@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 try:
     from flask import Flask
     def _start_keepalive():
-        port = int(os.environ.get("PORT", "8080"))
+        port = int(os.environ.get("PORT", "7860"))
         app = Flask(__name__)
         @app.route('/')
         def index(): return "Bot Running - v14.0 All Features", 200
