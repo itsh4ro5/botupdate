@@ -352,7 +352,7 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info(f"✅ Added to new chat: {chat.title} ({chat.id})")
     
     # Bot was removed or left
-    elif new_status in [ChatMember.LEFT, ChatMember.KICKED]:
+    elif new_status in [ChatMember.LEFT, ChatMember.BANNED]:
         if chat.id in DB["ALL_CHATS"]:
             # Only remove if not in manual lists (optional safety)
             if chat.id not in DB["FREE_CHANNELS"] and chat.id not in DB["PAID_CHANNELS"]:
