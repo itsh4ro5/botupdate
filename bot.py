@@ -9,12 +9,7 @@ Features Added:
 3. /setwelcome (Custom messages).
 4. Broadcast Media (Photos/Videos supported).
 5. Anti-Spam (Rate limiting).
-6. MongoDb Connection
-Preserved Features:
-- /batches (Generates TXT file of ALL chats).
-- /user (Deep Scans all chats).
-- Manual Approval Workflow (/demo, /per).
-- Link Revoke Logic.
+6. Lockdown Mode (/lockdown) & Stats Integration.
 """
 
 import logging
@@ -93,7 +88,8 @@ DB = {
     "USER_TOPICS": {}, 
     "PENDING_REQUESTS": {},
     "LINK_MAP": {},      # invite_link -> {"u": user_id, "b": batch_id}
-    "CUSTOM_WELCOMES": {} # NEW: batch_id -> "Msg"
+    "CUSTOM_WELCOMES": {}, # NEW: batch_id -> "Msg"
+    "NEW_USERS_ALLOWED": True # LOCKDOWN FEATURE
 }
 
 # Runtime Memory
@@ -141,6 +137,8 @@ def load_data():
                 # NEW: Load Custom Welcomes
                 if "CUSTOM_WELCOMES" in loaded: 
                     DB["CUSTOM_WELCOMES"] = {int(k): v for k, v in loaded["CUSTOM_WELCOMES"].items()}
+                if "NEW_USERS_ALLOWED" in loaded:
+                    DB["NEW_USERS_ALLOWED"] = loaded["NEW_USERS_ALLOWED"]
                 
                 # Convert string keys back to integers for dictionaries
                 for k in ["FREE_CHANNELS", "PAID_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
@@ -177,6 +175,8 @@ def load_data():
             if "LINK_MAP" in loaded: DB["LINK_MAP"] = loaded["LINK_MAP"]
             if "CUSTOM_WELCOMES" in loaded: 
                 DB["CUSTOM_WELCOMES"] = {int(k): v for k, v in loaded["CUSTOM_WELCOMES"].items()}
+            if "NEW_USERS_ALLOWED" in loaded:
+                DB["NEW_USERS_ALLOWED"] = loaded["NEW_USERS_ALLOWED"]
             
             for k in ["FREE_CHANNELS", "PAID_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
                 if k in loaded:
@@ -199,6 +199,7 @@ def save_data_sync():
         to_save = {
             "ADMIN_IDS": DB["ADMIN_IDS"],
             "BLOCKED_USERS": DB["BLOCKED_USERS"],
+            "NEW_USERS_ALLOWED": DB.get("NEW_USERS_ALLOWED", True),
             "LINK_MAP": DB["LINK_MAP"],
             "CUSTOM_WELCOMES": {str(k): v for k, v in DB["CUSTOM_WELCOMES"].items()},
             "FREE_CHANNELS": {str(k): v for k, v in DB["FREE_CHANNELS"].items()},
@@ -480,6 +481,22 @@ async def cmd_find_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
     else:
         msg = await update.message.reply_text("❌ No user found with that username.")
+    await schedule_delete(context, update.message)
+    await schedule_delete(context, msg)
+
+# NEW: LOCKDOWN SYSTEM
+async def cmd_lockdown(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    
+    current_status = DB.get("NEW_USERS_ALLOWED", True)
+    DB["NEW_USERS_ALLOWED"] = not current_status
+    await save_data_async()
+    
+    if DB["NEW_USERS_ALLOWED"]:
+        msg = await update.message.reply_text("🔓 **Lockdown Lifted!**\nNaye users ab bot use kar sakte hain aur mandatory channel join kar sakte hain.", parse_mode=ParseMode.MARKDOWN)
+    else:
+        msg = await update.message.reply_text("🔒 **Lockdown Enabled!**\nNaye users ab BLOCKED hain. Sirf wahi old users bot use kar payenge jo already mandatory channel me hain.", parse_mode=ParseMode.MARKDOWN)
+        
     await schedule_delete(context, update.message)
     await schedule_delete(context, msg)
 
@@ -939,10 +956,12 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     blocked = len(DB['BLOCKED_USERS'])
     
     mode = "MongoDB Cloud ☁️" if MONGO_URL else "Local File 📁"
+    lockdown_status = "🔴 ON (Closed for New Users)" if not DB.get("NEW_USERS_ALLOWED", True) else "🟢 OFF (Open for All)"
 
     t = (
         f"📊 **Statistics**\n"
         f"💾 **Storage:** {mode}\n"
+        f"🔒 **Lockdown:** {lockdown_status}\n\n"
         f"👥 Users: {total_users}\n"
         f"🆓 Free Batches: {free_batches}\n"
         f"💎 Paid Batches: {paid_batches}\n"
@@ -1349,7 +1368,11 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if await check_membership(uid, context):
             await q.answer("✅ Verified!")
             await show_user_menu(update)
-        else: await q.answer("❌ Join Main Channel First!", show_alert=True)
+        else:
+            if not DB.get("NEW_USERS_ALLOWED", True):
+                await q.answer("⛔ Abhi naye members allow nahi hain.", show_alert=True)
+            else:
+                await q.answer("❌ Join Main Channel First!", show_alert=True)
     elif data == "u_main": await show_user_menu(update)
     elif data == "u_free":
         if not DB["FREE_CHANNELS"]: await q.answer("Empty", show_alert=True); return
@@ -1479,7 +1502,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             f"👑 **WELCOME BOSS!**\n"
             f"**⚙️ Owner:** `/addadmin`, `/deladmin`, `/backup`, `/allusers`\n"
-            f"**🛠 Manage:** `/find`, `/ban`, `/unban`, `/kick`, `/extend`\n"
+            f"**🛠 Manage:** `/find`, `/ban`, `/unban`, `/kick`, `/extend`, `/lockdown`\n"
             f"**✅ Approve:** `/demo <link>`, `/per <link>`\n"
             f"**📊 Tools:** `/stats`, `/batchstats`\n"
             f"**📢 Broadcast:** `/broadcast`, `/post`, `/setwelcome`",
@@ -1489,7 +1512,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif is_admin(user.id):
         await update.message.reply_text(
             f"👮‍♂️ **WELCOME ADMIN!**\n"
-            f"**🛠 Manage:** `/find`, `/ban`, `/unban`, `/kick`, `/extend`\n"
+            f"**🛠 Manage:** `/find`, `/ban`, `/unban`, `/kick`, `/extend`, `/lockdown`\n"
             f"**✅ Approve:** `/demo <link>`, `/per <link>`\n"
             f"**📊 Tools:** `/stats`, `/batchstats`\n"
             f"**📢 Broadcast:** `/broadcast`, `/post`, `/setwelcome`",
@@ -1499,6 +1522,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif await check_membership(user.id, context):
         await show_user_menu(update)
     else:
+        if not DB.get("NEW_USERS_ALLOWED", True):
+            await update.message.reply_text(
+                "⛔ **Entry Closed!**\n\nAbhi naye members ke liye bot aur channel closed hai. "
+                "Sirf wahi purane users is bot ka use kar sakte hain jo pehle se hi main channel me add hain.", 
+                parse_mode=ParseMode.MARKDOWN
+            )
+            return
+
         kb = [[InlineKeyboardButton("📢 Join Channel", url=MANDATORY_CHANNEL_LINK)],
               [InlineKeyboardButton("✅ Verified", callback_data="verify")]]
         await update.message.reply_text("⚠️ **Join Main Channel First**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
@@ -1527,6 +1558,7 @@ def main():
     # New Features
     app.add_handler(CommandHandler("batchstats", cmd_batch_stats))
     app.add_handler(CommandHandler("setwelcome", cmd_set_welcome))
+    app.add_handler(CommandHandler("lockdown", cmd_lockdown))
     
     # Approval
     app.add_handler(CommandHandler("demo", cmd_approve_demo))
@@ -1551,7 +1583,7 @@ def main():
     
     if app.job_queue: app.job_queue.run_repeating(check_demos, interval=60, first=10)
     
-    print("Bot v13.1 Enhanced Started...")
+    print("Bot v14.0 Enhanced Started...")
     app.run_polling()
 
 if __name__ == "__main__":
