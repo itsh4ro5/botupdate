@@ -88,8 +88,10 @@ DB = {
     "USER_TOPICS": {}, 
     "PENDING_REQUESTS": {},
     "LINK_MAP": {},      # invite_link -> {"u": user_id, "b": batch_id}
-    "CUSTOM_WELCOMES": {}, # NEW: batch_id -> "Msg"
-    "NEW_USERS_ALLOWED": True # LOCKDOWN FEATURE
+    "CUSTOM_WELCOMES": {}, 
+    "NEW_USERS_ALLOWED": True, # LOCKDOWN FEATURE
+    "FREE_LOCKED": False,      # LOCK FREE BATCHES
+    "PAID_LOCKED": False       # LOCK PAID BATCHES
 }
 
 # Runtime Memory
@@ -500,7 +502,25 @@ async def cmd_lockdown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await schedule_delete(context, update.message)
     await schedule_delete(context, msg)
 
-# NEW: BATCH STATS
+async def cmd_lockfree(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    DB["FREE_LOCKED"] = not DB.get("FREE_LOCKED", False)
+    await save_data_async()
+    status = "LOCKED 🔒" if DB["FREE_LOCKED"] else "UNLOCKED 🔓"
+    msg = await update.message.reply_text(f"Free Batches are now **{status}**.", parse_mode=ParseMode.MARKDOWN)
+    await schedule_delete(context, update.message)
+    await schedule_delete(context, msg)
+
+async def cmd_lockpaid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    DB["PAID_LOCKED"] = not DB.get("PAID_LOCKED", False)
+    await save_data_async()
+    status = "LOCKED 🔐" if DB["PAID_LOCKED"] else "UNLOCKED 🔓"
+    msg = await update.message.reply_text(f"Paid Batches are now **{status}**.", parse_mode=ParseMode.MARKDOWN)
+    await schedule_delete(context, update.message)
+    await schedule_delete(context, msg)
+    
+    # NEW: BATCH STATS
 async def cmd_batch_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     msg = await update.message.reply_text("⏳ Calculating stats...")
@@ -957,14 +977,16 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     mode = "MongoDB Cloud ☁️" if MONGO_URL else "Local File 📁"
     lockdown_status = "🔴 ON (Closed for New Users)" if not DB.get("NEW_USERS_ALLOWED", True) else "🟢 OFF (Open for All)"
+    f_lock = "🔴 LOCKED" if DB.get("FREE_LOCKED", False) else "🟢 UNLOCKED"
+    p_lock = "🔴 LOCKED" if DB.get("PAID_LOCKED", False) else "🟢 UNLOCKED"
 
     t = (
         f"📊 **Statistics**\n"
         f"💾 **Storage:** {mode}\n"
-        f"🔒 **Lockdown:** {lockdown_status}\n\n"
-        f"👥 Users: {total_users}\n"
-        f"🆓 Free Batches: {free_batches}\n"
-        f"💎 Paid Batches: {paid_batches}\n"
+        f"🔒 **Lockdown:** {lockdown_status}\n"
+        f"🔓 **Free Courses:** {f_lock}\n"
+        f"🔐 **Paid Courses:** {p_lock}\n\n"
+        f"👥 Users: {len(DB['USER_DATA'])}\n"
         f"📡 All Tracked Chats: {all_chats_tracked}\n"
         f"🚫 Blocked: {blocked}"
     )
@@ -1257,10 +1279,29 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
                 except Exception as e:
                     logger.error(f"Failed to revoke link: {e}")
 
-async def on_join_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # This function logs when a user actually joins.
-    # Logic for starting timers is now moved to cmd_approve_demo.
-    pass
+async def on_chat_member_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    result = update.chat_member
+    if not result: return
+    chat = result.chat
+    user = result.new_chat_member.user
+    status = result.new_chat_member.status
+    
+    # Check if user left Mandatory Channel
+    if chat.id == MANDATORY_CHANNEL_ID and status in [ChatMember.LEFT, ChatMember.BANNED, ChatMember.KICKED]:
+        # Agar lockdown ON hai (yani new users allowed False hai)
+        if not DB.get("NEW_USERS_ALLOWED", True):
+            all_batches = list(DB["FREE_CHANNELS"].keys()) + list(DB["PAID_CHANNELS"].keys())
+            banned_count = 0
+            for bid in all_batches:
+                try:
+                    await context.bot.ban_chat_member(bid, user.id)
+                    banned_count += 1
+                except: pass
+            
+            # Bot se block kar do
+            if user.id not in DB["BLOCKED_USERS"]:
+                DB["BLOCKED_USERS"].append(user.id)
+                await save_data_async()
 
 async def check_demos(context: ContextTypes.DEFAULT_TYPE):
     """
@@ -1375,11 +1416,16 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await q.answer("❌ Join Main Channel First!", show_alert=True)
     elif data == "u_main": await show_user_menu(update)
     elif data == "u_free":
+        if DB.get("FREE_LOCKED", False):
+            await q.answer("🔒 Free Batches are currently locked by Admin.", show_alert=True)
+            return
         if not DB["FREE_CHANNELS"]: await q.answer("Empty", show_alert=True); return
-        kb = [[InlineKeyboardButton(f"🔗 {n}", callback_data=f"get_f_{i}")] for i, n in DB["FREE_CHANNELS"].items()]
-        kb.append([InlineKeyboardButton("🔙 Back", callback_data="u_main")])
-        await q.edit_message_text("📂 **Free Batches:**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        # ... baaki code ...
+        
     elif data == "u_paid":
+        if DB.get("PAID_LOCKED", False):
+            await q.answer("🔒 Paid Batches are currently locked by Admin.", show_alert=True)
+            return
         if not DB["PAID_CHANNELS"]: await q.answer("Empty", show_alert=True); return
         kb = [[InlineKeyboardButton(f"💎 {n}", callback_data=f"view_p_{i}")] for i, n in DB["PAID_CHANNELS"].items()]
         kb.append([InlineKeyboardButton("🔙 Back", callback_data="u_main")])
@@ -1559,6 +1605,8 @@ def main():
     app.add_handler(CommandHandler("batchstats", cmd_batch_stats))
     app.add_handler(CommandHandler("setwelcome", cmd_set_welcome))
     app.add_handler(CommandHandler("lockdown", cmd_lockdown))
+    app.add_handler(CommandHandler("lockfree", cmd_lockfree))
+    app.add_handler(CommandHandler("lockpaid", cmd_lockpaid))
     
     # Approval
     app.add_handler(CommandHandler("demo", cmd_approve_demo))
@@ -1580,6 +1628,7 @@ def main():
     app.add_handler(MessageReactionHandler(handle_reaction))
     app.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE, handle_edit))
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, main_message_handler))
+    
     
     if app.job_queue: app.job_queue.run_repeating(check_demos, interval=60, first=10)
     
