@@ -5,9 +5,9 @@ colorFrom: blue
 colorTo: purple
 sdk: docker
 pinned: false
+---
 
-
----🤖 Advanced Telegram Bot Manager
+🤖 Advanced Telegram Bot Manager
 A powerful, all-in-one Telegram bot solution built with Python (v20+), Flask, and JSON persistence. This bot is designed to manage paid and free communities with smart link generation, automated demo access, and a support ticket system using Forum Topics.
 🚀 Key Features
 1. 🔐 Smart Access Control
