@@ -9,7 +9,7 @@ Features Added:
 3. /setwelcome (Custom messages).
 4. Broadcast Media (Photos/Videos supported).
 5. Anti-Spam (Rate limiting).
-
+6. MongoDb Connection
 Preserved Features:
 - /batches (Generates TXT file of ALL chats).
 - /user (Deep Scans all chats).
