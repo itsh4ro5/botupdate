@@ -5,7 +5,7 @@ FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1
 
 # Default port (platforms override $PORT)
-ENV PORT=8000
+ENV PORT=7860
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # (Optional) expose default port for local runs
-EXPOSE 8000
+EXPOSE 7860
 
 # Start the bot (long polling + tiny Flask health server)
 CMD ["python", "bot.py"]
