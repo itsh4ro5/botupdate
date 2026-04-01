@@ -1623,7 +1623,6 @@ def main():
     
     app.add_handler(CallbackQueryHandler(general_callback))
     app.add_handler(ChatJoinRequestHandler(handle_join_request))
-    app.add_handler(ChatMemberHandler(on_join_update, ChatMemberHandler.CHAT_MEMBER))
     app.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
     app.add_handler(MessageReactionHandler(handle_reaction))
     app.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE, handle_edit))
