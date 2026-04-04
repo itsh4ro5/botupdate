@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 
 """
-ULTIMATE BOT MANAGER (v18.0 - Full Uncompressed Base Edition)
+ULTIMATE BOT MANAGER (v19.0 - Final Bug Fix & Advanced Links)
 Base: User provided code
 Features Added/Fixed:
-1. /del Command (Delete everywhere)
-2. Real-time Edit Sync (Text, Photos, Videos, Documents)
-3. Reply Context Mapping (Track exact replies)
-4. Lockdown Auto-Ban (Kicks from all batches if left main channel)
-5. Fixed Button Loading Glitches (BadRequest handled)
-6. All previous features preserved (MongoDB, Stats, Lockfree, etc.)
+1. ALWAYS Kicks from Free Batches if Main Channel is left (Bug Fixed).
+2. Advanced Link Formatter (Includes Batch Name).
+3. Super-Secure Links (Strict 1-Minute Expiry to prevent forwarding).
+4. /del Command (Delete everywhere)
+5. Real-time Edit Sync (Text, Photos, Videos, Documents)
+6. Reply Context Mapping (Track exact replies)
 """
 
 import logging
@@ -48,7 +48,7 @@ try:
         port = int(os.environ.get("PORT", "7860"))
         app = Flask(__name__)
         @app.route('/')
-        def index(): return "Bot Running - v18.0 Ultimate Uncompressed", 200
+        def index(): return "Bot Running - v19.0 Advanced Link & Bug Fixes", 200
         
         def run():
             app.run(host="0.0.0.0", port=port, use_reloader=False)
@@ -84,15 +84,15 @@ DB = {
     "FREE_CHANNELS": {},
     "PAID_CHANNELS": {},
     "ALL_CHATS": {},     
-    "USER_DATA": {},     # Structure: {uid: {name, username, demos: {bid: {expiry, warned}}, demo_history: []}}
+    "USER_DATA": {},     
     "BLOCKED_USERS": [],
     "USER_TOPICS": {}, 
     "PENDING_REQUESTS": {},
-    "LINK_MAP": {},      # invite_link -> {"u": user_id, "b": batch_id}
+    "LINK_MAP": {},      
     "CUSTOM_WELCOMES": {}, 
-    "NEW_USERS_ALLOWED": True, # LOCKDOWN FEATURE
-    "FREE_LOCKED": False,      # LOCK FREE BATCHES
-    "PAID_LOCKED": False       # LOCK PAID BATCHES
+    "NEW_USERS_ALLOWED": True, 
+    "FREE_LOCKED": False,      
+    "PAID_LOCKED": False       
 }
 
 # Runtime Memory
@@ -341,9 +341,7 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 del DB["ALL_CHATS"][chat.id]
                 await save_data_async()
 
-# NEW FEATURE: /del COMMAND
 async def cmd_del_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Deletes a message everywhere if replied with /del"""
     if not is_admin(update.effective_user.id): return
     if not update.message.reply_to_message: return
     
@@ -351,9 +349,9 @@ async def cmd_del_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if key in MESSAGE_MAP:
         target_chat, target_msg = MESSAGE_MAP[key]
         try:
-            await context.bot.delete_message(target_chat, target_msg) # User ke side se
-            await update.message.reply_to_message.delete() # Admin ke side se
-            await update.message.delete() # Command message khud delete
+            await context.bot.delete_message(target_chat, target_msg)
+            await update.message.reply_to_message.delete()
+            await update.message.delete()
             del MESSAGE_MAP[key]
             del MESSAGE_MAP[(target_chat, target_msg)]
         except Exception as e:
@@ -555,8 +553,10 @@ async def cmd_set_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if len(args) < 2: raise ValueError
         bid = int(args[0])
         msg_text = " ".join(args[1:])
+        
         DB["CUSTOM_WELCOMES"][bid] = msg_text
         await save_data_async()
+        
         await update.message.reply_text(f"✅ Custom Welcome Set for `{bid}`:\n\n{msg_text}", parse_mode=ParseMode.MARKDOWN)
     except:
         await update.message.reply_text("Usage: `/setwelcome <batch_id> <message>`")
@@ -1079,7 +1079,7 @@ async def broadcast_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             
         del BROADCAST_STATE[uid]
 
-# --- 14. SYNC & MESSAGE HANDLER (MEDIA + REPLY MAPPING) ---
+# --- 14. SYNC & MESSAGE HANDLER ---
 
 async def handle_reaction(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message_reaction: return
@@ -1090,7 +1090,6 @@ async def handle_reaction(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try: await context.bot.set_message_reaction(tc, tm, reaction=r.new_reaction)
         except: pass
 
-# FEATURE: FULL EDIT AND REPLACE SYNC
 async def handle_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.edited_message: return
     m = update.edited_message
@@ -1140,7 +1139,6 @@ async def main_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         
         topic_id = await get_or_create_topic(user, context)
         if topic_id:
-            # FEATURE: REPLY MAPPING
             reply_id = None
             if update.message.reply_to_message:
                 reply_key = (chat.id, update.message.reply_to_message.message_id)
@@ -1172,7 +1170,6 @@ async def main_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             if t == topic_id: target_uid = int(u); break
         
         if target_uid:
-            # FEATURE: REPLY MAPPING
             reply_id = None
             if update.message.reply_to_message:
                 reply_key = (SUPPORT_GROUP_ID, update.message.reply_to_message.message_id)
@@ -1187,7 +1184,41 @@ async def main_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 await context.bot.send_message(SUPPORT_GROUP_ID, "❌ User has blocked the bot.", message_thread_id=topic_id)
             except: pass
 
-# --- 15. JOIN & DEMO LOGIC ---
+# --- 15. AUTO-BAN & KICK LOGIC (BUG FIXED) ---
+
+async def on_chat_member_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    BUG FIXED: Ab user ALWAYS free batches se kick hoga agar usne main channel leave kiya.
+    Agar lockdown ON hai to wo paid batches se bhi ban hoga aur bot use block kar dega.
+    """
+    result = update.chat_member
+    if not result: return
+    chat = result.chat
+    user = result.new_chat_member.user
+    status = result.new_chat_member.status
+    
+    # Check if user left the MANDATORY CHANNEL
+    if chat.id == MANDATORY_CHANNEL_ID and status in [ChatMember.LEFT, ChatMember.BANNED, ChatMember.KICKED]:
+        
+        # 1. ALWAYS Kick from FREE Batches
+        for bid in list(DB["FREE_CHANNELS"].keys()):
+            try:
+                await context.bot.ban_chat_member(bid, user.id)
+                await context.bot.unban_chat_member(bid, user.id) # Unban so they can rejoin later if they join main channel again
+            except: pass
+            
+        # 2. STRICT ACTION IF LOCKDOWN IS ON
+        if not DB.get("NEW_USERS_ALLOWED", True):
+            # Ban from Paid Batches
+            for bid in list(DB["PAID_CHANNELS"].keys()):
+                try:
+                    await context.bot.ban_chat_member(bid, user.id)
+                except: pass
+            
+            # Block from Bot completely
+            if user.id not in DB["BLOCKED_USERS"]:
+                DB["BLOCKED_USERS"].append(user.id)
+                await save_data_async()
 
 async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req = update.chat_join_request
@@ -1219,26 +1250,6 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
                     await context.bot.revoke_chat_invite_link(chat.id, link_url)
                 except Exception as e:
                     logger.error(f"Failed to revoke link: {e}")
-
-# FEATURE: AUTO-BAN DURING LOCKDOWN
-async def on_chat_member_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    result = update.chat_member
-    if not result: return
-    chat = result.chat
-    user = result.new_chat_member.user
-    status = result.new_chat_member.status
-    
-    if chat.id == MANDATORY_CHANNEL_ID and status in [ChatMember.LEFT, ChatMember.BANNED, ChatMember.KICKED]:
-        if not DB.get("NEW_USERS_ALLOWED", True):
-            all_batches = list(DB["FREE_CHANNELS"].keys()) + list(DB["PAID_CHANNELS"].keys())
-            for bid in all_batches:
-                try:
-                    await context.bot.ban_chat_member(bid, user.id)
-                except: pass
-            
-            if user.id not in DB["BLOCKED_USERS"]:
-                DB["BLOCKED_USERS"].append(user.id)
-                await save_data_async()
 
 async def check_demos(context: ContextTypes.DEFAULT_TYPE):
     now = time.time()
@@ -1290,7 +1301,7 @@ async def check_demos(context: ContextTypes.DEFAULT_TYPE):
     if mod: 
         await save_data_async()
 
-# --- 16. USER UI (BUTTON GLITCH FIX) ---
+# --- 16. USER UI (UPDATED WITH BATCH NAME & 1-MIN EXPIRY) ---
 
 async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -1356,16 +1367,35 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cmd_myinfo(update, context)
         return
     
+    # --- FREE BATCH LINK GENERATION ---
     elif data.startswith("get_f_"):
         cid = int(data.split("_")[2])
         if await is_already_in_channel(context, cid, uid): 
             await q.answer("⚠️ Already Joined!", show_alert=True) 
             return
         try:
-            l = await context.bot.create_chat_invite_link(cid, creates_join_request=True, name=f"Free-{uid}")
-            await context.bot.send_message(uid, f"🔗 **Link:**\n{l.invite_link}\n\nℹ️ *Request auto-approved.*")
+            batch_name = DB["ALL_CHATS"].get(cid) or DB["FREE_CHANNELS"].get(cid) or f"Batch {cid}"
+            expire_time = int(time.time()) + 60 # 1 minute strict expiry
+            
+            l = await context.bot.create_chat_invite_link(
+                cid, 
+                creates_join_request=True, 
+                name=f"Free-{uid}",
+                expire_date=expire_time
+            )
+            
+            # Format requested by user
+            msg_text = (
+                f"🔗 **Link:**\n\n"
+                f"{batch_name}\n\n"
+                f"{l.invite_link}\n\n"
+                f"ℹ️ *Request auto-approved.*\n"
+                f"⏳ *(Link expires in 1 minute)*"
+            )
+            await context.bot.send_message(uid, msg_text, parse_mode=ParseMode.MARKDOWN)
             await q.answer("Sent to DM")
-        except: await q.answer("Bot Error", show_alert=True)
+        except Exception as e:
+            await q.answer(f"Bot Error: {e}", show_alert=True)
 
     elif data.startswith("view_p_"):
         cid = int(data.split("_")[2])
@@ -1376,6 +1406,7 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text("💎 **Premium Access:**\nClick below to get a join link.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
         except: pass
 
+    # --- PAID BATCH LINK GENERATION ---
     elif data.startswith("req_access_"):
         cid = int(data.split("_")[2])
         
@@ -1389,17 +1420,19 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await q.answer("🔄 Generating Link...")
         try:
+            batch_name = DB["ALL_CHATS"].get(cid) or DB["PAID_CHANNELS"].get(cid) or f"Batch {cid}"
+            expire_time = int(time.time()) + 60 # 1 minute strict expiry
+            
             l = await context.bot.create_chat_invite_link(
                 cid, 
                 creates_join_request=True, 
-                name=f"Req-{uid}-{int(time.time())}"
+                name=f"Req-{uid}-{int(time.time())}",
+                expire_date=expire_time
             )
             
             DB["LINK_MAP"][l.invite_link] = {"u": uid, "b": cid}
             await save_data_async()
             
-            batch_name = DB["ALL_CHATS"].get(cid) or DB["PAID_CHANNELS"].get(cid) or f"Batch {cid}"
-
             topic_id = await get_or_create_topic(update.effective_user, context)
             if topic_id:
                 admin_msg = (
@@ -1422,18 +1455,20 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             msg_text = (
                 f"✅ **Access Link Generated!**\n\n"
+                f"**{batch_name}**\n\n"
                 f"🔗 Link: {l.invite_link}\n\n"
                 f"ℹ️ **Status:** Link has been automatically sent to Admin.\n"
-                f"👉 Click Join and wait for approval."
+                f"👉 Click Join and wait for approval.\n"
+                f"⏳ *(Link expires in 1 minute)*"
             )
-            await context.bot.send_message(uid, msg_text)
+            await context.bot.send_message(uid, msg_text, parse_mode=ParseMode.MARKDOWN)
             
         except Exception as e:
             await context.bot.send_message(uid, f"❌ Error generating link: {e}")
 
 async def show_user_menu(update: Update):
     kb = [[InlineKeyboardButton("📂 Free Batches", callback_data="u_free"), InlineKeyboardButton("💎 Paid Batches", callback_data="u_paid")],
-          [InlineKeyboardButton("🆘 Backup Channel", url=f"tg://user?id={-1003604603493}")],
+          [InlineKeyboardButton("🆘 Support", url=f"tg://user?id={SUPPORT_GROUP_ID}")],
           [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")]]
     txt = "👋 **Welcome!**\nChoose an option:"
     
@@ -1444,25 +1479,6 @@ async def show_user_menu(update: Update):
     else: 
         await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
-# --- AUTO KICK FROM FREE BATCHES WHEN LEFT MAIN CHANNEL ---
-async def on_chat_member_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    result = update.chat_member
-    if not result: return
-    
-    chat = result.chat
-    user = result.new_chat_member.user
-    status = result.new_chat_member.status
-    
-    # Check if user left the MANDATORY CHANNEL
-    if chat.id == MANDATORY_CHANNEL_ID and status in [ChatMember.LEFT, ChatMember.BANNED, ChatMember.KICKED]:
-        # User ko sabhi FREE BATCHES se remove (kick) karo
-        for bid in list(DB["FREE_CHANNELS"].keys()):
-            try:
-                await context.bot.ban_chat_member(chat_id=bid, user_id=user.id)
-                await context.bot.unban_chat_member(chat_id=bid, user_id=user.id) # Unban taaki future me main channel join karke wapas aa sake
-            except Exception as e:
-                logger.error(f"Auto-Kick Error (Batch {bid}, User {user.id}): {e}")
-                
 # --- 17. MAIN ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1549,7 +1565,7 @@ def main():
     
     if app.job_queue: app.job_queue.run_repeating(check_demos, interval=60, first=10)
     
-    print("Bot v18.0 Ultimate Uncompressed Started...")
+    print("Bot v19.0 (Advanced Link Format, strict expiry & fixed Auto-Ban) Started...")
     app.run_polling()
 
 if __name__ == "__main__":
