@@ -1433,7 +1433,7 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_user_menu(update: Update):
     kb = [[InlineKeyboardButton("📂 Free Batches", callback_data="u_free"), InlineKeyboardButton("💎 Paid Batches", callback_data="u_paid")],
-          [InlineKeyboardButton("🆘 Support", url=f"tg://user?id={SUPPORT_GROUP_ID}")],
+          [InlineKeyboardButton("🆘 Backup Channel", url=f"tg://user?id={-1003604603493}")],
           [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")]]
     txt = "👋 **Welcome!**\nChoose an option:"
     
@@ -1444,6 +1444,25 @@ async def show_user_menu(update: Update):
     else: 
         await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
+# --- AUTO KICK FROM FREE BATCHES WHEN LEFT MAIN CHANNEL ---
+async def on_chat_member_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    result = update.chat_member
+    if not result: return
+    
+    chat = result.chat
+    user = result.new_chat_member.user
+    status = result.new_chat_member.status
+    
+    # Check if user left the MANDATORY CHANNEL
+    if chat.id == MANDATORY_CHANNEL_ID and status in [ChatMember.LEFT, ChatMember.BANNED, ChatMember.KICKED]:
+        # User ko sabhi FREE BATCHES se remove (kick) karo
+        for bid in list(DB["FREE_CHANNELS"].keys()):
+            try:
+                await context.bot.ban_chat_member(chat_id=bid, user_id=user.id)
+                await context.bot.unban_chat_member(chat_id=bid, user_id=user.id) # Unban taaki future me main channel join karke wapas aa sake
+            except Exception as e:
+                logger.error(f"Auto-Kick Error (Batch {bid}, User {user.id}): {e}")
+                
 # --- 17. MAIN ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
