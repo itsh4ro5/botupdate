@@ -1,21 +1,16 @@
 # -*- coding: utf-8 -*-
 
 """
-ULTIMATE BOT MANAGER (v26.0 - Uncompressed Ultimate Sync & Auto-Kick Fixed)
-Base: Original Expanded Code (bot (3).py)
+ULTIMATE BOT MANAGER (v27.0 - Uncompressed & Parse Error Fixed)
+Base: Original Expanded Code
 Features Added/Fixed:
-1. ALWAYS Kicks from Free Batches if Main Channel is left (Lockdown state ignored).
-2. Explicitly requests ALL_TYPES of updates to detect channel leaves.
-3. Advanced Link Formatter (Includes Batch Name).
-4. Super-Secure Links (Strict 1-Minute Expiry).
-5. /del Command (Delete everywhere).
-6. Real-time Edit Sync (Text, Photos, Videos, Documents).
-7. Reply Context Mapping (Track exact replies).
-8. Button Loading Glitch Fixed.
-9. UNIVERSAL KICK: Auto-kicks if user Leaves Channel OR Blocks the Bot unconditionally.
-10. BACKGROUND USER SYNC: Safely checks all DB users every 1 hour (Flood wait handled).
-11. AUTO-BROADCAST ON NEW FREE BATCH: Added bot username to broadcast format.
-12. BOT COMMANDS MENU: Added a quick menu for users.
+1. PARSE ERROR FIXED: Replaced Markdown with HTML for link generation & broadcasts.
+2. ROBUST AUTO-KICK: Unconditional kick if user leaves Main Channel or blocks bot.
+3. ID MATCHING FIXED: Strips '-100' for foolproof channel leave detection.
+4. BACKGROUND SYNC ENHANCED: Runs every 10 mins (with flood protection).
+5. /sync COMMAND: Admin can manually trigger background sync.
+6. AUTO-BROADCAST: Includes @H4R_Contact_bot in the text.
+7. BOT COMMANDS MENU: Auto-sets menu commands for easy user access.
 """
 
 import logging
@@ -56,7 +51,7 @@ try:
         
         @app.route('/')
         def index(): 
-            return "Bot Running - v26.0 Uncompressed Ultimate Fix", 200
+            return "Bot Running - v27.0 Uncompressed Ultimate Fix", 200
         
         def run():
             app.run(host="0.0.0.0", port=port, use_reloader=False)
@@ -102,7 +97,8 @@ DB = {
     "CUSTOM_WELCOMES": {}, 
     "NEW_USERS_ALLOWED": True, 
     "FREE_LOCKED": False,      
-    "PAID_LOCKED": False       
+    "PAID_LOCKED": False,
+    "SCHEDULED_DELETES": []
 }
 
 # Runtime Memory
@@ -158,6 +154,9 @@ def load_data():
                     
                 if "PAID_LOCKED" in loaded: 
                     DB["PAID_LOCKED"] = loaded["PAID_LOCKED"]
+                    
+                if "SCHEDULED_DELETES" in loaded:
+                    DB["SCHEDULED_DELETES"] = loaded["SCHEDULED_DELETES"]
                 
                 for k in ["FREE_CHANNELS", "PAID_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
                     if k in loaded: 
@@ -207,6 +206,9 @@ def load_data():
                 
             if "PAID_LOCKED" in loaded: 
                 DB["PAID_LOCKED"] = loaded["PAID_LOCKED"]
+                
+            if "SCHEDULED_DELETES" in loaded:
+                DB["SCHEDULED_DELETES"] = loaded["SCHEDULED_DELETES"]
             
             for k in ["FREE_CHANNELS", "PAID_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
                 if k in loaded: 
@@ -242,7 +244,8 @@ def save_data_sync():
             "ALL_CHATS": {str(k): v for k, v in DB["ALL_CHATS"].items()},
             "USER_DATA": {str(k): v for k, v in DB["USER_DATA"].items()},
             "USER_TOPICS": {str(k): v for k, v in DB["USER_TOPICS"].items()},
-            "PENDING_REQUESTS": {str(k): v for k, v in DB["PENDING_REQUESTS"].items()}
+            "PENDING_REQUESTS": {str(k): v for k, v in DB["PENDING_REQUESTS"].items()},
+            "SCHEDULED_DELETES": DB.get("SCHEDULED_DELETES", [])
         }
 
         if MONGO_URL and mongo_collection is not None:
@@ -266,6 +269,32 @@ async def save_data_async():
         await asyncio.to_thread(save_data_sync)
 
 # --- 6. CORE HELPERS ---
+
+# --- NEW: UNIVERSAL AUTO KICK HELPER ---
+async def execute_universal_kick(user_id, context):
+    """Kicks the user from ALL batches and blocks them."""
+    mod = False
+    # 1. Unconditionally kick from Free Batches
+    for bid in list(DB["FREE_CHANNELS"].keys()):
+        try:
+            await context.bot.ban_chat_member(int(bid), user_id)
+            await context.bot.unban_chat_member(int(bid), user_id)
+        except Exception: pass
+
+    # 2. Unconditionally kick from Paid Batches
+    for bid in list(DB["PAID_CHANNELS"].keys()):
+        try:
+            await context.bot.ban_chat_member(int(bid), user_id)
+        except Exception: pass
+
+    # 3. Block User in Bot
+    if user_id not in DB["BLOCKED_USERS"]:
+        DB["BLOCKED_USERS"].append(user_id)
+        mod = True
+
+    if mod:
+        await save_data_async()
+
 def is_admin(uid):
     if uid == OWNER_ID: 
         return True
@@ -381,28 +410,11 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.my_chat_member.chat
     status = update.my_chat_member.new_chat_member.status
     
-    # ⚠️ UNIVERSAL KICK: Agar kisi user ne Private Chat me bot ko Block kar diya
+    # User BLOCKED the bot in private chat
     if chat.type == ChatType.PRIVATE:
         if status in [ChatMember.KICKED, ChatMember.BANNED]:
-            logger.info(f"🚫 User {chat.id} blocked the bot. Executing Auto-Kick...")
-            
-            # Unconditionally kick from Free Batches
-            for bid in list(DB["FREE_CHANNELS"].keys()):
-                try:
-                    await context.bot.ban_chat_member(int(bid), chat.id)
-                    await context.bot.unban_chat_member(int(bid), chat.id)
-                except Exception: pass
-            
-            # Unconditionally kick from Paid Batches
-            for bid in list(DB["PAID_CHANNELS"].keys()):
-                try:
-                    await context.bot.ban_chat_member(int(bid), chat.id)
-                except Exception: pass
-                
-            # Add to BLOCKED_USERS
-            if chat.id not in DB["BLOCKED_USERS"]:
-                DB["BLOCKED_USERS"].append(chat.id)
-                await save_data_async()
+            logger.info(f"🚫 User {chat.id} blocked the bot. Auto-kicking unconditionally.")
+            await execute_universal_kick(chat.id, context)
         return
     
     if status in [ChatMember.MEMBER, ChatMember.ADMINISTRATOR]:
@@ -410,7 +422,7 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             DB["ALL_CHATS"][chat.id] = chat.title or f"Chat {chat.id}"
             await save_data_async()
             
-    elif status in [ChatMember.LEFT, ChatMember.BANNED, ChatMember.KICKED]:
+    elif status in [ChatMember.LEFT, ChatMember.BANNED]:
         if chat.id in DB["ALL_CHATS"]:
             if chat.id not in DB["FREE_CHANNELS"] and chat.id not in DB["PAID_CHANNELS"]:
                 del DB["ALL_CHATS"][chat.id]
@@ -544,6 +556,7 @@ async def cmd_ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
             DB["BLOCKED_USERS"].append(target)
             await save_data_async()
             msg = await update.message.reply_text(f"🚫 User {target} has been BLOCKED.")
+            await execute_universal_kick(target, context)
         else: 
             msg = await update.message.reply_text("⚠️ User already blocked or is Owner.")
     except Exception: 
@@ -1066,9 +1079,6 @@ async def wizard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def wizard_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    MODIFIED: Now includes Auto-Broadcast when a Free Batch is added.
-    """
     if not update.effective_user:
         return False
         
@@ -1103,11 +1113,11 @@ async def wizard_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 for t_cid in list(DB["ALL_CHATS"].keys()):
                     if t_cid != cid: 
                         try:
-                            # MODIFIED WITH BOT USERNAME
+                            # FIX: Used ParseMode.HTML to avoid markdown breaking on special characters
                             sent_msg = await context.bot.send_message(
                                 t_cid,
-                                f"🎉 **NEW FREE BATCH ADDED!** 🎉\n\n📛 **Name:** {cname}\n\n👉 Go to the Bot Menu to join now!\n\nBatch available on @H4R_Contact_bot",
-                                parse_mode=ParseMode.MARKDOWN
+                                f"🎉 <b>NEW FREE BATCH ADDED!</b> 🎉\n\n📛 <b>Name:</b> {cname}\n\n👉 Go to the Bot Menu to join now!\n\nBatch available on @H4R_Contact_bot",
+                                parse_mode=ParseMode.HTML
                             )
                             DB.setdefault("SCHEDULED_DELETES", []).append({
                                 "c": t_cid,
@@ -1353,7 +1363,7 @@ async def main_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             except Exception: 
                 pass
 
-# --- AUTO-BAN LOGIC (BUG FIXED FOR UNCONDITIONAL KICK) ---
+# --- AUTO-BAN LOGIC (BUG FIXED) ---
 async def on_chat_member_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = update.chat_member
     if not result: 
@@ -1363,28 +1373,13 @@ async def on_chat_member_update(update: Update, context: ContextTypes.DEFAULT_TY
     user = result.new_chat_member.user
     status = result.new_chat_member.status
     
-    if str(chat.id) == str(MANDATORY_CHANNEL_ID) and status in [ChatMember.LEFT, ChatMember.BANNED, ChatMember.KICKED]:
+    # ⚠️ FIXED: ID Matching. Telegram sometimes sends without -100 prefix.
+    chat_id_clean = str(chat.id).replace("-100", "")
+    man_id_clean = str(MANDATORY_CHANNEL_ID).replace("-100", "")
+    
+    if chat_id_clean == man_id_clean and status in [ChatMember.LEFT, ChatMember.BANNED, ChatMember.KICKED]:
         logger.info(f"🚪 User {user.id} left the Mandatory Channel. Auto-Kicking Unconditionally...")
-        
-        # Unconditionally kick from Free Batches
-        for bid in list(DB["FREE_CHANNELS"].keys()):
-            try:
-                await context.bot.ban_chat_member(int(bid), user.id)
-                await context.bot.unban_chat_member(int(bid), user.id) 
-            except Exception: 
-                pass
-                
-        # Unconditionally kick from Paid Batches
-        for bid in list(DB["PAID_CHANNELS"].keys()):
-            try: 
-                await context.bot.ban_chat_member(int(bid), user.id)
-            except Exception: 
-                pass
-                
-        # Unconditionally add to BLOCKED_USERS
-        if user.id not in DB["BLOCKED_USERS"]:
-            DB["BLOCKED_USERS"].append(user.id)
-            await save_data_async()
+        await execute_universal_kick(user.id, context)
 
 async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req = update.chat_join_request
@@ -1425,10 +1420,13 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
             except Exception: 
                 pass
 
-# --- BACKGROUND USER SYNC (EVERY 1 HOUR) ---
+# --- BACKGROUND USER SYNC (EVERY 10 MINS) ---
 async def background_sync(context: ContextTypes.DEFAULT_TYPE):
+    """
+    Safely iterates through all known users and checks if they left the mandatory channel.
+    Now optimized to handle FloodWait and runs every 10 mins.
+    """
     logger.info("🔄 Starting Background User Sync...")
-    mod = False
     
     for uid in list(DB["USER_DATA"].keys()):
         user_id = int(uid)
@@ -1439,35 +1437,32 @@ async def background_sync(context: ContextTypes.DEFAULT_TYPE):
         try:
             m = await context.bot.get_chat_member(MANDATORY_CHANNEL_ID, user_id)
             status = m.status
+        except BadRequest as e:
+            # If user not found in channel, they left or never joined
+            if "User not found" in str(e) or "chat not found" in str(e) or "user not found" in str(e).lower():
+                status = ChatMember.LEFT
+            else:
+                continue # Skip on other BadRequests
         except Exception:
-            status = ChatMember.LEFT
+            # Skip on FloodWait or NetworkError
+            continue 
             
         if status in [ChatMember.LEFT, ChatMember.BANNED, ChatMember.KICKED]:
             logger.info(f"🚫 Background Sync: Kicking {user_id} (Left Main Channel)")
-            # Unconditionally kick from Free Batches
-            for bid in list(DB["FREE_CHANNELS"].keys()):
-                try:
-                    await context.bot.ban_chat_member(int(bid), user_id)
-                    await context.bot.unban_chat_member(int(bid), user_id)
-                except Exception: pass
-            
-            # Unconditionally kick from Paid Batches
-            for bid in list(DB["PAID_CHANNELS"].keys()):
-                try:
-                    await context.bot.ban_chat_member(int(bid), user_id)
-                except Exception: pass
-                
-            # Unconditionally block
-            if user_id not in DB["BLOCKED_USERS"]:
-                DB["BLOCKED_USERS"].append(user_id)
-                mod = True
+            await execute_universal_kick(user_id, context)
                 
         # Sleep for 0.5s to avoid FloodWait from Telegram API
         await asyncio.sleep(0.5)
         
-    if mod: 
-        await save_data_async()
     logger.info("✅ Background Sync Complete.")
+
+# --- NEW: MANUAL SYNC COMMAND FOR ADMINS ---
+async def cmd_sync(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    msg = await update.message.reply_text("🔄 Background sync started manually. Check terminal logs.")
+    context.job_queue.run_once(background_sync, 1)
+    await schedule_delete(context, update.message)
+    await schedule_delete(context, msg)
 
 async def check_demos(context: ContextTypes.DEFAULT_TYPE):
     now = time.time()
@@ -1630,14 +1625,15 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 expire_date=int(time.time())+60
             )
             
+            # FIX: Switched to HTML parsing to prevent special character errors like + or -
             msg_text = (
-                f"🔗 **Link:**\n\n"
-                f"{bname}\n\n"
+                f"🔗 <b>Link:</b>\n\n"
+                f"<b>{bname}</b>\n\n"
                 f"{l.invite_link}\n\n"
-                f"ℹ️ *Request auto-approved.*\n"
-                f"⏳ *(Expires in 1 min)*"
+                f"ℹ️ <i>Request auto-approved.</i>\n"
+                f"⏳ <i>(Expires in 1 min)</i>"
             )
-            await context.bot.send_message(uid, msg_text, parse_mode=ParseMode.MARKDOWN)
+            await context.bot.send_message(uid, msg_text, parse_mode=ParseMode.HTML)
             await q.answer("Sent to DM")
             
         except Exception as e: 
@@ -1707,14 +1703,15 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception: 
                     pass
                     
+            # FIX: Switched to HTML parsing to prevent special character errors
             user_msg = (
-                f"✅ **Link Generated!**\n\n"
-                f"**{bname}**\n\n"
+                f"✅ <b>Access Link Generated!</b>\n\n"
+                f"<b>{bname}</b>\n\n"
                 f"🔗 {l.invite_link}\n\n"
-                f"ℹ️ **Sent to Admin.** Wait for approval.\n"
-                f"⏳ *(Expires in 1 min)*"
+                f"ℹ️ <b>Sent to Admin.</b> Wait for approval.\n"
+                f"⏳ <i>(Expires in 1 min)</i>"
             )
-            await context.bot.send_message(uid, user_msg, parse_mode=ParseMode.MARKDOWN)
+            await context.bot.send_message(uid, user_msg, parse_mode=ParseMode.HTML)
             
         except Exception as e: 
             await context.bot.send_message(uid, f"❌ Error: {e}")
@@ -1752,7 +1749,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_admin(user.id): 
         admin_text = (
             f"👑 **WELCOME ADMIN!**\n"
-            f"**🛠 Manage:** `/del`, `/find`, `/ban`, `/unban`, `/kick`, `/extend`, `/lockdown`, `/lockfree`, `/lockpaid`\n"
+            f"**🛠 Manage:** `/del`, `/find`, `/ban`, `/unban`, `/kick`, `/extend`, `/lockdown`, `/lockfree`, `/lockpaid`, `/sync`\n"
             f"**✅ Approve:** `/demo <link>`, `/per <link>`\n"
             f"**📊 Tools:** `/stats`, `/batchstats`\n"
             f"**📢 Broadcast:** `/broadcast`, `/post`, `/setwelcome`"
@@ -1812,6 +1809,7 @@ def main():
     app.add_handler(CommandHandler("lockdown", cmd_lockdown))
     app.add_handler(CommandHandler("lockfree", cmd_lockfree))
     app.add_handler(CommandHandler("lockpaid", cmd_lockpaid))
+    app.add_handler(CommandHandler("sync", cmd_sync))
     
     app.add_handler(CommandHandler("demo", cmd_approve_demo))
     app.add_handler(CommandHandler("per", cmd_approve_perm))
@@ -1837,9 +1835,10 @@ def main():
     
     if app.job_queue: 
         app.job_queue.run_repeating(check_demos, interval=60, first=10)
-        app.job_queue.run_repeating(background_sync, interval=3600, first=30)
+        # RUN BACKGROUND SYNC EVERY 10 MINS
+        app.job_queue.run_repeating(background_sync, interval=600, first=30)
     
-    print("Bot v26.0 (Unconditional Auto-Kick & Commands Menu) Started...")
+    print("Bot v27.0 (Auto-kick Fixed & HTML Parse) Started...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
