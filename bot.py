@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 """
-ULTIMATE BOT MANAGER (v21.0 - Uncompressed & Fully Fixed)
-Base: Original Expanded Code
+ULTIMATE BOT MANAGER (v25.0 - Uncompressed Ultimate Sync & Auto-Kick)
+Base: Original Expanded Code (bot (3).py)
 Features Added/Fixed:
 1. ALWAYS Kicks from Free Batches if Main Channel is left.
 2. Explicitly requests ALL_TYPES of updates to detect channel leaves.
@@ -12,6 +12,9 @@ Features Added/Fixed:
 6. Real-time Edit Sync (Text, Photos, Videos, Documents).
 7. Reply Context Mapping (Track exact replies).
 8. Button Loading Glitch Fixed.
+9. UNIVERSAL KICK: Auto-kicks if user Leaves Channel OR Blocks the Bot.
+10. BACKGROUND USER SYNC: Safely checks all DB users every 1 hour.
+11. AUTO-BROADCAST ON NEW FREE BATCH: Announces to all channels, auto-deletes in 10hrs.
 """
 
 import logging
@@ -52,7 +55,7 @@ try:
         
         @app.route('/')
         def index(): 
-            return "Bot Running - v21.0 Uncompressed Ultimate Fix", 200
+            return "Bot Running - v25.0 Uncompressed Ultimate Fix", 200
         
         def run():
             app.run(host="0.0.0.0", port=port, use_reloader=False)
@@ -98,7 +101,8 @@ DB = {
     "CUSTOM_WELCOMES": {}, 
     "NEW_USERS_ALLOWED": True, 
     "FREE_LOCKED": False,      
-    "PAID_LOCKED": False       
+    "PAID_LOCKED": False,
+    "SCHEDULED_DELETES": [] # NEW: Tracks messages to auto-delete after 10 hours
 }
 
 # Runtime Memory
@@ -154,6 +158,9 @@ def load_data():
                     
                 if "PAID_LOCKED" in loaded: 
                     DB["PAID_LOCKED"] = loaded["PAID_LOCKED"]
+                    
+                if "SCHEDULED_DELETES" in loaded:
+                    DB["SCHEDULED_DELETES"] = loaded["SCHEDULED_DELETES"]
                 
                 for k in ["FREE_CHANNELS", "PAID_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
                     if k in loaded: 
@@ -203,6 +210,9 @@ def load_data():
                 
             if "PAID_LOCKED" in loaded: 
                 DB["PAID_LOCKED"] = loaded["PAID_LOCKED"]
+                
+            if "SCHEDULED_DELETES" in loaded:
+                DB["SCHEDULED_DELETES"] = loaded["SCHEDULED_DELETES"]
             
             for k in ["FREE_CHANNELS", "PAID_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
                 if k in loaded: 
@@ -238,7 +248,8 @@ def save_data_sync():
             "ALL_CHATS": {str(k): v for k, v in DB["ALL_CHATS"].items()},
             "USER_DATA": {str(k): v for k, v in DB["USER_DATA"].items()},
             "USER_TOPICS": {str(k): v for k, v in DB["USER_TOPICS"].items()},
-            "PENDING_REQUESTS": {str(k): v for k, v in DB["PENDING_REQUESTS"].items()}
+            "PENDING_REQUESTS": {str(k): v for k, v in DB["PENDING_REQUESTS"].items()},
+            "SCHEDULED_DELETES": DB.get("SCHEDULED_DELETES", [])
         }
 
         if MONGO_URL and mongo_collection is not None:
@@ -370,6 +381,27 @@ async def get_or_create_topic(user, context):
     finally: 
         TOPIC_CREATION_LOCK.discard(user.id)
 
+# --- UNIVERSAL KICK HELPER ---
+async def auto_kick_user(user_id, context):
+    """Centralized function to kick a user from everything."""
+    # Kick from Free Batches
+    for bid in list(DB["FREE_CHANNELS"].keys()):
+        try:
+            await context.bot.ban_chat_member(int(bid), user_id)
+            await context.bot.unban_chat_member(int(bid), user_id)
+        except Exception: pass
+        
+    # Kick from Paid if lockdown is active
+    if not DB.get("NEW_USERS_ALLOWED", True):
+        for bid in list(DB["PAID_CHANNELS"].keys()):
+            try: await context.bot.ban_chat_member(int(bid), user_id)
+            except Exception: pass
+            
+        if user_id not in DB["BLOCKED_USERS"]:
+            DB["BLOCKED_USERS"].append(user_id)
+            await save_data_async()
+
+# --- AUTO-TRACK CHATS & BLOCK DETECTION ---
 async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.my_chat_member: 
         return
@@ -377,6 +409,14 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.my_chat_member.chat
     status = update.my_chat_member.new_chat_member.status
     
+    # User BLOCKED the Bot in Private Chat
+    if chat.type == ChatType.PRIVATE:
+        if status in [ChatMember.KICKED, ChatMember.BANNED]:
+            logger.info(f"🚫 User {chat.id} blocked the bot. Executing Auto-Kick...")
+            await auto_kick_user(chat.id, context)
+        return
+    
+    # Group/Channel Tracking
     if status in [ChatMember.MEMBER, ChatMember.ADMINISTRATOR]:
         if chat.id not in DB["ALL_CHATS"]:
             DB["ALL_CHATS"][chat.id] = chat.title or f"Chat {chat.id}"
@@ -1063,6 +1103,32 @@ async def wizard_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await save_data_async()
             
             msg = await update.message.reply_text(f"✅ **Added!**\n{cname} ({cid})", parse_mode=ParseMode.MARKDOWN)
+            
+            # --- AUTO BROADCAST FOR FREE BATCHES ---
+            if state["type"] == "free":
+                b_count = 0
+                await msg.reply_text("📢 Sending Auto-Broadcast to all tracked channels...", parse_mode=ParseMode.MARKDOWN)
+                
+                for t_cid in list(DB["ALL_CHATS"].keys()):
+                    if t_cid != cid: 
+                        try:
+                            sent_msg = await context.bot.send_message(
+                                t_cid,
+                                f"🎉 **NEW FREE BATCH ADDED!** 🎉\n\n📛 **Name:** {cname}\n\n👉 Go to the Bot Menu to join now!",
+                                parse_mode=ParseMode.MARKDOWN
+                            )
+                            DB.setdefault("SCHEDULED_DELETES", []).append({
+                                "c": t_cid,
+                                "m": sent_msg.message_id,
+                                "t": time.time() + 36000 # 10 hours
+                            })
+                            b_count += 1
+                        except Exception: 
+                            pass
+                
+                await msg.reply_text(f"✅ Broadcast sent to {b_count} chats. It will auto-delete after 10 hours.")
+                await save_data_async()
+
             del ADMIN_WIZARD[uid]
         except Exception: 
             msg = await update.message.reply_text("❌ Error. Ensure Bot is Admin and ID is valid.")
@@ -1306,26 +1372,8 @@ async def on_chat_member_update(update: Update, context: ContextTypes.DEFAULT_TY
     status = result.new_chat_member.status
     
     if str(chat.id) == str(MANDATORY_CHANNEL_ID) and status in [ChatMember.LEFT, ChatMember.BANNED, ChatMember.KICKED]:
-        
-        # 1. ALWAYS kick from FREE Batches 
-        for bid in list(DB["FREE_CHANNELS"].keys()):
-            try:
-                await context.bot.ban_chat_member(int(bid), user.id)
-                await context.bot.unban_chat_member(int(bid), user.id) 
-            except Exception: 
-                pass
-                
-        # 2. Strict Actions if Lockdown is ON
-        if not DB.get("NEW_USERS_ALLOWED", True):
-            for bid in list(DB["PAID_CHANNELS"].keys()):
-                try: 
-                    await context.bot.ban_chat_member(int(bid), user.id)
-                except Exception: 
-                    pass
-            
-            if user.id not in DB["BLOCKED_USERS"]:
-                DB["BLOCKED_USERS"].append(user.id)
-                await save_data_async()
+        logger.info(f"🚪 User {user.id} left the Mandatory Channel. Auto-Kicking...")
+        await auto_kick_user(user.id, context)
 
 async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req = update.chat_join_request
@@ -1365,6 +1413,34 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
                 await context.bot.revoke_chat_invite_link(chat.id, req.invite_link.invite_link)
             except Exception: 
                 pass
+
+# --- BACKGROUND USER SYNC (EVERY 1 HOUR) ---
+async def background_sync(context: ContextTypes.DEFAULT_TYPE):
+    logger.info("🔄 Starting Background User Sync...")
+    mod = False
+    
+    for uid in list(DB["USER_DATA"].keys()):
+        user_id = int(uid)
+        
+        if user_id in DB["BLOCKED_USERS"]: continue
+        if is_admin(user_id): continue
+        
+        try:
+            m = await context.bot.get_chat_member(MANDATORY_CHANNEL_ID, user_id)
+            status = m.status
+        except Exception:
+            status = ChatMember.LEFT
+            
+        if status in [ChatMember.LEFT, ChatMember.BANNED, ChatMember.KICKED]:
+            logger.info(f"🚫 Background Sync: Kicking {user_id} (Left Main Channel)")
+            await auto_kick_user(user_id, context)
+            mod = True
+            
+        await asyncio.sleep(0.1)
+        
+    if mod: 
+        await save_data_async()
+    logger.info("✅ Background Sync Complete.")
 
 async def check_demos(context: ContextTypes.DEFAULT_TYPE):
     now = time.time()
@@ -1411,6 +1487,23 @@ async def check_demos(context: ContextTypes.DEFAULT_TYPE):
                 except Exception: 
                     pass
                     
+    # 2. Check Scheduled Deletions (Broadcast Auto-Delete)
+    if "SCHEDULED_DELETES" in DB and DB["SCHEDULED_DELETES"]:
+        surviving = []
+        for item in DB["SCHEDULED_DELETES"]:
+            if now > item["t"]:
+                try:
+                    await context.bot.delete_message(item["c"], item["m"])
+                    mod = True
+                except Exception: 
+                    pass
+            else:
+                surviving.append(item)
+                
+        if len(surviving) != len(DB["SCHEDULED_DELETES"]):
+            DB["SCHEDULED_DELETES"] = surviving
+            mod = True
+
     if mod: 
         await save_data_async()
 
@@ -1695,7 +1788,6 @@ def main():
     app.add_handler(CallbackQueryHandler(general_callback))
     app.add_handler(ChatJoinRequestHandler(handle_join_request))
     
-    # ⚠️ CRITICAL FIX: explicitly telling handler to listen for CHAT_MEMBER updates
     app.add_handler(ChatMemberHandler(on_chat_member_update, ChatMemberHandler.CHAT_MEMBER))
     app.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
     
@@ -1705,10 +1797,10 @@ def main():
     
     if app.job_queue: 
         app.job_queue.run_repeating(check_demos, interval=60, first=10)
+        app.job_queue.run_repeating(background_sync, interval=3600, first=30)
     
-    print("Bot v21.0 (Fully Expanded & Fixed) Started...")
+    print("Bot v25.0 (Fully Expanded & Fixed) Started...")
     
-    # ⚠️ CRITICAL FIX: Explictly request ALL update types from Telegram
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
