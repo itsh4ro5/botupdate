@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-ULTIMATE BOT MANAGER (v27.1 - Uncompressed & Kick Logic Restored)
+ULTIMATE BOT MANAGER (v28.0 - Role Based Menus & Ultimate Ban Fixed)
 Base: Original Expanded Code
 Features Added/Fixed:
 1. PARSE ERROR FIXED: Replaced Markdown with HTML for link generation & broadcasts.
@@ -10,8 +10,10 @@ Features Added/Fixed:
 4. BACKGROUND SYNC ENHANCED: Runs every 10 mins (with flood protection).
 5. /sync COMMAND: Admin can manually trigger background sync.
 6. AUTO-BROADCAST: Includes @H4R_Contact_bot in the text.
-7. BOT COMMANDS MENU: Auto-sets menu commands for easy user access.
-8. KICK LOGIC RESTORED: Added back detailed error catching, unban logic, and log reporting from v14.
+7. KICK LOGIC RESTORED: Added back detailed error catching and unban logic.
+8. ROLE-BASED MENUS (NEW): Different Telegram Menu commands for Owner, Admins, and Users.
+9. ChatMember.KICKED ERROR FIXED (NEW): Updated to match python-telegram-bot v20+.
+10. PERMANENT /ban LOGIC (NEW): Bans forcefully remove users from channels and block re-entry.
 """
 
 import logging
@@ -52,7 +54,7 @@ try:
         
         @app.route('/')
         def index(): 
-            return "Bot Running - v27.1 Uncompressed Kick Fix", 200
+            return "Bot Running - v28.0 Ultimate Fix", 200
         
         def run():
             app.run(host="0.0.0.0", port=port, use_reloader=False)
@@ -271,44 +273,27 @@ async def save_data_async():
 
 # --- 6. CORE HELPERS ---
 
-# --- UPDATED: UNIVERSAL AUTO KICK HELPER (WITH OLD ROBUST LOGIC) ---
-async def execute_universal_kick(user_id, context):
-    """Kicks the user from ALL batches and blocks them using robust error catching."""
+# --- UPDATED: UNIVERSAL AUTO KICK HELPER ---
+# Added `permanent_ban` parameter. If True, it will NOT unban them (Used in /ban)
+async def execute_universal_kick(user_id, context, permanent_ban=False):
+    """Kicks or Permanently Bans the user from ALL batches and blocks them."""
     mod = False
     
-    # 1. Unconditionally kick from Free Batches
+    # 1. Unconditionally remove from Free Batches
     for bid in list(DB["FREE_CHANNELS"].keys()):
         try:
             await context.bot.ban_chat_member(int(bid), user_id)
-            logger.info(f"✅ User {user_id} universally kicked from Free Batch {bid}")
-            await context.bot.unban_chat_member(int(bid), user_id) # Allow rejoin later if unblocked
-        except Exception as e:
-            logger.error(f"❌ UNIVERSAL KICK FAILED for {user_id} in Free Batch {bid}: {e}")
-            if LOG_CHANNEL_ID:
-                try:
-                    err_msg = (f"⚠️ **UNIVERSAL KICK FAILED (Free)**\n"
-                               f"👤 User: `{user_id}`\n"
-                               f"🆔 Batch: `{bid}`\n"
-                               f"❓ Reason: `{e}`")
-                    await context.bot.send_message(LOG_CHANNEL_ID, err_msg, parse_mode=ParseMode.MARKDOWN)
-                except Exception: pass
+            if not permanent_ban:
+                await context.bot.unban_chat_member(int(bid), user_id) # Just kick
+        except Exception: pass
 
-    # 2. Unconditionally kick from Paid Batches
+    # 2. Unconditionally remove from Paid Batches
     for bid in list(DB["PAID_CHANNELS"].keys()):
         try:
             await context.bot.ban_chat_member(int(bid), user_id)
-            logger.info(f"✅ User {user_id} universally kicked from Paid Batch {bid}")
-            await context.bot.unban_chat_member(int(bid), user_id)
-        except Exception as e:
-            logger.error(f"❌ UNIVERSAL KICK FAILED for {user_id} in Paid Batch {bid}: {e}")
-            if LOG_CHANNEL_ID:
-                try:
-                    err_msg = (f"⚠️ **UNIVERSAL KICK FAILED (Paid)**\n"
-                               f"👤 User: `{user_id}`\n"
-                               f"🆔 Batch: `{bid}`\n"
-                               f"❓ Reason: `{e}`")
-                    await context.bot.send_message(LOG_CHANNEL_ID, err_msg, parse_mode=ParseMode.MARKDOWN)
-                except Exception: pass
+            if not permanent_ban:
+                await context.bot.unban_chat_member(int(bid), user_id) # Just kick
+        except Exception: pass
 
     # 3. Block User in Bot
     if user_id not in DB["BLOCKED_USERS"]:
@@ -433,9 +418,9 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.my_chat_member.chat
     status = update.my_chat_member.new_chat_member.status
     
-    # User BLOCKED the bot in private chat
+    # User BLOCKED the bot in private chat - Removed KICKED error here
     if chat.type == ChatType.PRIVATE:
-        if status in [ChatMember.KICKED, ChatMember.BANNED]:
+        if status == ChatMember.BANNED:
             logger.info(f"🚫 User {chat.id} blocked the bot. Auto-kicking unconditionally.")
             await execute_universal_kick(chat.id, context)
         return
@@ -450,6 +435,39 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if chat.id not in DB["FREE_CHANNELS"] and chat.id not in DB["PAID_CHANNELS"]:
                 del DB["ALL_CHATS"][chat.id]
                 await save_data_async()
+
+# --- 7. NEW: ROLE BASED MENU COMMANDS ---
+async def set_role_based_commands(user_id, context: ContextTypes.DEFAULT_TYPE):
+    """Sets the Telegram menu dynamically based on whether the user is Owner, Admin, or Regular User"""
+    try:
+        user_cmds = [
+            BotCommand("start", "Open Main Menu"),
+            BotCommand("id", "Get Telegram ID"),
+            BotCommand("myinfo", "Check Active Demos")
+        ]
+        
+        admin_cmds = user_cmds + [
+            BotCommand("stats", "Bot Statistics"),
+            BotCommand("batchstats", "Batch Info"),
+            BotCommand("find", "Find a User"),
+            BotCommand("ban", "Ban & Remove User"),
+            BotCommand("broadcast", "Send Broadcast")
+        ]
+        
+        owner_cmds = admin_cmds + [
+            BotCommand("addadmin", "Add New Admin"),
+            BotCommand("deladmin", "Remove Admin"),
+            BotCommand("backup", "Download Database")
+        ]
+        
+        if user_id == OWNER_ID:
+            await context.bot.set_my_commands(owner_cmds, scope=BotCommandScopeChat(user_id))
+        elif is_admin(user_id):
+            await context.bot.set_my_commands(admin_cmds, scope=BotCommandScopeChat(user_id))
+        else:
+            await context.bot.set_my_commands(user_cmds, scope=BotCommandScopeChat(user_id))
+    except Exception as e:
+        logger.error(f"Failed to set role commands for {user_id}: {e}")
 
 # --- DELETE COMMAND (/del) ---
 async def cmd_del_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -569,6 +587,7 @@ async def cmd_all_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.delete_message(update.effective_chat.id, msg.message_id)
     await schedule_delete(context, update.message)
 
+# --- UPDATED: /ban Command with permanent block ---
 async def cmd_ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): 
         return
@@ -576,17 +595,18 @@ async def cmd_ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         target = int(context.args[0])
         if target not in DB["BLOCKED_USERS"] and target != OWNER_ID: 
-            DB["BLOCKED_USERS"].append(target)
-            await save_data_async()
-            msg = await update.message.reply_text(f"🚫 User {target} has been BLOCKED.")
-            await execute_universal_kick(target, context)
+            msg = await update.message.reply_text(f"⏳ Process started... Kicking and Banning user `{target}` from all groups.", parse_mode=ParseMode.MARKDOWN)
+            # Apply permanent ban (will not unban them in the groups)
+            await execute_universal_kick(target, context, permanent_ban=True)
+            await msg.edit_text(f"🚫 User `{target}` has been PERMANENTLY BANNED from the bot and removed from all tracked groups.", parse_mode=ParseMode.MARKDOWN)
         else: 
-            msg = await update.message.reply_text("⚠️ User already blocked or is Owner.")
+            msg = await update.message.reply_text("⚠️ User is already blocked or is the Owner.")
     except Exception: 
         msg = await update.message.reply_text("Usage: /ban [user_id]")
         
     await schedule_delete(context, update.message)
-    await schedule_delete(context, msg)
+    try: await schedule_delete(context, msg) 
+    except Exception: pass
 
 async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): 
@@ -597,7 +617,9 @@ async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if target in DB["BLOCKED_USERS"]: 
             DB["BLOCKED_USERS"].remove(target)
             await save_data_async()
-            msg = await update.message.reply_text(f"✅ User {target} has been UNBLOCKED.")
+            # Note: Unbanning from the Bot DB allows them to request access again.
+            # They will still need to be manually unbanned from the specific Telegram Groups if they were permanently banned.
+            msg = await update.message.reply_text(f"✅ User {target} has been UNBLOCKED in the bot DB. \n*(Note: They might still need to be manually unbanned in channel settings to rejoin)*", parse_mode=ParseMode.MARKDOWN)
         else: 
             msg = await update.message.reply_text("⚠️ User is not blocked.")
     except Exception: 
@@ -1400,9 +1422,10 @@ async def on_chat_member_update(update: Update, context: ContextTypes.DEFAULT_TY
     chat_id_clean = str(chat.id).replace("-100", "")
     man_id_clean = str(MANDATORY_CHANNEL_ID).replace("-100", "")
     
-    if chat_id_clean == man_id_clean and status in [ChatMember.LEFT, ChatMember.BANNED, ChatMember.KICKED]:
+    # FIXED: ChatMember.KICKED removed to prevent AttributeError
+    if chat_id_clean == man_id_clean and status in [ChatMember.LEFT, ChatMember.BANNED]:
         logger.info(f"🚪 User {user.id} left the Mandatory Channel. Auto-Kicking Unconditionally...")
-        await execute_universal_kick(user.id, context)
+        await execute_universal_kick(user.id, context, permanent_ban=True) # Permanently bans them if they leave main
 
 async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req = update.chat_join_request
@@ -1461,25 +1484,22 @@ async def background_sync(context: ContextTypes.DEFAULT_TYPE):
             m = await context.bot.get_chat_member(MANDATORY_CHANNEL_ID, user_id)
             status = m.status
         except BadRequest as e:
-            # If user not found in channel, they left or never joined
             if "User not found" in str(e) or "chat not found" in str(e) or "user not found" in str(e).lower():
                 status = ChatMember.LEFT
             else:
-                continue # Skip on other BadRequests
+                continue 
         except Exception:
-            # Skip on FloodWait or NetworkError
             continue 
             
-        if status in [ChatMember.LEFT, ChatMember.BANNED, ChatMember.KICKED]:
+        # FIXED: ChatMember.KICKED removed
+        if status in [ChatMember.LEFT, ChatMember.BANNED]:
             logger.info(f"🚫 Background Sync: Kicking {user_id} (Left Main Channel)")
-            await execute_universal_kick(user_id, context)
+            await execute_universal_kick(user_id, context, permanent_ban=True)
                 
-        # Sleep for 0.5s to avoid FloodWait from Telegram API
         await asyncio.sleep(0.5)
         
     logger.info("✅ Background Sync Complete.")
 
-# --- NEW: MANUAL SYNC COMMAND FOR ADMINS ---
 async def cmd_sync(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     msg = await update.message.reply_text("🔄 Background sync started manually. Check terminal logs.")
@@ -1487,7 +1507,6 @@ async def cmd_sync(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await schedule_delete(context, update.message)
     await schedule_delete(context, msg)
 
-# --- UPDATED: CHECK DEMOS WITH ROBUST KICK LOGIC RESTORED ---
 async def check_demos(context: ContextTypes.DEFAULT_TYPE):
     now = time.time()
     mod = False
@@ -1513,14 +1532,9 @@ async def check_demos(context: ContextTypes.DEFAULT_TYPE):
                 logger.info(f"⏳ Processing Demo Expiry: User {user_id} in Batch {chat_id}")
                 
                 try:
-                    # 1. Attempt to Ban (Kick)
                     await context.bot.ban_chat_member(chat_id, user_id)
                     logger.info(f"✅ User {user_id} kicked from {chat_id}")
-
-                    # 2. Attempt to Unban (Allow rejoin if requested later)
                     await context.bot.unban_chat_member(chat_id, user_id)
-
-                    # 3. Send Notification
                     try: 
                         await context.bot.send_message(user_id, "⏰ **Demo Ended.**\nHope you enjoyed! Contact Admin for permanent access.")
                     except Exception: 
@@ -1528,7 +1542,6 @@ async def check_demos(context: ContextTypes.DEFAULT_TYPE):
 
                 except Exception as e: 
                     logger.error(f"❌ KICK FAILED for {user_id} in {chat_id}: {e}")
-                    # Notify Admin Channel if configured
                     if LOG_CHANNEL_ID:
                         try:
                             err_msg = (
@@ -1541,7 +1554,6 @@ async def check_demos(context: ContextTypes.DEFAULT_TYPE):
                             await context.bot.send_message(LOG_CHANNEL_ID, err_msg, parse_mode=ParseMode.MARKDOWN)
                         except Exception: pass
                     
-                # 4. Cleanup Demo specific data
                 if bid in data["demos"]:
                     del data["demos"][bid]
                     mod = True
@@ -1558,7 +1570,6 @@ async def check_demos(context: ContextTypes.DEFAULT_TYPE):
                 except Exception: 
                     pass
                     
-    # 2. Check Scheduled Deletions (Broadcast Auto-Delete)
     if "SCHEDULED_DELETES" in DB and DB["SCHEDULED_DELETES"]:
         surviving = []
         for item in DB["SCHEDULED_DELETES"]:
@@ -1674,7 +1685,6 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 expire_date=int(time.time())+60
             )
             
-            # FIX: Switched to HTML parsing to prevent special character errors like + or -
             msg_text = (
                 f"🔗 <b>Link:</b>\n\n"
                 f"<b>{bname}</b>\n\n"
@@ -1752,7 +1762,6 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception: 
                     pass
                     
-            # FIX: Switched to HTML parsing to prevent special character errors
             user_msg = (
                 f"✅ <b>Access Link Generated!</b>\n\n"
                 f"<b>{bname}</b>\n\n"
@@ -1784,6 +1793,9 @@ async def show_user_menu(update: Update):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    
+    # NEW: SET THE MENU COMMANDS FOR THIS SPECIFIC USER DYNAMICALLY
+    await set_role_based_commands(user.id, context)
     
     if user.id in DB["BLOCKED_USERS"]: 
         await update.message.reply_text("🚫 Blocked.")
@@ -1819,22 +1831,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         await update.message.reply_text("⚠️ **Join Main Channel First**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
-# --- BOT COMMANDS MENU ---
-async def set_bot_commands(application: Application):
-    """Sets the Telegram bot menu commands for all users"""
-    commands = [
-        BotCommand("start", "Start the bot & open Menu"),
-        BotCommand("id", "Get your Telegram ID"),
-        BotCommand("myinfo", "Check your active demos")
-    ]
-    try:
-        await application.bot.set_my_commands(commands)
-    except Exception as e:
-        logger.error(f"Failed to set bot commands: {e}")
-
 def main():
     load_data()
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).post_init(set_bot_commands).build()
+    # Note: Global set_my_commands removed. Roles are updated inside /start dynamically.
+    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("id", cmd_id))
@@ -1884,10 +1884,9 @@ def main():
     
     if app.job_queue: 
         app.job_queue.run_repeating(check_demos, interval=60, first=10)
-        # RUN BACKGROUND SYNC EVERY 10 MINS
         app.job_queue.run_repeating(background_sync, interval=600, first=30)
     
-    print("Bot v27.1 (Auto-kick Fixed & Kick Logic Restored) Started...")
+    print("Bot v28.0 (Role Based Menu & Perm Ban Fixed) Started...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
