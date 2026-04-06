@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 """
-ULTIMATE BOT MANAGER (v28.0 - Role Based Menus & Ultimate Ban Fixed)
-Base: Original Expanded Code
+ULTIMATE BOT MANAGER (v29.0 - Role Based Menus & Ultimate Ban Fixed)
+Base: Original Expanded Code (bot (3).py)
 Features Added/Fixed:
 1. PARSE ERROR FIXED: Replaced Markdown with HTML for link generation & broadcasts.
 2. ROBUST AUTO-KICK: Unconditional kick if user leaves Main Channel or blocks bot.
@@ -11,9 +11,11 @@ Features Added/Fixed:
 5. /sync COMMAND: Admin can manually trigger background sync.
 6. AUTO-BROADCAST: Includes @H4R_Contact_bot in the text.
 7. KICK LOGIC RESTORED: Added back detailed error catching and unban logic.
-8. ROLE-BASED MENUS (NEW): Different Telegram Menu commands for Owner, Admins, and Users.
+8. ROLE-BASED MENUS (NEW): Different Telegram Menu commands for Owner, Admins, and Users. (Fully Populated)
 9. ChatMember.KICKED ERROR FIXED (NEW): Updated to match python-telegram-bot v20+.
 10. PERMANENT /ban LOGIC (NEW): Bans forcefully remove users from channels and block re-entry.
+11. BANNED USER SUPPORT (NEW): Banned users can message bot for support but cannot use features.
+12. CONTEXTUAL BAN/UNBAN (NEW): Use /ban or /unban directly in a user's topic.
 """
 
 import logging
@@ -54,7 +56,7 @@ try:
         
         @app.route('/')
         def index(): 
-            return "Bot Running - v28.0 Ultimate Fix", 200
+            return "Bot Running - v29.0 Ultimate Fix", 200
         
         def run():
             app.run(host="0.0.0.0", port=port, use_reloader=False)
@@ -451,16 +453,30 @@ async def set_role_based_commands(user_id, context: ContextTypes.DEFAULT_TYPE):
             BotCommand("batchstats", "Batch Info"),
             BotCommand("find", "Find a User"),
             BotCommand("ban", "Ban & Remove User"),
-            BotCommand("broadcast", "Send Broadcast")
+            BotCommand("unban", "Unban User"),
+            BotCommand("kick", "Kick User"),
+            BotCommand("extend", "Extend Demo"),
+            BotCommand("demo", "Approve Demo"),
+            BotCommand("per", "Approve Perm"),
+            BotCommand("broadcast", "Send Broadcast"),
+            BotCommand("post", "Post Message"),
+            BotCommand("setwelcome", "Set Welcome"),
+            BotCommand("sync", "Manual Sync")
         ]
         
         owner_cmds = admin_cmds + [
             BotCommand("addadmin", "Add New Admin"),
             BotCommand("deladmin", "Remove Admin"),
-            BotCommand("backup", "Download Database")
+            BotCommand("allusers", "All Users List"),
+            BotCommand("lockdown", "Toggle Lockdown"),
+            BotCommand("lockfree", "Lock Free Batches"),
+            BotCommand("lockpaid", "Lock Paid Batches"),
+            BotCommand("addbatch", "Add Batch"),
+            BotCommand("delbatch", "Delete Batch"),
+            BotCommand("backup", "Backup DB")
         ]
         
-        if user_id == OWNER_ID:
+        if str(user_id) == str(OWNER_ID):
             await context.bot.set_my_commands(owner_cmds, scope=BotCommandScopeChat(user_id))
         elif is_admin(user_id):
             await context.bot.set_my_commands(admin_cmds, scope=BotCommandScopeChat(user_id))
@@ -587,22 +603,39 @@ async def cmd_all_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.delete_message(update.effective_chat.id, msg.message_id)
     await schedule_delete(context, update.message)
 
-# --- UPDATED: /ban Command with permanent block ---
+# --- UPDATED: /ban Command with permanent block AND Topic Context ---
 async def cmd_ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): 
         return
         
-    try:
-        target = int(context.args[0])
-        if target not in DB["BLOCKED_USERS"] and target != OWNER_ID: 
-            msg = await update.message.reply_text(f"⏳ Process started... Kicking and Banning user `{target}` from all groups.", parse_mode=ParseMode.MARKDOWN)
-            # Apply permanent ban (will not unban them in the groups)
-            await execute_universal_kick(target, context, permanent_ban=True)
-            await msg.edit_text(f"🚫 User `{target}` has been PERMANENTLY BANNED from the bot and removed from all tracked groups.", parse_mode=ParseMode.MARKDOWN)
-        else: 
-            msg = await update.message.reply_text("⚠️ User is already blocked or is the Owner.")
-    except Exception: 
-        msg = await update.message.reply_text("Usage: /ban [user_id]")
+    target = None
+    if len(context.args) > 0:
+        try: target = int(context.args[0])
+        except ValueError: pass
+    elif update.message.message_thread_id:
+        for u, t in DB["USER_TOPICS"].items():
+            if t == update.message.message_thread_id:
+                target = int(u)
+                break
+
+    if not target:
+        msg = await update.message.reply_text("Usage: `/ban [user_id]` OR send `/ban` directly in a user's support topic.", parse_mode=ParseMode.MARKDOWN)
+        await schedule_delete(context, update.message)
+        await schedule_delete(context, msg)
+        return
+
+    if target not in DB["BLOCKED_USERS"] and target != OWNER_ID: 
+        msg = await update.message.reply_text(f"⏳ Process started... Kicking and Banning user `{target}` from all groups.", parse_mode=ParseMode.MARKDOWN)
+        # Apply permanent ban (will not unban them in the groups)
+        await execute_universal_kick(target, context, permanent_ban=True)
+        await msg.edit_text(f"🚫 User `{target}` has been PERMANENTLY BANNED from the bot and removed from all tracked groups.", parse_mode=ParseMode.MARKDOWN)
+        
+        if target in DB["USER_TOPICS"]:
+            topic_id = DB["USER_TOPICS"][target]
+            try: await context.bot.send_message(SUPPORT_GROUP_ID, f"🚨 **ADMIN ALERT:** This user has been BANNED.", message_thread_id=topic_id, parse_mode=ParseMode.MARKDOWN)
+            except Exception: pass
+    else: 
+        msg = await update.message.reply_text("⚠️ User is already blocked or is the Owner.")
         
     await schedule_delete(context, update.message)
     try: await schedule_delete(context, msg) 
@@ -612,21 +645,37 @@ async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): 
         return
         
-    try:
-        target = int(context.args[0])
-        if target in DB["BLOCKED_USERS"]: 
-            DB["BLOCKED_USERS"].remove(target)
-            await save_data_async()
-            # Note: Unbanning from the Bot DB allows them to request access again.
-            # They will still need to be manually unbanned from the specific Telegram Groups if they were permanently banned.
-            msg = await update.message.reply_text(f"✅ User {target} has been UNBLOCKED in the bot DB. \n*(Note: They might still need to be manually unbanned in channel settings to rejoin)*", parse_mode=ParseMode.MARKDOWN)
-        else: 
-            msg = await update.message.reply_text("⚠️ User is not blocked.")
-    except Exception: 
-        msg = await update.message.reply_text("Usage: /unban [user_id]")
+    target = None
+    if len(context.args) > 0:
+        try: target = int(context.args[0])
+        except ValueError: pass
+    elif update.message.message_thread_id:
+        for u, t in DB["USER_TOPICS"].items():
+            if t == update.message.message_thread_id:
+                target = int(u)
+                break
+
+    if not target:
+        msg = await update.message.reply_text("Usage: `/unban [user_id]` OR send `/unban` directly in a user's support topic.", parse_mode=ParseMode.MARKDOWN)
+        await schedule_delete(context, update.message)
+        await schedule_delete(context, msg)
+        return
+
+    if target in DB["BLOCKED_USERS"]: 
+        DB["BLOCKED_USERS"].remove(target)
+        await save_data_async()
+        msg = await update.message.reply_text(f"✅ User `{target}` has been UNBLOCKED in the bot DB. \n*(Note: They might still need to be manually unbanned in channel settings to rejoin)*", parse_mode=ParseMode.MARKDOWN)
+        
+        if target in DB["USER_TOPICS"]:
+            topic_id = DB["USER_TOPICS"][target]
+            try: await context.bot.send_message(SUPPORT_GROUP_ID, f"🟢 **ADMIN ALERT:** This user has been UNBANNED.", message_thread_id=topic_id, parse_mode=ParseMode.MARKDOWN)
+            except Exception: pass
+    else: 
+        msg = await update.message.reply_text("⚠️ User is not blocked.")
         
     await schedule_delete(context, update.message)
-    await schedule_delete(context, msg)
+    try: await schedule_delete(context, msg) 
+    except Exception: pass
 
 async def cmd_find_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): 
@@ -1317,9 +1366,6 @@ async def main_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     if not user:
         return
         
-    if user.id in DB["BLOCKED_USERS"]:
-        return
-        
     if check_spam(user.id):
         return
         
@@ -1328,13 +1374,15 @@ async def main_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             DB["ALL_CHATS"][chat.id] = chat.title or f"Chat {chat.id}"
             await save_data_async()
             
-    if await wizard_message(update, context):
-        return
-        
-    if await handle_broadcast_flow(update, context):
-        return
+    if user.id not in DB["BLOCKED_USERS"]:
+        if await wizard_message(update, context):
+            return
+            
+        if await handle_broadcast_flow(update, context):
+            return
 
     if chat.type == ChatType.PRIVATE:
+        # Blocked users CAN send messages to private chat to reach support
         topic_id = await get_or_create_topic(user, context)
         if topic_id:
             reply_id = None
@@ -1422,7 +1470,6 @@ async def on_chat_member_update(update: Update, context: ContextTypes.DEFAULT_TY
     chat_id_clean = str(chat.id).replace("-100", "")
     man_id_clean = str(MANDATORY_CHANNEL_ID).replace("-100", "")
     
-    # FIXED: ChatMember.KICKED removed to prevent AttributeError
     if chat_id_clean == man_id_clean and status in [ChatMember.LEFT, ChatMember.BANNED]:
         logger.info(f"🚪 User {user.id} left the Mandatory Channel. Auto-Kicking Unconditionally...")
         await execute_universal_kick(user.id, context, permanent_ban=True) # Permanently bans them if they leave main
@@ -1491,7 +1538,6 @@ async def background_sync(context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             continue 
             
-        # FIXED: ChatMember.KICKED removed
         if status in [ChatMember.LEFT, ChatMember.BANNED]:
             logger.info(f"🚫 Background Sync: Kicking {user_id} (Left Main Channel)")
             await execute_universal_kick(user_id, context, permanent_ban=True)
@@ -1595,7 +1641,7 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = q.data
     
     if uid in DB["BLOCKED_USERS"]: 
-        await q.answer("🚫 Blocked.", show_alert=True)
+        await q.answer("🚫 You are banned from joining batches.", show_alert=True)
         return
         
     if check_spam(uid): 
@@ -1797,16 +1843,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # NEW: SET THE MENU COMMANDS FOR THIS SPECIFIC USER DYNAMICALLY
     await set_role_based_commands(user.id, context)
     
-    if user.id in DB["BLOCKED_USERS"]: 
-        await update.message.reply_text("🚫 Blocked.")
-        return
-        
     if user.id not in DB["USER_DATA"]: 
         DB["USER_DATA"][user.id] = {"name": user.full_name, "username": user.username, "joined_at": time.time(), "demos": {}}
         await save_data_async()
         
     await get_or_create_topic(user, context)
     
+    if user.id in DB["BLOCKED_USERS"]: 
+        await update.message.reply_text("🚫 You are banned from joining batches, but you can leave a message for support here if needed.", parse_mode=ParseMode.MARKDOWN)
+        return
+        
     if is_admin(user.id): 
         admin_text = (
             f"👑 **WELCOME ADMIN!**\n"
@@ -1886,7 +1932,7 @@ def main():
         app.job_queue.run_repeating(check_demos, interval=60, first=10)
         app.job_queue.run_repeating(background_sync, interval=600, first=30)
     
-    print("Bot v28.0 (Role Based Menu & Perm Ban Fixed) Started...")
+    print("Bot v29.0 (Role Based Menu & Perm Ban Fixed) Started...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
