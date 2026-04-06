@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-ULTIMATE BOT MANAGER (v27.0 - Uncompressed & Parse Error Fixed)
+ULTIMATE BOT MANAGER (v27.1 - Uncompressed & Kick Logic Restored)
 Base: Original Expanded Code
 Features Added/Fixed:
 1. PARSE ERROR FIXED: Replaced Markdown with HTML for link generation & broadcasts.
@@ -11,6 +11,7 @@ Features Added/Fixed:
 5. /sync COMMAND: Admin can manually trigger background sync.
 6. AUTO-BROADCAST: Includes @H4R_Contact_bot in the text.
 7. BOT COMMANDS MENU: Auto-sets menu commands for easy user access.
+8. KICK LOGIC RESTORED: Added back detailed error catching, unban logic, and log reporting from v14.
 """
 
 import logging
@@ -51,7 +52,7 @@ try:
         
         @app.route('/')
         def index(): 
-            return "Bot Running - v27.0 Uncompressed Ultimate Fix", 200
+            return "Bot Running - v27.1 Uncompressed Kick Fix", 200
         
         def run():
             app.run(host="0.0.0.0", port=port, use_reloader=False)
@@ -270,22 +271,44 @@ async def save_data_async():
 
 # --- 6. CORE HELPERS ---
 
-# --- NEW: UNIVERSAL AUTO KICK HELPER ---
+# --- UPDATED: UNIVERSAL AUTO KICK HELPER (WITH OLD ROBUST LOGIC) ---
 async def execute_universal_kick(user_id, context):
-    """Kicks the user from ALL batches and blocks them."""
+    """Kicks the user from ALL batches and blocks them using robust error catching."""
     mod = False
+    
     # 1. Unconditionally kick from Free Batches
     for bid in list(DB["FREE_CHANNELS"].keys()):
         try:
             await context.bot.ban_chat_member(int(bid), user_id)
-            await context.bot.unban_chat_member(int(bid), user_id)
-        except Exception: pass
+            logger.info(f"✅ User {user_id} universally kicked from Free Batch {bid}")
+            await context.bot.unban_chat_member(int(bid), user_id) # Allow rejoin later if unblocked
+        except Exception as e:
+            logger.error(f"❌ UNIVERSAL KICK FAILED for {user_id} in Free Batch {bid}: {e}")
+            if LOG_CHANNEL_ID:
+                try:
+                    err_msg = (f"⚠️ **UNIVERSAL KICK FAILED (Free)**\n"
+                               f"👤 User: `{user_id}`\n"
+                               f"🆔 Batch: `{bid}`\n"
+                               f"❓ Reason: `{e}`")
+                    await context.bot.send_message(LOG_CHANNEL_ID, err_msg, parse_mode=ParseMode.MARKDOWN)
+                except Exception: pass
 
     # 2. Unconditionally kick from Paid Batches
     for bid in list(DB["PAID_CHANNELS"].keys()):
         try:
             await context.bot.ban_chat_member(int(bid), user_id)
-        except Exception: pass
+            logger.info(f"✅ User {user_id} universally kicked from Paid Batch {bid}")
+            await context.bot.unban_chat_member(int(bid), user_id)
+        except Exception as e:
+            logger.error(f"❌ UNIVERSAL KICK FAILED for {user_id} in Paid Batch {bid}: {e}")
+            if LOG_CHANNEL_ID:
+                try:
+                    err_msg = (f"⚠️ **UNIVERSAL KICK FAILED (Paid)**\n"
+                               f"👤 User: `{user_id}`\n"
+                               f"🆔 Batch: `{bid}`\n"
+                               f"❓ Reason: `{e}`")
+                    await context.bot.send_message(LOG_CHANNEL_ID, err_msg, parse_mode=ParseMode.MARKDOWN)
+                except Exception: pass
 
     # 3. Block User in Bot
     if user_id not in DB["BLOCKED_USERS"]:
@@ -1464,6 +1487,7 @@ async def cmd_sync(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await schedule_delete(context, update.message)
     await schedule_delete(context, msg)
 
+# --- UPDATED: CHECK DEMOS WITH ROBUST KICK LOGIC RESTORED ---
 async def check_demos(context: ContextTypes.DEFAULT_TYPE):
     now = time.time()
     mod = False
@@ -1481,27 +1505,52 @@ async def check_demos(context: ContextTypes.DEFAULT_TYPE):
                 warned = False
                 data["demos"][bid] = {"expiry": expiry, "warned": False}
                 mod = True
+
+            chat_id = int(bid)
+            user_id = int(uid)
             
             if now > expiry:
+                logger.info(f"⏳ Processing Demo Expiry: User {user_id} in Batch {chat_id}")
+                
                 try:
-                    await context.bot.ban_chat_member(int(bid), int(uid))
-                    await context.bot.unban_chat_member(int(bid), int(uid))
+                    # 1. Attempt to Ban (Kick)
+                    await context.bot.ban_chat_member(chat_id, user_id)
+                    logger.info(f"✅ User {user_id} kicked from {chat_id}")
+
+                    # 2. Attempt to Unban (Allow rejoin if requested later)
+                    await context.bot.unban_chat_member(chat_id, user_id)
+
+                    # 3. Send Notification
                     try: 
-                        await context.bot.send_message(int(uid), "⏰ **Demo Ended.**")
+                        await context.bot.send_message(user_id, "⏰ **Demo Ended.**\nHope you enjoyed! Contact Admin for permanent access.")
                     except Exception: 
                         pass 
-                except Exception: 
-                    pass
+
+                except Exception as e: 
+                    logger.error(f"❌ KICK FAILED for {user_id} in {chat_id}: {e}")
+                    # Notify Admin Channel if configured
+                    if LOG_CHANNEL_ID:
+                        try:
+                            err_msg = (
+                                f"⚠️ **DEMO KICK FAILED**\n"
+                                f"👤 User: `{user_id}`\n"
+                                f"🆔 Batch: `{chat_id}`\n"
+                                f"❓ Reason: `{e}`\n"
+                                f"ℹ️ *Make sure Bot is Admin with Ban rights!*"
+                            )
+                            await context.bot.send_message(LOG_CHANNEL_ID, err_msg, parse_mode=ParseMode.MARKDOWN)
+                        except Exception: pass
                     
+                # 4. Cleanup Demo specific data
                 if bid in data["demos"]:
                     del data["demos"][bid]
                     mod = True
                     
             elif (expiry - now) <= 1800 and not warned:
                 try: 
-                    batch_name = DB['ALL_CHATS'].get(int(bid), 'Batch')
+                    batch_name = DB['ALL_CHATS'].get(chat_id, 'Batch')
                     await context.bot.send_message(
-                        int(uid), 
+                        user_id, 
                         f"⏳ **Reminder:** Demo for **{batch_name}** expires in <30 mins!"
                     )
                     data["demos"][bid]["warned"] = True
@@ -1838,7 +1887,7 @@ def main():
         # RUN BACKGROUND SYNC EVERY 10 MINS
         app.job_queue.run_repeating(background_sync, interval=600, first=30)
     
-    print("Bot v27.0 (Auto-kick Fixed & HTML Parse) Started...")
+    print("Bot v27.1 (Auto-kick Fixed & Kick Logic Restored) Started...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
