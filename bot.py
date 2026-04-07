@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 """
-ULTIMATE BOT MANAGER (v29.0 - Role Based Menus & Ultimate Ban Fixed)
-Base: Original Expanded Code (bot (3).py)
+ULTIMATE BOT MANAGER (v30.0 - Unban Telegram Restrictions Fixed)
+Base: Original Expanded Code
 Features Added/Fixed:
 1. PARSE ERROR FIXED: Replaced Markdown with HTML for link generation & broadcasts.
 2. ROBUST AUTO-KICK: Unconditional kick if user leaves Main Channel or blocks bot.
@@ -11,11 +11,10 @@ Features Added/Fixed:
 5. /sync COMMAND: Admin can manually trigger background sync.
 6. AUTO-BROADCAST: Includes @H4R_Contact_bot in the text.
 7. KICK LOGIC RESTORED: Added back detailed error catching and unban logic.
-8. ROLE-BASED MENUS (NEW): Different Telegram Menu commands for Owner, Admins, and Users. (Fully Populated)
+8. ROLE-BASED MENUS (NEW): Different Telegram Menu commands for Owner, Admins, and Users.
 9. ChatMember.KICKED ERROR FIXED (NEW): Updated to match python-telegram-bot v20+.
 10. PERMANENT /ban LOGIC (NEW): Bans forcefully remove users from channels and block re-entry.
-11. BANNED USER SUPPORT (NEW): Banned users can message bot for support but cannot use features.
-12. CONTEXTUAL BAN/UNBAN (NEW): Use /ban or /unban directly in a user's topic.
+11. TELEGRAM UNBAN FIXED (NEW): /unban now physically removes the user from the "Removed Users" list of all tracked channels so new invite links work perfectly.
 """
 
 import logging
@@ -56,7 +55,7 @@ try:
         
         @app.route('/')
         def index(): 
-            return "Bot Running - v29.0 Ultimate Fix", 200
+            return "Bot Running - v30.0 Unban Fix", 200
         
         def run():
             app.run(host="0.0.0.0", port=port, use_reloader=False)
@@ -275,8 +274,6 @@ async def save_data_async():
 
 # --- 6. CORE HELPERS ---
 
-# --- UPDATED: UNIVERSAL AUTO KICK HELPER ---
-# Added `permanent_ban` parameter. If True, it will NOT unban them (Used in /ban)
 async def execute_universal_kick(user_id, context, permanent_ban=False):
     """Kicks or Permanently Bans the user from ALL batches and blocks them."""
     mod = False
@@ -420,7 +417,6 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.my_chat_member.chat
     status = update.my_chat_member.new_chat_member.status
     
-    # User BLOCKED the bot in private chat - Removed KICKED error here
     if chat.type == ChatType.PRIVATE:
         if status == ChatMember.BANNED:
             logger.info(f"🚫 User {chat.id} blocked the bot. Auto-kicking unconditionally.")
@@ -603,7 +599,6 @@ async def cmd_all_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.delete_message(update.effective_chat.id, msg.message_id)
     await schedule_delete(context, update.message)
 
-# --- UPDATED: /ban Command with permanent block AND Topic Context ---
 async def cmd_ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): 
         return
@@ -626,7 +621,6 @@ async def cmd_ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if target not in DB["BLOCKED_USERS"] and target != OWNER_ID: 
         msg = await update.message.reply_text(f"⏳ Process started... Kicking and Banning user `{target}` from all groups.", parse_mode=ParseMode.MARKDOWN)
-        # Apply permanent ban (will not unban them in the groups)
         await execute_universal_kick(target, context, permanent_ban=True)
         await msg.edit_text(f"🚫 User `{target}` has been PERMANENTLY BANNED from the bot and removed from all tracked groups.", parse_mode=ParseMode.MARKDOWN)
         
@@ -641,6 +635,7 @@ async def cmd_ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try: await schedule_delete(context, msg) 
     except Exception: pass
 
+# --- TELEGRAM API UNBAN FIX IMPLEMENTED HERE ---
 async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): 
         return
@@ -662,13 +657,28 @@ async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if target in DB["BLOCKED_USERS"]: 
+        # 1. Remove from Bot DB
         DB["BLOCKED_USERS"].remove(target)
         await save_data_async()
-        msg = await update.message.reply_text(f"✅ User `{target}` has been UNBLOCKED in the bot DB. \n*(Note: They might still need to be manually unbanned in channel settings to rejoin)*", parse_mode=ParseMode.MARKDOWN)
+        
+        # 2. Telegram API: Unban from ALL channels' "Removed Users" list so new links work
+        unban_count = 0
+        all_channels = list(DB["FREE_CHANNELS"].keys()) + list(DB["PAID_CHANNELS"].keys())
+        if MANDATORY_CHANNEL_ID:
+            all_channels.append(MANDATORY_CHANNEL_ID)
+            
+        for bid in all_channels:
+            try:
+                await context.bot.unban_chat_member(int(bid), target)
+                unban_count += 1
+            except Exception: 
+                pass
+                
+        msg = await update.message.reply_text(f"✅ User `{target}` has been UNBLOCKED in the bot DB and removed from the Banned list of {unban_count} channels. They can now join again using new links.", parse_mode=ParseMode.MARKDOWN)
         
         if target in DB["USER_TOPICS"]:
             topic_id = DB["USER_TOPICS"][target]
-            try: await context.bot.send_message(SUPPORT_GROUP_ID, f"🟢 **ADMIN ALERT:** This user has been UNBANNED.", message_thread_id=topic_id, parse_mode=ParseMode.MARKDOWN)
+            try: await context.bot.send_message(SUPPORT_GROUP_ID, f"🟢 **ADMIN ALERT:** This user has been UNBANNED and their Telegram group restrictions have been cleared.", message_thread_id=topic_id, parse_mode=ParseMode.MARKDOWN)
             except Exception: pass
     else: 
         msg = await update.message.reply_text("⚠️ User is not blocked.")
@@ -1932,7 +1942,7 @@ def main():
         app.job_queue.run_repeating(check_demos, interval=60, first=10)
         app.job_queue.run_repeating(background_sync, interval=600, first=30)
     
-    print("Bot v29.0 (Role Based Menu & Perm Ban Fixed) Started...")
+    print("Bot v30.0 (Unban Telegram Fix) Started...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
