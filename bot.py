@@ -1,20 +1,21 @@
 # -*- coding: utf-8 -*-
 
 """
-ULTIMATE BOT MANAGER (v30.0 - Unban Telegram Restrictions Fixed)
-Base: Original Expanded Code
+ULTIMATE BOT MANAGER (v31.0 - Expiring Links & Broadcast Auto-Delete Fixed)
+Base: Original Expanded Code (bot (3).py)
 Features Added/Fixed:
 1. PARSE ERROR FIXED: Replaced Markdown with HTML for link generation & broadcasts.
 2. ROBUST AUTO-KICK: Unconditional kick if user leaves Main Channel or blocks bot.
 3. ID MATCHING FIXED: Strips '-100' for foolproof channel leave detection.
 4. BACKGROUND SYNC ENHANCED: Runs every 10 mins (with flood protection).
 5. /sync COMMAND: Admin can manually trigger background sync.
-6. AUTO-BROADCAST: Includes @H4R_Contact_bot in the text.
+6. AUTO-BROADCAST: Includes @H4R_Contact_bot in the text (Fixed to Auto-Delete in 3 Hrs).
 7. KICK LOGIC RESTORED: Added back detailed error catching and unban logic.
-8. ROLE-BASED MENUS (NEW): Different Telegram Menu commands for Owner, Admins, and Users.
-9. ChatMember.KICKED ERROR FIXED (NEW): Updated to match python-telegram-bot v20+.
-10. PERMANENT /ban LOGIC (NEW): Bans forcefully remove users from channels and block re-entry.
-11. TELEGRAM UNBAN FIXED (NEW): /unban now physically removes the user from the "Removed Users" list of all tracked channels so new invite links work perfectly.
+8. ROLE-BASED MENUS: Different Telegram Menu commands for Owner, Admins, and Users.
+9. ChatMember.KICKED ERROR FIXED: Updated to match python-telegram-bot v20+.
+10. PERMANENT /ban LOGIC: Bans forcefully remove users from channels and block re-entry.
+11. TELEGRAM UNBAN FIXED: /unban now physically removes the user from the "Removed Users" list of all tracked channels so new invite links work perfectly.
+12. AUTO-DELETE SECRETS (NEW): Invite Links and Joined/Welcome messages auto-delete after 60 seconds to keep chats clean.
 """
 
 import logging
@@ -55,7 +56,7 @@ try:
         
         @app.route('/')
         def index(): 
-            return "Bot Running - v30.0 Unban Fix", 200
+            return "Bot Running - v31.0 Link Expire Fix", 200
         
         def run():
             app.run(host="0.0.0.0", port=port, use_reloader=False)
@@ -357,9 +358,10 @@ async def delete_later(context: ContextTypes.DEFAULT_TYPE):
     except Exception: 
         pass
 
-async def schedule_delete(context, message):
+# UPDATED: Added flexible delay option for fast deletions (like Links)
+async def schedule_delete(context, message, delay=1200):
     if message: 
-        context.job_queue.run_once(delete_later, 1200, data={'chat_id': message.chat.id, 'msg_id': message.message_id})
+        context.job_queue.run_once(delete_later, delay, data={'chat_id': message.chat.id, 'msg_id': message.message_id})
 
 async def get_or_create_topic(user, context):
     if not SUPPORT_GROUP_ID: 
@@ -635,7 +637,6 @@ async def cmd_ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try: await schedule_delete(context, msg) 
     except Exception: pass
 
-# --- TELEGRAM API UNBAN FIX IMPLEMENTED HERE ---
 async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): 
         return
@@ -955,11 +956,12 @@ async def cmd_approve_demo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try: 
             batch_name = DB['ALL_CHATS'].get(batch_id, 'Batch')
             welcome_str = DB['CUSTOM_WELCOMES'].get(batch_id, '')
-            await context.bot.send_message(
+            welc_msg = await context.bot.send_message(
                 target_uid, 
                 f"✅ **Approved for 3hrs!**\nWelcome to {batch_name}.\n\n{welcome_str}", 
                 parse_mode=ParseMode.MARKDOWN
             ) 
+            await schedule_delete(context, welc_msg, delay=60)
         except Exception: 
             pass
             
@@ -1012,11 +1014,12 @@ async def cmd_approve_perm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try: 
             batch_name = DB['ALL_CHATS'].get(batch_id, 'Batch')
             welcome_str = DB['CUSTOM_WELCOMES'].get(batch_id, '')
-            await context.bot.send_message(
+            welc_msg = await context.bot.send_message(
                 target_uid, 
                 f"✅ **Approved Permanent!**\nWelcome to {batch_name}.\n\n{welcome_str}", 
                 parse_mode=ParseMode.MARKDOWN
             ) 
+            await schedule_delete(context, welc_msg, delay=60)
         except Exception: 
             pass
             
@@ -1209,7 +1212,7 @@ async def wizard_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             msg = await update.message.reply_text(f"✅ **Added!**\n{cname} ({cid})", parse_mode=ParseMode.MARKDOWN)
             
-            # --- AUTO BROADCAST FOR FREE BATCHES ---
+            # --- UPDATED: AUTO BROADCAST 3 HOUR FIX ---
             if state["type"] == "free":
                 b_count = 0
                 await msg.reply_text("📢 Sending Auto-Broadcast to all tracked channels...", parse_mode=ParseMode.MARKDOWN)
@@ -1217,22 +1220,22 @@ async def wizard_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 for t_cid in list(DB["ALL_CHATS"].keys()):
                     if t_cid != cid: 
                         try:
-                            # FIX: Used ParseMode.HTML to avoid markdown breaking on special characters
                             sent_msg = await context.bot.send_message(
                                 t_cid,
                                 f"🎉 <b>NEW FREE BATCH ADDED!</b> 🎉\n\n📛 <b>Name:</b> {cname}\n\n👉 Go to the Bot Menu to join now!\n\nBatch available on @H4R_Contact_bot",
                                 parse_mode=ParseMode.HTML
                             )
+                            # Changed 36000 (10 hrs) to 10800 (3 hrs)
                             DB.setdefault("SCHEDULED_DELETES", []).append({
                                 "c": t_cid,
                                 "m": sent_msg.message_id,
-                                "t": time.time() + 36000 # 10 hours
+                                "t": time.time() + 10800 
                             })
                             b_count += 1
                         except Exception: 
                             pass
                 
-                await msg.reply_text(f"✅ Broadcast sent to {b_count} chats. It will auto-delete after 10 hours.")
+                await msg.reply_text(f"✅ Broadcast sent to {b_count} chats. It will auto-delete after 3 hours.")
                 await save_data_async()
 
             del ADMIN_WIZARD[uid]
@@ -1392,7 +1395,6 @@ async def main_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             return
 
     if chat.type == ChatType.PRIVATE:
-        # Blocked users CAN send messages to private chat to reach support
         topic_id = await get_or_create_topic(user, context)
         if topic_id:
             reply_id = None
@@ -1466,7 +1468,6 @@ async def main_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             except Exception: 
                 pass
 
-# --- AUTO-BAN LOGIC (BUG FIXED) ---
 async def on_chat_member_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = update.chat_member
     if not result: 
@@ -1476,13 +1477,12 @@ async def on_chat_member_update(update: Update, context: ContextTypes.DEFAULT_TY
     user = result.new_chat_member.user
     status = result.new_chat_member.status
     
-    # ⚠️ FIXED: ID Matching. Telegram sometimes sends without -100 prefix.
     chat_id_clean = str(chat.id).replace("-100", "")
     man_id_clean = str(MANDATORY_CHANNEL_ID).replace("-100", "")
     
     if chat_id_clean == man_id_clean and status in [ChatMember.LEFT, ChatMember.BANNED]:
         logger.info(f"🚪 User {user.id} left the Mandatory Channel. Auto-Kicking Unconditionally...")
-        await execute_universal_kick(user.id, context, permanent_ban=True) # Permanently bans them if they leave main
+        await execute_universal_kick(user.id, context, permanent_ban=True) 
 
 async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req = update.chat_join_request
@@ -1502,7 +1502,8 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
                 await context.bot.approve_chat_join_request(chat.id, user.id)
                 
                 welcome_str = DB["CUSTOM_WELCOMES"].get(chat.id, f"✅ **Approved!**\nWelcome to {chat.title}")
-                await context.bot.send_message(user.id, welcome_str, parse_mode=ParseMode.MARKDOWN)
+                w_msg = await context.bot.send_message(user.id, welcome_str, parse_mode=ParseMode.MARKDOWN)
+                await schedule_delete(context, w_msg, delay=60) # AUTO DELETE WELCOME
             except Exception: 
                 pass
         else:
@@ -1523,12 +1524,7 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
             except Exception: 
                 pass
 
-# --- BACKGROUND USER SYNC (EVERY 10 MINS) ---
 async def background_sync(context: ContextTypes.DEFAULT_TYPE):
-    """
-    Safely iterates through all known users and checks if they left the mandatory channel.
-    Now optimized to handle FloodWait and runs every 10 mins.
-    """
     logger.info("🔄 Starting Background User Sync...")
     
     for uid in list(DB["USER_DATA"].keys()):
@@ -1563,6 +1559,7 @@ async def cmd_sync(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await schedule_delete(context, update.message)
     await schedule_delete(context, msg)
 
+# UPDATED: Added exception logging for Scheduled Deletes
 async def check_demos(context: ContextTypes.DEFAULT_TYPE):
     now = time.time()
     mod = False
@@ -1626,15 +1623,18 @@ async def check_demos(context: ContextTypes.DEFAULT_TYPE):
                 except Exception: 
                     pass
                     
+    # BROADCASST / SCHEDULED DELETES LOGIC
     if "SCHEDULED_DELETES" in DB and DB["SCHEDULED_DELETES"]:
         surviving = []
         for item in DB["SCHEDULED_DELETES"]:
             if now > item["t"]:
                 try:
                     await context.bot.delete_message(item["c"], item["m"])
+                    logger.info(f"✅ Auto-deleted scheduled broadcast in chat {item['c']}")
                     mod = True
-                except Exception: 
-                    pass
+                except Exception as e: 
+                    logger.error(f"❌ Failed to delete scheduled msg in {item['c']}: {e}")
+                    mod = True # We still drop it from DB so it doesn't try forever
             else:
                 surviving.append(item)
                 
@@ -1748,7 +1748,8 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"ℹ️ <i>Request auto-approved.</i>\n"
                 f"⏳ <i>(Expires in 1 min)</i>"
             )
-            await context.bot.send_message(uid, msg_text, parse_mode=ParseMode.HTML)
+            sent_msg = await context.bot.send_message(uid, msg_text, parse_mode=ParseMode.HTML)
+            await schedule_delete(context, sent_msg, delay=60) # AUTO DELETE LINK
             await q.answer("Sent to DM")
             
         except Exception as e: 
@@ -1825,7 +1826,8 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"ℹ️ <b>Sent to Admin.</b> Wait for approval.\n"
                 f"⏳ <i>(Expires in 1 min)</i>"
             )
-            await context.bot.send_message(uid, user_msg, parse_mode=ParseMode.HTML)
+            user_msg_obj = await context.bot.send_message(uid, user_msg, parse_mode=ParseMode.HTML)
+            await schedule_delete(context, user_msg_obj, delay=60) # AUTO DELETE REQUEST LINK
             
         except Exception as e: 
             await context.bot.send_message(uid, f"❌ Error: {e}")
@@ -1850,7 +1852,6 @@ async def show_user_menu(update: Update):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     
-    # NEW: SET THE MENU COMMANDS FOR THIS SPECIFIC USER DYNAMICALLY
     await set_role_based_commands(user.id, context)
     
     if user.id not in DB["USER_DATA"]: 
@@ -1889,7 +1890,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     load_data()
-    # Note: Global set_my_commands removed. Roles are updated inside /start dynamically.
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
@@ -1942,7 +1942,7 @@ def main():
         app.job_queue.run_repeating(check_demos, interval=60, first=10)
         app.job_queue.run_repeating(background_sync, interval=600, first=30)
     
-    print("Bot v30.0 (Unban Telegram Fix) Started...")
+    print("Bot v31.0 (Link Expire Fix & Broadcast Fix) Started...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
