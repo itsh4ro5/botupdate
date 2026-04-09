@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 """
-ULTIMATE BOT MANAGER (v31.0 - Expiring Links & Broadcast Auto-Delete Fixed)
-Base: Original Expanded Code (bot (3).py)
+ULTIMATE BOT MANAGER (v32.0 - Test Bot Button & Dynamic Verification)
+Base: Original Expanded Code (bot (3).py) + v31.0 Fixes
 Features Added/Fixed:
 1. PARSE ERROR FIXED: Replaced Markdown with HTML for link generation & broadcasts.
 2. ROBUST AUTO-KICK: Unconditional kick if user leaves Main Channel or blocks bot.
@@ -15,7 +15,9 @@ Features Added/Fixed:
 9. ChatMember.KICKED ERROR FIXED: Updated to match python-telegram-bot v20+.
 10. PERMANENT /ban LOGIC: Bans forcefully remove users from channels and block re-entry.
 11. TELEGRAM UNBAN FIXED: /unban now physically removes the user from the "Removed Users" list of all tracked channels so new invite links work perfectly.
-12. AUTO-DELETE SECRETS (NEW): Invite Links and Joined/Welcome messages auto-delete after 60 seconds to keep chats clean.
+12. AUTO-DELETE SECRETS: Invite Links and Joined/Welcome messages auto-delete after 60 seconds to keep chats clean.
+13. DYNAMIC TEST BOT BUTTON (NEW): Added a "Test Bot" button in the main menu that strictly verifies channel membership before providing the link.
+14. /settestbot COMMAND (NEW): Admins can dynamically update the Test Bot link from within Telegram.
 """
 
 import logging
@@ -56,7 +58,7 @@ try:
         
         @app.route('/')
         def index(): 
-            return "Bot Running - v31.0 Link Expire Fix", 200
+            return "Bot Running - v32.0 Test Bot Fix", 200
         
         def run():
             app.run(host="0.0.0.0", port=port, use_reloader=False)
@@ -103,7 +105,8 @@ DB = {
     "NEW_USERS_ALLOWED": True, 
     "FREE_LOCKED": False,      
     "PAID_LOCKED": False,
-    "SCHEDULED_DELETES": []
+    "SCHEDULED_DELETES": [],
+    "TEST_BOT_LINK": ""  # NEW CONFIG
 }
 
 # Runtime Memory
@@ -139,29 +142,15 @@ def load_data():
             if data and "data" in data:
                 loaded = data["data"]
                 
-                if "ADMIN_IDS" in loaded: 
-                    DB["ADMIN_IDS"] = [int(x) for x in loaded["ADMIN_IDS"] if str(x).isdigit()]
-                    
-                if "BLOCKED_USERS" in loaded: 
-                    DB["BLOCKED_USERS"] = loaded["BLOCKED_USERS"]
-                    
-                if "LINK_MAP" in loaded: 
-                    DB["LINK_MAP"] = loaded["LINK_MAP"]
-                    
-                if "CUSTOM_WELCOMES" in loaded: 
-                    DB["CUSTOM_WELCOMES"] = {int(k): v for k, v in loaded["CUSTOM_WELCOMES"].items()}
-                    
-                if "NEW_USERS_ALLOWED" in loaded: 
-                    DB["NEW_USERS_ALLOWED"] = loaded["NEW_USERS_ALLOWED"]
-                    
-                if "FREE_LOCKED" in loaded: 
-                    DB["FREE_LOCKED"] = loaded["FREE_LOCKED"]
-                    
-                if "PAID_LOCKED" in loaded: 
-                    DB["PAID_LOCKED"] = loaded["PAID_LOCKED"]
-                    
-                if "SCHEDULED_DELETES" in loaded:
-                    DB["SCHEDULED_DELETES"] = loaded["SCHEDULED_DELETES"]
+                if "ADMIN_IDS" in loaded: DB["ADMIN_IDS"] = [int(x) for x in loaded["ADMIN_IDS"] if str(x).isdigit()]
+                if "BLOCKED_USERS" in loaded: DB["BLOCKED_USERS"] = loaded["BLOCKED_USERS"]
+                if "LINK_MAP" in loaded: DB["LINK_MAP"] = loaded["LINK_MAP"]
+                if "CUSTOM_WELCOMES" in loaded: DB["CUSTOM_WELCOMES"] = {int(k): v for k, v in loaded["CUSTOM_WELCOMES"].items()}
+                if "NEW_USERS_ALLOWED" in loaded: DB["NEW_USERS_ALLOWED"] = loaded["NEW_USERS_ALLOWED"]
+                if "FREE_LOCKED" in loaded: DB["FREE_LOCKED"] = loaded["FREE_LOCKED"]
+                if "PAID_LOCKED" in loaded: DB["PAID_LOCKED"] = loaded["PAID_LOCKED"]
+                if "SCHEDULED_DELETES" in loaded: DB["SCHEDULED_DELETES"] = loaded["SCHEDULED_DELETES"]
+                if "TEST_BOT_LINK" in loaded: DB["TEST_BOT_LINK"] = loaded["TEST_BOT_LINK"]
                 
                 for k in ["FREE_CHANNELS", "PAID_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
                     if k in loaded: 
@@ -191,29 +180,15 @@ def load_data():
         with open(DATA_FILE, "r") as f:
             loaded = json.load(f)
             
-            if "ADMIN_IDS" in loaded: 
-                DB["ADMIN_IDS"] = [int(x) for x in loaded["ADMIN_IDS"] if str(x).isdigit()]
-                
-            if "BLOCKED_USERS" in loaded: 
-                DB["BLOCKED_USERS"] = loaded["BLOCKED_USERS"]
-                
-            if "LINK_MAP" in loaded: 
-                DB["LINK_MAP"] = loaded["LINK_MAP"]
-                
-            if "CUSTOM_WELCOMES" in loaded: 
-                DB["CUSTOM_WELCOMES"] = {int(k): v for k, v in loaded["CUSTOM_WELCOMES"].items()}
-                
-            if "NEW_USERS_ALLOWED" in loaded: 
-                DB["NEW_USERS_ALLOWED"] = loaded["NEW_USERS_ALLOWED"]
-                
-            if "FREE_LOCKED" in loaded: 
-                DB["FREE_LOCKED"] = loaded["FREE_LOCKED"]
-                
-            if "PAID_LOCKED" in loaded: 
-                DB["PAID_LOCKED"] = loaded["PAID_LOCKED"]
-                
-            if "SCHEDULED_DELETES" in loaded:
-                DB["SCHEDULED_DELETES"] = loaded["SCHEDULED_DELETES"]
+            if "ADMIN_IDS" in loaded: DB["ADMIN_IDS"] = [int(x) for x in loaded["ADMIN_IDS"] if str(x).isdigit()]
+            if "BLOCKED_USERS" in loaded: DB["BLOCKED_USERS"] = loaded["BLOCKED_USERS"]
+            if "LINK_MAP" in loaded: DB["LINK_MAP"] = loaded["LINK_MAP"]
+            if "CUSTOM_WELCOMES" in loaded: DB["CUSTOM_WELCOMES"] = {int(k): v for k, v in loaded["CUSTOM_WELCOMES"].items()}
+            if "NEW_USERS_ALLOWED" in loaded: DB["NEW_USERS_ALLOWED"] = loaded["NEW_USERS_ALLOWED"]
+            if "FREE_LOCKED" in loaded: DB["FREE_LOCKED"] = loaded["FREE_LOCKED"]
+            if "PAID_LOCKED" in loaded: DB["PAID_LOCKED"] = loaded["PAID_LOCKED"]
+            if "SCHEDULED_DELETES" in loaded: DB["SCHEDULED_DELETES"] = loaded["SCHEDULED_DELETES"]
+            if "TEST_BOT_LINK" in loaded: DB["TEST_BOT_LINK"] = loaded["TEST_BOT_LINK"]
             
             for k in ["FREE_CHANNELS", "PAID_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
                 if k in loaded: 
@@ -250,7 +225,8 @@ def save_data_sync():
             "USER_DATA": {str(k): v for k, v in DB["USER_DATA"].items()},
             "USER_TOPICS": {str(k): v for k, v in DB["USER_TOPICS"].items()},
             "PENDING_REQUESTS": {str(k): v for k, v in DB["PENDING_REQUESTS"].items()},
-            "SCHEDULED_DELETES": DB.get("SCHEDULED_DELETES", [])
+            "SCHEDULED_DELETES": DB.get("SCHEDULED_DELETES", []),
+            "TEST_BOT_LINK": DB.get("TEST_BOT_LINK", "")
         }
 
         if MONGO_URL and mongo_collection is not None:
@@ -358,7 +334,6 @@ async def delete_later(context: ContextTypes.DEFAULT_TYPE):
     except Exception: 
         pass
 
-# UPDATED: Added flexible delay option for fast deletions (like Links)
 async def schedule_delete(context, message, delay=1200):
     if message: 
         context.job_queue.run_once(delete_later, delay, data={'chat_id': message.chat.id, 'msg_id': message.message_id})
@@ -459,6 +434,7 @@ async def set_role_based_commands(user_id, context: ContextTypes.DEFAULT_TYPE):
             BotCommand("broadcast", "Send Broadcast"),
             BotCommand("post", "Post Message"),
             BotCommand("setwelcome", "Set Welcome"),
+            BotCommand("settestbot", "Set Test Bot Link"),
             BotCommand("sync", "Manual Sync")
         ]
         
@@ -658,11 +634,9 @@ async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if target in DB["BLOCKED_USERS"]: 
-        # 1. Remove from Bot DB
         DB["BLOCKED_USERS"].remove(target)
         await save_data_async()
         
-        # 2. Telegram API: Unban from ALL channels' "Removed Users" list so new links work
         unban_count = 0
         all_channels = list(DB["FREE_CHANNELS"].keys()) + list(DB["PAID_CHANNELS"].keys())
         if MANDATORY_CHANNEL_ID:
@@ -800,6 +774,22 @@ async def cmd_set_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ Set:\n{msg_text}")
     except Exception: 
         await update.message.reply_text("Usage: `/setwelcome <batch_id> <message>`")
+
+# --- NEW COMMAND: SET TEST BOT LINK ---
+async def cmd_set_testbot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): 
+        return
+        
+    try: 
+        link = context.args[0]
+        DB["TEST_BOT_LINK"] = link
+        await save_data_async()
+        msg = await update.message.reply_text(f"✅ Test bot link has been successfully set to: {link}")
+    except Exception: 
+        msg = await update.message.reply_text("Usage: `/settestbot <link>`\nExample: `/settestbot https://t.me/MyTestBot`", parse_mode=ParseMode.MARKDOWN)
+        
+    await schedule_delete(context, update.message)
+    await schedule_delete(context, msg)
 
 async def cmd_extend_demo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): 
@@ -1212,7 +1202,6 @@ async def wizard_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             msg = await update.message.reply_text(f"✅ **Added!**\n{cname} ({cid})", parse_mode=ParseMode.MARKDOWN)
             
-            # --- UPDATED: AUTO BROADCAST 3 HOUR FIX ---
             if state["type"] == "free":
                 b_count = 0
                 await msg.reply_text("📢 Sending Auto-Broadcast to all tracked channels...", parse_mode=ParseMode.MARKDOWN)
@@ -1225,7 +1214,6 @@ async def wizard_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 f"🎉 <b>NEW FREE BATCH ADDED!</b> 🎉\n\n📛 <b>Name:</b> {cname}\n\n👉 Go to the Bot Menu to join now!\n\nBatch available on @H4R_Contact_bot",
                                 parse_mode=ParseMode.HTML
                             )
-                            # Changed 36000 (10 hrs) to 10800 (3 hrs)
                             DB.setdefault("SCHEDULED_DELETES", []).append({
                                 "c": t_cid,
                                 "m": sent_msg.message_id,
@@ -1503,7 +1491,7 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
                 
                 welcome_str = DB["CUSTOM_WELCOMES"].get(chat.id, f"✅ **Approved!**\nWelcome to {chat.title}")
                 w_msg = await context.bot.send_message(user.id, welcome_str, parse_mode=ParseMode.MARKDOWN)
-                await schedule_delete(context, w_msg, delay=60) # AUTO DELETE WELCOME
+                await schedule_delete(context, w_msg, delay=60)
             except Exception: 
                 pass
         else:
@@ -1559,7 +1547,6 @@ async def cmd_sync(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await schedule_delete(context, update.message)
     await schedule_delete(context, msg)
 
-# UPDATED: Added exception logging for Scheduled Deletes
 async def check_demos(context: ContextTypes.DEFAULT_TYPE):
     now = time.time()
     mod = False
@@ -1623,7 +1610,6 @@ async def check_demos(context: ContextTypes.DEFAULT_TYPE):
                 except Exception: 
                     pass
                     
-    # BROADCASST / SCHEDULED DELETES LOGIC
     if "SCHEDULED_DELETES" in DB and DB["SCHEDULED_DELETES"]:
         surviving = []
         for item in DB["SCHEDULED_DELETES"]:
@@ -1634,7 +1620,7 @@ async def check_demos(context: ContextTypes.DEFAULT_TYPE):
                     mod = True
                 except Exception as e: 
                     logger.error(f"❌ Failed to delete scheduled msg in {item['c']}: {e}")
-                    mod = True # We still drop it from DB so it doesn't try forever
+                    mod = True 
             else:
                 surviving.append(item)
                 
@@ -1664,6 +1650,31 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     if data.startswith("bc_"): 
         await broadcast_callback(update, context)
+        return
+
+    # NEW: Test Bot Validation Logic
+    if data == "test_bot":
+        if not await check_membership(uid, context):
+            await q.answer("❌ Join Main Channel First!", show_alert=True)
+            return
+            
+        test_link = DB.get("TEST_BOT_LINK")
+        if not test_link:
+            await q.answer("⚠️ Test Bot is not setup by Admin yet!", show_alert=True)
+            return
+            
+        await q.answer("Verifying & Generating Link...")
+        kb = [[InlineKeyboardButton("🔗 Open Test Bot", url=test_link)]]
+        try:
+            sent_msg = await context.bot.send_message(
+                uid, 
+                "🤖 **Test Bot Access Verification:**\n\nYou are verified! Click the button below to open the Test Bot.", 
+                reply_markup=InlineKeyboardMarkup(kb), 
+                parse_mode=ParseMode.MARKDOWN
+            )
+            await schedule_delete(context, sent_msg, delay=60) # Auto Delete Test bot link after 60 sec
+        except Exception:
+            pass
         return
 
     if data == "verify":
@@ -1749,7 +1760,7 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"⏳ <i>(Expires in 1 min)</i>"
             )
             sent_msg = await context.bot.send_message(uid, msg_text, parse_mode=ParseMode.HTML)
-            await schedule_delete(context, sent_msg, delay=60) # AUTO DELETE LINK
+            await schedule_delete(context, sent_msg, delay=60)
             await q.answer("Sent to DM")
             
         except Exception as e: 
@@ -1827,15 +1838,17 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"⏳ <i>(Expires in 1 min)</i>"
             )
             user_msg_obj = await context.bot.send_message(uid, user_msg, parse_mode=ParseMode.HTML)
-            await schedule_delete(context, user_msg_obj, delay=60) # AUTO DELETE REQUEST LINK
+            await schedule_delete(context, user_msg_obj, delay=60)
             
         except Exception as e: 
             await context.bot.send_message(uid, f"❌ Error: {e}")
 
+# UPDATED: Added "Test Bot" Button to Main Menu
 async def show_user_menu(update: Update):
     kb = [
         [InlineKeyboardButton("📂 Free Batches", callback_data="u_free"), 
          InlineKeyboardButton("💎 Paid Batches", callback_data="u_paid")],
+        [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")], # NEW BUTTON
         [InlineKeyboardButton("🆘 Support", url=f"tg://user?id={SUPPORT_GROUP_ID}")],
         [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")]
     ]
@@ -1870,7 +1883,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"**🛠 Manage:** `/del`, `/find`, `/ban`, `/unban`, `/kick`, `/extend`, `/lockdown`, `/lockfree`, `/lockpaid`, `/sync`\n"
             f"**✅ Approve:** `/demo <link>`, `/per <link>`\n"
             f"**📊 Tools:** `/stats`, `/batchstats`\n"
-            f"**📢 Broadcast:** `/broadcast`, `/post`, `/setwelcome`"
+            f"**📢 Broadcast:** `/broadcast`, `/post`, `/setwelcome`, `/settestbot`"
         )
         await update.message.reply_text(admin_text, parse_mode=ParseMode.MARKDOWN)
         
@@ -1911,6 +1924,7 @@ def main():
     
     app.add_handler(CommandHandler("batchstats", cmd_batch_stats))
     app.add_handler(CommandHandler("setwelcome", cmd_set_welcome))
+    app.add_handler(CommandHandler("settestbot", cmd_set_testbot)) # NEW COMMAND
     app.add_handler(CommandHandler("lockdown", cmd_lockdown))
     app.add_handler(CommandHandler("lockfree", cmd_lockfree))
     app.add_handler(CommandHandler("lockpaid", cmd_lockpaid))
@@ -1942,7 +1956,7 @@ def main():
         app.job_queue.run_repeating(check_demos, interval=60, first=10)
         app.job_queue.run_repeating(background_sync, interval=600, first=30)
     
-    print("Bot v31.0 (Link Expire Fix & Broadcast Fix) Started...")
+    print("Bot v32.0 (Dynamic Test Bot & Security) Started...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
