@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 """
-ULTIMATE BOT MANAGER (v32.0 - Test Bot Button & Dynamic Verification)
-Base: Original Expanded Code (bot (3).py) + v31.0 Fixes
+ULTIMATE BOT MANAGER (v33.0 - Test Bot Lockdown Added)
+Base: Original Expanded Code (bot (3).py) + v31.0 + v32.0 Fixes
 Features Added/Fixed:
 1. PARSE ERROR FIXED: Replaced Markdown with HTML for link generation & broadcasts.
 2. ROBUST AUTO-KICK: Unconditional kick if user leaves Main Channel or blocks bot.
@@ -16,8 +16,9 @@ Features Added/Fixed:
 10. PERMANENT /ban LOGIC: Bans forcefully remove users from channels and block re-entry.
 11. TELEGRAM UNBAN FIXED: /unban now physically removes the user from the "Removed Users" list of all tracked channels so new invite links work perfectly.
 12. AUTO-DELETE SECRETS: Invite Links and Joined/Welcome messages auto-delete after 60 seconds to keep chats clean.
-13. DYNAMIC TEST BOT BUTTON (NEW): Added a "Test Bot" button in the main menu that strictly verifies channel membership before providing the link.
-14. /settestbot COMMAND (NEW): Admins can dynamically update the Test Bot link from within Telegram.
+13. DYNAMIC TEST BOT BUTTON: Added a "Test Bot" button in the main menu that strictly verifies channel membership before providing the link.
+14. /settestbot COMMAND: Admins can dynamically update the Test Bot link from within Telegram.
+15. /locktestbot COMMAND (NEW): Admins can lock/unlock the Test Bot button just like free and paid batches.
 """
 
 import logging
@@ -58,7 +59,7 @@ try:
         
         @app.route('/')
         def index(): 
-            return "Bot Running - v32.0 Test Bot Fix", 200
+            return "Bot Running - v33.0 Test Bot Lockdown", 200
         
         def run():
             app.run(host="0.0.0.0", port=port, use_reloader=False)
@@ -105,8 +106,9 @@ DB = {
     "NEW_USERS_ALLOWED": True, 
     "FREE_LOCKED": False,      
     "PAID_LOCKED": False,
+    "TEST_BOT_LOCKED": False, # NEW CONFIG FOR LOCK
     "SCHEDULED_DELETES": [],
-    "TEST_BOT_LINK": ""  # NEW CONFIG
+    "TEST_BOT_LINK": ""
 }
 
 # Runtime Memory
@@ -149,6 +151,7 @@ def load_data():
                 if "NEW_USERS_ALLOWED" in loaded: DB["NEW_USERS_ALLOWED"] = loaded["NEW_USERS_ALLOWED"]
                 if "FREE_LOCKED" in loaded: DB["FREE_LOCKED"] = loaded["FREE_LOCKED"]
                 if "PAID_LOCKED" in loaded: DB["PAID_LOCKED"] = loaded["PAID_LOCKED"]
+                if "TEST_BOT_LOCKED" in loaded: DB["TEST_BOT_LOCKED"] = loaded["TEST_BOT_LOCKED"]
                 if "SCHEDULED_DELETES" in loaded: DB["SCHEDULED_DELETES"] = loaded["SCHEDULED_DELETES"]
                 if "TEST_BOT_LINK" in loaded: DB["TEST_BOT_LINK"] = loaded["TEST_BOT_LINK"]
                 
@@ -187,6 +190,7 @@ def load_data():
             if "NEW_USERS_ALLOWED" in loaded: DB["NEW_USERS_ALLOWED"] = loaded["NEW_USERS_ALLOWED"]
             if "FREE_LOCKED" in loaded: DB["FREE_LOCKED"] = loaded["FREE_LOCKED"]
             if "PAID_LOCKED" in loaded: DB["PAID_LOCKED"] = loaded["PAID_LOCKED"]
+            if "TEST_BOT_LOCKED" in loaded: DB["TEST_BOT_LOCKED"] = loaded["TEST_BOT_LOCKED"]
             if "SCHEDULED_DELETES" in loaded: DB["SCHEDULED_DELETES"] = loaded["SCHEDULED_DELETES"]
             if "TEST_BOT_LINK" in loaded: DB["TEST_BOT_LINK"] = loaded["TEST_BOT_LINK"]
             
@@ -217,6 +221,7 @@ def save_data_sync():
             "NEW_USERS_ALLOWED": DB.get("NEW_USERS_ALLOWED", True),
             "FREE_LOCKED": DB.get("FREE_LOCKED", False),
             "PAID_LOCKED": DB.get("PAID_LOCKED", False),
+            "TEST_BOT_LOCKED": DB.get("TEST_BOT_LOCKED", False),
             "LINK_MAP": DB["LINK_MAP"],
             "CUSTOM_WELCOMES": {str(k): v for k, v in DB["CUSTOM_WELCOMES"].items()},
             "FREE_CHANNELS": {str(k): v for k, v in DB["FREE_CHANNELS"].items()},
@@ -445,6 +450,7 @@ async def set_role_based_commands(user_id, context: ContextTypes.DEFAULT_TYPE):
             BotCommand("lockdown", "Toggle Lockdown"),
             BotCommand("lockfree", "Lock Free Batches"),
             BotCommand("lockpaid", "Lock Paid Batches"),
+            BotCommand("locktestbot", "Lock Test Bot"),
             BotCommand("addbatch", "Add Batch"),
             BotCommand("delbatch", "Delete Batch"),
             BotCommand("backup", "Backup DB")
@@ -634,9 +640,11 @@ async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if target in DB["BLOCKED_USERS"]: 
+        # 1. Remove from Bot DB
         DB["BLOCKED_USERS"].remove(target)
         await save_data_async()
         
+        # 2. Telegram API: Unban from ALL channels' "Removed Users" list so new links work
         unban_count = 0
         all_channels = list(DB["FREE_CHANNELS"].keys()) + list(DB["PAID_CHANNELS"].keys())
         if MANDATORY_CHANNEL_ID:
@@ -731,6 +739,22 @@ async def cmd_lockpaid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await schedule_delete(context, update.message)
     await schedule_delete(context, msg)
 
+# --- NEW COMMAND: LOCK TEST BOT ---
+async def cmd_locktestbot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): 
+        return
+        
+    DB["TEST_BOT_LOCKED"] = not DB.get("TEST_BOT_LOCKED", False)
+    await save_data_async()
+    
+    if DB["TEST_BOT_LOCKED"]:
+        msg = await update.message.reply_text("Test Bot access is now **LOCKED 🔒**.", parse_mode=ParseMode.MARKDOWN)
+    else:
+        msg = await update.message.reply_text("Test Bot access is now **UNLOCKED 🔓**.", parse_mode=ParseMode.MARKDOWN)
+        
+    await schedule_delete(context, update.message)
+    await schedule_delete(context, msg)
+
 async def cmd_batch_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): 
         return
@@ -775,7 +799,6 @@ async def cmd_set_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception: 
         await update.message.reply_text("Usage: `/setwelcome <batch_id> <message>`")
 
-# --- NEW COMMAND: SET TEST BOT LINK ---
 async def cmd_set_testbot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): 
         return
@@ -1089,13 +1112,15 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lockdown = '🔴 ON' if not DB.get('NEW_USERS_ALLOWED', True) else '🟢 OFF'
     freelocked = '🔴 YES' if DB.get('FREE_LOCKED', False) else '🟢 NO'
     paidlocked = '🔴 YES' if DB.get('PAID_LOCKED', False) else '🟢 NO'
+    testbotlocked = '🔴 YES' if DB.get('TEST_BOT_LOCKED', False) else '🟢 NO'
     
     t = (
         f"📊 **Statistics**\n"
         f"💾 Storage: {storage}\n"
         f"🔒 Lockdown: {lockdown}\n"
         f"🔓 Free Locked: {freelocked}\n"
-        f"🔐 Paid Locked: {paidlocked}\n\n"
+        f"🔐 Paid Locked: {paidlocked}\n"
+        f"🤖 Test Bot Locked: {testbotlocked}\n\n"
         f"👥 Users: {len(DB['USER_DATA'])}\n"
         f"🆓 Free: {len(DB['FREE_CHANNELS'])}\n"
         f"💎 Paid: {len(DB['PAID_CHANNELS'])}\n"
@@ -1652,8 +1677,12 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await broadcast_callback(update, context)
         return
 
-    # NEW: Test Bot Validation Logic
+    # NEW: Test Bot Validation Logic & Lock Check
     if data == "test_bot":
+        if DB.get("TEST_BOT_LOCKED", False):
+            await q.answer("🔒 Locked by Admin.", show_alert=True)
+            return
+            
         if not await check_membership(uid, context):
             await q.answer("❌ Join Main Channel First!", show_alert=True)
             return
@@ -1672,7 +1701,7 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=InlineKeyboardMarkup(kb), 
                 parse_mode=ParseMode.MARKDOWN
             )
-            await schedule_delete(context, sent_msg, delay=60) # Auto Delete Test bot link after 60 sec
+            await schedule_delete(context, sent_msg, delay=60)
         except Exception:
             pass
         return
@@ -1843,12 +1872,11 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e: 
             await context.bot.send_message(uid, f"❌ Error: {e}")
 
-# UPDATED: Added "Test Bot" Button to Main Menu
 async def show_user_menu(update: Update):
     kb = [
         [InlineKeyboardButton("📂 Free Batches", callback_data="u_free"), 
          InlineKeyboardButton("💎 Paid Batches", callback_data="u_paid")],
-        [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")], # NEW BUTTON
+        [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")], 
         [InlineKeyboardButton("🆘 Support", url=f"tg://user?id={SUPPORT_GROUP_ID}")],
         [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")]
     ]
@@ -1883,7 +1911,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"**🛠 Manage:** `/del`, `/find`, `/ban`, `/unban`, `/kick`, `/extend`, `/lockdown`, `/lockfree`, `/lockpaid`, `/sync`\n"
             f"**✅ Approve:** `/demo <link>`, `/per <link>`\n"
             f"**📊 Tools:** `/stats`, `/batchstats`\n"
-            f"**📢 Broadcast:** `/broadcast`, `/post`, `/setwelcome`, `/settestbot`"
+            f"**📢 Broadcast:** `/broadcast`, `/post`, `/setwelcome`, `/settestbot`, `/locktestbot`"
         )
         await update.message.reply_text(admin_text, parse_mode=ParseMode.MARKDOWN)
         
@@ -1924,7 +1952,8 @@ def main():
     
     app.add_handler(CommandHandler("batchstats", cmd_batch_stats))
     app.add_handler(CommandHandler("setwelcome", cmd_set_welcome))
-    app.add_handler(CommandHandler("settestbot", cmd_set_testbot)) # NEW COMMAND
+    app.add_handler(CommandHandler("settestbot", cmd_set_testbot))
+    app.add_handler(CommandHandler("locktestbot", cmd_locktestbot)) # NEW COMMAND
     app.add_handler(CommandHandler("lockdown", cmd_lockdown))
     app.add_handler(CommandHandler("lockfree", cmd_lockfree))
     app.add_handler(CommandHandler("lockpaid", cmd_lockpaid))
@@ -1956,7 +1985,7 @@ def main():
         app.job_queue.run_repeating(check_demos, interval=60, first=10)
         app.job_queue.run_repeating(background_sync, interval=600, first=30)
     
-    print("Bot v32.0 (Dynamic Test Bot & Security) Started...")
+    print("Bot v33.0 (Test Bot Lockdown Added) Started...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
