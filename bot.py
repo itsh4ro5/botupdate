@@ -628,6 +628,66 @@ async def cmd_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user and is_admin(user.id): 
         await schedule_delete(context, msg_obj)
 
+async def cmd_joinall(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Sirf Owner use kar sakta hai
+    if update.effective_user.id != OWNER_ID:
+        return
+
+    session_string = DB.get("SESSION_STRING")
+    if not session_string or not API_ID:
+        await update.message.reply_text("❌ **Error:** Pehle `/login` karke apna Userbot connect karein.")
+        return
+
+    msg = await update.message.reply_text("⏳ **Userbot ko channels me add kiya ja raha hai...**\nPyrogram connect ho raha hai...")
+
+    # Pyrogram client start karke Userbot ka asli Telegram ID nikalenge
+    client = Client("temp_bot", api_id=API_ID, api_hash=API_HASH, session_string=session_string, in_memory=True)
+    try:
+        await client.start()
+        me = await client.get_me()
+        userbot_id = me.id
+        await client.stop()
+    except Exception as e:
+        await msg.edit_text(f"❌ **Userbot connect nahi ho paya:** `{e}`")
+        return
+
+    await msg.edit_text(f"⏳ **Account Found:** `{me.first_name}`\nAb isko sabhi channels me Admin banaya ja raha hai... Please wait.")
+
+    # Sabhi channels ki ek list banayenge
+    all_chats = []
+    if MANDATORY_CHANNEL_ID:
+        all_chats.append(MANDATORY_CHANNEL_ID)
+    all_chats.extend(list(DB["FREE_CHANNELS"].keys()))
+    all_chats.extend(list(DB["PAID_CHANNELS"].keys()))
+
+    success = 0
+    failed = 0
+
+    for cid in all_chats:
+        try:
+            # Main Bot seedha Userbot ko admin bana dega (Auto-Join ho jayega)
+            await context.bot.promote_chat_member(
+                chat_id=int(cid),
+                user_id=userbot_id,
+                can_invite_users=True,  # Minimal admin permission
+                can_manage_chat=True    # Channel/Group manage karne ki basic permission
+            )
+            success += 1
+            # FloodWait se bachne ke liye chhota delay
+            await asyncio.sleep(0.5) 
+        except Exception as e:
+            logger.error(f"Failed to make admin in {cid}: {e}")
+            failed += 1
+
+    await msg.edit_text(
+        f"✅ **Auto-Join & Admin Process Pura Hua!**\n\n"
+        f"👤 **Account:** `{me.first_name}`\n"
+        f"✅ **Successfully Added & Made Admin:** `{success}` channels\n"
+        f"❌ **Failed:** `{failed}` channels (Agar koi fail hua, toh check karein ki kya wahan Main Bot ko Add Admin ka right hai ya nahi).\n\n"
+        f"🎉 **Ab aap aaram se `/clear` command use kar sakte hain!**",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
 async def cmd_add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID: 
         return
@@ -2069,6 +2129,7 @@ def main():
     app.add_handler(CommandHandler("lockfree", cmd_lockfree))
     app.add_handler(CommandHandler("lockpaid", cmd_lockpaid))
     app.add_handler(CommandHandler("sync", cmd_sync))
+    app.add_handler(CommandHandler("joinall", cmd_joinall))
     
     app.add_handler(CommandHandler("demo", cmd_approve_demo))
     app.add_handler(CommandHandler("per", cmd_approve_perm))
