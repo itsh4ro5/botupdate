@@ -510,6 +510,15 @@ async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         await userbot.start()
+
+        try:
+        await userbot.start()
+        
+        # 👇 YAHAN SE NAYA FIX ADD KAREIN 👇
+        await msg.edit_text("⏳ Userbot apni memory refresh kar raha hai (Syncing chats)...")
+        async for dialog in userbot.get_dialogs():
+            pass # Bas list scroll karke memory me save karne ke liye
+        # 👆 YAHAN TAK 👆
         
         # 1. Fetch Mandatory Channel Users (SLOW & SAFE)
         await msg.edit_text("⏳ Mandatory Channel ke sabhi users ko fetch kiya ja raha hai... (Slow Process)")
