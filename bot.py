@@ -29,6 +29,8 @@ import asyncio
 import time
 import threading
 import re
+from pyrogram import Client
+from pyrogram.errors import FloodWait
 from datetime import datetime, timedelta
 from telegram import (
     Update, ChatMember, InlineKeyboardButton, InlineKeyboardMarkup, 
@@ -36,7 +38,7 @@ from telegram import (
     InputMediaPhoto, InputMediaVideo, InputMediaDocument, InputMediaAudio, InputMediaAnimation
 )
 from telegram.constants import ChatType, ParseMode
-from telegram.error import TelegramError, BadRequest, Forbidden
+from telegram.error import TelegramError, BadRequest, Forbidden, RetryAfter
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, ContextTypes, ChatMemberHandler, 
     CallbackQueryHandler, MessageHandler, filters, Application, ChatJoinRequestHandler,
@@ -81,6 +83,9 @@ DEFAULTS = {
     "LOG_CH": 0
 }
 
+API_ID = int(os.environ.get("API_ID", 0))
+API_HASH = os.environ.get("API_HASH", "")
+SESSION_STRING = os.environ.get("SESSION_STRING", "")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", DEFAULTS["TOKEN"])
 OWNER_ID = int(os.environ.get("OWNER_ID", DEFAULTS["OWNER"]))
 SUPPORT_GROUP_ID = int(os.environ.get("SUPPORT_GROUP_ID", DEFAULTS["SUPPORT"]))
@@ -488,6 +493,112 @@ async def cmd_del_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await schedule_delete(context, msg)
 
 # --- 8. COMMANDS ---
+
+async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Ab ye command SIRF OWNER use kar payega
+    if update.effective_user.id != OWNER_ID: 
+        return
+        
+    if not SESSION_STRING or not API_ID:
+        await update.message.reply_text("❌ **Userbot Config Missing!**\nPlease add API_ID, API_HASH, and SESSION_STRING.", parse_mode=ParseMode.MARKDOWN)
+        return
+
+    msg = await update.message.reply_text("⏳ **Super Exit /clear Start...**\n\n🛡️ *Render Free Server aur Telegram Limits ko bachane ke liye ye process SLOW rakha gaya hai. Kripya wait karein...*", parse_mode=ParseMode.MARKDOWN)
+
+    # In-memory session jisse disk usage na badhe
+    userbot = Client("clear_bot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING, in_memory=True)
+    
+    try:
+        await userbot.start()
+        
+        # 1. Fetch Mandatory Channel Users (SLOW & SAFE)
+        await msg.edit_text("⏳ Mandatory Channel ke sabhi users ko fetch kiya ja raha hai... (Slow Process)")
+        mandatory_users = set()
+        
+        try:
+            async for member in userbot.get_chat_members(MANDATORY_CHANNEL_ID):
+                if not member.user.is_bot and not member.user.is_deleted:
+                    mandatory_users.add(member.user.id)
+                # Chota delay taaki Userbot list nikalte time FloodWait na khaye
+                await asyncio.sleep(0.01) 
+        except FloodWait as e:
+            await asyncio.sleep(e.value + 2) # Agar flood aaya toh wait karega
+            
+        # Txt file generate karna (Memory safe)
+        file_content = "Mandatory Channel Users ID:\n" + "\n".join([str(uid) for uid in mandatory_users])
+        f = io.BytesIO(file_content.encode("utf-8"))
+        f.name = "mandatory_users.txt"
+        
+        await context.bot.send_document(
+            chat_id=update.effective_chat.id, 
+            document=f, 
+            caption=f"✅ Mandatory channel se **{len(mandatory_users)}** users fetch hue hain."
+        )
+
+        # 2. Check and Kick from other Batches
+        all_channels = list(DB["FREE_CHANNELS"].keys()) + list(DB["PAID_CHANNELS"].keys())
+        removed_count = 0
+        checked_users = 0
+        
+        for bid in all_channels:
+            try:
+                bname = DB["ALL_CHATS"].get(int(bid), f"Batch {bid}")
+                await msg.edit_text(f"⏳ Checking Batch: **{bname}**...\nServer ko safe rakhne ke liye process slow chal raha hai.", parse_mode=ParseMode.MARKDOWN)
+                
+                async for member in userbot.get_chat_members(int(bid)):
+                    uid = member.user.id
+                    checked_users += 1
+                    
+                    if uid not in mandatory_users and uid != OWNER_ID and not member.user.is_bot:
+                        try:
+                            # User ko remove karna
+                            await context.bot.ban_chat_member(int(bid), uid)
+                            await context.bot.unban_chat_member(int(bid), uid)
+                            removed_count += 1
+                            
+                            # ✨ SUPER SAFE DELAY FOR RENDER & TELEGRAM (1.5 Seconds) ✨
+                            await asyncio.sleep(1.5)
+                            
+                        except RetryAfter as e:
+                            # Agar Main Bot par FloodWait lag gaya
+                            logger.warning(f"FloodWait hit for {e.retry_after} seconds. Waiting...")
+                            await asyncio.sleep(e.retry_after + 2)
+                        except Exception:
+                            pass
+                    
+                    # Message har 50 users ke baad update hoga taaki message edit limit na lage
+                    if checked_users % 50 == 0:
+                        try:
+                            await msg.edit_text(f"⏳ **Live Status:**\nBatch: {bname}\nChecked: `{checked_users}`\nRemoved: `{removed_count}`\n\n*Process is running safely...*", parse_mode=ParseMode.MARKDOWN)
+                        except RetryAfter as e:
+                            await asyncio.sleep(e.retry_after + 1)
+                        except Exception:
+                            pass
+                            
+            except FloodWait as e:
+                # Agar Userbot par limit lagi
+                await asyncio.sleep(e.value + 5)
+            except Exception as e:
+                logger.error(f"Batch {bid} error: {e}")
+                
+        await userbot.stop()
+
+        # 3. Final Success Message
+        await msg.edit_text(
+            f"✅ **/clear Process Pura Hua!** (100% Safe Execution)\n\n"
+            f"🛡️ **Total Mandatory Users:** `{len(mandatory_users)}`\n"
+            f"🚪 **Dusre Batches se Remove Hue:** `{removed_count}`\n\n"
+            f"*(Render server aur bot dono bina kisi crash ke safely run hue)*",
+            parse_mode=ParseMode.MARKDOWN
+        )
+
+    except Exception as e:
+        await msg.edit_text(f"❌ **Error occurred:** `{e}`\n(Process stopped to protect server)", parse_mode=ParseMode.MARKDOWN)
+        try:
+            await userbot.stop()
+        except Exception:
+            pass
+            
 async def cmd_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     user = update.effective_user
@@ -1970,6 +2081,7 @@ def main():
     app.add_handler(CommandHandler("broadcast", cmd_broadcast_start))
     app.add_handler(CommandHandler("post", cmd_post_start))
     app.add_handler(CommandHandler("cancel", cmd_cancel))
+    app.add_handler(CommandHandler("clear", cmd_clear))
     
     app.add_handler(CallbackQueryHandler(general_callback))
     app.add_handler(ChatJoinRequestHandler(handle_join_request))
