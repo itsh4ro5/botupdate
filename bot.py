@@ -508,7 +508,7 @@ async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # In-memory session jisse disk usage na badhe
     userbot = Client("clear_bot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING, in_memory=True)
     
-        try:
+    try:
         await userbot.start()
         
         # 👇 YAHAN SE NAYA FIX ADD KAREIN 👇
