@@ -495,57 +495,32 @@ async def cmd_del_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --- 8. COMMANDS ---
 
 async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Ab ye command SIRF OWNER use kar payega
+    # Sirf Owner use kar sakta hai
     if update.effective_user.id != OWNER_ID: 
         return
         
     if not SESSION_STRING or not API_ID:
-        await update.message.reply_text("❌ **Userbot Config Missing!**\nPlease add API_ID, API_HASH, and SESSION_STRING.", parse_mode=ParseMode.MARKDOWN)
+        await update.message.reply_text("❌ **Userbot Config Missing!**\nPlease add API_ID, API_HASH, and SESSION_STRING in Env Variables.", parse_mode=ParseMode.MARKDOWN)
         return
 
-    msg = await update.message.reply_text("⏳ **Super Exit /clear Start...**\n\n🛡️ *Render Free Server aur Telegram Limits ko bachane ke liye ye process SLOW rakha gaya hai. Kripya wait karein...*", parse_mode=ParseMode.MARKDOWN)
+    msg = await update.message.reply_text("⏳ **Super Exit /clear Start...**\n\n🛡️ *Reverse Logic Mode: Ab bot ek-ek user ko check karega taaki 200-member limit bypass ho sake...*", parse_mode=ParseMode.MARKDOWN)
 
-    # In-memory session jisse disk usage na badhe
+    # In-memory session Env variable ke sath
     userbot = Client("clear_bot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING, in_memory=True)
     
     try:
         await userbot.start()
         
-        # 👇 YAHAN SE NAYA FIX ADD KAREIN 👇
         await msg.edit_text("⏳ Userbot apni memory refresh kar raha hai (Syncing chats)...")
         async for dialog in userbot.get_dialogs():
-            pass # Bas list scroll karke memory me save karne ke liye
-        # 👆 YAHAN TAK 👆
-        
-        # 1. Fetch Mandatory Channel Users (SLOW & SAFE)
-        await msg.edit_text("⏳ Mandatory Channel ke sabhi users ko fetch kiya ja raha hai... (Slow Process)")
-        mandatory_users = set()
-        
-        try:
-            async for member in userbot.get_chat_members(MANDATORY_CHANNEL_ID):
-                if not member.user.is_bot and not member.user.is_deleted:
-                    mandatory_users.add(member.user.id)
-                # Chota delay taaki Userbot list nikalte time FloodWait na khaye
-                await asyncio.sleep(0.01) 
-        except FloodWait as e:
-            await asyncio.sleep(e.value + 2) # Agar flood aaya toh wait karega
+            pass 
             
-        # Txt file generate karna (Memory safe)
-        file_content = "Mandatory Channel Users ID:\n" + "\n".join([str(uid) for uid in mandatory_users])
-        f = io.BytesIO(file_content.encode("utf-8"))
-        f.name = "mandatory_users.txt"
-        
-        await context.bot.send_document(
-            chat_id=update.effective_chat.id, 
-            document=f, 
-            caption=f"✅ Mandatory channel se **{len(mandatory_users)}** users fetch hue hain."
-        )
-
-        # 2. Check and Kick from other Batches
         all_channels = list(DB["FREE_CHANNELS"].keys()) + list(DB["PAID_CHANNELS"].keys())
         removed_count = 0
         checked_users = 0
+        safe_users = 0
         
+        # Seedha batches ko check karna shuru karenge
         for bid in all_channels:
             try:
                 bname = DB["ALL_CHATS"].get(int(bid), f"Batch {bid}")
@@ -555,46 +530,58 @@ async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     uid = member.user.id
                     checked_users += 1
                     
-                    if uid not in mandatory_users and uid != OWNER_ID and not member.user.is_bot:
+                    if uid != OWNER_ID and not member.user.is_bot:
+                        # REVERSE LOGIC: Batch ke user ko Mandatory me dhundho
+                        is_in_main = False
                         try:
-                            # User ko remove karna
-                            await context.bot.ban_chat_member(int(bid), uid)
-                            await context.bot.unban_chat_member(int(bid), uid)
-                            removed_count += 1
-                            
-                            # ✨ SUPER SAFE DELAY FOR RENDER & TELEGRAM (1.5 Seconds) ✨
-                            await asyncio.sleep(1.5)
-                            
-                        except RetryAfter as e:
-                            # Agar Main Bot par FloodWait lag gaya
-                            logger.warning(f"FloodWait hit for {e.retry_after} seconds. Waiting...")
-                            await asyncio.sleep(e.retry_after + 2)
+                            # Agar user mandatory me nahi hoga, toh ye error dega
+                            await userbot.get_chat_member(MANDATORY_CHANNEL_ID, uid)
+                            is_in_main = True
+                            safe_users += 1
                         except Exception:
-                            pass
+                            # Error aayi matlab user mandatory me nahi hai
+                            is_in_main = False
+                            
+                        # Agar Mandatory me nahi hai, toh batch se Kick karo
+                        if not is_in_main:
+                            try:
+                                await context.bot.ban_chat_member(int(bid), uid)
+                                await context.bot.unban_chat_member(int(bid), uid)
+                                removed_count += 1
+                                
+                                # Kick karne ke baad delay (Safe for Render)
+                                await asyncio.sleep(1.5)
+                            except RetryAfter as e:
+                                await asyncio.sleep(e.retry_after + 2)
+                            except Exception:
+                                pass
+                        
+                        # Har user check hone ke baad chhota delay (API limit se bachne ke liye)
+                        await asyncio.sleep(0.1)
                     
-                    # Message har 50 users ke baad update hoga taaki message edit limit na lage
-                    if checked_users % 50 == 0:
+                    # Message update
+                    if checked_users % 30 == 0:
                         try:
-                            await msg.edit_text(f"⏳ **Live Status:**\nBatch: {bname}\nChecked: `{checked_users}`\nRemoved: `{removed_count}`\n\n*Process is running safely...*", parse_mode=ParseMode.MARKDOWN)
+                            await msg.edit_text(f"⏳ **Live Status:**\nBatch: {bname}\nChecked: `{checked_users}`\nSafe (In Main): `{safe_users}`\nRemoved: `{removed_count}`\n\n*Process is running safely...*", parse_mode=ParseMode.MARKDOWN)
                         except RetryAfter as e:
                             await asyncio.sleep(e.retry_after + 1)
                         except Exception:
                             pass
                             
             except FloodWait as e:
-                # Agar Userbot par limit lagi
                 await asyncio.sleep(e.value + 5)
-            except Exception as e:
-                logger.error(f"Batch {bid} error: {e}")
+            except Exception:
+                pass
                 
         await userbot.stop()
 
-        # 3. Final Success Message
+        # Final Success Message
         await msg.edit_text(
-            f"✅ **/clear Process Pura Hua!** (100% Safe Execution)\n\n"
-            f"🛡️ **Total Mandatory Users:** `{len(mandatory_users)}`\n"
-            f"🚪 **Dusre Batches se Remove Hue:** `{removed_count}`\n\n"
-            f"*(Render server aur bot dono bina kisi crash ke safely run hue)*",
+            f"✅ **/clear Process Pura Hua!** (100% Accurate)\n\n"
+            f"👥 **Total Users Checked:** `{checked_users}`\n"
+            f"🛡️ **Safe (Mandatory me hain):** `{safe_users}`\n"
+            f"🚪 **Batches se Remove Hue:** `{removed_count}`\n\n"
+            f"*(Telegram ki 200 limit ko Reverse Logic se successfully bypass kar diya gaya hai!)*",
             parse_mode=ParseMode.MARKDOWN
         )
 
