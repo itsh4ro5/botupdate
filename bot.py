@@ -633,15 +633,14 @@ async def cmd_joinall(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID:
         return
 
-    session_string = DB.get("SESSION_STRING")
-    if not session_string or not API_ID:
-        await update.message.reply_text("❌ **Error:** Pehle `/login` karke apna Userbot connect karein.")
+    if not SESSION_STRING or not API_ID:
+        await update.message.reply_text("❌ **Error:** Env variables me API_ID aur SESSION_STRING set nahi hai.")
         return
 
     msg = await update.message.reply_text("⏳ **Userbot ko channels me add kiya ja raha hai...**\nPyrogram connect ho raha hai...")
 
     # Pyrogram client start karke Userbot ka asli Telegram ID nikalenge
-    client = Client("temp_bot", api_id=API_ID, api_hash=API_HASH, session_string=session_string, in_memory=True)
+    client = Client("temp_bot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING, in_memory=True)
     try:
         await client.start()
         me = await client.get_me()
@@ -673,17 +672,15 @@ async def cmd_joinall(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 can_manage_chat=True    # Channel/Group manage karne ki basic permission
             )
             success += 1
-            # FloodWait se bachne ke liye chhota delay
             await asyncio.sleep(0.5) 
         except Exception as e:
-            logger.error(f"Failed to make admin in {cid}: {e}")
             failed += 1
 
     await msg.edit_text(
         f"✅ **Auto-Join & Admin Process Pura Hua!**\n\n"
         f"👤 **Account:** `{me.first_name}`\n"
         f"✅ **Successfully Added & Made Admin:** `{success}` channels\n"
-        f"❌ **Failed:** `{failed}` channels (Agar koi fail hua, toh check karein ki kya wahan Main Bot ko Add Admin ka right hai ya nahi).\n\n"
+        f"❌ **Failed:** `{failed}` channels (Check karein ki kya wahan Main Bot ko Add Admin ka right hai ya nahi).\n\n"
         f"🎉 **Ab aap aaram se `/clear` command use kar sakte hain!**",
         parse_mode=ParseMode.MARKDOWN
     )
