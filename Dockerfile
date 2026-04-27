@@ -9,6 +9,13 @@ ENV PORT=7860
 
 WORKDIR /app
 
+# 👇 YAHAN NAYI LINE ADD KI GAYI HAI 👇
+# tgcrypto ko build karne ke liye gcc aur python3-dev install karein
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc python3-dev && \
+    rm -rf /var/lib/apt/lists/*
+# 👆 ================================ 👆
+
 # Install dependencies first (better layer caching)
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
