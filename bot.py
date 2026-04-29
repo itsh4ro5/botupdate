@@ -1075,41 +1075,47 @@ async def cmd_approve_demo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     args = context.args
     
-    # Default time: 3 hours (Agar koi time na de)
+    # Default time: 3 hours
     demo_seconds = 3 * 3600
     time_display = "3 Hrs"
 
-    # Link extract karna
-    try: 
+    link = None
+
+    # 1. SMART FEATURE: Agar admin ne request message ko Reply kiya hai
+    if msg.reply_to_message and msg.reply_to_message.text:
+        m = re.search(r'(https?://t\.me/\+[a-zA-Z0-9_\-]+)', msg.reply_to_message.text)
+        if m:
+            link = m.group(1)
+
+    # 2. Agar admin ne reply nahi kiya, direct link paste kiya hai
+    if not link:
         m = re.search(r'(https?://t\.me/\+[a-zA-Z0-9_\-]+)', msg.text)
         if m:
             link = m.group(1)
-        else:
+        elif len(args) > 0 and "t.me" in args[0]:
             link = args[0].strip()
-    except Exception: 
-        await msg.reply_text("Usage: `/demo <link> [time]`\nExample: `/demo link 10m` or `/demo link 2h`", parse_mode=ParseMode.MARKDOWN)
+
+    if not link: 
+        await msg.reply_text("❌ Link nahi mila!\n**Usage:** `/demo <link> 10m`\n**Shortcut:** Request message ko Reply karke likhein `/demo 10m`", parse_mode=ParseMode.MARKDOWN)
         return
         
     # Dynamic time calculate karna
     for arg in args:
-        if "t.me" not in arg: # Agar arg link nahi hai, toh matlab wo time hai
+        if "t.me" not in arg: 
             time_str = arg.lower()
             try:
-                # Text se number alag karna
                 num_val = float(re.sub(r'[^0-9.]', '', time_str))
-                
-                if 'm' in time_str and 'h' not in time_str: # Minute check
+                if 'm' in time_str and 'h' not in time_str:
                     demo_seconds = num_val * 60
                     time_display = f"{int(num_val)} Mins"
-                elif 'd' in time_str: # Day check
+                elif 'd' in time_str:
                     demo_seconds = num_val * 86400
                     time_display = f"{int(num_val)} Days"
-                else: # Default Hour check (h, hr, ya bas number ho)
+                else:
                     demo_seconds = num_val * 3600
-                    # Decimal hatane ke liye int me convert
                     time_display = f"{int(num_val) if num_val.is_integer() else num_val} Hrs"
             except ValueError:
-                pass # Agar invalid text hai toh default 3 hours hi rahega
+                pass 
                 
     ld = DB["LINK_MAP"].get(link)
     target_uid = None
@@ -1127,21 +1133,18 @@ async def cmd_approve_demo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     break
                     
     if not target_uid or not batch_id: 
-        await msg.reply_text("❌ Link/User not found.")
+        await msg.reply_text("❌ Link/User database me nahi mila.")
         return
         
     if batch_id in DB["USER_DATA"].get(target_uid, {}).get("demo_history", []): 
-        await msg.reply_text("⚠️ Warning: ALREADY used demo.")
+        await msg.reply_text("⚠️ Warning: Ye user pehle is batch ka demo le chuka hai.")
         
     try:
         await context.bot.approve_chat_join_request(batch_id, target_uid)
         
-        if "USER_DATA" not in DB:
-            DB["USER_DATA"] = {}
-        if target_uid not in DB["USER_DATA"]:
-            DB["USER_DATA"][target_uid] = {}
-        if "demos" not in DB["USER_DATA"][target_uid]:
-            DB["USER_DATA"][target_uid]["demos"] = {}
+        if "USER_DATA" not in DB: DB["USER_DATA"] = {}
+        if target_uid not in DB["USER_DATA"]: DB["USER_DATA"][target_uid] = {}
+        if "demos" not in DB["USER_DATA"][target_uid]: DB["USER_DATA"][target_uid]["demos"] = {}
             
         # Naya Dynamic Expiry Time Save Karna
         DB["USER_DATA"][target_uid]["demos"][str(batch_id)] = {"expiry": time.time() + demo_seconds, "warned": False}
