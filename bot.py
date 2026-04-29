@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-ULTIMATE BOT MANAGER (v33.0 - Test Bot Lockdown Added)
+ULTIMATE BOT MANAGER (v34.0 - Full Uncompressed Version)
 Base: Original Expanded Code (bot (3).py) + v31.0 + v32.0 Fixes
 Features Added/Fixed:
 1. PARSE ERROR FIXED: Replaced Markdown with HTML for link generation & broadcasts.
@@ -19,7 +19,11 @@ Features Added/Fixed:
 13. DYNAMIC TEST BOT BUTTON: Added a "Test Bot" button in the main menu that strictly verifies channel membership before providing the link.
 14. /settestbot COMMAND: Admins can dynamically update the Test Bot link from within Telegram.
 15. /locktestbot COMMAND (NEW): Admins can lock/unlock the Test Bot button just like free and paid batches.
-16. SMART KICK FIX: Ensures /per users are never auto-kicked from Paid Batches, cleans DB timers, and strictly separates Auto-Kicks from Manual Bans.
+16. SMART KICK FIX: Ensures /per users are never auto-kicked from Paid Batches.
+17. T&C ENFORCEMENT: Force new and old users to accept rules before accessing batches.
+18. MEMORY LEAK FIX: Auto-cleans SPAM_CACHE and MESSAGE_MAP to prevent server crash.
+19. AUTO-BACKUP: Sends bot_data.json to LOG_CHANNEL every 24 hours.
+20. REGEX FIX: Supports both old (joinchat) and new (+) Telegram private links.
 """
 
 import logging
@@ -62,7 +66,7 @@ try:
         
         @app.route('/')
         def index(): 
-            return "Bot Running - v33.0 Test Bot Lockdown", 200
+            return "Bot Running - v34.0 Uncompressed", 200
         
         def run():
             app.run(host="0.0.0.0", port=port, use_reloader=False)
@@ -274,28 +278,25 @@ async def execute_universal_kick(user_id, context, permanent_ban=False):
                 await context.bot.unban_chat_member(int(bid), user_id) # Just kick
         except Exception: pass
 
-    # 2. Smart Logic for Paid Batches (Rule 1, 2, 3, 4)
+    # 2. Smart Logic for Paid Batches
     for bid in list(DB["PAID_CHANNELS"].keys()):
         try:
             bid_str = str(bid)
             is_demo = False
             
-            # Check if the user is on a demo for this specific paid batch
             if user_id in DB["USER_DATA"] and "demos" in DB["USER_DATA"][user_id] and bid_str in DB["USER_DATA"][user_id]["demos"]:
                 is_demo = True
 
             if permanent_ban:
-                # RULE 4: Manual Ban forcefully removes everyone including /per users
                 await context.bot.ban_chat_member(int(bid), user_id)
                 if is_demo:
                     del DB["USER_DATA"][user_id]["demos"][bid_str]
                     mod = True
             else:
-                # RULE 1: Auto-kick ONLY removes if they are on /demo. Keep /per users safe.
                 if is_demo:
                     await context.bot.ban_chat_member(int(bid), user_id)
-                    await context.bot.unban_chat_member(int(bid), user_id) # RULE 3: Telegram API Ban-Clear
-                    del DB["USER_DATA"][user_id]["demos"][bid_str]         # RULE 2: DB Cleanup
+                    await context.bot.unban_chat_member(int(bid), user_id)
+                    del DB["USER_DATA"][user_id]["demos"][bid_str]
                     mod = True
         except Exception: pass
 
@@ -918,7 +919,6 @@ async def cmd_lockpaid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await schedule_delete(context, update.message)
     await schedule_delete(context, msg)
 
-# --- NEW COMMAND: LOCK TEST BOT ---
 async def cmd_locktestbot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): 
         return
@@ -1099,19 +1099,16 @@ async def cmd_approve_demo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     link = None
 
-    # 1. SMART FEATURE: Agar admin ne request message ko Reply kiya hai
+    # SMART FEATURE + Regex Update
+    text_to_search = msg.text if msg.text else ""
     if msg.reply_to_message and msg.reply_to_message.text:
-        m = re.search(r'(https?://t\.me/\+[a-zA-Z0-9_\-]+)', msg.reply_to_message.text)
-        if m:
-            link = m.group(1)
+        text_to_search = msg.reply_to_message.text
 
-    # 2. Agar admin ne reply nahi kiya, direct link paste kiya hai
-    if not link:
-        m = re.search(r'(https?://t\.me/\+[a-zA-Z0-9_\-]+)', msg.text)
-        if m:
-            link = m.group(1)
-        elif len(args) > 0 and "t.me" in args[0]:
-            link = args[0].strip()
+    m = re.search(r'(https?://t\.me/(?:\+|joinchat/)[a-zA-Z0-9_\-]+)', text_to_search)
+    if m:
+        link = m.group(1)
+    elif len(args) > 0 and "t.me" in args[0]:
+        link = args[0].strip()
 
     if not link: 
         await msg.reply_text("❌ Link nahi mila!\n**Usage:** `/demo <link> 10m`\n**Shortcut:** Request message ko Reply karke likhein `/demo 10m`", parse_mode=ParseMode.MARKDOWN)
@@ -1197,15 +1194,20 @@ async def cmd_approve_perm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     msg = update.message
-    try: 
-        m = re.search(r'(https?://t\.me/\+[a-zA-Z0-9_\-]+)', msg.text)
-        if m:
-            link = m.group(1)
-        else:
+    
+    text_to_search = msg.text if msg.text else ""
+    if msg.reply_to_message and msg.reply_to_message.text:
+        text_to_search = msg.reply_to_message.text
+
+    m = re.search(r'(https?://t\.me/(?:\+|joinchat/)[a-zA-Z0-9_\-]+)', text_to_search)
+    if m:
+        link = m.group(1)
+    else:
+        try:
             link = context.args[0].strip()
-    except Exception: 
-        await msg.reply_text("Usage: `/per <link>`")
-        return
+        except Exception: 
+            await msg.reply_text("Usage: `/per <link>`")
+            return
         
     ld = DB["LINK_MAP"].get(link)
     target_uid = None
@@ -1552,6 +1554,13 @@ async def broadcast_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 await context.bot.copy_message(tid, uid, BROADCAST_STATE[uid]["content"].message_id)
                 count += 1
                 await asyncio.sleep(0.05)
+            except RetryAfter as e:
+                await asyncio.sleep(e.retry_after + 1)
+                try:
+                    await context.bot.copy_message(tid, uid, BROADCAST_STATE[uid]["content"].message_id)
+                    count += 1
+                except Exception: 
+                    pass
             except Exception: 
                 pass
                 
@@ -1757,7 +1766,16 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
                 pass
 
 async def background_sync(context: ContextTypes.DEFAULT_TYPE):
-    logger.info("🔄 Starting Background User Sync...")
+    logger.info("🔄 Starting Background Sync & Memory Cleanup...")
+    
+    # --- MEMORY LEAK FIX ---
+    global SPAM_CACHE
+    now = time.time()
+    SPAM_CACHE = {k: v for k, v in SPAM_CACHE.items() if now - v < 2.0} 
+    
+    if len(MESSAGE_MAP) > 5000:
+        logger.info("🧹 Clearing old MESSAGE_MAP to save RAM...")
+        MESSAGE_MAP.clear()
     
     for uid in list(DB["USER_DATA"].keys()):
         user_id = int(uid)
@@ -1875,6 +1893,44 @@ async def check_demos(context: ContextTypes.DEFAULT_TYPE):
     if mod: 
         await save_data_async()
 
+async def auto_backup_db(context: ContextTypes.DEFAULT_TYPE):
+    """AUTO BACKUP FEATURE"""
+    if LOG_CHANNEL_ID and os.path.exists(DATA_FILE):
+        try:
+            await context.bot.send_document(
+                chat_id=LOG_CHANNEL_ID,
+                document=open(DATA_FILE, "rb"),
+                caption=f"🛡️ **AUTOMATIC DB BACKUP**\n📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+                parse_mode=ParseMode.MARKDOWN
+            )
+            logger.info("✅ Auto-backup sent to log channel.")
+        except Exception as e:
+            logger.error(f"❌ Auto-backup failed: {e}")
+
+async def show_tnc_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """T&C POPUP LAYER"""
+    tnc_text = (
+        "📜 **WELCOME TO THE BOT!** 📜\n\n"
+        "**🤖 HOW TO USE:**\n"
+        "1️⃣ Use the menu to browse **Free** or **Paid** batches.\n"
+        "2️⃣ Click to generate your unique, one-time access link.\n"
+        "3️⃣ For paid batches, you can request a **Demo** or **Permanent** access.\n\n"
+        "**⚠️ TERMS & CONDITIONS (STRICT RULES):**\n"
+        "🚫 **Do not leave the Main Channel:** If you leave, our Smart System will auto-kick you from ALL batches permanently.\n"
+        "🚫 **Do not block the bot:** Doing so will result in an instant ban.\n"
+        "🚫 **No link sharing:** All invite links are 1-time use only and bound to your ID.\n\n"
+        "✅ *By clicking below, you agree to these rules.*"
+    )
+    kb = [[InlineKeyboardButton("✅ I Accept & Continue", callback_data="accept_tnc")]]
+    
+    if update.callback_query: 
+        try: 
+            await update.callback_query.edit_message_text(tnc_text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        except Exception: 
+            pass
+    else: 
+        await update.message.reply_text(tnc_text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
 async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     uid = q.from_user.id
@@ -1928,6 +1984,7 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "verify":
         if await check_membership(uid, context): 
             await q.answer("✅ Verified!")
+            # T&C Logic Check
             if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
                 await show_tnc_menu(update, context)
             else:
@@ -1938,7 +1995,6 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await q.answer("❌ Join Main Channel First!", show_alert=True)
 
-    # NAYA BLOCK ADD KAREIN: Jab user I Accept pe click karega
     elif data == "accept_tnc":
         if uid not in DB["USER_DATA"]:
             DB["USER_DATA"][uid] = {}
@@ -1948,17 +2004,18 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await q.answer("✅ Rules Accepted! Welcome to the bot.", show_alert=True)
         await show_user_menu(update)
-        else: 
-            if not DB.get("NEW_USERS_ALLOWED", True):
-                await q.answer("⛔ Entry Closed.", show_alert=True)
-            else:
-                await q.answer("❌ Join Main Channel First!", show_alert=True)
                 
     elif data == "u_main": 
         await q.answer()
         await show_user_menu(update)
         
     elif data == "u_free":
+        # T&C Bypass Block
+        if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
+            await q.answer("⚠️ Please Accept Rules First!", show_alert=True)
+            await show_tnc_menu(update, context)
+            return
+
         if DB.get("FREE_LOCKED", False): 
             await q.answer("🔒 Locked.", show_alert=True)
             return
@@ -1979,6 +2036,12 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
             
     elif data == "u_paid":
+        # T&C Bypass Block
+        if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
+            await q.answer("⚠️ Please Accept Rules First!", show_alert=True)
+            await show_tnc_menu(update, context)
+            return
+
         if DB.get("PAID_LOCKED", False): 
             await q.answer("🔒 Locked.", show_alert=True)
             return
@@ -2109,29 +2172,6 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         except Exception as e: 
             await context.bot.send_message(uid, f"❌ Error: {e}")
-            
-async def show_tnc_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    tnc_text = (
-        "📜 **WELCOME TO THE BOT!** 📜\n\n"
-        "**🤖 HOW TO USE:**\n"
-        "1️⃣ Use the menu to browse **Free** or **Paid** batches.\n"
-        "2️⃣ Click to generate your unique, one-time access link.\n"
-        "3️⃣ For paid batches, you can request a **Demo** or **Permanent** access.\n\n"
-        "**⚠️ TERMS & CONDITIONS (STRICT RULES):**\n"
-        "🚫 **Do not leave the Main Channel:** If you leave, our Smart System will auto-kick you from ALL batches permanently.\n"
-        "🚫 **Do not block the bot:** Doing so will result in an instant ban.\n"
-        "🚫 **No link sharing:** All invite links are 1-time use only and bound to your ID.\n\n"
-        "✅ *By clicking below, you agree to these rules.*"
-    )
-    kb = [[InlineKeyboardButton("✅ I Accept & Continue", callback_data="accept_tnc")]]
-    
-    if update.callback_query: 
-        try: 
-            await update.callback_query.edit_message_text(tnc_text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-        except Exception: 
-            pass
-    else: 
-        await update.message.reply_text(tnc_text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
 async def show_user_menu(update: Update):
     kb = [
@@ -2157,7 +2197,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await set_role_based_commands(user.id, context)
     
     if user.id not in DB["USER_DATA"]: 
-        DB["USER_DATA"][user.id] = {"name": user.full_name, "username": user.username, "joined_at": time.time(), "demos": {}}
+        DB["USER_DATA"][user.id] = {"name": user.full_name, "username": user.username, "joined_at": time.time(), "demos": {}, "tnc_accepted": False}
         await save_data_async()
         
     await get_or_create_topic(user, context)
@@ -2177,8 +2217,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(admin_text, parse_mode=ParseMode.MARKDOWN)
         
     elif await check_membership(user.id, context): 
-        # Check if user has accepted T&C
-        if not DB["USER_DATA"][user.id].get("tnc_accepted", False):
+        if not DB["USER_DATA"].get(user.id, {}).get("tnc_accepted", False):
             await show_tnc_menu(update, context)
         else:
             await show_user_menu(update)
@@ -2254,8 +2293,10 @@ def main():
     if app.job_queue: 
         app.job_queue.run_repeating(check_demos, interval=60, first=10)
         app.job_queue.run_repeating(background_sync, interval=600, first=30)
+        # Naya auto backup yahan schedule hua hai
+        app.job_queue.run_repeating(auto_backup_db, interval=86400, first=60)
     
-    print("Bot v33.0 (Test Bot Lockdown Added) Started...")
+    print("Bot v34.0 (Full Uncompressed + T&C) Started...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
