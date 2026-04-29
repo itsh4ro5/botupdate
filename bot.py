@@ -1928,7 +1928,26 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "verify":
         if await check_membership(uid, context): 
             await q.answer("✅ Verified!")
-            await show_user_menu(update)
+            if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
+                await show_tnc_menu(update, context)
+            else:
+                await show_user_menu(update)
+        else: 
+            if not DB.get("NEW_USERS_ALLOWED", True):
+                await q.answer("⛔ Entry Closed.", show_alert=True)
+            else:
+                await q.answer("❌ Join Main Channel First!", show_alert=True)
+
+    # NAYA BLOCK ADD KAREIN: Jab user I Accept pe click karega
+    elif data == "accept_tnc":
+        if uid not in DB["USER_DATA"]:
+            DB["USER_DATA"][uid] = {}
+            
+        DB["USER_DATA"][uid]["tnc_accepted"] = True
+        await save_data_async()
+        
+        await q.answer("✅ Rules Accepted! Welcome to the bot.", show_alert=True)
+        await show_user_menu(update)
         else: 
             if not DB.get("NEW_USERS_ALLOWED", True):
                 await q.answer("⛔ Entry Closed.", show_alert=True)
@@ -2090,6 +2109,29 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         except Exception as e: 
             await context.bot.send_message(uid, f"❌ Error: {e}")
+            
+async def show_tnc_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    tnc_text = (
+        "📜 **WELCOME TO THE BOT!** 📜\n\n"
+        "**🤖 HOW TO USE:**\n"
+        "1️⃣ Use the menu to browse **Free** or **Paid** batches.\n"
+        "2️⃣ Click to generate your unique, one-time access link.\n"
+        "3️⃣ For paid batches, you can request a **Demo** or **Permanent** access.\n\n"
+        "**⚠️ TERMS & CONDITIONS (STRICT RULES):**\n"
+        "🚫 **Do not leave the Main Channel:** If you leave, our Smart System will auto-kick you from ALL batches permanently.\n"
+        "🚫 **Do not block the bot:** Doing so will result in an instant ban.\n"
+        "🚫 **No link sharing:** All invite links are 1-time use only and bound to your ID.\n\n"
+        "✅ *By clicking below, you agree to these rules.*"
+    )
+    kb = [[InlineKeyboardButton("✅ I Accept & Continue", callback_data="accept_tnc")]]
+    
+    if update.callback_query: 
+        try: 
+            await update.callback_query.edit_message_text(tnc_text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        except Exception: 
+            pass
+    else: 
+        await update.message.reply_text(tnc_text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
 async def show_user_menu(update: Update):
     kb = [
@@ -2135,7 +2177,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(admin_text, parse_mode=ParseMode.MARKDOWN)
         
     elif await check_membership(user.id, context): 
-        await show_user_menu(update)
+        # Check if user has accepted T&C
+        if not DB["USER_DATA"][user.id].get("tnc_accepted", False):
+            await show_tnc_menu(update, context)
+        else:
+            await show_user_menu(update)
         
     else:
         if not DB.get("NEW_USERS_ALLOWED", True): 
