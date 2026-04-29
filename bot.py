@@ -850,6 +850,41 @@ async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try: await schedule_delete(context, msg) 
     except Exception: pass
 
+async def cmd_reset_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): 
+        return
+        
+    try: 
+        target_uid = int(context.args[0])
+    except Exception: 
+        await update.message.reply_text("Usage: `/resetuser [user_id]`", parse_mode=ParseMode.MARKDOWN)
+        return
+        
+    mod = False
+    
+    # 1. Remove from USER_DATA (Clears demo history, timers, T&C, everything)
+    if str(target_uid) in DB["USER_DATA"] or target_uid in DB["USER_DATA"]:
+        # Dono string aur int type check kar lete hain
+        if target_uid in DB["USER_DATA"]: del DB["USER_DATA"][target_uid]
+        if str(target_uid) in DB["USER_DATA"]: del DB["USER_DATA"][str(target_uid)]
+        mod = True
+        
+    # 2. Remove from BLOCKED_USERS
+    if target_uid in DB["BLOCKED_USERS"]:
+        DB["BLOCKED_USERS"].remove(target_uid)
+        mod = True
+        
+    # 3. Remove from USER_TOPICS (Support history)
+    if target_uid in DB["USER_TOPICS"]:
+        del DB["USER_TOPICS"][target_uid]
+        mod = True
+        
+    if mod:
+        await save_data_async()
+        await update.message.reply_text(f"✅ User `{target_uid}` ka poora data MongoDB se completely DELETE kar diya gaya hai.\n\nAb wo as a completely NEW user /start kar sakta hai aur naye links generate kar sakta hai.", parse_mode=ParseMode.MARKDOWN)
+    else:
+        await update.message.reply_text(f"⚠️ User `{target_uid}` ka data database me nahi mila.", parse_mode=ParseMode.MARKDOWN)
+
 async def cmd_find_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): 
         return
@@ -2249,6 +2284,7 @@ def main():
     
     app.add_handler(CommandHandler("ban", cmd_ban))
     app.add_handler(CommandHandler("unban", cmd_unban))
+    app.add_handler(CommandHandler("resetuser", cmd_reset_user))
     app.add_handler(CommandHandler("find", cmd_find_user))
     app.add_handler(CommandHandler("extend", cmd_extend_demo))
     app.add_handler(CommandHandler("kick", cmd_kick_user))
