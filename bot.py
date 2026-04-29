@@ -1073,16 +1073,44 @@ async def cmd_approve_demo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     msg = update.message
+    args = context.args
+    
+    # Default time: 3 hours
+    demo_seconds = 3 * 3600
+    time_display = "3 Hrs"
+
+    # Link extract karna
     try: 
         m = re.search(r'(https?://t\.me/\+[a-zA-Z0-9_\-]+)', msg.text)
         if m:
             link = m.group(1)
         else:
-            link = context.args[0].strip()
+            link = args[0].strip()
     except Exception: 
-        await msg.reply_text("Usage: `/demo <link>`")
+        await msg.reply_text("Usage: `/demo <link> [time]`\nExample: `/demo link 10m` or `/demo link 2h`", parse_mode=ParseMode.MARKDOWN)
         return
         
+    # Dynamic time calculate karna
+    for arg in args:
+        if "t.me" not in arg: # Agar arg link nahi hai, toh matlab wo time hai
+            time_str = arg.lower()
+            try:
+                # Text se number alag karna
+                num_val = float(re.sub(r'[^0-9.]', '', time_str))
+                
+                if 'm' in time_str and 'h' not in time_str: # Minute check
+                    demo_seconds = num_val * 60
+                    time_display = f"{int(num_val)} Mins"
+                elif 'd' in time_str: # Day check
+                    demo_seconds = num_val * 86400
+                    time_display = f"{int(num_val)} Days"
+                else: # Default Hour check (h, hr, ya bas number ho)
+                    demo_seconds = num_val * 3600
+                    # Decimal htane ke liye int me convert
+                    time_display = f"{int(num_val) if num_val.is_integer() else num_val} Hrs"
+            except ValueError:
+                pass # Agar invalid text hai toh default 3 hours hi rahega
+                
     ld = DB["LINK_MAP"].get(link)
     target_uid = None
     batch_id = None
@@ -1103,7 +1131,7 @@ async def cmd_approve_demo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     if batch_id in DB["USER_DATA"].get(target_uid, {}).get("demo_history", []): 
-        await msg.reply_text("⚠️ Warning: ALREADY used demo.")
+        await msg.reply_text("⚠️ Warning: ALREADY used demo in this batch.")
         
     try:
         await context.bot.approve_chat_join_request(batch_id, target_uid)
@@ -1115,7 +1143,8 @@ async def cmd_approve_demo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if "demos" not in DB["USER_DATA"][target_uid]:
             DB["USER_DATA"][target_uid]["demos"] = {}
             
-        DB["USER_DATA"][target_uid]["demos"][str(batch_id)] = {"expiry": time.time() + (3 * 3600), "warned": False}
+        # Naya Dynamic Expiry Time Save Karna
+        DB["USER_DATA"][target_uid]["demos"][str(batch_id)] = {"expiry": time.time() + demo_seconds, "warned": False}
         
         if "demo_history" not in DB["USER_DATA"][target_uid]:
             DB["USER_DATA"][target_uid]["demo_history"] = []
@@ -1125,14 +1154,14 @@ async def cmd_approve_demo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         await save_data_async()
         
-        await msg.reply_text(f"✅ **APPROVED (DEMO)**\nUser `{target_uid}` -> Batch `{batch_id}` for 3 Hrs.")
+        await msg.reply_text(f"✅ **APPROVED (DEMO)**\nUser `{target_uid}` -> Batch `{batch_id}` for **{time_display}**.")
         
         try: 
             batch_name = DB['ALL_CHATS'].get(batch_id, 'Batch')
             welcome_str = DB['CUSTOM_WELCOMES'].get(batch_id, '')
             welc_msg = await context.bot.send_message(
                 target_uid, 
-                f"✅ **Approved for 3hrs!**\nWelcome to {batch_name}.\n\n{welcome_str}", 
+                f"✅ **Approved for {time_display}!**\nWelcome to {batch_name}.\n\n{welcome_str}", 
                 parse_mode=ParseMode.MARKDOWN
             ) 
             await schedule_delete(context, welc_msg, delay=60)
@@ -1199,6 +1228,14 @@ async def cmd_approve_perm(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
     except Exception as e: 
         await msg.reply_text(f"❌ Error: {e}")
+
+async def delete_service_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Auto-delete 'User joined' and 'User left' messages to keep chat clean."""
+    try:
+        if update.message:
+            await update.message.delete()
+    except Exception:
+        pass  # Agar bot ke paas delete permission nahi hui toh error ignore kar dega
 
 async def cmd_user_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): 
@@ -2139,6 +2176,9 @@ def main():
     
     app.add_handler(ChatMemberHandler(on_chat_member_update, ChatMemberHandler.CHAT_MEMBER))
     app.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
+
+    # === Yahan naya handler add karein ===
+    app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS | filters.StatusUpdate.LEFT_CHAT_MEMBER, delete_service_messages))
     
     app.add_handler(MessageReactionHandler(handle_reaction))
     app.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE, handle_edit))
