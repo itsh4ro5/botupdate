@@ -1075,7 +1075,7 @@ async def cmd_approve_demo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     args = context.args
     
-    # Default time: 3 hours
+    # Default time: 3 hours (Agar koi time na de)
     demo_seconds = 3 * 3600
     time_display = "3 Hrs"
 
@@ -1106,7 +1106,7 @@ async def cmd_approve_demo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     time_display = f"{int(num_val)} Days"
                 else: # Default Hour check (h, hr, ya bas number ho)
                     demo_seconds = num_val * 3600
-                    # Decimal htane ke liye int me convert
+                    # Decimal hatane ke liye int me convert
                     time_display = f"{int(num_val) if num_val.is_integer() else num_val} Hrs"
             except ValueError:
                 pass # Agar invalid text hai toh default 3 hours hi rahega
@@ -1131,7 +1131,7 @@ async def cmd_approve_demo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     if batch_id in DB["USER_DATA"].get(target_uid, {}).get("demo_history", []): 
-        await msg.reply_text("⚠️ Warning: ALREADY used demo in this batch.")
+        await msg.reply_text("⚠️ Warning: ALREADY used demo.")
         
     try:
         await context.bot.approve_chat_join_request(batch_id, target_uid)
