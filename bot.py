@@ -19,6 +19,7 @@ Features Added/Fixed:
 13. DYNAMIC TEST BOT BUTTON: Added a "Test Bot" button in the main menu that strictly verifies channel membership before providing the link.
 14. /settestbot COMMAND: Admins can dynamically update the Test Bot link from within Telegram.
 15. /locktestbot COMMAND (NEW): Admins can lock/unlock the Test Bot button just like free and paid batches.
+16. SMART KICK FIX: Ensures /per users are never auto-kicked from Paid Batches, cleans DB timers, and strictly separates Auto-Kicks from Manual Bans.
 """
 
 import logging
@@ -111,7 +112,7 @@ DB = {
     "NEW_USERS_ALLOWED": True, 
     "FREE_LOCKED": False,      
     "PAID_LOCKED": False,
-    "TEST_BOT_LOCKED": False, # NEW CONFIG FOR LOCK
+    "TEST_BOT_LOCKED": False, 
     "SCHEDULED_DELETES": [],
     "TEST_BOT_LINK": ""
 }
@@ -273,12 +274,29 @@ async def execute_universal_kick(user_id, context, permanent_ban=False):
                 await context.bot.unban_chat_member(int(bid), user_id) # Just kick
         except Exception: pass
 
-    # 2. Unconditionally remove from Paid Batches
+    # 2. Smart Logic for Paid Batches (Rule 1, 2, 3, 4)
     for bid in list(DB["PAID_CHANNELS"].keys()):
         try:
-            await context.bot.ban_chat_member(int(bid), user_id)
-            if not permanent_ban:
-                await context.bot.unban_chat_member(int(bid), user_id) # Just kick
+            bid_str = str(bid)
+            is_demo = False
+            
+            # Check if the user is on a demo for this specific paid batch
+            if user_id in DB["USER_DATA"] and "demos" in DB["USER_DATA"][user_id] and bid_str in DB["USER_DATA"][user_id]["demos"]:
+                is_demo = True
+
+            if permanent_ban:
+                # RULE 4: Manual Ban forcefully removes everyone including /per users
+                await context.bot.ban_chat_member(int(bid), user_id)
+                if is_demo:
+                    del DB["USER_DATA"][user_id]["demos"][bid_str]
+                    mod = True
+            else:
+                # RULE 1: Auto-kick ONLY removes if they are on /demo. Keep /per users safe.
+                if is_demo:
+                    await context.bot.ban_chat_member(int(bid), user_id)
+                    await context.bot.unban_chat_member(int(bid), user_id) # RULE 3: Telegram API Ban-Clear
+                    del DB["USER_DATA"][user_id]["demos"][bid_str]         # RULE 2: DB Cleanup
+                    mod = True
         except Exception: pass
 
     # 3. Block User in Bot
@@ -1696,7 +1714,7 @@ async def on_chat_member_update(update: Update, context: ContextTypes.DEFAULT_TY
     
     if chat_id_clean == man_id_clean and status in [ChatMember.LEFT, ChatMember.BANNED]:
         logger.info(f"🚪 User {user.id} left the Mandatory Channel. Auto-Kicking Unconditionally...")
-        await execute_universal_kick(user.id, context, permanent_ban=True) 
+        await execute_universal_kick(user.id, context, permanent_ban=False) 
 
 async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req = update.chat_join_request
@@ -1760,7 +1778,7 @@ async def background_sync(context: ContextTypes.DEFAULT_TYPE):
             
         if status in [ChatMember.LEFT, ChatMember.BANNED]:
             logger.info(f"🚫 Background Sync: Kicking {user_id} (Left Main Channel)")
-            await execute_universal_kick(user_id, context, permanent_ban=True)
+            await execute_universal_kick(user_id, context, permanent_ban=False)
                 
         await asyncio.sleep(0.5)
         
