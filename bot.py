@@ -854,37 +854,85 @@ async def cmd_reset_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): 
         return
         
-    try: 
-        target_uid = int(context.args[0])
-    except Exception: 
-        await update.message.reply_text("Usage: `/resetuser [user_id]`", parse_mode=ParseMode.MARKDOWN)
+    target_uid = None
+    target_batch = None
+    
+    # 1. Topic se User ID automatically nikalna
+    if update.message.message_thread_id:
+        for u, t in DB["USER_TOPICS"].items():
+            if t == update.message.message_thread_id:
+                target_uid = int(u)
+                break
+
+    # 2. Arguments parse karna
+    if len(context.args) == 1:
+        if target_uid: 
+            # Topic ke andar use kiya hai: /resetuser -10012345678
+            target_batch = str(context.args[0])
+        else:
+            # Topic ke bahar use kiya hai: /resetuser 123456789
+            try: target_uid = int(context.args[0])
+            except ValueError: pass
+    elif len(context.args) >= 2:
+        # Topic ke bahar explicit command: /resetuser 123456789 -10012345678
+        try:
+            target_uid = int(context.args[0])
+            target_batch = str(context.args[1])
+        except ValueError: pass
+    elif len(context.args) == 0 and target_uid:
+        # Topic ke andar sirf: /resetuser (Full Reset ke liye)
+        pass 
+        
+    if not target_uid:
+        await update.message.reply_text(
+            "❌ **Error:** User ID nahi mili.\n\n"
+            "**Usage in Topic:** `/resetuser [channel_id]`\n"
+            "**Usage outside:** `/resetuser [user_id] [channel_id]`", 
+            parse_mode=ParseMode.MARKDOWN
+        )
         return
         
     mod = False
     
-    # 1. Remove from USER_DATA (Clears demo history, timers, T&C, everything)
-    if str(target_uid) in DB["USER_DATA"] or target_uid in DB["USER_DATA"]:
-        # Dono string aur int type check kar lete hain
-        if target_uid in DB["USER_DATA"]: del DB["USER_DATA"][target_uid]
-        if str(target_uid) in DB["USER_DATA"]: del DB["USER_DATA"][str(target_uid)]
-        mod = True
-        
-    # 2. Remove from BLOCKED_USERS
-    if target_uid in DB["BLOCKED_USERS"]:
-        DB["BLOCKED_USERS"].remove(target_uid)
-        mod = True
-        
-    # 3. Remove from USER_TOPICS (Support history)
-    if target_uid in DB["USER_TOPICS"]:
-        del DB["USER_TOPICS"][target_uid]
-        mod = True
-        
+    # DB me check karne ke liye safe key nikalna (int ya string)
+    user_key = target_uid if target_uid in DB["USER_DATA"] else str(target_uid)
+    
+    if user_key in DB["USER_DATA"]:
+        if target_batch:
+            # --- SPECIFIC CHANNEL KA DATA DELETE KARENGE ---
+            if "demos" in DB["USER_DATA"][user_key] and target_batch in DB["USER_DATA"][user_key]["demos"]:
+                del DB["USER_DATA"][user_key]["demos"][target_batch]
+                mod = True
+                
+            if "demo_history" in DB["USER_DATA"][user_key]:
+                # History me string ya integer dono format ho sakte hain, dono check karenge
+                if target_batch in DB["USER_DATA"][user_key]["demo_history"]:
+                    DB["USER_DATA"][user_key]["demo_history"].remove(target_batch)
+                    mod = True
+                try:
+                    batch_int = int(target_batch)
+                    if batch_int in DB["USER_DATA"][user_key]["demo_history"]:
+                        DB["USER_DATA"][user_key]["demo_history"].remove(batch_int)
+                        mod = True
+                except ValueError:
+                    pass
+            
+            msg_text = f"✅ User `{target_uid}` ka data specifically Batch `{target_batch}` se delete kar diya gaya hai.\n\n*(Support Topic bilkul safe hai)*"
+        else:
+            # --- FULL RESET (Pehla wala logic) ---
+            DB["USER_DATA"][user_key]["demos"] = {}
+            DB["USER_DATA"][user_key]["demo_history"] = []
+            if target_uid in DB["BLOCKED_USERS"]:
+                DB["BLOCKED_USERS"].remove(target_uid)
+            mod = True
+            msg_text = f"✅ User `{target_uid}` ka **POORA** Demos & History reset kar diya gaya hai.\n\n*(Support Topic bilkul safe hai)*"
+            
     if mod:
         await save_data_async()
-        await update.message.reply_text(f"✅ User `{target_uid}` ka poora data MongoDB se completely DELETE kar diya gaya hai.\n\nAb wo as a completely NEW user /start kar sakta hai aur naye links generate kar sakta hai.", parse_mode=ParseMode.MARKDOWN)
+        await update.message.reply_text(msg_text, parse_mode=ParseMode.MARKDOWN)
     else:
-        await update.message.reply_text(f"⚠️ User `{target_uid}` ka data database me nahi mila.", parse_mode=ParseMode.MARKDOWN)
-
+        await update.message.reply_text(f"⚠️ User `{target_uid}` ka record ya us Batch ka data nahi mila.", parse_mode=ParseMode.MARKDOWN)
+        
 async def cmd_find_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): 
         return
