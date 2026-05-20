@@ -251,8 +251,10 @@ def save_data_sync():
             "PENDING_REQUESTS": {str(k): v for k, v in DB["PENDING_REQUESTS"].items()},
             "SCHEDULED_DELETES": DB.get("SCHEDULED_DELETES", []),
             "TEST_BOT_LINK": DB.get("TEST_BOT_LINK", ""),
-            "BATCH_CATEGORIES": {str(k): v for k, v in DB.get("BATCH_CATEGORIES", {}).items()} # <-- YAHAN
-            
+            "BATCH_CATEGORIES": {str(k): v for k, v in DB.get("BATCH_CATEGORIES", {}).items()},
+            "CATEGORIES": DB.get("CATEGORIES", DEFAULT_CATEGORIES)
+        }
+
         if MONGO_URL and mongo_collection is not None:
             try: 
                 mongo_collection.replace_one(
@@ -268,7 +270,7 @@ def save_data_sync():
             
     except Exception as e:
         logger.error(f"Save Error: {e}")
-
+                
 async def save_data_async():
     async with data_lock: 
         await asyncio.to_thread(save_data_sync)
