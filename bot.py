@@ -2116,7 +2116,6 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await broadcast_callback(update, context)
         return
 
-    # NEW: Test Bot Validation Logic & Lock Check
     if data == "test_bot":
         if DB.get("TEST_BOT_LOCKED", False):
             await q.answer("🔒 Locked by Admin.", show_alert=True)
@@ -2148,7 +2147,6 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "verify":
         if await check_membership(uid, context): 
             await q.answer("✅ Verified!")
-            # T&C Logic Check
             if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
                 await show_tnc_menu(update, context)
             else:
@@ -2174,7 +2172,6 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_user_menu(update)
         
     elif data == "u_free":
-        # T&C Bypass Block
         if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
             await q.answer("⚠️ Please Accept Rules First!", show_alert=True)
             await show_tnc_menu(update, context)
@@ -2198,164 +2195,8 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text("📂 **Free Batches:**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
         except Exception: 
             pass
-
-    elif data.startswith("my_batches_"):
-        # T&C Check
-        if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
-            await q.answer("⚠️ Please Accept Rules First!", show_alert=True)
-            await show_tnc_menu(update, context)
-            return
-
-        # User ko wait message dikhayein jab tak bot channels scan karta hai
-        await q.edit_message_text("⏳ **Aapke batches fetch kiye ja rahe hain... Please wait.**", parse_mode=ParseMode.MARKDOWN)
-        
-        page = int(data.split("_")[-1])
-        
-        # Sabhi free aur paid channels ki list combine karein
-        all_batches = {**DB["FREE_CHANNELS"], **DB["PAID_CHANNELS"]}
-        joined_batches = []
-        
-        # Concurrent API calls takiye scan super fast ho
-        async def check_member(cid, name):
-            try:
-                m = await context.bot.get_chat_member(cid, uid)
-                if m.status in [ChatMember.MEMBER, ChatMember.ADMINISTRATOR, ChatMember.OWNER, ChatMember.RESTRICTED]:
-                    return (cid, name)
-            except Exception:
-                pass
-            return None
-
-        tasks = [check_member(cid, name) for cid, name in all_batches.items()]
-        results = await asyncio.gather(*tasks)
-        joined_batches = [r for r in results if r is not None]
-
-        if not joined_batches:
-            kb = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="u_main")]]
-            await q.edit_message_text("❌ Aap abhi kisi bhi batch me join nahi hain.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-            return
-
-        # Pagination Logic (Max 10 per page)
-        MAX_PER_PAGE = 10
-        total_batches = len(joined_batches)
-        start_idx = page * MAX_PER_PAGE
-        end_idx = start_idx + MAX_PER_PAGE
-        current_batches = joined_batches[start_idx:end_idx]
-
-        kb = []
-        for cid, name in current_batches:
-            # Private channel ka direct link (t.me/c/id/1 format)
-            clean_cid = str(cid).replace("-100", "")
-            chat_url = f"https://t.me/c/{clean_cid}/1" 
-            kb.append([InlineKeyboardButton(f"✅ {name}", url=chat_url)])
-
-        # Next aur Back buttons ka logic
-        nav_buttons = []
-        if page > 0:
-            nav_buttons.append(InlineKeyboardButton("⬅️ Back", callback_data=f"my_batches_{page-1}"))
-        if end_idx < total_batches:
-            nav_buttons.append(InlineKeyboardButton("Next ➡️", callback_data=f"my_batches_{page+1}"))
-        
-        if nav_buttons:
-            kb.append(nav_buttons)
-            
-        kb.append([InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")])
-
-        await q.edit_message_text(
-            f"📚 **My Batches (Page {page+1})**\n\nYahan wo sabhi batches hain jisme aap successfully join hain. Click karke direct channel access karein:",
-            reply_markup=InlineKeyboardMarkup(kb),
-            parse_mode=ParseMode.MARKDOWN
-        )
-
-   elif data.startswith("all_batches_"):
-        kb = []
-        categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES)
-        for i, cat in enumerate(categories):
-            kb.append([InlineKeyboardButton(cat, callback_data=f"showcat_{i}")])
-        kb.append([InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")])
-        await q.edit_message_text("🌐 **All Batches - Select Category:**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-
-    elif data.startswith("showcat_"):
-        categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES)
-        cat_idx = int(data.split("_")[1])
-        cat_name = categories[cat_idx]
-        kb = [
-            [InlineKeyboardButton("🆓 Free Batches", callback_data=f"listcat_{cat_idx}_free_0"),
-             InlineKeyboardButton("💎 Paid Batches", callback_data=f"listcat_{cat_idx}_paid_0")],
-            [InlineKeyboardButton("🔙 Back to Categories", callback_data="all_batches_0")]
-        ]
-        await q.edit_message_text(f"📂 **Category: {cat_name}**\n\nAapko kis type ke batch chahiye?", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-
-    elif data.startswith("setexistingcat_"):
-        parts = data.split("_")
-        cid = parts[1]
-        cat_idx = int(parts[2])
-        if "BATCH_CATEGORIES" not in DB: DB["BATCH_CATEGORIES"] = {}
-        DB["BATCH_CATEGORIES"][str(cid)] = CATEGORIES[cat_idx]
-        await save_data_async()
-        await q.edit_message_text(f"✅ Batch `{cid}` ki category **{CATEGORIES[cat_idx]}** set kar di gayi hai!", parse_mode=ParseMode.MARKDOWN)
-
-
-    elif data.startswith("listcat_"):
-        # T&C Check
-        if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
-            await q.answer("⚠️ Please Accept Rules First!", show_alert=True)
-            await show_tnc_menu(update, context)
-            return
-
-        parts = data.split("_")
-        cat_idx = int(parts[1])
-        b_type = parts[2]
-        page = int(parts[3])
-        cat_name = CATEGORIES[cat_idx]
-        
-        # Check if type is locked
-        if b_type == "free" and DB.get("FREE_LOCKED", False):
-            await q.answer("🔒 Free Batches Locked.", show_alert=True)
-            return
-        if b_type == "paid" and DB.get("PAID_LOCKED", False):
-            await q.answer("🔒 Paid Batches Locked.", show_alert=True)
-            return
-            
-        source_dict = DB["FREE_CHANNELS"] if b_type == "free" else DB["PAID_CHANNELS"]
-        filtered_batches = []
-        
-        # Filter batches based on Category
-        for cid, name in source_dict.items():
-            # Agar purana batch hai jisme category nahi set hai, toh default 'Other Batches' manega
-            batch_cat = DB.get("BATCH_CATEGORIES", {}).get(str(cid), "Other Batches")
-            if batch_cat == cat_name:
-                filtered_batches.append((cid, name))
-                
-        if not filtered_batches:
-            kb = [[InlineKeyboardButton("🔙 Back", callback_data=f"showcat_{cat_idx}")]]
-            await q.edit_message_text(f"❌ Is category ({cat_name}) me abhi koi {b_type.title()} batch nahi hai.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-            return
-            
-        # Pagination for All Batches
-        MAX_PER_PAGE = 10
-        total = len(filtered_batches)
-        start_idx = page * MAX_PER_PAGE
-        end_idx = start_idx + MAX_PER_PAGE
-        current = filtered_batches[start_idx:end_idx]
-        
-        kb = []
-        for cid, name in current:
-            # Agar Free hai toh 'get_f_cid', Paid hai toh 'view_p_cid'
-            c_data = f"get_f_{cid}" if b_type == "free" else f"view_p_{cid}"
-            icon = "🔗" if b_type == "free" else "💎"
-            kb.append([InlineKeyboardButton(f"{icon} {name}", callback_data=c_data)])
-            
-        nav_buttons = []
-        if page > 0: nav_buttons.append(InlineKeyboardButton("⬅️ Back", callback_data=f"listcat_{cat_idx}_{b_type}_{page-1}"))
-        if end_idx < total: nav_buttons.append(InlineKeyboardButton("Next ➡️", callback_data=f"listcat_{cat_idx}_{b_type}_{page+1}"))
-        if nav_buttons: kb.append(nav_buttons)
-            
-        kb.append([InlineKeyboardButton("🔙 Category Menu", callback_data=f"showcat_{cat_idx}")])
-        
-        await q.edit_message_text(f"📚 **{cat_name} ({b_type.title()})**\n\nNeeche diye gaye batches par click karke join karein:", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
             
     elif data == "u_paid":
-        # T&C Bypass Block
         if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
             await q.answer("⚠️ Please Accept Rules First!", show_alert=True)
             await show_tnc_menu(update, context)
@@ -2385,6 +2226,148 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cmd_myinfo(update, context)
         return
 
+    elif data.startswith("my_batches_"):
+        if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
+            await q.answer("⚠️ Please Accept Rules First!", show_alert=True)
+            await show_tnc_menu(update, context)
+            return
+
+        await q.edit_message_text("⏳ **Aapke batches fetch kiye ja rahe hain... Please wait.**", parse_mode=ParseMode.MARKDOWN)
+        
+        page = int(data.split("_")[-1])
+        all_batches = {**DB["FREE_CHANNELS"], **DB["PAID_CHANNELS"]}
+        joined_batches = []
+        
+        async def check_member(cid, name):
+            try:
+                m = await context.bot.get_chat_member(cid, uid)
+                if m.status in [ChatMember.MEMBER, ChatMember.ADMINISTRATOR, ChatMember.OWNER, ChatMember.RESTRICTED]:
+                    return (cid, name)
+            except Exception:
+                pass
+            return None
+
+        tasks = [check_member(cid, name) for cid, name in all_batches.items()]
+        results = await asyncio.gather(*tasks)
+        joined_batches = [r for r in results if r is not None]
+
+        if not joined_batches:
+            kb = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="u_main")]]
+            await q.edit_message_text("❌ Aap abhi kisi bhi batch me join nahi hain.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+            return
+
+        MAX_PER_PAGE = 10
+        total_batches = len(joined_batches)
+        start_idx = page * MAX_PER_PAGE
+        end_idx = start_idx + MAX_PER_PAGE
+        current_batches = joined_batches[start_idx:end_idx]
+
+        kb = []
+        for cid, name in current_batches:
+            clean_cid = str(cid).replace("-100", "")
+            chat_url = f"https://t.me/c/{clean_cid}/1" 
+            kb.append([InlineKeyboardButton(f"✅ {name}", url=chat_url)])
+
+        nav_buttons = []
+        if page > 0:
+            nav_buttons.append(InlineKeyboardButton("⬅️ Back", callback_data=f"my_batches_{page-1}"))
+        if end_idx < total_batches:
+            nav_buttons.append(InlineKeyboardButton("Next ➡️", callback_data=f"my_batches_{page+1}"))
+        
+        if nav_buttons:
+            kb.append(nav_buttons)
+            
+        kb.append([InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")])
+
+        await q.edit_message_text(
+            f"📚 **My Batches (Page {page+1})**\n\nYahan wo sabhi batches hain jisme aap successfully join hain. Click karke direct channel access karein:",
+            reply_markup=InlineKeyboardMarkup(kb),
+            parse_mode=ParseMode.MARKDOWN
+        )
+
+    elif data.startswith("all_batches_"):
+        kb = []
+        categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES)
+        for i, cat in enumerate(categories):
+            kb.append([InlineKeyboardButton(cat, callback_data=f"showcat_{i}")])
+        kb.append([InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")])
+        await q.edit_message_text("🌐 **All Batches - Select Category:**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
+    elif data.startswith("showcat_"):
+        categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES)
+        cat_idx = int(data.split("_")[1])
+        cat_name = categories[cat_idx]
+        kb = [
+            [InlineKeyboardButton("🆓 Free Batches", callback_data=f"listcat_{cat_idx}_free_0"),
+             InlineKeyboardButton("💎 Paid Batches", callback_data=f"listcat_{cat_idx}_paid_0")],
+            [InlineKeyboardButton("🔙 Back to Categories", callback_data="all_batches_0")]
+        ]
+        await q.edit_message_text(f"📂 **Category: {cat_name}**\n\nAapko kis type ke batch chahiye?", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
+    elif data.startswith("setexistingcat_"):
+        parts = data.split("_")
+        cid = parts[1]
+        cat_idx = int(parts[2])
+        categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES)
+        if "BATCH_CATEGORIES" not in DB: DB["BATCH_CATEGORIES"] = {}
+        DB["BATCH_CATEGORIES"][str(cid)] = categories[cat_idx]
+        await save_data_async()
+        await q.edit_message_text(f"✅ Batch `{cid}` ki category **{categories[cat_idx]}** set kar di gayi hai!", parse_mode=ParseMode.MARKDOWN)
+
+    elif data.startswith("listcat_"):
+        if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
+            await q.answer("⚠️ Please Accept Rules First!", show_alert=True)
+            await show_tnc_menu(update, context)
+            return
+
+        parts = data.split("_")
+        cat_idx = int(parts[1])
+        b_type = parts[2]
+        page = int(parts[3])
+        categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES)
+        cat_name = categories[cat_idx]
+        
+        if b_type == "free" and DB.get("FREE_LOCKED", False):
+            await q.answer("🔒 Free Batches Locked.", show_alert=True)
+            return
+        if b_type == "paid" and DB.get("PAID_LOCKED", False):
+            await q.answer("🔒 Paid Batches Locked.", show_alert=True)
+            return
+            
+        source_dict = DB["FREE_CHANNELS"] if b_type == "free" else DB["PAID_CHANNELS"]
+        filtered_batches = []
+        
+        for cid, name in source_dict.items():
+            batch_cat = DB.get("BATCH_CATEGORIES", {}).get(str(cid), "Other Batches")
+            if batch_cat == cat_name:
+                filtered_batches.append((cid, name))
+                
+        if not filtered_batches:
+            kb = [[InlineKeyboardButton("🔙 Back", callback_data=f"showcat_{cat_idx}")]]
+            await q.edit_message_text(f"❌ Is category ({cat_name}) me abhi koi {b_type.title()} batch nahi hai.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+            return
+            
+        MAX_PER_PAGE = 10
+        total = len(filtered_batches)
+        start_idx = page * MAX_PER_PAGE
+        end_idx = start_idx + MAX_PER_PAGE
+        current = filtered_batches[start_idx:end_idx]
+        
+        kb = []
+        for cid, name in current:
+            c_data = f"get_f_{cid}" if b_type == "free" else f"view_p_{cid}"
+            icon = "🔗" if b_type == "free" else "💎"
+            kb.append([InlineKeyboardButton(f"{icon} {name}", callback_data=c_data)])
+            
+        nav_buttons = []
+        if page > 0: nav_buttons.append(InlineKeyboardButton("⬅️ Back", callback_data=f"listcat_{cat_idx}_{b_type}_{page-1}"))
+        if end_idx < total: nav_buttons.append(InlineKeyboardButton("Next ➡️", callback_data=f"listcat_{cat_idx}_{b_type}_{page+1}"))
+        if nav_buttons: kb.append(nav_buttons)
+            
+        kb.append([InlineKeyboardButton("🔙 Category Menu", callback_data=f"showcat_{cat_idx}")])
+        
+        await q.edit_message_text(f"📚 **{cat_name} ({b_type.title()})**\n\nNeeche diye gaye batches par click karke join karein:", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
     elif data.startswith("delcat_"):
         cat_idx = int(data.split("_")[1])
         categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES)
@@ -2396,10 +2379,8 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if deleted_cat == "Other Batches":
             return await q.answer("❌ 'Other Batches' ko delete nahi kiya ja sakta!", show_alert=True)
             
-        # Category list se remove karein
         DB["CATEGORIES"].remove(deleted_cat)
         
-        # Jiske channels is category me the, unko shift karein
         shifted_count = 0
         if "BATCH_CATEGORIES" in DB:
             for cid, cat in DB["BATCH_CATEGORIES"].items():
