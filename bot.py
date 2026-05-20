@@ -2268,11 +2268,22 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
    elif data.startswith("all_batches_"):
         kb = []
-        categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES) # <--- Ye line add hogi
+        categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES)
         for i, cat in enumerate(categories):
             kb.append([InlineKeyboardButton(cat, callback_data=f"showcat_{i}")])
         kb.append([InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")])
         await q.edit_message_text("🌐 **All Batches - Select Category:**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
+    elif data.startswith("showcat_"):
+        categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES)
+        cat_idx = int(data.split("_")[1])
+        cat_name = categories[cat_idx]
+        kb = [
+            [InlineKeyboardButton("🆓 Free Batches", callback_data=f"listcat_{cat_idx}_free_0"),
+             InlineKeyboardButton("💎 Paid Batches", callback_data=f"listcat_{cat_idx}_paid_0")],
+            [InlineKeyboardButton("🔙 Back to Categories", callback_data="all_batches_0")]
+        ]
+        await q.edit_message_text(f"📂 **Category: {cat_name}**\n\nAapko kis type ke batch chahiye?", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
     elif data.startswith("setexistingcat_"):
         parts = data.split("_")
@@ -2283,15 +2294,6 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await save_data_async()
         await q.edit_message_text(f"✅ Batch `{cid}` ki category **{CATEGORIES[cat_idx]}** set kar di gayi hai!", parse_mode=ParseMode.MARKDOWN)
 
-    elif data.startswith("showcat_"):
-        cat_idx = int(data.split("_")[1])
-        cat_name = CATEGORIES[cat_idx]
-        kb = [
-            [InlineKeyboardButton("🆓 Free Batches", callback_data=f"listcat_{cat_idx}_free_0"),
-             InlineKeyboardButton("💎 Paid Batches", callback_data=f"listcat_{cat_idx}_paid_0")],
-            [InlineKeyboardButton("🔙 Back to Categories", callback_data="all_batches_0")]
-        ]
-        await q.edit_message_text(f"📂 **Category: {cat_name}**\n\nAapko kis type ke batch chahiye?", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
     elif data.startswith("listcat_"):
         # T&C Check
