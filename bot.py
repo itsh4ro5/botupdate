@@ -2188,7 +2188,7 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("all_batches_"):
         # Ye filhal empty chhod diya hai jab tak aap iska logic na batayein
         kb = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="u_main")]]
-        await q.edit_message_text("⏳ **All Batches** feature aane wala hai...\n\nDeveloper (Aap) isko design kar rahe hain.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        await q.edit_message_text("⏳ **All Batches** feature aane wala hai...\n\n🇮‌🇹‌'🇸‌ 🇭‌4️⃣🇷‌ isko design kar rahe hain.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
             
     elif data == "u_paid":
         # T&C Bypass Block
