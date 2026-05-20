@@ -101,6 +101,13 @@ MONGO_URL = os.environ.get("MONGO_URL", None)
 MANDATORY_CHANNEL_LINK = os.environ.get("MANDATORY_CHANNEL_LINK", "https://t.me/YourChannel")
 DATA_FILE = os.environ.get("DATA_FILE", "bot_data.json")
 
+# --- DEFAULT CATEGORIES ---
+DEFAULT_CATEGORIES = [
+    "Civil Engg.", "Electrical Engg.", "Mechanical Engg.", 
+    "Electronics Engg.", "CSE", "Competition (Math, Reas, GK/GS)", 
+    "Skill Improvement", "Other Batches"
+]
+
 # --- 4. DATABASE & MEMORY ---
 DB = {
     "ADMIN_IDS": [],
@@ -118,7 +125,9 @@ DB = {
     "PAID_LOCKED": False,
     "TEST_BOT_LOCKED": False, 
     "SCHEDULED_DELETES": [],
-    "TEST_BOT_LINK": ""
+    "TEST_BOT_LINK": "",
+    "BATCH_CATEGORIES": {},
+    "CATEGORIES": DEFAULT_CATEGORIES.copy() # <-- Nayi dynamic list DB me add ho gayi
 }
 
 # Runtime Memory
@@ -241,9 +250,9 @@ def save_data_sync():
             "USER_TOPICS": {str(k): v for k, v in DB["USER_TOPICS"].items()},
             "PENDING_REQUESTS": {str(k): v for k, v in DB["PENDING_REQUESTS"].items()},
             "SCHEDULED_DELETES": DB.get("SCHEDULED_DELETES", []),
-            "TEST_BOT_LINK": DB.get("TEST_BOT_LINK", "")
-        }
-
+            "TEST_BOT_LINK": DB.get("TEST_BOT_LINK", ""),
+            "BATCH_CATEGORIES": {str(k): v for k, v in DB.get("BATCH_CATEGORIES", {}).items()} # <-- YAHAN
+            
         if MONGO_URL and mongo_collection is not None:
             try: 
                 mongo_collection.replace_one(
@@ -972,6 +981,45 @@ async def cmd_lockdown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await schedule_delete(context, update.message)
     await schedule_delete(context, msg)
 
+async def cmd_addcat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin command to add a new dynamic category."""
+    if not is_admin(update.effective_user.id): return
+    
+    new_cat = " ".join(context.args).strip()
+    if not new_cat:
+        await update.message.reply_text("Usage: `/addcat [Category Name]`\nExample: `/addcat Web Development`", parse_mode=ParseMode.MARKDOWN)
+        return
+        
+    categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES)
+    if new_cat in categories:
+        await update.message.reply_text("⚠️ Ye category pehle se exist karti hai.")
+        return
+        
+    DB["CATEGORIES"].append(new_cat)
+    await save_data_async()
+    await update.message.reply_text(f"✅ Nayi Category **{new_cat}** successfully add ho gayi hai!\nAb ye 'All Batches' me dikhegi.", parse_mode=ParseMode.MARKDOWN)
+
+async def cmd_delcat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin command to delete a category and shift its batches to Other Batches."""
+    if not is_admin(update.effective_user.id): return
+    
+    categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES)
+    kb = []
+    
+    for i, cat in enumerate(categories):
+        # 'Other Batches' default hai, isko delete karne se block karna hai
+        if cat == "Other Batches": 
+            continue
+        kb.append([InlineKeyboardButton(f"🗑 Delete: {cat}", callback_data=f"delcat_{i}")])
+        
+    kb.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel_delcat")])
+    
+    await update.message.reply_text(
+        "🗑 **Delete Category Menu:**\n\nJis category ko aap delete karna chahte hain uspe click karein.\n⚠️ *Note: Delete hone par iske andar ke sabhi batches automatically 'Other Batches' me shift ho jayenge.*", 
+        reply_markup=InlineKeyboardMarkup(kb),
+        parse_mode=ParseMode.MARKDOWN
+    )
+
 async def cmd_lockfree(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): 
         return
@@ -1473,97 +1521,98 @@ async def cmd_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await schedule_delete(context, msg)
 
 async def cmd_addbatch_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id): 
-        return
+    if not is_admin(update.effective_user.id): return
+    ADMIN_WIZARD[update.effective_user.id] = {"step": "ask_cat"}
+    
+    kb = []
+    # 2 buttons per row for categories
+    for i in range(0, len(CATEGORIES), 2):
+        row = [InlineKeyboardButton(CATEGORIES[i], callback_data=f"wcat_{i}")]
+        if i+1 < len(CATEGORIES):
+            row.append(InlineKeyboardButton(CATEGORIES[i+1], callback_data=f"wcat_{i+1}"))
+        kb.append(row)
         
-    ADMIN_WIZARD[update.effective_user.id] = {"step": "ask_type"}
-    
-    kb = [
-        [InlineKeyboardButton("Free", callback_data="wiz_free"), 
-         InlineKeyboardButton("Paid", callback_data="wiz_paid")]
-    ]
-    
-    msg = await update.message.reply_text("🆕 **Add Batch Wizard**", reply_markup=InlineKeyboardMarkup(kb))
+    msg = await update.message.reply_text("🆕 **Add Batch Wizard - Step 1**\nSelect Category for new batch:", reply_markup=InlineKeyboardMarkup(kb))
     await schedule_delete(context, update.message)
     await schedule_delete(context, msg)
 
 async def wizard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     uid = q.from_user.id
-    
-    if uid not in ADMIN_WIZARD: 
-        await q.answer("Expired")
+    if uid not in ADMIN_WIZARD: return await q.answer("Expired")
+        
+    if q.data.startswith("wcat_"): 
+        cat_idx = int(q.data.split('_')[1])
+        ADMIN_WIZARD[uid]["category"] = CATEGORIES[cat_idx]
+        ADMIN_WIZARD[uid]["step"] = "ask_type"
+        
+        kb = [[InlineKeyboardButton("Free", callback_data="wiz_free"), InlineKeyboardButton("Paid", callback_data="wiz_paid")]]
+        await q.edit_message_text(f"✅ Category: **{CATEGORIES[cat_idx]}**\n\n➡️ **Step 2:** Select Batch Type:", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
         return
         
     if q.data in ["wiz_free", "wiz_paid"]: 
+        if "category" not in ADMIN_WIZARD[uid]: return await q.answer("Start again")
         ADMIN_WIZARD[uid]["type"] = q.data.split('_')[1]
         ADMIN_WIZARD[uid]["step"] = "ask_id"
         
-        await q.edit_message_text(
-            f"➡️ Send **Channel ID** for {q.data.split('_')[1].upper()}:", 
-            parse_mode=ParseMode.MARKDOWN
-        )
+        await q.edit_message_text(f"➡️ **Step 3:** Send **Channel ID** for {q.data.split('_')[1].upper()} ({ADMIN_WIZARD[uid]['category']}):", parse_mode=ParseMode.MARKDOWN)
+        return
 
 async def wizard_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_user:
-        return False
-        
+    if not update.effective_user: return False
     uid = update.effective_user.id
-    
-    if uid not in ADMIN_WIZARD: 
-        return False
+    if uid not in ADMIN_WIZARD: return False
         
     state = ADMIN_WIZARD[uid]
-    
     if state["step"] == "ask_id":
         try:
             cid = int(update.message.text)
             chat_info = await context.bot.get_chat(cid)
             cname = chat_info.title or f"Batch {cid}"
             
-            if state["type"] == "free":
-                DB["FREE_CHANNELS"][cid] = cname
-            else:
-                DB["PAID_CHANNELS"][cid] = cname
+            if state["type"] == "free": DB["FREE_CHANNELS"][cid] = cname
+            else: DB["PAID_CHANNELS"][cid] = cname
                 
             DB["ALL_CHATS"][cid] = cname
+            # SAVE CATEGORY TO DB
+            if "BATCH_CATEGORIES" not in DB: DB["BATCH_CATEGORIES"] = {}
+            DB["BATCH_CATEGORIES"][str(cid)] = state["category"]
+            
             await save_data_async()
-            
-            msg = await update.message.reply_text(f"✅ **Added!**\n{cname} ({cid})", parse_mode=ParseMode.MARKDOWN)
-            
-            if state["type"] == "free":
-                b_count = 0
-                await msg.reply_text("📢 Sending Auto-Broadcast to all tracked channels...", parse_mode=ParseMode.MARKDOWN)
-                
-                for t_cid in list(DB["ALL_CHATS"].keys()):
-                    if t_cid != cid: 
-                        try:
-                            sent_msg = await context.bot.send_message(
-                                t_cid,
-                                f"🎉 <b>NEW FREE BATCH ADDED!</b> 🎉\n\n📛 <b>Name:</b> {cname}\n\n👉 Go to the Bot Menu to join now!\n\nBatch available on @H4R_Contact_bot",
-                                parse_mode=ParseMode.HTML
-                            )
-                            DB.setdefault("SCHEDULED_DELETES", []).append({
-                                "c": t_cid,
-                                "m": sent_msg.message_id,
-                                "t": time.time() + 10800 
-                            })
-                            b_count += 1
-                        except Exception: 
-                            pass
-                
-                await msg.reply_text(f"✅ Broadcast sent to {b_count} chats. It will auto-delete after 3 hours.")
-                await save_data_async()
-
+            msg = await update.message.reply_text(f"✅ **Added!**\nName: {cname} ({cid})\nCategory: {state['category']}", parse_mode=ParseMode.MARKDOWN)
             del ADMIN_WIZARD[uid]
         except Exception: 
             msg = await update.message.reply_text("❌ Error. Ensure Bot is Admin and ID is valid.")
-            
         await schedule_delete(context, update.message)
         await schedule_delete(context, msg)
         return True
-        
     return False
+
+async def cmd_setcategory(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin command to set category for existing batches."""
+    if not is_admin(update.effective_user.id): return
+    try: 
+        cid = int(context.args[0])
+    except Exception: 
+        msg = await update.message.reply_text("Usage: `/setcat [channel_id]`", parse_mode=ParseMode.MARKDOWN)
+        return
+        
+    if cid not in DB["ALL_CHATS"]:
+        await update.message.reply_text("❌ Batch DB me nahi mila. Check ID.")
+        return
+        
+    kb = []
+    for i in range(0, len(CATEGORIES), 2):
+        row = [InlineKeyboardButton(CATEGORIES[i], callback_data=f"setexistingcat_{cid}_{i}")]
+        if i+1 < len(CATEGORIES):
+            row.append(InlineKeyboardButton(CATEGORIES[i+1], callback_data=f"setexistingcat_{cid}_{i+1}"))
+        kb.append(row)
+        
+    current_cat = DB.get("BATCH_CATEGORIES", {}).get(str(cid), "Other Batches (Default)")
+    await update.message.reply_text(
+        f"📂 Batch: {DB['ALL_CHATS'][cid]}\nТекущая/Current Category: {current_cat}\n\nNayi category select karein:", 
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
 
 async def cmd_broadcast_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): 
@@ -2185,10 +2234,91 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.MARKDOWN
         )
 
-    elif data.startswith("all_batches_"):
-        # Ye filhal empty chhod diya hai jab tak aap iska logic na batayein
-        kb = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="u_main")]]
-        await q.edit_message_text("⏳ **All Batches** feature aane wala hai...\n\n🇮‌🇹‌'🇸‌ 🇭‌4️⃣🇷‌ isko design kar rahe hain.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+   elif data.startswith("all_batches_"):
+        kb = []
+        categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES) # <--- Ye line add hogi
+        for i, cat in enumerate(categories):
+            kb.append([InlineKeyboardButton(cat, callback_data=f"showcat_{i}")])
+        kb.append([InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")])
+        await q.edit_message_text("🌐 **All Batches - Select Category:**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
+    elif data.startswith("setexistingcat_"):
+        parts = data.split("_")
+        cid = parts[1]
+        cat_idx = int(parts[2])
+        if "BATCH_CATEGORIES" not in DB: DB["BATCH_CATEGORIES"] = {}
+        DB["BATCH_CATEGORIES"][str(cid)] = CATEGORIES[cat_idx]
+        await save_data_async()
+        await q.edit_message_text(f"✅ Batch `{cid}` ki category **{CATEGORIES[cat_idx]}** set kar di gayi hai!", parse_mode=ParseMode.MARKDOWN)
+
+    elif data.startswith("showcat_"):
+        cat_idx = int(data.split("_")[1])
+        cat_name = CATEGORIES[cat_idx]
+        kb = [
+            [InlineKeyboardButton("🆓 Free Batches", callback_data=f"listcat_{cat_idx}_free_0"),
+             InlineKeyboardButton("💎 Paid Batches", callback_data=f"listcat_{cat_idx}_paid_0")],
+            [InlineKeyboardButton("🔙 Back to Categories", callback_data="all_batches_0")]
+        ]
+        await q.edit_message_text(f"📂 **Category: {cat_name}**\n\nAapko kis type ke batch chahiye?", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
+    elif data.startswith("listcat_"):
+        # T&C Check
+        if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
+            await q.answer("⚠️ Please Accept Rules First!", show_alert=True)
+            await show_tnc_menu(update, context)
+            return
+
+        parts = data.split("_")
+        cat_idx = int(parts[1])
+        b_type = parts[2]
+        page = int(parts[3])
+        cat_name = CATEGORIES[cat_idx]
+        
+        # Check if type is locked
+        if b_type == "free" and DB.get("FREE_LOCKED", False):
+            await q.answer("🔒 Free Batches Locked.", show_alert=True)
+            return
+        if b_type == "paid" and DB.get("PAID_LOCKED", False):
+            await q.answer("🔒 Paid Batches Locked.", show_alert=True)
+            return
+            
+        source_dict = DB["FREE_CHANNELS"] if b_type == "free" else DB["PAID_CHANNELS"]
+        filtered_batches = []
+        
+        # Filter batches based on Category
+        for cid, name in source_dict.items():
+            # Agar purana batch hai jisme category nahi set hai, toh default 'Other Batches' manega
+            batch_cat = DB.get("BATCH_CATEGORIES", {}).get(str(cid), "Other Batches")
+            if batch_cat == cat_name:
+                filtered_batches.append((cid, name))
+                
+        if not filtered_batches:
+            kb = [[InlineKeyboardButton("🔙 Back", callback_data=f"showcat_{cat_idx}")]]
+            await q.edit_message_text(f"❌ Is category ({cat_name}) me abhi koi {b_type.title()} batch nahi hai.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+            return
+            
+        # Pagination for All Batches
+        MAX_PER_PAGE = 10
+        total = len(filtered_batches)
+        start_idx = page * MAX_PER_PAGE
+        end_idx = start_idx + MAX_PER_PAGE
+        current = filtered_batches[start_idx:end_idx]
+        
+        kb = []
+        for cid, name in current:
+            # Agar Free hai toh 'get_f_cid', Paid hai toh 'view_p_cid'
+            c_data = f"get_f_{cid}" if b_type == "free" else f"view_p_{cid}"
+            icon = "🔗" if b_type == "free" else "💎"
+            kb.append([InlineKeyboardButton(f"{icon} {name}", callback_data=c_data)])
+            
+        nav_buttons = []
+        if page > 0: nav_buttons.append(InlineKeyboardButton("⬅️ Back", callback_data=f"listcat_{cat_idx}_{b_type}_{page-1}"))
+        if end_idx < total: nav_buttons.append(InlineKeyboardButton("Next ➡️", callback_data=f"listcat_{cat_idx}_{b_type}_{page+1}"))
+        if nav_buttons: kb.append(nav_buttons)
+            
+        kb.append([InlineKeyboardButton("🔙 Category Menu", callback_data=f"showcat_{cat_idx}")])
+        
+        await q.edit_message_text(f"📚 **{cat_name} ({b_type.title()})**\n\nNeeche diye gaye batches par click karke join karein:", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
             
     elif data == "u_paid":
         # T&C Bypass Block
@@ -2220,7 +2350,35 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.answer()
         await cmd_myinfo(update, context)
         return
-    
+
+    elif data.startswith("delcat_"):
+        cat_idx = int(data.split("_")[1])
+        categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES)
+        
+        if cat_idx >= len(categories):
+            return await q.answer("Invalid category", show_alert=True)
+            
+        deleted_cat = categories[cat_idx]
+        if deleted_cat == "Other Batches":
+            return await q.answer("❌ 'Other Batches' ko delete nahi kiya ja sakta!", show_alert=True)
+            
+        # Category list se remove karein
+        DB["CATEGORIES"].remove(deleted_cat)
+        
+        # Jiske channels is category me the, unko shift karein
+        shifted_count = 0
+        if "BATCH_CATEGORIES" in DB:
+            for cid, cat in DB["BATCH_CATEGORIES"].items():
+                if cat == deleted_cat:
+                    DB["BATCH_CATEGORIES"][cid] = "Other Batches"
+                    shifted_count += 1
+                    
+        await save_data_async()
+        await q.edit_message_text(f"✅ Category **{deleted_cat}** delete kar di gayi hai.\n\n🔄 Uske **{shifted_count} batches** automatically 'Other Batches' me shift ho gaye hain.", parse_mode=ParseMode.MARKDOWN)
+
+    elif data == "cancel_delcat":
+        await q.edit_message_text("❌ Category deletion cancelled.")
+
     elif data.startswith("get_f_"):
         cid = int(data.split("_")[2])
         
@@ -2330,14 +2488,24 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_user_menu(update: Update):
     kb = [
-        # Yahan Free aur Paid batches ko hatakar naye buttons add kiye gaye hain
         [InlineKeyboardButton("📚 My Batches", callback_data="my_batches_0"), 
          InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0")],
         [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")], 
         [InlineKeyboardButton("🆘 Support", url=f"tg://user?id={SUPPORT_GROUP_ID}")],
         [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")]
     ]
-    txt = "👋 **Welcome!**"
+    
+    # Naya aur Professional Welcome Message for User
+    user_name = update.effective_user.first_name if update.effective_user else "User"
+    txt = (
+        f"👋 **Welcome to the Hub, {user_name}!** 🚀\n\n"
+        f"This is your central gateway to access all our exclusive communities.\n\n"
+        f"**🔹 What you can do here:**\n"
+        f"📂 **Free Batches:** Browse & instantly join free communities.\n"
+        f"💎 **Paid Batches:** Request Demo or Permanent access.\n"
+        f"📚 **My Batches:** Quickly jump to your already joined channels.\n\n"
+        f"👇 *Select an option from the menu below to get started!*"
+    )
     
     if update.callback_query: 
         try: 
@@ -2362,13 +2530,30 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 You are banned from joining batches, but you can leave a message for support here if needed.", parse_mode=ParseMode.MARKDOWN)
         return
         
-    if is_admin(user.id): 
+    # === Yahan se replace karna shuru karein ===
+    if str(user.id) == str(OWNER_ID): 
+        owner_text = (
+            "👑 **OWNER CONTROL PANEL** 👑\n"
+            "Welcome back, Boss! All systems are online and running perfectly.\n\n"
+            "**🛡️ Security:** `/lockdown`, `/lockfree`, `/lockpaid`, `/locktestbot`\n"
+            "**🗄️ Database:** `/backup`, `/sync`, `/allusers`\n"
+            "**👥 Staff:** `/addadmin`, `/deladmin`\n"
+            "**📦 Category & Batches:** `/addcat`, `/delcat`, `/addbatch`, `/delbatch`\n"
+            "**📢 Comms:** `/broadcast`, `/post`, `/settestbot`\n"
+            "**📊 Analytics:** `/stats`, `/batchstats`\n\n"
+            "⚙️ *Use the commands above to manage your entire bot empire.*"
+        )
+        await update.message.reply_text(owner_text, parse_mode=ParseMode.MARKDOWN)
+
+    elif is_admin(user.id): 
         admin_text = (
-            f"👑 **WELCOME ADMIN!**\n"
-            f"**🛠 Manage:** `/del`, `/find`, `/ban`, `/unban`, `/kick`, `/extend`, `/lockdown`, `/lockfree`, `/lockpaid`, `/sync`\n"
-            f"**✅ Approve:** `/demo <link>`, `/per <link>`\n"
-            f"**📊 Tools:** `/stats`, `/batchstats`\n"
-            f"**📢 Broadcast:** `/broadcast`, `/post`, `/setwelcome`, `/settestbot`, `/locktestbot`"
+            "👮‍♂️ **ADMINISTRATOR DASHBOARD** 👮‍♂️\n"
+            "Welcome to the control center. Ready to manage the community?\n\n"
+            "**🛠 Moderation:** `/ban`, `/unban`, `/kick`, `/find`, `/del`, `/resetuser`\n"
+            "**✅ Approvals:** `/demo <link>`, `/per <link>`, `/extend`\n"
+            "**📦 Batches:** `/addbatch`, `/delbatch`, `/setcat`\n"
+            "**📢 Messages:** `/broadcast`, `/post`, `/setwelcome`\n\n"
+            "📋 *Your actions help keep the community safe and organized.*"
         )
         await update.message.reply_text(admin_text, parse_mode=ParseMode.MARKDOWN)
         
@@ -2377,6 +2562,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await show_tnc_menu(update, context)
         else:
             await show_user_menu(update)
+    # === Yahan tak replace karein ===
         
     else:
         if not DB.get("NEW_USERS_ALLOWED", True): 
@@ -2432,6 +2618,8 @@ def main():
     app.add_handler(CommandHandler("broadcast", cmd_broadcast_start))
     app.add_handler(CommandHandler("post", cmd_post_start))
     app.add_handler(CommandHandler("cancel", cmd_cancel))
+    app.add_handler(CommandHandler("addcat", cmd_addcat))
+    app.add_handler(CommandHandler("delcat", cmd_delcat))
     app.add_handler(CommandHandler("clear", cmd_clear))
     
     app.add_handler(CallbackQueryHandler(general_callback))
