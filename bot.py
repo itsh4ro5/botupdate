@@ -2634,6 +2634,7 @@ def main():
     app.add_handler(CommandHandler("post", cmd_post_start))
     app.add_handler(CommandHandler("cancel", cmd_cancel))
     app.add_handler(CommandHandler("addcat", cmd_addcat))
+    app.add_handler(CommandHandler("setcat", cmd_setcategory))
     app.add_handler(CommandHandler("delcat", cmd_delcat))
     app.add_handler(CommandHandler("clear", cmd_clear))
     
