@@ -1574,15 +1574,45 @@ async def wizard_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else: DB["PAID_CHANNELS"][cid] = cname
                 
             DB["ALL_CHATS"][cid] = cname
+            
             # SAVE CATEGORY TO DB
             if "BATCH_CATEGORIES" not in DB: DB["BATCH_CATEGORIES"] = {}
             DB["BATCH_CATEGORIES"][str(cid)] = state["category"]
             
             await save_data_async()
             msg = await update.message.reply_text(f"✅ **Added!**\nName: {cname} ({cid})\nCategory: {state['category']}", parse_mode=ParseMode.MARKDOWN)
+            
+            # --- AUTO-BROADCAST & DELETE LOGIC (RESTORED & FIXED) ---
+            if state["type"] == "free":
+                b_count = 0
+                await update.message.reply_text("📢 Sending Auto-Broadcast to all tracked channels...", parse_mode=ParseMode.MARKDOWN)
+                
+                for t_cid in list(DB["ALL_CHATS"].keys()):
+                    if t_cid != cid: 
+                        try:
+                            sent_msg = await context.bot.send_message(
+                                t_cid,
+                                f"🎉 <b>NEW FREE BATCH ADDED!</b> 🎉\n\n📛 <b>Name:</b> {cname}\n📁 <b>Category:</b> {state['category']}\n\n👉 Go to the Bot Menu to join now!\n\nBatch available on @H4R_Contact_bot",
+                                parse_mode=ParseMode.HTML
+                            )
+                            # Auto Delete Logic: 10800 seconds = 3 hours (Change to 86400 for 1 day)
+                            DB.setdefault("SCHEDULED_DELETES", []).append({
+                                "c": t_cid,
+                                "m": sent_msg.message_id,
+                                "t": time.time() + 10800 
+                            })
+                            b_count += 1
+                        except Exception: 
+                            pass
+                
+                await update.message.reply_text(f"✅ Broadcast sent to {b_count} chats. It will auto-delete after 3 hours.")
+                await save_data_async()
+            # ---------------------------------------------------------
+
             del ADMIN_WIZARD[uid]
         except Exception: 
             msg = await update.message.reply_text("❌ Error. Ensure Bot is Admin and ID is valid.")
+            
         await schedule_delete(context, update.message)
         await schedule_delete(context, msg)
         return True
