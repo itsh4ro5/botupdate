@@ -2117,6 +2117,78 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text("📂 **Free Batches:**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
         except Exception: 
             pass
+
+    elif data.startswith("my_batches_"):
+        # T&C Check
+        if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
+            await q.answer("⚠️ Please Accept Rules First!", show_alert=True)
+            await show_tnc_menu(update, context)
+            return
+
+        # User ko wait message dikhayein jab tak bot channels scan karta hai
+        await q.edit_message_text("⏳ **Aapke batches fetch kiye ja rahe hain... Please wait.**", parse_mode=ParseMode.MARKDOWN)
+        
+        page = int(data.split("_")[-1])
+        
+        # Sabhi free aur paid channels ki list combine karein
+        all_batches = {**DB["FREE_CHANNELS"], **DB["PAID_CHANNELS"]}
+        joined_batches = []
+        
+        # Concurrent API calls takiye scan super fast ho
+        async def check_member(cid, name):
+            try:
+                m = await context.bot.get_chat_member(cid, uid)
+                if m.status in [ChatMember.MEMBER, ChatMember.ADMINISTRATOR, ChatMember.OWNER, ChatMember.RESTRICTED]:
+                    return (cid, name)
+            except Exception:
+                pass
+            return None
+
+        tasks = [check_member(cid, name) for cid, name in all_batches.items()]
+        results = await asyncio.gather(*tasks)
+        joined_batches = [r for r in results if r is not None]
+
+        if not joined_batches:
+            kb = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="u_main")]]
+            await q.edit_message_text("❌ Aap abhi kisi bhi batch me join nahi hain.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+            return
+
+        # Pagination Logic (Max 10 per page)
+        MAX_PER_PAGE = 10
+        total_batches = len(joined_batches)
+        start_idx = page * MAX_PER_PAGE
+        end_idx = start_idx + MAX_PER_PAGE
+        current_batches = joined_batches[start_idx:end_idx]
+
+        kb = []
+        for cid, name in current_batches:
+            # Private channel ka direct link (t.me/c/id/1 format)
+            clean_cid = str(cid).replace("-100", "")
+            chat_url = f"https://t.me/c/{clean_cid}/1" 
+            kb.append([InlineKeyboardButton(f"✅ {name}", url=chat_url)])
+
+        # Next aur Back buttons ka logic
+        nav_buttons = []
+        if page > 0:
+            nav_buttons.append(InlineKeyboardButton("⬅️ Back", callback_data=f"my_batches_{page-1}"))
+        if end_idx < total_batches:
+            nav_buttons.append(InlineKeyboardButton("Next ➡️", callback_data=f"my_batches_{page+1}"))
+        
+        if nav_buttons:
+            kb.append(nav_buttons)
+            
+        kb.append([InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")])
+
+        await q.edit_message_text(
+            f"📚 **My Batches (Page {page+1})**\n\nYahan wo sabhi batches hain jisme aap successfully join hain. Click karke direct channel access karein:",
+            reply_markup=InlineKeyboardMarkup(kb),
+            parse_mode=ParseMode.MARKDOWN
+        )
+
+    elif data.startswith("all_batches_"):
+        # Ye filhal empty chhod diya hai jab tak aap iska logic na batayein
+        kb = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="u_main")]]
+        await q.edit_message_text("⏳ **All Batches** feature aane wala hai...\n\nDeveloper (Aap) isko design kar rahe hain.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
             
     elif data == "u_paid":
         # T&C Bypass Block
@@ -2258,8 +2330,9 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_user_menu(update: Update):
     kb = [
-        [InlineKeyboardButton("📂 Free Batches", callback_data="u_free"), 
-         InlineKeyboardButton("💎 Paid Batches", callback_data="u_paid")],
+        # Yahan Free aur Paid batches ko hatakar naye buttons add kiye gaye hain
+        [InlineKeyboardButton("📚 My Batches", callback_data="my_batches_0"), 
+         InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0")],
         [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")], 
         [InlineKeyboardButton("🆘 Support", url=f"tg://user?id={SUPPORT_GROUP_ID}")],
         [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")]
