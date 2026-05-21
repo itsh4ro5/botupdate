@@ -127,7 +127,7 @@ DB = {
     "SCHEDULED_DELETES": [],
     "TEST_BOT_LINK": "",
     "BATCH_CATEGORIES": {},
-    "CATEGORIES": DEFAULT_CATEGORIES.copy()# <-- Nayi dynamic list DB me add ho gayi
+    "CATEGORIES": DEFAULT_CATEGORIES.copy(),# <-- Nayi dynamic list DB me add ho gayi
     "MAINTENANCE_MODE": False  # <-- NAYI LINE
 }
 
