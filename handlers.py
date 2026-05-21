@@ -153,11 +153,12 @@ async def cmd_emptybatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try: cid = int(context.args[0])
     except ValueError: return await update.effective_message.reply_text("❌ Error: Valid Batch ID bhejein.")
     
-    if not SESSION_STRING or not API_ID: 
-        return await update.effective_message.reply_text("❌ **Userbot Config Missing!** (SESSION_STRING zaroori hai)")
+    session_string = DB.get("USERBOT_SESSION")
+    if not session_string or not API_ID: 
+        return await update.effective_message.reply_text("❌ **Userbot Not Logged In!** Pehle Owner dashboard se login karein.")
         
     msg = await update.effective_message.reply_text(f"⏳ **Emptying Batch `{cid}`...**\nUserbot start ho raha hai. Isme thoda time lag sakta hai, please wait.")
-    userbot = Client("empty_bot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING, in_memory=True)
+    userbot = Client("empty_bot", api_id=API_ID, api_hash=API_HASH, session_string=session_string, in_memory=True)
     
     try:
         await userbot.start()
@@ -202,9 +203,10 @@ async def cmd_sync(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_joinall(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID: return
-    if not SESSION_STRING or not API_ID: return await update.effective_message.reply_text("❌ Error: Env variables missing.")
+    session_string = DB.get("USERBOT_SESSION")
+    if not session_string or not API_ID: return await update.effective_message.reply_text("❌ Error: Userbot not logged in. Owner dashboard se login karein.")
     msg = await update.effective_message.reply_text("⏳ Auto-joining userbot...")
-    client = Client("temp_bot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING, in_memory=True)
+    client = Client("temp_bot", api_id=API_ID, api_hash=API_HASH, session_string=session_string, in_memory=True)
     try: await client.start(); userbot_id = (await client.get_me()).id; await client.stop()
     except Exception as e: return await msg.edit_text(f"❌ Error: {e}")
     all_chats = [MANDATORY_CHANNEL_ID] + list(DB["FREE_CHANNELS"].keys()) + list(DB["PAID_CHANNELS"].keys())
@@ -255,16 +257,51 @@ async def cmd_ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.effective_message.reply_text(f"🚫 User `{target}` BANNED.", parse_mode=ParseMode.MARKDOWN)
 
 async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id) or not context.args: return
-    try: target = int(context.args[0])
-    except ValueError: return
-    if target in DB["BLOCKED_USERS"]: 
-        DB["BLOCKED_USERS"].remove(target); await save_data_async()
-        all_channels = list(DB["FREE_CHANNELS"].keys()) + list(DB["PAID_CHANNELS"].keys()) + [MANDATORY_CHANNEL_ID]
-        for bid in all_channels:
-            try: await context.bot.unban_chat_member(int(bid), target)
-            except Exception: pass
-        await update.effective_message.reply_text(f"✅ User `{target}` UNBLOCKED.", parse_mode=ParseMode.MARKDOWN)
+    uid = update.effective_user.id
+    if not is_admin(uid): return
+
+    target_id = None
+
+    # Case 1 & 2: Chat se command aaya ho (/unban 12345) ya Wizard input ho
+    if context.args:
+        target_id = context.args[0]
+    elif update.message and update.message.text:
+        target_id = update.message.text.strip()
+        
+    if not target_id:
+        return await update.effective_message.reply_text("❌ Error: Kripya ek User ID bhejein.")
+
+    try: 
+        target = int(target_id)
+    except (ValueError, TypeError): 
+        return await update.effective_message.reply_text("❌ Error: Kripya ek valid Numeric User ID bhejein.")
+
+    # 1. Database se unban karna (Agar list me hai)
+    db_msg = "Database me pehle se unbanned tha."
+    if target in DB.get("BLOCKED_USERS", []): 
+        DB["BLOCKED_USERS"].remove(target)
+        await save_data_async()
+        db_msg = "Database se unban kiya gaya."
+
+    # 2. Main aur baaki sabhi channels se force unban karna (Bina check kiye ki wo DB me ban tha ya nahi)
+    all_channels = list(DB.get("FREE_CHANNELS", {}).keys()) + list(DB.get("PAID_CHANNELS", {}).keys())
+    if MANDATORY_CHANNEL_ID:
+        all_channels.append(MANDATORY_CHANNEL_ID)
+        
+    success_count = 0
+    for bid in all_channels:
+        try: 
+            await context.bot.unban_chat_member(int(bid), target)
+            success_count += 1
+        except Exception: 
+            pass
+
+    await update.effective_message.reply_text(
+        f"✅ **User `{target}` Successfully Unbanned!**\n"
+        f"ℹ️ {db_msg}\n"
+        f"📢 `{success_count}` channels/groups se unban request bheji gayi.", 
+        parse_mode=ParseMode.MARKDOWN
+    )
 
 async def cmd_reset_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id) or len(context.args) == 0: return
@@ -460,9 +497,10 @@ async def cmd_locktestbot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID: return
-    if not SESSION_STRING or not API_ID: return await update.effective_message.reply_text("❌ **Userbot Config Missing!**")
+    session_string = DB.get("USERBOT_SESSION")
+    if not session_string or not API_ID: return await update.effective_message.reply_text("❌ **Userbot Not Logged In!** Dashboard se login karein.")
     msg = await update.effective_message.reply_text("⏳ **Super Exit /clear Start...**")
-    userbot = Client("clear_bot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING, in_memory=True)
+    userbot = Client("clear_bot", api_id=API_ID, api_hash=API_HASH, session_string=session_string, in_memory=True)
     try:
         await userbot.start()
         all_channels = list(DB["FREE_CHANNELS"].keys()) + list(DB["PAID_CHANNELS"].keys())
@@ -565,260 +603,255 @@ async def broadcast_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             except Exception: pass
         await context.bot.send_message(uid, f"✅ Done. Sent to {count}."); del BROADCAST_STATE[uid]
 
+PROCESSING_USERS = set()
+
 async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; uid = q.from_user.id; data = q.data
-    if uid in DB["BLOCKED_USERS"] or check_spam(uid): return await q.answer("Blocked/Wait", show_alert=True)
-    if data.startswith("wiz_"): return await wizard_callback(update, context)
-    if data.startswith("bc_"): return await broadcast_callback(update, context)
     
-    if data == "dash_home":
-        if uid in ADMIN_WIZARD: del ADMIN_WIZARD[uid]
-        await q.answer(); await start(update, context)
-
-    elif data == "dash_locks":
-        kb = [
-            [InlineKeyboardButton(f"System Lockdown: {'🔴 ON' if not DB.get('NEW_USERS_ALLOWED', True) else '🟢 OFF'}", callback_data="toggle_lockdown")],
-            [InlineKeyboardButton(f"Free Batches: {'🔴 LOCKED' if DB.get('FREE_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_free"), InlineKeyboardButton(f"Paid Batches: {'🔴 LOCKED' if DB.get('PAID_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_paid")],
-            [InlineKeyboardButton(f"Test Bot: {'🔴 LOCKED' if DB.get('TEST_BOT_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_testbot")],
-            [InlineKeyboardButton(f"Maintenance Mode: {'🔴 ON' if DB.get('MAINTENANCE_MODE', False) else '🟢 OFF'}", callback_data="toggle_maintenance")],
-            [InlineKeyboardButton("🔙 Back to Terminal", callback_data="dash_home")]
-        ]
-        await q.edit_message_text("🔒 **Security & Access Control**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-
-    elif data.startswith("toggle_"):
-        key = data.split("_")[1].upper()
-        if key == "LOCKDOWN": DB["NEW_USERS_ALLOWED"] = not DB.get("NEW_USERS_ALLOWED", True)
-        elif key == "MAINTENANCE": DB["MAINTENANCE_MODE"] = not DB.get("MAINTENANCE_MODE", False)
-        elif key == "FREE": DB["FREE_LOCKED"] = not DB.get("FREE_LOCKED", False)
-        elif key == "PAID": DB["PAID_LOCKED"] = not DB.get("PAID_LOCKED", False)
-        elif key == "TESTBOT": DB["TEST_BOT_LOCKED"] = not DB.get("TEST_BOT_LOCKED", False)
-        await save_data_async()
+    if uid in DB["BLOCKED_USERS"]: return await q.answer("🚫 You are blocked by the admin.", show_alert=True)
+    
+    # Anti-Spam: State Lock Method (Bina popup ke loading spinner rok dega)
+    if uid in PROCESSING_USERS: return await q.answer() 
+    
+    PROCESSING_USERS.add(uid)
+    try:
+        if data.startswith("wiz_"): return await wizard_callback(update, context)
+        if data.startswith("bc_"): return await broadcast_callback(update, context)
         
-        kb = [
-            [InlineKeyboardButton(f"System Lockdown: {'🔴 ON' if not DB.get('NEW_USERS_ALLOWED', True) else '🟢 OFF'}", callback_data="toggle_lockdown")],
-            [InlineKeyboardButton(f"Free Batches: {'🔴 LOCKED' if DB.get('FREE_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_free"), InlineKeyboardButton(f"Paid Batches: {'🔴 LOCKED' if DB.get('PAID_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_paid")],
-            [InlineKeyboardButton(f"Test Bot: {'🔴 LOCKED' if DB.get('TEST_BOT_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_testbot")],
-            [InlineKeyboardButton(f"Maintenance Mode: {'🔴 ON' if DB.get('MAINTENANCE_MODE', False) else '🟢 OFF'}", callback_data="toggle_maintenance")],
-            [InlineKeyboardButton("🔙 Back to Terminal", callback_data="dash_home")]
-        ]
-        await q.edit_message_text("🔒 **Security & Access Control**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        if data == "dash_home":
+            if uid in ADMIN_WIZARD: del ADMIN_WIZARD[uid]
+            await q.answer()
+            await start(update, context)
 
-    elif data == "dash_db":
-        kb = [[InlineKeyboardButton("📥 Download Backup", callback_data="act_backup"), InlineKeyboardButton("🔄 Run Sync", callback_data="act_sync")], [InlineKeyboardButton("👥 Download All Users List", callback_data="act_allusers")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
-        await q.edit_message_text("🗄️ **Database Tools**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        elif data == "dash_locks":
+            kb = [
+                [InlineKeyboardButton(f"System Lockdown: {'🔴 ON' if not DB.get('NEW_USERS_ALLOWED', True) else '🟢 OFF'}", callback_data="toggle_lockdown")],
+                [InlineKeyboardButton(f"Free Batches: {'🔴 LOCKED' if DB.get('FREE_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_free"), InlineKeyboardButton(f"Paid Batches: {'🔴 LOCKED' if DB.get('PAID_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_paid")],
+                [InlineKeyboardButton(f"Test Bot: {'🔴 LOCKED' if DB.get('TEST_BOT_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_testbot")],
+                [InlineKeyboardButton(f"Maintenance Mode: {'🔴 ON' if DB.get('MAINTENANCE_MODE', False) else '🟢 OFF'}", callback_data="toggle_maintenance")],
+                [InlineKeyboardButton("🔙 Back to Terminal", callback_data="dash_home")]
+            ]
+            await q.edit_message_text("🔒 **Security & Access Control**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
-    elif data in ["dash_batches", "adash_batches"]:
-        kb = [
-            [InlineKeyboardButton("➕ Add Batch", callback_data="act_addbatch"), InlineKeyboardButton("🗑️ Delete Batch", callback_data="input_delbatch")], 
-            [InlineKeyboardButton("📁 Add Category", callback_data="input_addcat"), InlineKeyboardButton("🗑️ Delete Category", callback_data="act_delcat")], 
-            [InlineKeyboardButton("📂 Set Batch Category", callback_data="input_setcat"), InlineKeyboardButton("🧹 Empty Batch", callback_data="input_emptybatch")], # 👈 Naya Button Add Kiya
-            [InlineKeyboardButton("📊 Batch Stats", callback_data="act_batchstats")], 
-            [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]
-        ]
-        await q.edit_message_text("📦 **Batches Management**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-
-    elif data == "dash_staff":
-        kb = [[InlineKeyboardButton("👮 Add Admin", callback_data="input_addadmin"), InlineKeyboardButton("🚫 Remove Admin", callback_data="input_deladmin")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
-        await q.edit_message_text("👥 **Staff Management**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-
-    elif data in ["dash_comms", "adash_comms"]:
-        kb = [[InlineKeyboardButton("📢 Broadcast", callback_data="act_broadcast"), InlineKeyboardButton("📝 Post Message", callback_data="act_post")], [InlineKeyboardButton("🔗 Set Test Bot", callback_data="input_settestbot"), InlineKeyboardButton("👋 Set Welcome", callback_data="input_setwelcome")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
-        await q.edit_message_text("📢 **Communications**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-
-    # 1. Main Dashboard (Hide/Show Button)
-    elif data == "dash_home":
-        kb = [
-            [InlineKeyboardButton("📦 Batches", callback_data="dash_batches"), InlineKeyboardButton("👥 Users", callback_data="dash_users")],
-            [InlineKeyboardButton("⚙️ Settings", callback_data="dash_settings")]
-        ]
-        if uid == OWNER_ID:
-            kb.append([InlineKeyboardButton("🔑 Userbot Login Details", callback_data="userbot_details")])
-        await q.edit_message_text("🏠 **Main Dashboard**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-
-    # 2. Login Details Menu
-    elif data == "userbot_details":
-        if uid != OWNER_ID: return await q.answer("❌ Access Denied! Owner only.", show_alert=True)
-        
-        session = DB.get("USERBOT_SESSION")
-        phone = DB.get("USERBOT_PHONE", "Not Found")
-        
-        if session:
-            text = f"✅ **Userbot Status: LOGGED IN**\n📱 **Number:** `{phone}`\n\nAb bot functions dynamically is session ko use karenge."
-            kb = [[InlineKeyboardButton("🚪 Logout (Delete Session)", callback_data="userbot_logout")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
-        else:
-            text = "❌ **Userbot Status: NOT LOGGED IN**\n\nKoi active session nahi hai. Kripya niche login par click karein."
-            kb = [[InlineKeyboardButton("📲 Login Now", callback_data="input_userbotphone")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
+        elif data.startswith("toggle_"):
+            key = data.split("_")[1].upper()
+            if key == "LOCKDOWN": DB["NEW_USERS_ALLOWED"] = not DB.get("NEW_USERS_ALLOWED", True)
+            elif key == "MAINTENANCE": DB["MAINTENANCE_MODE"] = not DB.get("MAINTENANCE_MODE", False)
+            elif key == "FREE": DB["FREE_LOCKED"] = not DB.get("FREE_LOCKED", False)
+            elif key == "PAID": DB["PAID_LOCKED"] = not DB.get("PAID_LOCKED", False)
+            elif key == "TESTBOT": DB["TEST_BOT_LOCKED"] = not DB.get("TEST_BOT_LOCKED", False)
+            await save_data_async()
             
-        await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+            kb = [
+                [InlineKeyboardButton(f"System Lockdown: {'🔴 ON' if not DB.get('NEW_USERS_ALLOWED', True) else '🟢 OFF'}", callback_data="toggle_lockdown")],
+                [InlineKeyboardButton(f"Free Batches: {'🔴 LOCKED' if DB.get('FREE_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_free"), InlineKeyboardButton(f"Paid Batches: {'🔴 LOCKED' if DB.get('PAID_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_paid")],
+                [InlineKeyboardButton(f"Test Bot: {'🔴 LOCKED' if DB.get('TEST_BOT_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_testbot")],
+                [InlineKeyboardButton(f"Maintenance Mode: {'🔴 ON' if DB.get('MAINTENANCE_MODE', False) else '🟢 OFF'}", callback_data="toggle_maintenance")],
+                [InlineKeyboardButton("🔙 Back to Terminal", callback_data="dash_home")]
+            ]
+            await q.edit_message_text("🔒 **Security & Access Control**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
-    # 3. Logout
-    elif data == "userbot_logout":
-        if uid != OWNER_ID: return
-        DB["USERBOT_SESSION"] = None
-        DB["USERBOT_PHONE"] = None
-        await save_data_async()
-        if os.path.exists("temp_owner.session"): os.remove("temp_owner.session")
-        await q.answer("✅ Session Deleted Successfully!", show_alert=True)
-        await q.edit_message_text("❌ **Userbot is now LOGGED OUT.**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]))
+        elif data == "dash_db":
+            kb = [[InlineKeyboardButton("📥 Download Backup", callback_data="act_backup"), InlineKeyboardButton("🔄 Run Sync", callback_data="act_sync")], [InlineKeyboardButton("👥 Download All Users List", callback_data="act_allusers")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
+            await q.edit_message_text("🗄️ **Database Tools**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
-    # 4. Input Prompts update (sirf prompts dictionary update karni hai 'input_' block mein)
-    elif data.startswith("input_"):
-        cmd_name = data.split("_")[1]; ADMIN_WIZARD[uid] = {"step": f"call_cmd_{cmd_name}"}
-        prompts = {
-            # ... apne baaki purane prompts yahan rakhna ...
-            "userbotphone": "📱 **Apna Phone Number bhejein**\nCountry code ke sath (Jaise: `+919876543210`):",
-            "userbototp": "💬 **OTP Bhejein**\n⚠️ *OTP spaces me bhejein!* Jaise: `1 2 3 4 5`:",
-            "userbotpass": "🔒 **2FA Password bhejein:**"
-        }
-        await q.edit_message_text(f"⚡ **INPUT REQUIRED**\n\n{prompts.get(cmd_name, 'Send input:')}", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="dash_home")]]), parse_mode=ParseMode.MARKDOWN)
+        elif data in ["dash_batches", "adash_batches"]:
+            kb = [
+                [InlineKeyboardButton("➕ Add Batch", callback_data="act_addbatch"), InlineKeyboardButton("🗑️ Delete Batch", callback_data="input_delbatch")], 
+                [InlineKeyboardButton("📁 Add Category", callback_data="input_addcat"), InlineKeyboardButton("🗑️ Delete Category", callback_data="act_delcat")], 
+                [InlineKeyboardButton("📂 Set Batch Category", callback_data="input_setcat"), InlineKeyboardButton("🧹 Empty Batch", callback_data="input_emptybatch")], 
+                [InlineKeyboardButton("📊 Batch Stats", callback_data="act_batchstats")], 
+                [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]
+            ]
+            await q.edit_message_text("📦 **Batches Management**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
-    elif data == "dash_stats": await q.answer("Generating Stats..."); await cmd_stats(update, context)
+        elif data == "dash_staff":
+            kb = [[InlineKeyboardButton("👮 Add Admin", callback_data="input_addadmin"), InlineKeyboardButton("🚫 Remove Admin", callback_data="input_deladmin")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
+            await q.edit_message_text("👥 **Staff Management**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
-    elif data == "adash_users":
-        kb = [[InlineKeyboardButton("🚫 Ban", callback_data="input_ban"), InlineKeyboardButton("✅ Unban", callback_data="input_unban")], [InlineKeyboardButton("🥾 Kick", callback_data="input_kick"), InlineKeyboardButton("🔍 Find", callback_data="input_find")], [InlineKeyboardButton("🔄 Reset User Data", callback_data="input_resetuser")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
-        await q.edit_message_text("👤 **User Management**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        elif data in ["dash_comms", "adash_comms"]:
+            kb = [[InlineKeyboardButton("📢 Broadcast", callback_data="act_broadcast"), InlineKeyboardButton("📝 Post Message", callback_data="act_post")], [InlineKeyboardButton("🔗 Set Test Bot", callback_data="input_settestbot"), InlineKeyboardButton("👋 Set Welcome", callback_data="input_setwelcome")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
+            await q.edit_message_text("📢 **Communications**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
-    elif data == "adash_approvals":
-        kb = [[InlineKeyboardButton("⏳ Approve Demo", callback_data="input_demo"), InlineKeyboardButton("💎 Approve Perm", callback_data="input_perm")], [InlineKeyboardButton("➕ Extend Demo Time", callback_data="input_extend")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
-        await q.edit_message_text("✅ **Access Approvals**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        # Login Details Menu & Advanced Stats
+        elif data == "userbot_details":
+            if uid != OWNER_ID: return await q.answer("❌ Access Denied! Owner only.", show_alert=True)
+            
+            session = DB.get("USERBOT_SESSION")
+            phone = DB.get("USERBOT_PHONE", "Not Found")
+            
+            if session:
+                connected_status = "🟢 Active & Ready"
+                text = f"🛡️ **USERBOT CONTROL PANEL**\n\n✅ **Status:** {connected_status}\n📱 **Logged in Number:** `{phone}`\n\n⚡ *Userbot is fully linked and ready to execute /emptybatch, /clear, and /joinall commands.*"
+                kb = [[InlineKeyboardButton("🚪 Logout (Delete Session)", callback_data="userbot_logout")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
+            else:
+                text = "🛡️ **USERBOT CONTROL PANEL**\n\n❌ **Status:** 🔴 NOT LOGGED IN\n\n⚠️ *Koi active session nahi hai. Userbot features won't work. Kripya login karein.*"
+                kb = [[InlineKeyboardButton("📲 Login Now", callback_data="input_userbotphone")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
+                
+            await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
-    elif data == "act_backup": await q.answer("Sending..."); await cmd_backup(update, context)
-    elif data == "act_sync": await q.answer("Sync Started!"); await cmd_sync(update, context)
-    elif data == "act_allusers": await q.answer("Generating..."); await cmd_all_users(update, context)
-    elif data == "act_batchstats": await q.answer("Calculating..."); await cmd_batch_stats(update, context)
-    elif data == "act_addbatch": await cmd_addbatch_start(update, context)
-    elif data == "act_delcat": await cmd_delcat(update, context)
-    elif data == "act_broadcast": await cmd_broadcast_start(update, context)
-    elif data == "act_post": await cmd_post_start(update, context)
+        elif data == "userbot_logout":
+            if uid != OWNER_ID: return
+            DB["USERBOT_SESSION"] = None
+            DB["USERBOT_PHONE"] = None
+            await save_data_async()
+            if os.path.exists("temp_owner.session"): os.remove("temp_owner.session")
+            await q.answer("✅ Session Deleted Successfully!", show_alert=True)
+            await q.edit_message_text("❌ **Userbot is now LOGGED OUT.**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]))
 
-    elif data.startswith("input_"):
-        cmd_name = data.split("_")[1]; ADMIN_WIZARD[uid] = {"step": f"call_cmd_{cmd_name}"}
-        prompts = {"addadmin": "Send User ID to make Admin:", "deladmin": "Send User ID to remove from Admin:", "ban": "Send User ID to Ban:", "unban": "Send User ID to Unban:", "kick": "Send User ID and Batch ID\nFormat: `uid bid`", "find": "Send Username to find:", "resetuser": "Send User ID to reset:", "demo": "Send Link and Time:\nFormat: `link 10h`", "perm": "Send Link to approve:", "extend": "Send User ID, Batch ID, Hours:\nFormat: `uid bid 24`", "settestbot": "Send new Test Bot link:", "setwelcome": "Send Batch ID and Welcome Msg:\nFormat: `bid message`", "delbatch": "Send Type and ID:\nFormat: `free 123` or `paid 123`", "addcat": "Send Name for new Category:", "setcat": "Send Batch ID(s) (comma ya space lagakar):\nFormat: `-100x, -100y`", 
-        "emptybatch": "⚠️ **DHYAN DEIN!**\nSend Batch ID jisko poora khali (empty) karna hai:\nFormat: `-100123456789`"} # 👈 Ye add hua
-        await q.edit_message_text(f"⚡ **INPUT REQUIRED FOR: {cmd_name.upper()}**\n\n{prompts.get(cmd_name, 'Send input:')}", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel Input", callback_data="dash_home")]]), parse_mode=ParseMode.MARKDOWN)
+        elif data.startswith("input_"):
+            cmd_name = data.split("_")[1]; ADMIN_WIZARD[uid] = {"step": f"call_cmd_{cmd_name}"}
+            prompts = {
+                "addadmin": "Send User ID to make Admin:", "deladmin": "Send User ID to remove from Admin:", "ban": "Send User ID to Ban:", "unban": "Send User ID to Unban:", "kick": "Send User ID and Batch ID\nFormat: `uid bid`", "find": "Send Username to find:", "resetuser": "Send User ID to reset:", "demo": "Send Link and Time:\nFormat: `link 10h`", "perm": "Send Link to approve:", "extend": "Send User ID, Batch ID, Hours:\nFormat: `uid bid 24`", "settestbot": "Send new Test Bot link:", "setwelcome": "Send Batch ID and Welcome Msg:\nFormat: `bid message`", "delbatch": "Send Type and ID:\nFormat: `free 123` or `paid 123`", "addcat": "Send Name for new Category:", "setcat": "Send Batch ID(s) (comma ya space lagakar):\nFormat: `-100x, -100y`", 
+                "emptybatch": "⚠️ **DHYAN DEIN!**\nSend Batch ID jisko poora khali (empty) karna hai:\nFormat: `-100123456789`",
+                "userbotphone": "📱 **Apna Phone Number bhejein**\nCountry code ke sath (Jaise: `+919876543210`):",
+                "userbototp": "💬 **OTP Bhejein**\n⚠️ *OTP spaces me bhejein!* Jaise: `1 2 3 4 5`:",
+                "userbotpass": "🔒 **2FA Password bhejein:**"
+            }
+            await q.edit_message_text(f"⚡ **INPUT REQUIRED FOR: {cmd_name.upper()}**\n\n{prompts.get(cmd_name, 'Send input:')}", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel Input", callback_data="dash_home")]]), parse_mode=ParseMode.MARKDOWN)
+            
+        elif data == "dash_stats": await q.answer("Generating Stats..."); await cmd_stats(update, context)
+
+        elif data == "adash_users":
+            kb = [[InlineKeyboardButton("🚫 Ban", callback_data="input_ban"), InlineKeyboardButton("✅ Unban", callback_data="input_unban")], [InlineKeyboardButton("🥾 Kick", callback_data="input_kick"), InlineKeyboardButton("🔍 Find", callback_data="input_find")], [InlineKeyboardButton("🔄 Reset User Data", callback_data="input_resetuser")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
+            await q.edit_message_text("👤 **User Management**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
+        elif data == "adash_approvals":
+            kb = [[InlineKeyboardButton("⏳ Approve Demo", callback_data="input_demo"), InlineKeyboardButton("💎 Approve Perm", callback_data="input_perm")], [InlineKeyboardButton("➕ Extend Demo Time", callback_data="input_extend")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
+            await q.edit_message_text("✅ **Access Approvals**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
+        elif data == "act_backup": await q.answer("Sending..."); await cmd_backup(update, context)
+        elif data == "act_sync": await q.answer("Sync Started!"); await cmd_sync(update, context)
+        elif data == "act_allusers": await q.answer("Generating..."); await cmd_all_users(update, context)
+        elif data == "act_batchstats": await q.answer("Calculating..."); await cmd_batch_stats(update, context)
+        elif data == "act_addbatch": await cmd_addbatch_start(update, context)
+        elif data == "act_delcat": await cmd_delcat(update, context)
+        elif data == "act_broadcast": await cmd_broadcast_start(update, context)
+        elif data == "act_post": await cmd_post_start(update, context)
         
-    elif data == "accept_tnc": DB.setdefault("USER_DATA", {}).setdefault(uid, {})["tnc_accepted"] = True; await save_data_async(); await show_user_menu(update)
-    elif data == "u_main": await show_user_menu(update)
-    elif data == "my_info": await q.answer(); await cmd_myinfo(update, context)
-    elif data == "test_bot":
-        if DB.get("TEST_BOT_LOCKED", False): return await q.answer("🔒 Locked by Admin.", show_alert=True)
-        if not await check_membership(uid, context): return await q.answer("❌ Join Main Channel First!", show_alert=True)
-        if not DB.get("TEST_BOT_LINK"): return await q.answer("⚠️ Test Bot is not setup by Admin yet!", show_alert=True)
-        await q.answer("Verifying & Generating Link...")
-        kb = [[InlineKeyboardButton("🔗 Open Test Bot", url=DB.get("TEST_BOT_LINK"))]]
-        try: sent_msg = await context.bot.send_message(uid, "🤖 **Test Bot Access Verification:**\n\nYou are verified! Click the button below to open the Test Bot.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN); await schedule_delete(context, sent_msg, delay=60)
-        except Exception: pass
-
-    elif data.startswith("my_batches_"):
-        if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False): return await show_tnc_menu(update, context)
-        await q.edit_message_text("⏳ **Aapke batches fetch kiye ja rahe hain... Please wait.**", parse_mode=ParseMode.MARKDOWN)
-        page = int(data.split("_")[-1])
-        all_batches = {**DB["FREE_CHANNELS"], **DB["PAID_CHANNELS"]}; joined_batches = []
-        async def check_member(cid, name):
-            try:
-                m = await context.bot.get_chat_member(cid, uid)
-                if m.status in [ChatMember.MEMBER, ChatMember.ADMINISTRATOR, ChatMember.OWNER, ChatMember.RESTRICTED]: return (cid, name)
+        elif data == "accept_tnc": DB.setdefault("USER_DATA", {}).setdefault(uid, {})["tnc_accepted"] = True; await save_data_async(); await show_user_menu(update)
+        elif data == "u_main": await show_user_menu(update)
+        elif data == "my_info": await q.answer(); await cmd_myinfo(update, context)
+        elif data == "test_bot":
+            if DB.get("TEST_BOT_LOCKED", False): return await q.answer("🔒 Locked by Admin.", show_alert=True)
+            if not await check_membership(uid, context): return await q.answer("❌ Join Main Channel First!", show_alert=True)
+            if not DB.get("TEST_BOT_LINK"): return await q.answer("⚠️ Test Bot is not setup by Admin yet!", show_alert=True)
+            await q.answer("Verifying & Generating Link...")
+            kb = [[InlineKeyboardButton("🔗 Open Test Bot", url=DB.get("TEST_BOT_LINK"))]]
+            try: sent_msg = await context.bot.send_message(uid, "🤖 **Test Bot Access Verification:**\n\nYou are verified! Click the button below to open the Test Bot.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN); await schedule_delete(context, sent_msg, delay=60)
             except Exception: pass
-            return None
-        results = await asyncio.gather(*[check_member(cid, name) for cid, name in all_batches.items()]); joined_batches = [r for r in results if r is not None]
-        if not joined_batches: return await q.edit_message_text("❌ Aap abhi kisi bhi batch me join nahi hain.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data="u_main")]]), parse_mode=ParseMode.MARKDOWN)
-        MAX_PER_PAGE = 10; total_batches = len(joined_batches); start_idx = page * MAX_PER_PAGE; end_idx = start_idx + MAX_PER_PAGE
-        kb = [[InlineKeyboardButton(f"✅ {name}", url=f"https://t.me/c/{str(cid).replace('-100', '')}/1")] for cid, name in joined_batches[start_idx:end_idx]]
-        nav_buttons = []
-        if page > 0: nav_buttons.append(InlineKeyboardButton("⬅️ Back", callback_data=f"my_batches_{page-1}"))
-        if end_idx < total_batches: nav_buttons.append(InlineKeyboardButton("Next ➡️", callback_data=f"my_batches_{page+1}"))
-        if nav_buttons: kb.append(nav_buttons)
-        kb.append([InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")])
-        await q.edit_message_text(f"📚 **My Batches (Page {page+1})**\n\nYahan wo sabhi batches hain jisme aap successfully join hain. Click karke direct channel access karein:", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
-    elif data.startswith("all_batches_"):
-        kb = [[InlineKeyboardButton(cat, callback_data=f"showcat_{i}")] for i, cat in enumerate(DB.get("CATEGORIES", DEFAULT_CATEGORIES))] + [[InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")]]
-        await q.edit_message_text("🌐 **All Batches - Select Category:**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-    elif data.startswith("showcat_"):
-        cat_idx = int(data.split("_")[1]); kb = [[InlineKeyboardButton("🆓 Free Batches", callback_data=f"listcat_{cat_idx}_free_0"), InlineKeyboardButton("💎 Paid Batches", callback_data=f"listcat_{cat_idx}_paid_0")], [InlineKeyboardButton("🔙 Back to Categories", callback_data="all_batches_0")]]
-        await q.edit_message_text(f"📂 **Category: {DB.get('CATEGORIES', DEFAULT_CATEGORIES)[cat_idx]}**\n\nAapko kis type ke batch chahiye?", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-    elif data.startswith("setextcat_"):
-        await q.answer("Processing, please wait...") # 👈 Ye loading spinner ko turant rok dega
-        cat_idx = int(data.split("_")[1])
-        selected_cat = DB.get("CATEGORIES", DEFAULT_CATEGORIES)[cat_idx]
-        
-        # Temporary memory se IDs nikalna
-        ids = context.user_data.get('setcat_ids', [])
-        if not ids: 
-            await q.edit_message_text("❌ Session expired ya IDs nahi mili. Kripya wapas /start karke try karein.")
-            return
-        
-        # Loop chala kar sabhi channels ki category update karna
-        for cid in ids:
-            DB.setdefault("BATCH_CATEGORIES", {})[str(cid)] = selected_cat
-            
-        await save_data_async()
-        context.user_data.pop('setcat_ids', None) # Memory clear karna
-        
-        await q.edit_message_text(f"✅ **Success!**\n\nTotal `{len(ids)}` batches ko successfully **{selected_cat}** category me shift kar diya gaya hai!", parse_mode=ParseMode.MARKDOWN)
-    elif data.startswith("listcat_"):
-        if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False): return await show_tnc_menu(update, context)
-        parts = data.split("_"); cat_idx, b_type, page = int(parts[1]), parts[2], int(parts[3])
-        cat_name = DB.get("CATEGORIES", DEFAULT_CATEGORIES)[cat_idx]
-        if b_type == "free" and DB.get("FREE_LOCKED", False): return await q.answer("🔒 Free Batches Locked.", show_alert=True)
-        if b_type == "paid" and DB.get("PAID_LOCKED", False): return await q.answer("🔒 Paid Batches Locked.", show_alert=True)
-        source_dict = DB["FREE_CHANNELS"] if b_type == "free" else DB["PAID_CHANNELS"]
-        filtered_batches = [(cid, name) for cid, name in source_dict.items() if DB.get("BATCH_CATEGORIES", {}).get(str(cid), "Other Batches") == cat_name]
-        if not filtered_batches: return await q.edit_message_text(f"❌ Is category ({cat_name}) me abhi koi {b_type.title()} batch nahi hai.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data=f"showcat_{cat_idx}")]]), parse_mode=ParseMode.MARKDOWN)
-        MAX_PER_PAGE = 10; total = len(filtered_batches); start_idx = page * MAX_PER_PAGE; end_idx = start_idx + MAX_PER_PAGE
-        kb = [[InlineKeyboardButton(f"{'🔗' if b_type == 'free' else '💎'} {name}", callback_data=f"get_f_{cid}" if b_type == "free" else f"view_p_{cid}")] for cid, name in filtered_batches[start_idx:end_idx]]
-        nav_buttons = []
-        if page > 0: nav_buttons.append(InlineKeyboardButton("⬅️ Back", callback_data=f"listcat_{cat_idx}_{b_type}_{page-1}"))
-        if end_idx < total: nav_buttons.append(InlineKeyboardButton("Next ➡️", callback_data=f"listcat_{cat_idx}_{b_type}_{page+1}"))
-        if nav_buttons: kb.append(nav_buttons)
-        kb.append([InlineKeyboardButton("🔙 Category Menu", callback_data=f"showcat_{cat_idx}")])
-        await q.edit_message_text(f"📚 **{cat_name} ({b_type.title()})**\n\nNeeche diye gaye batches par click karke join karein:", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-
-    elif data.startswith("delcat_"):
-        cat_idx = int(data.split("_")[1]); categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES)
-        if cat_idx >= len(categories): return await q.answer("Invalid category", show_alert=True)
-        deleted_cat = categories[cat_idx]
-        if deleted_cat == "Other Batches": return await q.answer("❌ 'Other Batches' ko delete nahi kiya ja sakta!", show_alert=True)
-        DB["CATEGORIES"].remove(deleted_cat); shifted_count = 0
-        if "BATCH_CATEGORIES" in DB:
-            for cid, cat in DB["BATCH_CATEGORIES"].items():
-                if cat == deleted_cat: DB["BATCH_CATEGORIES"][cid] = "Other Batches"; shifted_count += 1
-        await save_data_async(); await q.edit_message_text(f"✅ Category **{deleted_cat}** delete kar di gayi hai.\n\n🔄 Uske **{shifted_count} batches** automatically 'Other Batches' me shift ho gaye hain.", parse_mode=ParseMode.MARKDOWN)
-
-    elif data == "cancel_delcat": await q.edit_message_text("❌ Category deletion cancelled.")
-
-    elif data.startswith("get_f_"):
-        cid = int(data.split("_")[2])
-        if await is_already_in_channel(context, cid, uid): return await q.answer("⚠️ Already Joined!", show_alert=True)
-        try:
-            bname = DB["ALL_CHATS"].get(cid, f"Batch {cid}")
-            l = await context.bot.create_chat_invite_link(cid, creates_join_request=True, name=f"Free-{uid}", expire_date=int(time.time())+60)
-            sent_msg = await context.bot.send_message(uid, f"🔗 <b>Link:</b>\n\n<b>{bname}</b>\n\n{l.invite_link}\n\nℹ️ <i>Request auto-approved.</i>\n⏳ <i>(Expires in 1 min)</i>", parse_mode=ParseMode.HTML)
-            await schedule_delete(context, sent_msg, delay=60); await q.answer("Sent to DM")
-        except Exception as e: await q.answer(f"Bot Error: {e}", show_alert=True)
-
-    elif data.startswith("view_p_"):
-        cid = int(data.split("_")[2]); await q.answer()
-        kb = [[InlineKeyboardButton("🔗 Request Access", callback_data=f"req_access_{cid}")], [InlineKeyboardButton("🔙 Back", callback_data="u_main")]]
-        try: await q.edit_message_text("💎 **Premium Access:**\nClick below.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-        except Exception: pass
-
-    elif data.startswith("req_access_"):
-        cid = int(data.split("_")[2])
-        if not await check_membership(uid, context): return await q.answer("❌ Join Main First!", show_alert=True)
-        if await is_already_in_channel(context, cid, uid): return await q.answer("⚠️ Already joined!", show_alert=True)
-        await q.answer("🔄 Generating Link...")
-        try:
-            bname = DB["ALL_CHATS"].get(cid, f"Batch {cid}"); l = await context.bot.create_chat_invite_link(cid, creates_join_request=True, name=f"Req-{uid}", expire_date=int(time.time())+60)
-            DB["LINK_MAP"][l.invite_link] = {"u": uid, "b": cid}; await save_data_async()
-            topic_id = await get_or_create_topic(update.effective_user, context)
-            if topic_id:
-                try: await context.bot.send_message(SUPPORT_GROUP_ID, f"🔔 **NEW REQUEST**\n👤 User: {update.effective_user.mention_html()}\n📂 Batch: <b>{bname}</b>\n🔗 Link: {l.invite_link}\n\n👇 **Action:**\n/demo {l.invite_link}\n/per {l.invite_link}", message_thread_id=topic_id, parse_mode=ParseMode.HTML)
+        elif data.startswith("my_batches_"):
+            if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False): return await show_tnc_menu(update, context)
+            await q.edit_message_text("⏳ **Aapke batches fetch kiye ja rahe hain... Please wait.**", parse_mode=ParseMode.MARKDOWN)
+            page = int(data.split("_")[-1])
+            all_batches = {**DB["FREE_CHANNELS"], **DB["PAID_CHANNELS"]}; joined_batches = []
+            async def check_member(cid, name):
+                try:
+                    m = await context.bot.get_chat_member(cid, uid)
+                    if m.status in [ChatMember.MEMBER, ChatMember.ADMINISTRATOR, ChatMember.OWNER, ChatMember.RESTRICTED]: return (cid, name)
                 except Exception: pass
-            user_msg_obj = await context.bot.send_message(uid, f"✅ <b>Access Link Generated!</b>\n\n<b>{bname}</b>\n\n🔗 {l.invite_link}\n\nℹ️ <b>Sent to Admin.</b> Wait for approval.\n⏳ <i>(Expires in 1 min)</i>", parse_mode=ParseMode.HTML)
-            await schedule_delete(context, user_msg_obj, delay=60)
-        except Exception as e: await context.bot.send_message(uid, f"❌ Error: {e}")
+                return None
+            results = await asyncio.gather(*[check_member(cid, name) for cid, name in all_batches.items()]); joined_batches = [r for r in results if r is not None]
+            if not joined_batches: return await q.edit_message_text("❌ Aap abhi kisi bhi batch me join nahi hain.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data="u_main")]]), parse_mode=ParseMode.MARKDOWN)
+            MAX_PER_PAGE = 10; total_batches = len(joined_batches); start_idx = page * MAX_PER_PAGE; end_idx = start_idx + MAX_PER_PAGE
+            kb = [[InlineKeyboardButton(f"✅ {name}", url=f"https://t.me/c/{str(cid).replace('-100', '')}/1")] for cid, name in joined_batches[start_idx:end_idx]]
+            nav_buttons = []
+            if page > 0: nav_buttons.append(InlineKeyboardButton("⬅️ Back", callback_data=f"my_batches_{page-1}"))
+            if end_idx < total_batches: nav_buttons.append(InlineKeyboardButton("Next ➡️", callback_data=f"my_batches_{page+1}"))
+            if nav_buttons: kb.append(nav_buttons)
+            kb.append([InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")])
+            await q.edit_message_text(f"📚 **My Batches (Page {page+1})**\n\nYahan wo sabhi batches hain jisme aap successfully join hain. Click karke direct channel access karein:", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
+        elif data.startswith("all_batches_"):
+            kb = [[InlineKeyboardButton(cat, callback_data=f"showcat_{i}")] for i, cat in enumerate(DB.get("CATEGORIES", DEFAULT_CATEGORIES))] + [[InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")]]
+            await q.edit_message_text("🌐 **All Batches - Select Category:**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        elif data.startswith("showcat_"):
+            cat_idx = int(data.split("_")[1]); kb = [[InlineKeyboardButton("🆓 Free Batches", callback_data=f"listcat_{cat_idx}_free_0"), InlineKeyboardButton("💎 Paid Batches", callback_data=f"listcat_{cat_idx}_paid_0")], [InlineKeyboardButton("🔙 Back to Categories", callback_data="all_batches_0")]]
+            await q.edit_message_text(f"📂 **Category: {DB.get('CATEGORIES', DEFAULT_CATEGORIES)[cat_idx]}**\n\nAapko kis type ke batch chahiye?", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        
+        elif data.startswith("setextcat_"):
+            cat_idx = int(data.split("_")[1])
+            selected_cat = DB.get("CATEGORIES", DEFAULT_CATEGORIES)[cat_idx]
+            ids = context.user_data.get('setcat_ids', [])
+            if not ids: 
+                await q.edit_message_text("❌ Session expired ya IDs nahi mili. Kripya wapas /start karke try karein.")
+                return
+            for cid in ids:
+                DB.setdefault("BATCH_CATEGORIES", {})[str(cid)] = selected_cat
+            await save_data_async()
+            context.user_data.pop('setcat_ids', None)
+            await q.edit_message_text(f"✅ **Success!**\n\nTotal `{len(ids)}` batches ko successfully **{selected_cat}** category me shift kar diya gaya hai!", parse_mode=ParseMode.MARKDOWN)
+        
+        elif data.startswith("listcat_"):
+            if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False): return await show_tnc_menu(update, context)
+            parts = data.split("_"); cat_idx, b_type, page = int(parts[1]), parts[2], int(parts[3])
+            cat_name = DB.get("CATEGORIES", DEFAULT_CATEGORIES)[cat_idx]
+            if b_type == "free" and DB.get("FREE_LOCKED", False): return await q.answer("🔒 Free Batches Locked.", show_alert=True)
+            if b_type == "paid" and DB.get("PAID_LOCKED", False): return await q.answer("🔒 Paid Batches Locked.", show_alert=True)
+            source_dict = DB["FREE_CHANNELS"] if b_type == "free" else DB["PAID_CHANNELS"]
+            filtered_batches = [(cid, name) for cid, name in source_dict.items() if DB.get("BATCH_CATEGORIES", {}).get(str(cid), "Other Batches") == cat_name]
+            if not filtered_batches: return await q.edit_message_text(f"❌ Is category ({cat_name}) me abhi koi {b_type.title()} batch nahi hai.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data=f"showcat_{cat_idx}")]]), parse_mode=ParseMode.MARKDOWN)
+            MAX_PER_PAGE = 10; total = len(filtered_batches); start_idx = page * MAX_PER_PAGE; end_idx = start_idx + MAX_PER_PAGE
+            kb = [[InlineKeyboardButton(f"{'🔗' if b_type == 'free' else '💎'} {name}", callback_data=f"get_f_{cid}" if b_type == "free" else f"view_p_{cid}")] for cid, name in filtered_batches[start_idx:end_idx]]
+            nav_buttons = []
+            if page > 0: nav_buttons.append(InlineKeyboardButton("⬅️ Back", callback_data=f"listcat_{cat_idx}_{b_type}_{page-1}"))
+            if end_idx < total: nav_buttons.append(InlineKeyboardButton("Next ➡️", callback_data=f"listcat_{cat_idx}_{b_type}_{page+1}"))
+            if nav_buttons: kb.append(nav_buttons)
+            kb.append([InlineKeyboardButton("🔙 Category Menu", callback_data=f"showcat_{cat_idx}")])
+            await q.edit_message_text(f"📚 **{cat_name} ({b_type.title()})**\n\nNeeche diye gaye batches par click karke join karein:", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
+        elif data.startswith("delcat_"):
+            cat_idx = int(data.split("_")[1]); categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES)
+            if cat_idx >= len(categories): return await q.answer("Invalid category", show_alert=True)
+            deleted_cat = categories[cat_idx]
+            if deleted_cat == "Other Batches": return await q.answer("❌ 'Other Batches' ko delete nahi kiya ja sakta!", show_alert=True)
+            DB["CATEGORIES"].remove(deleted_cat); shifted_count = 0
+            if "BATCH_CATEGORIES" in DB:
+                for cid, cat in DB["BATCH_CATEGORIES"].items():
+                    if cat == deleted_cat: DB["BATCH_CATEGORIES"][cid] = "Other Batches"; shifted_count += 1
+            await save_data_async(); await q.edit_message_text(f"✅ Category **{deleted_cat}** delete kar di gayi hai.\n\n🔄 Uske **{shifted_count} batches** automatically 'Other Batches' me shift ho gaye hain.", parse_mode=ParseMode.MARKDOWN)
+
+        elif data == "cancel_delcat": await q.edit_message_text("❌ Category deletion cancelled.")
+
+        elif data.startswith("get_f_"):
+            cid = int(data.split("_")[2])
+            if await is_already_in_channel(context, cid, uid): return await q.answer("⚠️ Already Joined!", show_alert=True)
+            try:
+                bname = DB["ALL_CHATS"].get(cid, f"Batch {cid}")
+                l = await context.bot.create_chat_invite_link(cid, creates_join_request=True, name=f"Free-{uid}", expire_date=int(time.time())+60)
+                sent_msg = await context.bot.send_message(uid, f"🔗 <b>Link:</b>\n\n<b>{bname}</b>\n\n{l.invite_link}\n\nℹ️ <i>Request auto-approved.</i>\n⏳ <i>(Expires in 1 min)</i>", parse_mode=ParseMode.HTML)
+                await schedule_delete(context, sent_msg, delay=60); await q.answer("Sent to DM")
+            except Exception as e: await q.answer(f"Bot Error: {e}", show_alert=True)
+
+        elif data.startswith("view_p_"):
+            cid = int(data.split("_")[2]); await q.answer()
+            kb = [[InlineKeyboardButton("🔗 Request Access", callback_data=f"req_access_{cid}")], [InlineKeyboardButton("🔙 Back", callback_data="u_main")]]
+            try: await q.edit_message_text("💎 **Premium Access:**\nClick below.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+            except Exception: pass
+
+        elif data.startswith("req_access_"):
+            cid = int(data.split("_")[2])
+            if not await check_membership(uid, context): return await q.answer("❌ Join Main First!", show_alert=True)
+            if await is_already_in_channel(context, cid, uid): return await q.answer("⚠️ Already joined!", show_alert=True)
+            await q.answer("🔄 Generating Link...")
+            try:
+                bname = DB["ALL_CHATS"].get(cid, f"Batch {cid}"); l = await context.bot.create_chat_invite_link(cid, creates_join_request=True, name=f"Req-{uid}", expire_date=int(time.time())+60)
+                DB["LINK_MAP"][l.invite_link] = {"u": uid, "b": cid}; await save_data_async()
+                topic_id = await get_or_create_topic(update.effective_user, context)
+                if topic_id:
+                    try: await context.bot.send_message(SUPPORT_GROUP_ID, f"🔔 **NEW REQUEST**\n👤 User: {update.effective_user.mention_html()}\n📂 Batch: <b>{bname}</b>\n🔗 Link: {l.invite_link}\n\n👇 **Action:**\n/demo {l.invite_link}\n/per {l.invite_link}", message_thread_id=topic_id, parse_mode=ParseMode.HTML)
+                    except Exception: pass
+                user_msg_obj = await context.bot.send_message(uid, f"✅ <b>Access Link Generated!</b>\n\n<b>{bname}</b>\n\n🔗 {l.invite_link}\n\nℹ️ <b>Sent to Admin.</b> Wait for approval.\n⏳ <i>(Expires in 1 min)</i>", parse_mode=ParseMode.HTML)
+                await schedule_delete(context, user_msg_obj, delay=60)
+            except Exception as e: await context.bot.send_message(uid, f"❌ Error: {e}")
+
+    except Exception as e:
+        logger.error(f"Callback Error: {e}")
+    finally:
+        # Ye sabse zaroori line hai: Process khatam hote hi Lock hata deta hai
+        PROCESSING_USERS.discard(uid)
+        
 # --- START, MENUS & CORE EVENTS ---
 async def show_tnc_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = [[InlineKeyboardButton("✅ I Accept", callback_data="accept_tnc")]]
@@ -840,7 +873,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await get_or_create_topic(user, context)
 
     if str(user.id) == str(OWNER_ID):
-        kb = [[InlineKeyboardButton("🔒 Security", callback_data="dash_locks"), InlineKeyboardButton("🗄️ Database", callback_data="dash_db")], [InlineKeyboardButton("📦 Batches", callback_data="dash_batches"), InlineKeyboardButton("👥 Staff", callback_data="dash_staff")], [InlineKeyboardButton("📢 Comms", callback_data="dash_comms"), InlineKeyboardButton("📊 Analytics", callback_data="dash_stats")]]
+        kb = [
+            [InlineKeyboardButton("🔒 Security", callback_data="dash_locks"), InlineKeyboardButton("🗄️ Database", callback_data="dash_db")], 
+            [InlineKeyboardButton("📦 Batches", callback_data="dash_batches"), InlineKeyboardButton("👥 Staff", callback_data="dash_staff")], 
+            [InlineKeyboardButton("📢 Comms", callback_data="dash_comms"), InlineKeyboardButton("📊 Analytics", callback_data="dash_stats")],
+            [InlineKeyboardButton("🔑 Userbot Login & Stats", callback_data="userbot_details")]
+        ]
         text = "🚀 **SYSTEM MASTER TERMINAL**\nSelect a module:"
         if update.callback_query: await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
         else: await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
