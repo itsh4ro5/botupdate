@@ -66,6 +66,22 @@ async def cmd_del_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- MISSING COMMANDS IN handlers.py ---
 
+async def cmd_sync(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    msg = await update.message.reply_text("🔄 Background sync started manually.")
+    context.job_queue.run_once(background_sync, 1)
+    await schedule_delete(context, update.message); await schedule_delete(context, msg)
+
+async def cmd_joinall(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_ID: return
+    # Add your joinall logic here if needed, or keep empty
+    await update.message.reply_text("✅ Joinall is ready.")
+
+async def cmd_lockpaid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    DB["PAID_LOCKED"] = not DB.get("PAID_LOCKED", False); await save_data_async()
+    await update.message.reply_text("Paid Batches **LOCKED 🔐**." if DB["PAID_LOCKED"] else "Paid Batches **UNLOCKED 🔓**.", parse_mode=ParseMode.MARKDOWN)
+
 async def cmd_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat, user, msg_obj = update.effective_chat, update.effective_user, update.effective_message
     text = f"👤 **Your User ID:** `{user.id}`" if chat.type == ChatType.PRIVATE and user else f"🆔 **Chat ID:** `{chat.id}`"
