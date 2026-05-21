@@ -34,32 +34,29 @@ async def cmd_userbotphone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if uid != OWNER_ID: return
     
-    # 🛑 YAHAN CHECK KARENGE KI API_ID SAHI HAI YA NAHI
     if not API_ID or API_ID == 0:
-        return await update.message.reply_text("❌ **API_ID Missing!**\nAapne Cloud (Koyeb/Render) me API_ID set nahi kiya hai. Kripya my.telegram.org se valid API_ID aur API_HASH daalein.")
+        return await update.message.reply_text("❌ **API_ID Missing!** Kripya Cloud Dashboard me API_ID theek karein.")
         
     phone = update.message.text.replace(" ", "")
     msg = await update.message.reply_text("⏳ OTP request bhej raha hu, kripya wait karein...")
     
-    # ✅ Naya Fresh In-Memory Client
+    # Client banakar connect karenge
     client = Client("temp_login", api_id=API_ID, api_hash=API_HASH, in_memory=True)
     await client.connect()
     
     try:
         sent_code = await client.send_code(phone)
         
-        # Auth key generate hone ke baad memory session save karna
-        temp_session = await client.export_session_string()
-        context.user_data['temp_session'] = temp_session
+        # 🟢 FIX: Yahan session export nahi karenge! Balki poore client ko memory me zinda rakhenge
+        context.user_data['login_client'] = client
         context.user_data['login_phone'] = phone
         context.user_data['phone_code_hash'] = sent_code.phone_code_hash
         
         ADMIN_WIZARD[uid] = {"step": "call_cmd_userbototp"}
         await msg.edit_text("✅ **OTP Bhej diya gaya hai!**\n\nKripya apna OTP yahan type karein.\n⚠️ **DHYAN DEIN:** OTP space lagakar likhein (Example: `1 2 3 4 5`)")
     except Exception as e:
+        await client.disconnect() # Error aane par hi disconnect karenge
         await msg.edit_text(f"❌ Error: `{e}`")
-    finally:
-        await client.disconnect()
 
 
 async def cmd_userbototp(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -69,37 +66,36 @@ async def cmd_userbototp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     otp = update.message.text.replace(" ", "").replace("-", "")
     phone = context.user_data.get('login_phone')
     phone_code_hash = context.user_data.get('phone_code_hash')
-    temp_session = context.user_data.get('temp_session')
+    client = context.user_data.get('login_client') # 🟢 Zinda connection wapas nikala
     
-    if not phone or not phone_code_hash or not temp_session:
-        return await update.message.reply_text("❌ Session expire ho gaya. Kripya Dashboard se wapas Login par click karein.")
+    if not phone or not phone_code_hash or not client:
+        return await update.message.reply_text("❌ Session expire ho gaya. Kripya wapas login par click karein.")
         
     msg = await update.message.reply_text("⏳ OTP Verify kar raha hu...")
-    
-    # ✅ FIX: Pyrogram v2 me string session ko sidha 'name' ki jagah pass karte hain
-    client = Client(temp_session, api_id=API_ID, api_hash=API_HASH)
-    await client.connect()
     
     try:
         await client.sign_in(phone, phone_code_hash, otp)
         
+        # 🟢 FIX: Login successful hone ke baad hi Session String export karenge
         session_string = await client.export_session_string()
         DB["USERBOT_SESSION"] = session_string
         DB["USERBOT_PHONE"] = phone
         await save_data_async()
         
+        # Kaam khatam hone ke baad disconnect aur memory saaf
+        await client.disconnect()
+        context.user_data.pop('login_client', None)
         context.user_data.pop('login_phone', None)
         context.user_data.pop('phone_code_hash', None)
-        context.user_data.pop('temp_session', None)
         
         await msg.edit_text("🎉 **LOGIN SUCCESSFUL!**\n\nBina 2FA ke Session Database me save ho gaya hai.")
     except SessionPasswordNeeded:
         ADMIN_WIZARD[uid] = {"step": "call_cmd_userbotpass"}
         await msg.edit_text("🔒 **2-Step Verification Detected!**\n\nIs account me 2FA on hai. Kripya apna **2FA Password** type karein:")
     except Exception as e:
-        await msg.edit_text(f"❌ OTP Error: `{e}`")
-    finally:
         await client.disconnect()
+        context.user_data.pop('login_client', None)
+        await msg.edit_text(f"❌ OTP Error: `{e}`")
 
 
 async def cmd_userbotpass(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -108,33 +104,31 @@ async def cmd_userbotpass(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     password = update.message.text
     phone = context.user_data.get('login_phone')
-    temp_session = context.user_data.get('temp_session')
+    client = context.user_data.get('login_client') # 🟢 Connection yahan tak zinda hai
     
-    if not phone or not temp_session:
+    if not phone or not client:
         return await update.message.reply_text("❌ Session expire ho gaya. Kripya wapas login par click karein.")
     
     msg = await update.message.reply_text("⏳ Password check kar raha hu...")
     
-    # ✅ FIX: Yahan bhi same session string ko pass karna hai
-    client = Client(temp_session, api_id=API_ID, api_hash=API_HASH)
-    await client.connect()
-    
     try:
         await client.check_password(password)
         
+        # 🟢 FIX: 2FA successful hone ke baad Session export karenge
         session_string = await client.export_session_string()
         DB["USERBOT_SESSION"] = session_string
         DB["USERBOT_PHONE"] = phone
         await save_data_async()
         
+        await client.disconnect()
+        context.user_data.pop('login_client', None)
         context.user_data.pop('login_phone', None)
-        context.user_data.pop('temp_session', None)
         
         await msg.edit_text("🎉 **LOGIN SUCCESSFUL!**\n\n2FA Password verified. Session save ho gaya hai.")
     except Exception as e:
-        await msg.edit_text(f"❌ Password Error: `{e}`")
-    finally:
         await client.disconnect()
+        context.user_data.pop('login_client', None)
+        await msg.edit_text(f"❌ Password Error: `{e}`")
         
 async def cmd_del_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin command to delete the replied-to message."""
