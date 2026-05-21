@@ -320,7 +320,62 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("setexistingcat_"):
         cid, cat_idx = parts = data.split("_")[1:3]
         DB.setdefault("BATCH_CATEGORIES", {})[str(cid)] = DB.get("CATEGORIES", DEFAULT_CATEGORIES)[int(cat_idx)]; await save_data_async(); await q.edit_message_text(f"✅ Set to {DB.get('CATEGORIES', DEFAULT_CATEGORIES)[int(cat_idx)]}")
+# --- MISSING COMMANDS (ADD THESE AT THE BOTTOM OF handlers.py) ---
 
+async def cmd_user_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    try: target_id = int(context.args[0])
+    except Exception: return await update.message.reply_text("Usage: /user [id]")
+    info = DB["USER_DATA"].get(target_id, {})
+    r = f"USER DETAILS: {target_id}\nName: {info.get('name', 'Unknown')}\n\n" + ("🚫 BLOCKED\n\n" if target_id in DB['BLOCKED_USERS'] else "") + "--- MEMBERSHIP ---\n"
+    found = False
+    for cid in set(list(DB["ALL_CHATS"].keys()) + list(DB["FREE_CHANNELS"].keys()) + list(DB["PAID_CHANNELS"].keys())):
+        try:
+            if (await context.bot.get_chat_member(cid, target_id)).status in [ChatMember.MEMBER, ChatMember.ADMINISTRATOR, ChatMember.OWNER, ChatMember.RESTRICTED]: r += f"{DB['ALL_CHATS'].get(cid, cid)}: ✅\n"; found = True
+        except Exception: pass
+    if not found: r += "Not found in any batch.\n"
+    if "demo_history" in info: r += "\n--- DEMO HISTORY ---\n" + "\n".join([f"• {h}" for h in info["demo_history"]])
+    f = io.BytesIO(r.encode("utf-8")); f.name = f"scan_{target_id}.txt"
+    await update.message.reply_document(document=f, caption="🔍 Deep Scan")
+
+async def cmd_batches(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    r = "ALL BATCHES\n" + "="*30 + "\n" + "\n".join([f"{cid} | {DB['ALL_CHATS'].get(cid, 'Unknown')}" for cid in set(list(DB["ALL_CHATS"].keys()) + list(DB["FREE_CHANNELS"].keys()) + list(DB["PAID_CHANNELS"].keys()))])
+    f = io.BytesIO(r.encode("utf-8")); f.name = "batches.txt"
+    await update.message.reply_document(document=f)
+
+async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    t = f"📊 **Statistics**\n💾 Storage: {'MongoDB ☁️' if MONGO_URL else 'Local 📁'}\n🔒 Lockdown: {'🔴 ON' if not DB.get('NEW_USERS_ALLOWED', True) else '🟢 OFF'}\n🔓 Free Locked: {'🔴 YES' if DB.get('FREE_LOCKED', False) else '🟢 NO'}\n🔐 Paid Locked: {'🔴 YES' if DB.get('PAID_LOCKED', False) else '🟢 NO'}\n🤖 Test Bot Locked: {'🔴 YES' if DB.get('TEST_BOT_LOCKED', False) else '🟢 NO'}\n\n👥 Users: {len(DB['USER_DATA'])}\n🆓 Free: {len(DB['FREE_CHANNELS'])}\n💎 Paid: {len(DB['PAID_CHANNELS'])}\n🚫 Blocked: {len(DB['BLOCKED_USERS'])}"
+    await update.message.reply_text(t, parse_mode=ParseMode.MARKDOWN)
+
+async def cmd_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if uid in BROADCAST_STATE: del BROADCAST_STATE[uid]
+    if uid in ADMIN_WIZARD: del ADMIN_WIZARD[uid]
+    await update.message.reply_text("❌ Cancelled")
+
+async def cmd_lockdown(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    DB["NEW_USERS_ALLOWED"] = not DB.get("NEW_USERS_ALLOWED", True); await save_data_async()
+    msg = await update.message.reply_text("🔓 **Lockdown Lifted!**" if DB["NEW_USERS_ALLOWED"] else "🔒 **Lockdown Enabled!**", parse_mode=ParseMode.MARKDOWN)
+    await schedule_delete(context, update.message); await schedule_delete(context, msg)
+
+async def cmd_lockfree(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    DB["FREE_LOCKED"] = not DB.get("FREE_LOCKED", False); await save_data_async()
+    await update.message.reply_text("Free Batches **LOCKED 🔒**." if DB["FREE_LOCKED"] else "Free Batches **UNLOCKED 🔓**.", parse_mode=ParseMode.MARKDOWN)
+
+async def cmd_lockpaid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    DB["PAID_LOCKED"] = not DB.get("PAID_LOCKED", False); await save_data_async()
+    await update.message.reply_text("Paid Batches **LOCKED 🔐**." if DB["PAID_LOCKED"] else "Paid Batches **UNLOCKED 🔓**.", parse_mode=ParseMode.MARKDOWN)
+
+async def cmd_locktestbot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    DB["TEST_BOT_LOCKED"] = not DB.get("TEST_BOT_LOCKED", False); await save_data_async()
+    await update.message.reply_text("Test Bot **LOCKED 🔒**." if DB["TEST_BOT_LOCKED"] else "Test Bot **UNLOCKED 🔓**.", parse_mode=ParseMode.MARKDOWN)
+    
 # --- START & MENUS ---
 async def show_tnc_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = [[InlineKeyboardButton("✅ I Accept", callback_data="accept_tnc")]]
