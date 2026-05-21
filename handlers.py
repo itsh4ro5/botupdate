@@ -568,6 +568,28 @@ async def wizard_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif state["step"].startswith("call_cmd_"):
         cmd_name = state["step"].replace("call_cmd_", "")
         context.args = update.message.text.split()
+        
+        # 👈 Ye line naya add hua hai: Bot current step ko yaad rakhega
+        current_step = state["step"] 
+        
+        try:
+            cmds = {"addadmin": cmd_add_admin, "deladmin": cmd_del_admin, "ban": cmd_ban, "unban": cmd_unban, "kick": cmd_kick_user, "find": cmd_find_user, "resetuser": cmd_reset_user, "demo": cmd_approve_demo, "perm": cmd_approve_perm, "extend": cmd_extend_demo, "settestbot": cmd_set_testbot, "setwelcome": cmd_set_welcome, "delbatch": cmd_delbatch, "addcat": cmd_addcat, "setcat": cmd_setcategory, "emptybatch": cmd_emptybatch, "userbotphone": cmd_userbotphone, "userbototp": cmd_userbototp, "userbotpass": cmd_userbotpass}
+            
+            if cmd_name in cmds: 
+                await cmds[cmd_name](update, context)
+        except Exception: 
+            pass
+        
+        # 👈 Naya Logic: Sirf tabhi memory delete hogi jab command poora khatam ho jaye
+        # Agar OTP ya Password maanga gaya hai, toh memory delete nahi hogi!
+        if uid in ADMIN_WIZARD and ADMIN_WIZARD[uid].get("step") == current_step: 
+            del ADMIN_WIZARD[uid]
+        
+        return True
+
+    elif state["step"].startswith("call_cmd_"):
+        cmd_name = state["step"].replace("call_cmd_", "")
+        context.args = update.message.text.split()
         try:
             # Dhyan dein: Ye 'cmds' wali line 'try:' ke muqable 4 spaces aage honi chahiye
             cmds = {"addadmin": cmd_add_admin, "deladmin": cmd_del_admin, "ban": cmd_ban, "unban": cmd_unban, "kick": cmd_kick_user, "find": cmd_find_user, "resetuser": cmd_reset_user, "demo": cmd_approve_demo, "perm": cmd_approve_perm, "extend": cmd_extend_demo, "settestbot": cmd_set_testbot, "setwelcome": cmd_set_welcome, "delbatch": cmd_delbatch, "addcat": cmd_addcat, "setcat": cmd_setcategory, "emptybatch": cmd_emptybatch, "userbotphone": cmd_userbotphone, "userbototp": cmd_userbototp, "userbotpass": cmd_userbotpass}
