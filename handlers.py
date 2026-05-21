@@ -592,17 +592,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if str(user.id) == str(OWNER_ID):
         kb = [[InlineKeyboardButton("🔒 Security", callback_data="dash_locks"), InlineKeyboardButton("🗄️ Database", callback_data="dash_db")], [InlineKeyboardButton("📦 Batches", callback_data="dash_batches"), InlineKeyboardButton("👥 Staff", callback_data="dash_staff")], [InlineKeyboardButton("📢 Comms", callback_data="dash_comms"), InlineKeyboardButton("📊 Analytics", callback_data="dash_stats")]]
-        await update.message.reply_text("🚀 **SYSTEM MASTER TERMINAL**\nSelect a module:", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        text = "🚀 **SYSTEM MASTER TERMINAL**\nSelect a module:"
+        
+        # Check if button clicked (callback) or command typed
+        if update.callback_query: 
+            await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        else: 
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+            
     elif is_admin(user.id):
         kb = [[InlineKeyboardButton("👤 Users", callback_data="adash_users"), InlineKeyboardButton("✅ Approvals", callback_data="adash_approvals")], [InlineKeyboardButton("📁 Batches", callback_data="adash_batches"), InlineKeyboardButton("📢 Comms", callback_data="adash_comms")]]
-        await update.message.reply_text("🛡️ **ADMINISTRATOR DASHBOARD**\nSelect an action:", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        text = "🛡️ **ADMINISTRATOR DASHBOARD**\nSelect an action:"
+        
+        # Check if button clicked (callback) or command typed
+        if update.callback_query: 
+            await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        else: 
+            await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+            
     elif await check_membership(user.id, context):
         if not DB["USER_DATA"].get(user.id, {}).get("tnc_accepted", False): await show_tnc_menu(update, context)
         else: await show_user_menu(update)
-    else:
-        if not DB.get("NEW_USERS_ALLOWED", True): return await update.message.reply_text("⛔ **Entry Closed!**", parse_mode=ParseMode.MARKDOWN)
-        kb = [[InlineKeyboardButton("📢 Join Channel", url=MANDATORY_CHANNEL_LINK)], [InlineKeyboardButton("✅ Verified", callback_data="verify")]]
-        await update.message.reply_text("⚠️ **Join Main Channel First**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
 async def delete_service_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try: await update.message.delete()
