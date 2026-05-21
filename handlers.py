@@ -156,25 +156,27 @@ async def cmd_addcat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_text(f"✅ Added Category: {new_cat}")
 
 async def cmd_setcategory(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id) or not context.args: return
-    try:
-        cid = int(context.args[0])
-        kb = [[InlineKeyboardButton(c, callback_data=f"setexistingcat_{cid}_{i}")] for i, c in enumerate(DB.get("CATEGORIES", DEFAULT_CATEGORIES))]
-        await update.effective_message.reply_text(f"Nayi category select karein for `{cid}`:", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-    except Exception:
-        await update.effective_message.reply_text("❌ Error: Valid Batch ID bhejein.")
+    if not is_admin(update.effective_user.id): return
+    
+    # Message se saari IDs (numbers) nikalna
+    raw_text = update.message.text
+    ids = re.findall(r'-?\d+', raw_text) # Ye automatically comma aur spaces ko handle kar lega
+    
+    if not ids:
+        return await update.effective_message.reply_text("❌ Error: Koi valid ID nahi mili.")
+    
+    # Agle step ke liye in saari IDs ko temporary memory me save kar lo
+    context.user_data['setcat_ids'] = ids
+    
+    # Category buttons dikhana
+    kb = [[InlineKeyboardButton(c, callback_data=f"setextcat_{i}")] for i, c in enumerate(DB.get("CATEGORIES", DEFAULT_CATEGORIES))]
+    await update.effective_message.reply_text(f"📁 **{len(ids)} Batches** detect hue hain.\nIn sabhi ke liye nayi category select karein:", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
 async def cmd_delcat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     kb = [[InlineKeyboardButton(f"🗑 Delete: {c}", callback_data=f"delcat_{i}")] for i, c in enumerate(DB.get("CATEGORIES", DEFAULT_CATEGORIES)) if c != "Other Batches"]
     kb.append([InlineKeyboardButton("❌ Cancel", callback_data="dash_home")])
     await update.effective_message.reply_text("🗑 **Delete Category:**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-
-async def cmd_setcategory(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id) or not context.args: return
-    cid = int(context.args[0])
-    kb = [[InlineKeyboardButton(c, callback_data=f"setexistingcat_{cid}_{i}")] for i, c in enumerate(DB.get("CATEGORIES", DEFAULT_CATEGORIES))]
-    await update.effective_message.reply_text(f"Nayi category select karein for {cid}:", reply_markup=InlineKeyboardMarkup(kb))
 
 async def cmd_batch_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
@@ -507,9 +509,9 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data.startswith("input_"):
         cmd_name = data.split("_")[1]; ADMIN_WIZARD[uid] = {"step": f"call_cmd_{cmd_name}"}
-        prompts = {"addadmin": "Send User ID to make Admin:", "deladmin": "Send User ID to remove from Admin:", "ban": "Send User ID to Ban:", "unban": "Send User ID to Unban:", "kick": "Send User ID and Batch ID\nFormat: `uid bid`", "find": "Send Username to find:", "resetuser": "Send User ID to reset:", "demo": "Send Link and Time:\nFormat: `link 10h`", "perm": "Send Link to approve:", "extend": "Send User ID, Batch ID, Hours:\nFormat: `uid bid 24`", "settestbot": "Send new Test Bot link:", "setwelcome": "Send Batch ID and Welcome Msg:\nFormat: `bid message`", "delbatch": "Send Type and ID:\nFormat: `free 123` or `paid 123`", "addcat": "Send Name for new Category:", "setcat": "Send Batch ID to change category:"}
+        prompts = {"addadmin": "Send User ID to make Admin:", "deladmin": "Send User ID to remove from Admin:", "ban": "Send User ID to Ban:", "unban": "Send User ID to Unban:", "kick": "Send User ID and Batch ID\nFormat: `uid bid`", "find": "Send Username to find:", "resetuser": "Send User ID to reset:", "demo": "Send Link and Time:\nFormat: `link 10h`", "perm": "Send Link to approve:", "extend": "Send User ID, Batch ID, Hours:\nFormat: `uid bid 24`", "settestbot": "Send new Test Bot link:", "setwelcome": "Send Batch ID and Welcome Msg:\nFormat: `bid message`", "delbatch": "Send Type and ID:\nFormat: `free 123` or `paid 123`", "addcat": "Send Name for new Category:", "setcat": "Send Batch ID(s) (comma ya space lagakar):\nFormat: `-100x, -100y, -100z`"}
         await q.edit_message_text(f"⚡ **INPUT REQUIRED FOR: {cmd_name.upper()}**\n\n{prompts.get(cmd_name, 'Send input:')}", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel Input", callback_data="dash_home")]]), parse_mode=ParseMode.MARKDOWN)
-
+        
     elif data == "accept_tnc": DB.setdefault("USER_DATA", {}).setdefault(uid, {})["tnc_accepted"] = True; await save_data_async(); await show_user_menu(update)
     elif data == "u_main": await show_user_menu(update)
     elif data == "my_info": await q.answer(); await cmd_myinfo(update, context)
@@ -551,14 +553,21 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cat_idx = int(data.split("_")[1]); kb = [[InlineKeyboardButton("🆓 Free Batches", callback_data=f"listcat_{cat_idx}_free_0"), InlineKeyboardButton("💎 Paid Batches", callback_data=f"listcat_{cat_idx}_paid_0")], [InlineKeyboardButton("🔙 Back to Categories", callback_data="all_batches_0")]]
         await q.edit_message_text(f"📂 **Category: {DB.get('CATEGORIES', DEFAULT_CATEGORIES)[cat_idx]}**\n\nAapko kis type ke batch chahiye?", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
     elif data.startswith("setexistingcat_"):
-        parts = data.split("_")
-        cid, cat_idx = parts[1], int(parts[2])
+        cat_idx = int(data.split("_")[1])
         selected_cat = DB.get("CATEGORIES", DEFAULT_CATEGORIES)[cat_idx]
         
-        # Nayi category assign karna
-        DB.setdefault("BATCH_CATEGORIES", {})[str(cid)] = selected_cat
+        # Purane step me save ki gayi IDs nikalna
+        ids = context.user_data.get('setcat_ids', [])
+        if not ids: return await q.answer("❌ Error: Session expired. Wapas try karein.", show_alert=True)
+        
+        # Ek sath sabhi batches me nayi category assign karna loop chala kar
+        for cid in ids:
+            DB.setdefault("BATCH_CATEGORIES", {})[str(cid)] = selected_cat
+            
         await save_data_async()
-        await q.edit_message_text(f"✅ Batch `{cid}` ab **{selected_cat}** category me set ho gaya hai!", parse_mode=ParseMode.MARKDOWN)
+        context.user_data.pop('setcat_ids', None) # Data clean kar do
+        
+        await q.edit_message_text(f"✅ **Success!**\nTotal `{len(ids)}` batches ko ek sath **{selected_cat}** category me shift kar diya gaya hai!", parse_mode=ParseMode.MARKDOWN)
 
     elif data.startswith("listcat_"):
         if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False): return await show_tnc_menu(update, context)
