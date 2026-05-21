@@ -127,7 +127,8 @@ DB = {
     "SCHEDULED_DELETES": [],
     "TEST_BOT_LINK": "",
     "BATCH_CATEGORIES": {},
-    "CATEGORIES": DEFAULT_CATEGORIES.copy() # <-- Nayi dynamic list DB me add ho gayi
+    "CATEGORIES": DEFAULT_CATEGORIES.copy()# <-- Nayi dynamic list DB me add ho gayi
+    "MAINTENANCE_MODE": False  # <-- NAYI LINE
 }
 
 # Runtime Memory
@@ -173,6 +174,7 @@ def load_data():
                 if "TEST_BOT_LOCKED" in loaded: DB["TEST_BOT_LOCKED"] = loaded["TEST_BOT_LOCKED"]
                 if "SCHEDULED_DELETES" in loaded: DB["SCHEDULED_DELETES"] = loaded["SCHEDULED_DELETES"]
                 if "TEST_BOT_LINK" in loaded: DB["TEST_BOT_LINK"] = loaded["TEST_BOT_LINK"]
+                if "MAINTENANCE_MODE" in loaded: DB["MAINTENANCE_MODE"] = loaded["MAINTENANCE_MODE"]
                 
                 for k in ["FREE_CHANNELS", "PAID_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
                     if k in loaded: 
@@ -253,6 +255,7 @@ def save_data_sync():
             "TEST_BOT_LINK": DB.get("TEST_BOT_LINK", ""),
             "BATCH_CATEGORIES": {str(k): v for k, v in DB.get("BATCH_CATEGORIES", {}).items()},
             "CATEGORIES": DB.get("CATEGORIES", DEFAULT_CATEGORIES)
+            "MAINTENANCE_MODE": DB.get("MAINTENANCE_MODE", False)  # <-- NAYI LINE
         }
 
         if MONGO_URL and mongo_collection is not None:
@@ -521,7 +524,22 @@ async def cmd_del_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             msg = await update.message.reply_text(f"⚠️ Delete failed (> 48hrs old or not found). Error: {e}")
             await schedule_delete(context, msg)
-
+            
+async def cmd_maintenance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin command to toggle Maintenance Mode."""
+    if not is_admin(update.effective_user.id): 
+        return
+        
+    DB["MAINTENANCE_MODE"] = not DB.get("MAINTENANCE_MODE", False)
+    await save_data_async()
+    
+    if DB["MAINTENANCE_MODE"]:
+        msg = await update.message.reply_text("🛠️ **Maintenance Mode Enabled!**\nNormal users ka support message ab aana band ho gaya hai.", parse_mode=ParseMode.MARKDOWN)
+    else:
+        msg = await update.message.reply_text("✅ **Maintenance Mode Disabled!**\nBot ab normally kaam kar raha hai.", parse_mode=ParseMode.MARKDOWN)
+        
+    await schedule_delete(context, update.message)
+    await schedule_delete(context, msg)
 # --- 8. COMMANDS ---
 
 async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1800,6 +1818,15 @@ async def main_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             return
 
     if chat.type == ChatType.PRIVATE:
+        # --- MAINTENANCE MODE CHECK ---
+        if DB.get("MAINTENANCE_MODE", False) and not is_admin(user.id):
+            await update.message.reply_text(
+                "⚠️ **The bot is under maintenance.**\n\nWhen it is fixed we will inform you as soon as possible. At this time your request is not forwarding to admin.",
+                parse_mode=ParseMode.MARKDOWN
+            )
+            return
+        # ------------------------------
+
         topic_id = await get_or_create_topic(user, context)
         if topic_id:
             reply_id = None
@@ -2617,6 +2644,7 @@ def main():
     app.add_handler(CommandHandler("settestbot", cmd_set_testbot))
     app.add_handler(CommandHandler("locktestbot", cmd_locktestbot)) # NEW COMMAND
     app.add_handler(CommandHandler("lockdown", cmd_lockdown))
+    app.add_handler(CommandHandler("maintenance", cmd_maintenance))
     app.add_handler(CommandHandler("lockfree", cmd_lockfree))
     app.add_handler(CommandHandler("lockpaid", cmd_lockpaid))
     app.add_handler(CommandHandler("sync", cmd_sync))
