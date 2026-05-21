@@ -1,4 +1,6 @@
 import io, os, re, time, asyncio
+from pyrogram import Client
+from pyrogram.errors import SessionPasswordNeeded
 from datetime import datetime
 from pyrogram import Client
 from pyrogram.errors import FloodWait
@@ -27,6 +29,97 @@ async def cmd_add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if new_admin not in DB["ADMIN_IDS"]: DB["ADMIN_IDS"].append(new_admin); await save_data_async(); msg = await update.effective_message.reply_text(f"✅ User {new_admin} is now Admin.")
         else: msg = await update.effective_message.reply_text("⚠️ Already Admin.")
     except Exception: pass
+
+async def cmd_userbotphone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if uid != OWNER_ID: return
+    
+    phone = update.message.text.replace(" ", "")
+    msg = await update.message.reply_text("⏳ OTP request bhej raha hu, kripya wait karein...")
+    
+    # State preserve karne ke liye 'temp_owner' naam ki file banegi
+    client = Client("temp_owner", api_id=API_ID, api_hash=API_HASH)
+    await client.connect()
+    
+    try:
+        sent_code = await client.send_code(phone)
+        context.user_data['login_phone'] = phone
+        context.user_data['phone_code_hash'] = sent_code.phone_code_hash
+        
+        ADMIN_WIZARD[uid] = {"step": "call_cmd_userbototp"}
+        await msg.edit_text("✅ **OTP Bhej diya gaya hai!**\n\nKripya apna OTP yahan type karein.\n⚠️ **DHYAN DEIN:** OTP space lagakar likhein (Example: `1 2 3 4 5`)")
+    except Exception as e:
+        await msg.edit_text(f"❌ Error: `{e}`")
+    finally:
+        await client.disconnect()
+
+
+async def cmd_userbototp(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if uid != OWNER_ID: return
+    
+    otp = update.message.text.replace(" ", "").replace("-", "")
+    phone = context.user_data.get('login_phone')
+    phone_code_hash = context.user_data.get('phone_code_hash')
+    
+    if not phone or not phone_code_hash:
+        return await update.message.reply_text("❌ Session expire ho gaya. Kripya wapas login par click karein.")
+        
+    msg = await update.message.reply_text("⏳ OTP Verify kar raha hu...")
+    client = Client("temp_owner", api_id=API_ID, api_hash=API_HASH)
+    await client.connect()
+    
+    try:
+        await client.sign_in(phone, phone_code_hash, otp)
+        
+        # Agar 2FA nahi hai, seedha save karo
+        session_string = await client.export_session_string()
+        DB["USERBOT_SESSION"] = session_string
+        DB["USERBOT_PHONE"] = phone
+        await save_data_async()
+        
+        context.user_data.pop('login_phone', None)
+        context.user_data.pop('phone_code_hash', None)
+        if os.path.exists("temp_owner.session"): os.remove("temp_owner.session") # cleanup
+        
+        await msg.edit_text("🎉 **LOGIN SUCCESSFUL!**\n\nBina 2FA ke Session Database me save ho gaya hai.")
+    except SessionPasswordNeeded:
+        # Agar 2FA laga hai
+        ADMIN_WIZARD[uid] = {"step": "call_cmd_userbotpass"}
+        await msg.edit_text("🔒 **2-Step Verification Detected!**\n\nIs account me 2FA on hai. Kripya apna **2FA Password** type karein:")
+    except Exception as e:
+        await msg.edit_text(f"❌ OTP Error: `{e}`")
+    finally:
+        await client.disconnect()
+
+
+async def cmd_userbotpass(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if uid != OWNER_ID: return
+    
+    password = update.message.text
+    phone = context.user_data.get('login_phone')
+    
+    msg = await update.message.reply_text("⏳ Password check kar raha hu...")
+    client = Client("temp_owner", api_id=API_ID, api_hash=API_HASH)
+    await client.connect()
+    
+    try:
+        await client.check_password(password)
+        
+        session_string = await client.export_session_string()
+        DB["USERBOT_SESSION"] = session_string
+        DB["USERBOT_PHONE"] = phone
+        await save_data_async()
+        
+        context.user_data.pop('login_phone', None)
+        if os.path.exists("temp_owner.session"): os.remove("temp_owner.session") # cleanup
+        
+        await msg.edit_text("🎉 **LOGIN SUCCESSFUL!**\n\n2FA Password verified. Session save ho gaya hai.")
+    except Exception as e:
+        await msg.edit_text(f"❌ Password Error: `{e}`")
+    finally:
+        await client.disconnect()
 
 async def cmd_del_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin command to delete the replied-to message."""
@@ -438,14 +531,17 @@ async def wizard_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cmd_name = state["step"].replace("call_cmd_", "")
         context.args = update.message.text.split()
         try:
-            # Yahan 'emptybatch': cmd_emptybatch add karna hai
-cmds = {"addadmin": cmd_add_admin, "deladmin": cmd_del_admin, "ban": cmd_ban, "unban": cmd_unban, "kick": cmd_kick_user, "find": cmd_find_user, "resetuser": cmd_reset_user, "demo": cmd_approve_demo, "perm": cmd_approve_perm, "extend": cmd_extend_demo, "settestbot": cmd_set_testbot, "setwelcome": cmd_set_welcome, "delbatch": cmd_delbatch, "addcat": cmd_addcat, "setcat": cmd_setcategory, "emptybatch": cmd_emptybatch}
-            if cmd_name in cmds: await cmds[cmd_name](update, context)
-        except Exception: pass
-        if uid in ADMIN_WIZARD: del ADMIN_WIZARD[uid]
+            # Dhyan dein: Ye 'cmds' wali line 'try:' ke muqable 4 spaces aage honi chahiye
+            cmds = {"addadmin": cmd_add_admin, "deladmin": cmd_del_admin, "ban": cmd_ban, "unban": cmd_unban, "kick": cmd_kick_user, "find": cmd_find_user, "resetuser": cmd_reset_user, "demo": cmd_approve_demo, "perm": cmd_approve_perm, "extend": cmd_extend_demo, "settestbot": cmd_set_testbot, "setwelcome": cmd_set_welcome, "delbatch": cmd_delbatch, "addcat": cmd_addcat, "setcat": cmd_setcategory, "emptybatch": cmd_emptybatch, "userbotphone": cmd_userbotphone, "userbototp": cmd_userbototp, "userbotpass": cmd_userbotpass}
+            
+            if cmd_name in cmds: 
+                await cmds[cmd_name](update, context)
+        except Exception: 
+            pass
+        
+        if uid in ADMIN_WIZARD: 
+            del ADMIN_WIZARD[uid]
         return True
-    return False
-
 async def handle_broadcast_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or update.effective_user.id not in BROADCAST_STATE: return False
     state = BROADCAST_STATE[update.effective_user.id]
@@ -528,6 +624,53 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data in ["dash_comms", "adash_comms"]:
         kb = [[InlineKeyboardButton("📢 Broadcast", callback_data="act_broadcast"), InlineKeyboardButton("📝 Post Message", callback_data="act_post")], [InlineKeyboardButton("🔗 Set Test Bot", callback_data="input_settestbot"), InlineKeyboardButton("👋 Set Welcome", callback_data="input_setwelcome")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
         await q.edit_message_text("📢 **Communications**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
+    # 1. Main Dashboard (Hide/Show Button)
+    elif data == "dash_home":
+        kb = [
+            [InlineKeyboardButton("📦 Batches", callback_data="dash_batches"), InlineKeyboardButton("👥 Users", callback_data="dash_users")],
+            [InlineKeyboardButton("⚙️ Settings", callback_data="dash_settings")]
+        ]
+        if uid == OWNER_ID:
+            kb.append([InlineKeyboardButton("🔑 Userbot Login Details", callback_data="userbot_details")])
+        await q.edit_message_text("🏠 **Main Dashboard**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
+    # 2. Login Details Menu
+    elif data == "userbot_details":
+        if uid != OWNER_ID: return await q.answer("❌ Access Denied! Owner only.", show_alert=True)
+        
+        session = DB.get("USERBOT_SESSION")
+        phone = DB.get("USERBOT_PHONE", "Not Found")
+        
+        if session:
+            text = f"✅ **Userbot Status: LOGGED IN**\n📱 **Number:** `{phone}`\n\nAb bot functions dynamically is session ko use karenge."
+            kb = [[InlineKeyboardButton("🚪 Logout (Delete Session)", callback_data="userbot_logout")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
+        else:
+            text = "❌ **Userbot Status: NOT LOGGED IN**\n\nKoi active session nahi hai. Kripya niche login par click karein."
+            kb = [[InlineKeyboardButton("📲 Login Now", callback_data="input_userbotphone")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
+            
+        await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
+    # 3. Logout
+    elif data == "userbot_logout":
+        if uid != OWNER_ID: return
+        DB["USERBOT_SESSION"] = None
+        DB["USERBOT_PHONE"] = None
+        await save_data_async()
+        if os.path.exists("temp_owner.session"): os.remove("temp_owner.session")
+        await q.answer("✅ Session Deleted Successfully!", show_alert=True)
+        await q.edit_message_text("❌ **Userbot is now LOGGED OUT.**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]))
+
+    # 4. Input Prompts update (sirf prompts dictionary update karni hai 'input_' block mein)
+    elif data.startswith("input_"):
+        cmd_name = data.split("_")[1]; ADMIN_WIZARD[uid] = {"step": f"call_cmd_{cmd_name}"}
+        prompts = {
+            # ... apne baaki purane prompts yahan rakhna ...
+            "userbotphone": "📱 **Apna Phone Number bhejein**\nCountry code ke sath (Jaise: `+919876543210`):",
+            "userbototp": "💬 **OTP Bhejein**\n⚠️ *OTP spaces me bhejein!* Jaise: `1 2 3 4 5`:",
+            "userbotpass": "🔒 **2FA Password bhejein:**"
+        }
+        await q.edit_message_text(f"⚡ **INPUT REQUIRED**\n\n{prompts.get(cmd_name, 'Send input:')}", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="dash_home")]]), parse_mode=ParseMode.MARKDOWN)
 
     elif data == "dash_stats": await q.answer("Generating Stats..."); await cmd_stats(update, context)
 
