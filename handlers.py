@@ -35,6 +35,23 @@ async def cmd_del_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if target in DB["ADMIN_IDS"]: DB["ADMIN_IDS"].remove(target); await save_data_async(); msg = await update.message.reply_text(f"🗑 User {target} removed.")
     except Exception: pass
 
+# --- MISSING COMMANDS IN handlers.py ---
+
+async def cmd_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat, user, msg_obj = update.effective_chat, update.effective_user, update.effective_message
+    text = f"👤 **Your User ID:** `{user.id}`" if chat.type == ChatType.PRIVATE and user else f"🆔 **Chat ID:** `{chat.id}`"
+    if chat.type != ChatType.PRIVATE:
+        if msg_obj and msg_obj.is_topic_message and msg_obj.message_thread_id: text += f"\n🧵 **Topic ID:** `{msg_obj.message_thread_id}`"
+        if user: text += f"\n👤 **User ID:** `{user.id}`"
+    try:
+        if msg_obj: await msg_obj.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+        else: await context.bot.send_message(chat.id, text, parse_mode=ParseMode.MARKDOWN)
+    except Exception: pass
+    if user and is_admin(user.id): await schedule_delete(context, msg_obj)
+
+async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await start(update, context)
+
 async def cmd_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID: return
     save_data_sync()
