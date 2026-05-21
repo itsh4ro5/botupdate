@@ -28,6 +28,35 @@ async def cmd_add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else: msg = await update.message.reply_text("⚠️ Already Admin.")
     except Exception: pass
 
+async def cmd_del_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin command to delete the replied-to message."""
+    if not is_admin(update.effective_user.id) or not update.message.reply_to_message: 
+        return
+    
+    # Message mapping check (taaki support group ka message bhi delete ho sake)
+    key = (update.effective_chat.id, update.message.reply_to_message.message_id)
+    if key in MESSAGE_MAP:
+        tc, tm = MESSAGE_MAP[key]
+        try:
+            await context.bot.delete_message(tc, tm)
+            await update.message.reply_to_message.delete()
+            await update.message.delete()
+            del MESSAGE_MAP[key]
+            # Reverse mapping delete karna
+            if (tc, tm) in MESSAGE_MAP:
+                del MESSAGE_MAP[(tc, tm)]
+        except Exception as e:
+            logger.error(f"Error deleting message: {e}")
+            msg = await update.message.reply_text(f"⚠️ Delete failed: {e}")
+            await schedule_delete(context, msg)
+    else:
+        # Agar map me nahi hai toh sirf reply-to-message delete karo
+        try:
+            await update.message.reply_to_message.delete()
+            await update.message.delete()
+        except Exception as e:
+            logger.error(f"Delete failed: {e}")
+
 async def cmd_del_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID: return
     try:
