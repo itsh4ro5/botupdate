@@ -412,7 +412,17 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif key == "FREE": DB["FREE_LOCKED"] = not DB.get("FREE_LOCKED", False)
         elif key == "PAID": DB["PAID_LOCKED"] = not DB.get("PAID_LOCKED", False)
         elif key == "TESTBOT": DB["TEST_BOT_LOCKED"] = not DB.get("TEST_BOT_LOCKED", False)
-        await save_data_async(); q.data = "dash_locks"; await general_callback(update, context)
+        await save_data_async()
+        
+        # Bina q.data ko modify kiye direct menu refresh karna:
+        kb = [
+            [InlineKeyboardButton(f"System Lockdown: {'🔴 ON' if not DB.get('NEW_USERS_ALLOWED', True) else '🟢 OFF'}", callback_data="toggle_lockdown")],
+            [InlineKeyboardButton(f"Free Batches: {'🔴 LOCKED' if DB.get('FREE_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_free"), InlineKeyboardButton(f"Paid Batches: {'🔴 LOCKED' if DB.get('PAID_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_paid")],
+            [InlineKeyboardButton(f"Test Bot: {'🔴 LOCKED' if DB.get('TEST_BOT_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_testbot")],
+            [InlineKeyboardButton(f"Maintenance Mode: {'🔴 ON' if DB.get('MAINTENANCE_MODE', False) else '🟢 OFF'}", callback_data="toggle_maintenance")],
+            [InlineKeyboardButton("🔙 Back to Terminal", callback_data="dash_home")]
+        ]
+        await q.edit_message_text("🔒 **Security & Access Control**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
     elif data == "dash_db":
         kb = [[InlineKeyboardButton("📥 Download Backup", callback_data="act_backup"), InlineKeyboardButton("🔄 Run Sync", callback_data="act_sync")], [InlineKeyboardButton("👥 Download All Users List", callback_data="act_allusers")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
