@@ -254,7 +254,7 @@ def save_data_sync():
             "SCHEDULED_DELETES": DB.get("SCHEDULED_DELETES", []),
             "TEST_BOT_LINK": DB.get("TEST_BOT_LINK", ""),
             "BATCH_CATEGORIES": {str(k): v for k, v in DB.get("BATCH_CATEGORIES", {}).items()},
-            "CATEGORIES": DB.get("CATEGORIES", DEFAULT_CATEGORIES)
+            "CATEGORIES": DB.get("CATEGORIES", DEFAULT_CATEGORIES),
             "MAINTENANCE_MODE": DB.get("MAINTENANCE_MODE", False)  # <-- NAYI LINE
         }
 
