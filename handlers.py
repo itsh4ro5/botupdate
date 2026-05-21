@@ -37,12 +37,16 @@ async def cmd_userbotphone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     phone = update.message.text.replace(" ", "")
     msg = await update.message.reply_text("⏳ OTP request bhej raha hu, kripya wait karein...")
     
-    # State preserve karne ke liye 'temp_owner' naam ki file banegi
-    client = Client("temp_owner", api_id=API_ID, api_hash=API_HASH)
+    # Ab hum file nahi banayenge, memory use karenge
+    client = Client("temp_login", api_id=API_ID, api_hash=API_HASH, in_memory=True)
     await client.connect()
     
     try:
         sent_code = await client.send_code(phone)
+        
+        # Pre-auth session ko memory me save karenge taaki device change na ho
+        temp_session = await client.export_session_string()
+        context.user_data['temp_session'] = temp_session
         context.user_data['login_phone'] = phone
         context.user_data['phone_code_hash'] = sent_code.phone_code_hash
         
@@ -61,30 +65,34 @@ async def cmd_userbototp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     otp = update.message.text.replace(" ", "").replace("-", "")
     phone = context.user_data.get('login_phone')
     phone_code_hash = context.user_data.get('phone_code_hash')
+    temp_session = context.user_data.get('temp_session')
     
-    if not phone or not phone_code_hash:
-        return await update.message.reply_text("❌ Session expire ho gaya. Kripya wapas login par click karein.")
+    if not phone or not phone_code_hash or not temp_session:
+        return await update.message.reply_text("❌ Session expire ho gaya. Kripya Dashboard se wapas Login par click karein.")
         
     msg = await update.message.reply_text("⏳ OTP Verify kar raha hu...")
-    client = Client("temp_owner", api_id=API_ID, api_hash=API_HASH)
+    
+    # Purane pre-auth session se connect karenge taaki Telegram ko same device lage
+    client = Client("temp_login", api_id=API_ID, api_hash=API_HASH, session_string=temp_session, in_memory=True)
     await client.connect()
     
     try:
         await client.sign_in(phone, phone_code_hash, otp)
         
-        # Agar 2FA nahi hai, seedha save karo
+        # Agar 2FA nahi hai, seedha authorized session database me save karo
         session_string = await client.export_session_string()
         DB["USERBOT_SESSION"] = session_string
         DB["USERBOT_PHONE"] = phone
         await save_data_async()
         
+        # Temporary memory saaf kar do
         context.user_data.pop('login_phone', None)
         context.user_data.pop('phone_code_hash', None)
-        if os.path.exists("temp_owner.session"): os.remove("temp_owner.session") # cleanup
+        context.user_data.pop('temp_session', None)
         
         await msg.edit_text("🎉 **LOGIN SUCCESSFUL!**\n\nBina 2FA ke Session Database me save ho gaya hai.")
     except SessionPasswordNeeded:
-        # Agar 2FA laga hai
+        # Agar 2FA laga hai, toh yahi pre-auth session next step me (password ke liye) kaam aayega
         ADMIN_WIZARD[uid] = {"step": "call_cmd_userbotpass"}
         await msg.edit_text("🔒 **2-Step Verification Detected!**\n\nIs account me 2FA on hai. Kripya apna **2FA Password** type karein:")
     except Exception as e:
@@ -99,21 +107,27 @@ async def cmd_userbotpass(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     password = update.message.text
     phone = context.user_data.get('login_phone')
+    temp_session = context.user_data.get('temp_session')
+    
+    if not phone or not temp_session:
+        return await update.message.reply_text("❌ Session expire ho gaya. Kripya wapas login par click karein.")
     
     msg = await update.message.reply_text("⏳ Password check kar raha hu...")
-    client = Client("temp_owner", api_id=API_ID, api_hash=API_HASH)
+    
+    client = Client("temp_login", api_id=API_ID, api_hash=API_HASH, session_string=temp_session, in_memory=True)
     await client.connect()
     
     try:
         await client.check_password(password)
         
+        # Final logged in session save karo
         session_string = await client.export_session_string()
         DB["USERBOT_SESSION"] = session_string
         DB["USERBOT_PHONE"] = phone
         await save_data_async()
         
         context.user_data.pop('login_phone', None)
-        if os.path.exists("temp_owner.session"): os.remove("temp_owner.session") # cleanup
+        context.user_data.pop('temp_session', None)
         
         await msg.edit_text("🎉 **LOGIN SUCCESSFUL!**\n\n2FA Password verified. Session save ho gaya hai.")
     except Exception as e:
