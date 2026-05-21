@@ -54,6 +54,46 @@ async def cmd_del_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.error(f"Delete failed: {e}")
 
+async def cmd_emptybatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id) or not context.args: return
+    
+    try: cid = int(context.args[0])
+    except ValueError: return await update.effective_message.reply_text("❌ Error: Valid Batch ID bhejein.")
+    
+    if not SESSION_STRING or not API_ID: 
+        return await update.effective_message.reply_text("❌ **Userbot Config Missing!** (SESSION_STRING zaroori hai)")
+        
+    msg = await update.effective_message.reply_text(f"⏳ **Emptying Batch `{cid}`...**\nUserbot start ho raha hai. Isme thoda time lag sakta hai, please wait.")
+    userbot = Client("empty_bot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING, in_memory=True)
+    
+    try:
+        await userbot.start()
+        removed_count = 0
+        
+        async for member in userbot.get_chat_members(cid):
+            uid = member.user.id
+            # Admin, bot aur Owner ko nahi nikalega
+            if uid != OWNER_ID and not member.user.is_bot and not is_admin(uid):
+                try:
+                    # Ban karke turant Unban karega (Kick) taaki Removed Users list me na jaye
+                    await context.bot.ban_chat_member(cid, uid)
+                    await context.bot.unban_chat_member(cid, uid)
+                    removed_count += 1
+                    
+                    # Database se bhi is batch ka data hata dega
+                    if uid in DB["USER_DATA"] and "demos" in DB["USER_DATA"][uid]:
+                        if str(cid) in DB["USER_DATA"][uid]["demos"]:
+                            del DB["USER_DATA"][uid]["demos"][str(cid)]
+                            
+                    await asyncio.sleep(1.5) # Flood restriction se bachne ke liye delay
+                except Exception: pass
+        
+        await save_data_async()
+        await userbot.stop()
+        await msg.edit_text(f"✅ **Batch `{cid}` Pura Khali Ho Gaya!**\n\nTotal `{removed_count}` users ko remove kiya aur Removed List/DB se clean kar diya.", parse_mode=ParseMode.MARKDOWN)
+    except Exception as e:
+        await msg.edit_text(f"❌ Error: `{e}`")
+
 async def cmd_del_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID: return
     try:
@@ -398,7 +438,8 @@ async def wizard_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cmd_name = state["step"].replace("call_cmd_", "")
         context.args = update.message.text.split()
         try:
-            cmds = {"addadmin": cmd_add_admin, "deladmin": cmd_del_admin, "ban": cmd_ban, "unban": cmd_unban, "kick": cmd_kick_user, "find": cmd_find_user, "resetuser": cmd_reset_user, "demo": cmd_approve_demo, "perm": cmd_approve_perm, "extend": cmd_extend_demo, "settestbot": cmd_set_testbot, "setwelcome": cmd_set_welcome, "delbatch": cmd_delbatch, "addcat": cmd_addcat, "setcat": cmd_setcategory}
+            # Yahan 'emptybatch': cmd_emptybatch add karna hai
+cmds = {"addadmin": cmd_add_admin, "deladmin": cmd_del_admin, "ban": cmd_ban, "unban": cmd_unban, "kick": cmd_kick_user, "find": cmd_find_user, "resetuser": cmd_reset_user, "demo": cmd_approve_demo, "perm": cmd_approve_perm, "extend": cmd_extend_demo, "settestbot": cmd_set_testbot, "setwelcome": cmd_set_welcome, "delbatch": cmd_delbatch, "addcat": cmd_addcat, "setcat": cmd_setcategory, "emptybatch": cmd_emptybatch}
             if cmd_name in cmds: await cmds[cmd_name](update, context)
         except Exception: pass
         if uid in ADMIN_WIZARD: del ADMIN_WIZARD[uid]
@@ -474,7 +515,7 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb = [
             [InlineKeyboardButton("➕ Add Batch", callback_data="act_addbatch"), InlineKeyboardButton("🗑️ Delete Batch", callback_data="input_delbatch")], 
             [InlineKeyboardButton("📁 Add Category", callback_data="input_addcat"), InlineKeyboardButton("🗑️ Delete Category", callback_data="act_delcat")], 
-            [InlineKeyboardButton("📂 Set Batch Category", callback_data="input_setcat")], # 👈 YE RAHA NAYA BUTTON
+            [InlineKeyboardButton("📂 Set Batch Category", callback_data="input_setcat"), InlineKeyboardButton("🧹 Empty Batch", callback_data="input_emptybatch")], # 👈 Naya Button Add Kiya
             [InlineKeyboardButton("📊 Batch Stats", callback_data="act_batchstats")], 
             [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]
         ]
@@ -509,7 +550,8 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data.startswith("input_"):
         cmd_name = data.split("_")[1]; ADMIN_WIZARD[uid] = {"step": f"call_cmd_{cmd_name}"}
-        prompts = {"addadmin": "Send User ID to make Admin:", "deladmin": "Send User ID to remove from Admin:", "ban": "Send User ID to Ban:", "unban": "Send User ID to Unban:", "kick": "Send User ID and Batch ID\nFormat: `uid bid`", "find": "Send Username to find:", "resetuser": "Send User ID to reset:", "demo": "Send Link and Time:\nFormat: `link 10h`", "perm": "Send Link to approve:", "extend": "Send User ID, Batch ID, Hours:\nFormat: `uid bid 24`", "settestbot": "Send new Test Bot link:", "setwelcome": "Send Batch ID and Welcome Msg:\nFormat: `bid message`", "delbatch": "Send Type and ID:\nFormat: `free 123` or `paid 123`", "addcat": "Send Name for new Category:", "setcat": "Send Batch ID(s) (comma ya space lagakar):\nFormat: `-100x, -100y, -100z`"}
+        prompts = {"addadmin": "Send User ID to make Admin:", "deladmin": "Send User ID to remove from Admin:", "ban": "Send User ID to Ban:", "unban": "Send User ID to Unban:", "kick": "Send User ID and Batch ID\nFormat: `uid bid`", "find": "Send Username to find:", "resetuser": "Send User ID to reset:", "demo": "Send Link and Time:\nFormat: `link 10h`", "perm": "Send Link to approve:", "extend": "Send User ID, Batch ID, Hours:\nFormat: `uid bid 24`", "settestbot": "Send new Test Bot link:", "setwelcome": "Send Batch ID and Welcome Msg:\nFormat: `bid message`", "delbatch": "Send Type and ID:\nFormat: `free 123` or `paid 123`", "addcat": "Send Name for new Category:", "setcat": "Send Batch ID(s) (comma ya space lagakar):\nFormat: `-100x, -100y`", 
+        "emptybatch": "⚠️ **DHYAN DEIN!**\nSend Batch ID jisko poora khali (empty) karna hai:\nFormat: `-100123456789`"} # 👈 Ye add hua
         await q.edit_message_text(f"⚡ **INPUT REQUIRED FOR: {cmd_name.upper()}**\n\n{prompts.get(cmd_name, 'Send input:')}", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel Input", callback_data="dash_home")]]), parse_mode=ParseMode.MARKDOWN)
         
     elif data == "accept_tnc": DB.setdefault("USER_DATA", {}).setdefault(uid, {})["tnc_accepted"] = True; await save_data_async(); await show_user_menu(update)
