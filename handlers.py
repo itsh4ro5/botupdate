@@ -34,17 +34,21 @@ async def cmd_userbotphone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if uid != OWNER_ID: return
     
+    # 🛑 YAHAN CHECK KARENGE KI API_ID SAHI HAI YA NAHI
+    if not API_ID or API_ID == 0:
+        return await update.message.reply_text("❌ **API_ID Missing!**\nAapne Cloud (Koyeb/Render) me API_ID set nahi kiya hai. Kripya my.telegram.org se valid API_ID aur API_HASH daalein.")
+        
     phone = update.message.text.replace(" ", "")
     msg = await update.message.reply_text("⏳ OTP request bhej raha hu, kripya wait karein...")
     
-    # Ab hum file nahi banayenge, memory use karenge
+    # ✅ Naya Fresh In-Memory Client
     client = Client("temp_login", api_id=API_ID, api_hash=API_HASH, in_memory=True)
     await client.connect()
     
     try:
         sent_code = await client.send_code(phone)
         
-        # Pre-auth session ko memory me save karenge taaki device change na ho
+        # Auth key generate hone ke baad memory session save karna
         temp_session = await client.export_session_string()
         context.user_data['temp_session'] = temp_session
         context.user_data['login_phone'] = phone
@@ -72,27 +76,24 @@ async def cmd_userbototp(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     msg = await update.message.reply_text("⏳ OTP Verify kar raha hu...")
     
-    # Purane pre-auth session se connect karenge taaki Telegram ko same device lage
-    client = Client("temp_login", api_id=API_ID, api_hash=API_HASH, session_string=temp_session, in_memory=True)
+    # ✅ FIX: Pyrogram v2 me string session ko sidha 'name' ki jagah pass karte hain
+    client = Client(temp_session, api_id=API_ID, api_hash=API_HASH)
     await client.connect()
     
     try:
         await client.sign_in(phone, phone_code_hash, otp)
         
-        # Agar 2FA nahi hai, seedha authorized session database me save karo
         session_string = await client.export_session_string()
         DB["USERBOT_SESSION"] = session_string
         DB["USERBOT_PHONE"] = phone
         await save_data_async()
         
-        # Temporary memory saaf kar do
         context.user_data.pop('login_phone', None)
         context.user_data.pop('phone_code_hash', None)
         context.user_data.pop('temp_session', None)
         
         await msg.edit_text("🎉 **LOGIN SUCCESSFUL!**\n\nBina 2FA ke Session Database me save ho gaya hai.")
     except SessionPasswordNeeded:
-        # Agar 2FA laga hai, toh yahi pre-auth session next step me (password ke liye) kaam aayega
         ADMIN_WIZARD[uid] = {"step": "call_cmd_userbotpass"}
         await msg.edit_text("🔒 **2-Step Verification Detected!**\n\nIs account me 2FA on hai. Kripya apna **2FA Password** type karein:")
     except Exception as e:
@@ -114,13 +115,13 @@ async def cmd_userbotpass(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     msg = await update.message.reply_text("⏳ Password check kar raha hu...")
     
-    client = Client("temp_login", api_id=API_ID, api_hash=API_HASH, session_string=temp_session, in_memory=True)
+    # ✅ FIX: Yahan bhi same session string ko pass karna hai
+    client = Client(temp_session, api_id=API_ID, api_hash=API_HASH)
     await client.connect()
     
     try:
         await client.check_password(password)
         
-        # Final logged in session save karo
         session_string = await client.export_session_string()
         DB["USERBOT_SESSION"] = session_string
         DB["USERBOT_PHONE"] = phone
@@ -134,7 +135,7 @@ async def cmd_userbotpass(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text(f"❌ Password Error: `{e}`")
     finally:
         await client.disconnect()
-
+        
 async def cmd_del_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin command to delete the replied-to message."""
     if not is_admin(update.effective_user.id) or not update.message or not update.message.reply_to_message: 
