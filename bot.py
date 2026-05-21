@@ -30,7 +30,7 @@ def main():
     
     # --- SARE COMMANDS WAPAS REGISTER KIYE GAYE HAIN ---
     commands = [
-        ("start", start), ("id", cmd_id), ("del", cmd_del_msg),
+        ("start", cmd_start), ("id", cmd_id), ("del", cmd_del_msg),
         ("addadmin", cmd_add_admin), ("deladmin", cmd_del_admin), ("backup", cmd_backup),
         ("allusers", cmd_all_users), ("ban", cmd_ban), ("unban", cmd_unban),
         ("resetuser", cmd_reset_user), ("find", cmd_find_user), ("extend", cmd_extend_demo),
