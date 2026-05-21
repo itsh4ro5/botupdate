@@ -155,6 +155,15 @@ async def cmd_addcat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if new_cat not in categories: DB["CATEGORIES"].append(new_cat); await save_data_async()
     await update.effective_message.reply_text(f"✅ Added Category: {new_cat}")
 
+async def cmd_setcategory(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id) or not context.args: return
+    try:
+        cid = int(context.args[0])
+        kb = [[InlineKeyboardButton(c, callback_data=f"setexistingcat_{cid}_{i}")] for i, c in enumerate(DB.get("CATEGORIES", DEFAULT_CATEGORIES))]
+        await update.effective_message.reply_text(f"Nayi category select karein for `{cid}`:", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+    except Exception:
+        await update.effective_message.reply_text("❌ Error: Valid Batch ID bhejein.")
+
 async def cmd_delcat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     kb = [[InlineKeyboardButton(f"🗑 Delete: {c}", callback_data=f"delcat_{i}")] for i, c in enumerate(DB.get("CATEGORIES", DEFAULT_CATEGORIES)) if c != "Other Batches"]
@@ -460,7 +469,13 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text("🗄️ **Database Tools**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
     elif data in ["dash_batches", "adash_batches"]:
-        kb = [[InlineKeyboardButton("➕ Add Batch", callback_data="act_addbatch"), InlineKeyboardButton("🗑️ Delete Batch", callback_data="input_delbatch")], [InlineKeyboardButton("📁 Add Category", callback_data="input_addcat"), InlineKeyboardButton("🗑️ Delete Category", callback_data="act_delcat")], [InlineKeyboardButton("📊 Batch Stats", callback_data="act_batchstats")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
+        kb = [
+            [InlineKeyboardButton("➕ Add Batch", callback_data="act_addbatch"), InlineKeyboardButton("🗑️ Delete Batch", callback_data="input_delbatch")], 
+            [InlineKeyboardButton("📁 Add Category", callback_data="input_addcat"), InlineKeyboardButton("🗑️ Delete Category", callback_data="act_delcat")], 
+            [InlineKeyboardButton("📂 Set Batch Category", callback_data="input_setcat")], # 👈 YE RAHA NAYA BUTTON
+            [InlineKeyboardButton("📊 Batch Stats", callback_data="act_batchstats")], 
+            [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]
+        ]
         await q.edit_message_text("📦 **Batches Management**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
     elif data == "dash_staff":
@@ -536,8 +551,14 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cat_idx = int(data.split("_")[1]); kb = [[InlineKeyboardButton("🆓 Free Batches", callback_data=f"listcat_{cat_idx}_free_0"), InlineKeyboardButton("💎 Paid Batches", callback_data=f"listcat_{cat_idx}_paid_0")], [InlineKeyboardButton("🔙 Back to Categories", callback_data="all_batches_0")]]
         await q.edit_message_text(f"📂 **Category: {DB.get('CATEGORIES', DEFAULT_CATEGORIES)[cat_idx]}**\n\nAapko kis type ke batch chahiye?", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
     elif data.startswith("setexistingcat_"):
-        cid, cat_idx = parts = data.split("_")[1:3]
-        DB.setdefault("BATCH_CATEGORIES", {})[str(cid)] = DB.get("CATEGORIES", DEFAULT_CATEGORIES)[int(cat_idx)]; await save_data_async(); await q.edit_message_text(f"✅ Set to {DB.get('CATEGORIES', DEFAULT_CATEGORIES)[int(cat_idx)]}")
+        parts = data.split("_")
+        cid, cat_idx = parts[1], int(parts[2])
+        selected_cat = DB.get("CATEGORIES", DEFAULT_CATEGORIES)[cat_idx]
+        
+        # Nayi category assign karna
+        DB.setdefault("BATCH_CATEGORIES", {})[str(cid)] = selected_cat
+        await save_data_async()
+        await q.edit_message_text(f"✅ Batch `{cid}` ab **{selected_cat}** category me set ho gaya hai!", parse_mode=ParseMode.MARKDOWN)
 
     elif data.startswith("listcat_"):
         if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False): return await show_tnc_menu(update, context)
