@@ -552,23 +552,25 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("showcat_"):
         cat_idx = int(data.split("_")[1]); kb = [[InlineKeyboardButton("🆓 Free Batches", callback_data=f"listcat_{cat_idx}_free_0"), InlineKeyboardButton("💎 Paid Batches", callback_data=f"listcat_{cat_idx}_paid_0")], [InlineKeyboardButton("🔙 Back to Categories", callback_data="all_batches_0")]]
         await q.edit_message_text(f"📂 **Category: {DB.get('CATEGORIES', DEFAULT_CATEGORIES)[cat_idx]}**\n\nAapko kis type ke batch chahiye?", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-    elif data.startswith("setexistingcat_"):
+    elif data.startswith("setextcat_"):
+        await q.answer("Processing, please wait...") # 👈 Ye loading spinner ko turant rok dega
         cat_idx = int(data.split("_")[1])
         selected_cat = DB.get("CATEGORIES", DEFAULT_CATEGORIES)[cat_idx]
         
-        # Purane step me save ki gayi IDs nikalna
+        # Temporary memory se IDs nikalna
         ids = context.user_data.get('setcat_ids', [])
-        if not ids: return await q.answer("❌ Error: Session expired. Wapas try karein.", show_alert=True)
+        if not ids: 
+            await q.edit_message_text("❌ Session expired ya IDs nahi mili. Kripya wapas /start karke try karein.")
+            return
         
-        # Ek sath sabhi batches me nayi category assign karna loop chala kar
+        # Loop chala kar sabhi channels ki category update karna
         for cid in ids:
             DB.setdefault("BATCH_CATEGORIES", {})[str(cid)] = selected_cat
             
         await save_data_async()
-        context.user_data.pop('setcat_ids', None) # Data clean kar do
+        context.user_data.pop('setcat_ids', None) # Memory clear karna
         
-        await q.edit_message_text(f"✅ **Success!**\nTotal `{len(ids)}` batches ko ek sath **{selected_cat}** category me shift kar diya gaya hai!", parse_mode=ParseMode.MARKDOWN)
-
+        await q.edit_message_text(f"✅ **Success!**\n\nTotal `{len(ids)}` batches ko successfully **{selected_cat}** category me shift kar diya gaya hai!", parse_mode=ParseMode.MARKDOWN)
     elif data.startswith("listcat_"):
         if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False): return await show_tnc_menu(update, context)
         parts = data.split("_"); cat_idx, b_type, page = int(parts[1]), parts[2], int(parts[3])
