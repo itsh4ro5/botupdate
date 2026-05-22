@@ -56,6 +56,13 @@ if MONGO_URL:
 # --- DATABASE FUNCTIONS ---
 def load_data():
     global DB
+    # ✅ FIX: Yahan sari nayi keys add kar di gayi hain, jisme USERBOT_SESSION aur USERBOT_PHONE bhi shamil hain
+    keys_to_load = [
+        "LINK_MAP", "NEW_USERS_ALLOWED", "FREE_LOCKED", "PAID_LOCKED", "TEST_BOT_LOCKED", 
+        "SCHEDULED_DELETES", "TEST_BOT_LINK", "MAINTENANCE_MODE", "CATEGORIES", "BATCH_CATEGORIES", 
+        "USERBOT_SESSION", "USERBOT_PHONE"
+    ]
+    
     if MONGO_URL and mongo_collection is not None:
         try:
             data = mongo_collection.find_one({"_id": "main_settings"})
@@ -64,8 +71,7 @@ def load_data():
                 if "ADMIN_IDS" in loaded: DB["ADMIN_IDS"] = [int(x) for x in loaded["ADMIN_IDS"] if str(x).isdigit()]
                 if "BLOCKED_USERS" in loaded: DB["BLOCKED_USERS"] = loaded["BLOCKED_USERS"]
                 
-                # ✅ FIX: Is list me "CATEGORIES" aur "BATCH_CATEGORIES" add kiya hai taaki MongoDB se load ho sake
-                for k in ["LINK_MAP", "NEW_USERS_ALLOWED", "FREE_LOCKED", "PAID_LOCKED", "TEST_BOT_LOCKED", "SCHEDULED_DELETES", "TEST_BOT_LINK", "MAINTENANCE_MODE", "CATEGORIES", "BATCH_CATEGORIES"]:
+                for k in keys_to_load:
                     if k in loaded: DB[k] = loaded[k]
                     
                 for k in ["CUSTOM_WELCOMES", "FREE_CHANNELS", "PAID_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
@@ -83,8 +89,7 @@ def load_data():
             if "ADMIN_IDS" in loaded: DB["ADMIN_IDS"] = [int(x) for x in loaded["ADMIN_IDS"] if str(x).isdigit()]
             if "BLOCKED_USERS" in loaded: DB["BLOCKED_USERS"] = loaded["BLOCKED_USERS"]
             
-            # ✅ FIX: Local JSON file se bhi load karne ke liye yahan dono keys add ki hain
-            for k in ["LINK_MAP", "NEW_USERS_ALLOWED", "FREE_LOCKED", "PAID_LOCKED", "TEST_BOT_LOCKED", "SCHEDULED_DELETES", "TEST_BOT_LINK", "MAINTENANCE_MODE", "CATEGORIES", "BATCH_CATEGORIES"]:
+            for k in keys_to_load:
                 if k in loaded: DB[k] = loaded[k]
                 
             for k in ["CUSTOM_WELCOMES", "FREE_CHANNELS", "PAID_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
@@ -94,6 +99,7 @@ def load_data():
             for cid, name in DB["PAID_CHANNELS"].items(): DB["ALL_CHATS"][cid] = name
     except Exception as e: logger.error(f"Local Load Error: {e}")
 
+
 def save_data_sync():
     try:
         to_save = {
@@ -101,9 +107,15 @@ def save_data_sync():
             "NEW_USERS_ALLOWED": DB.get("NEW_USERS_ALLOWED", True), "FREE_LOCKED": DB.get("FREE_LOCKED", False),
             "PAID_LOCKED": DB.get("PAID_LOCKED", False), "TEST_BOT_LOCKED": DB.get("TEST_BOT_LOCKED", False),
             "LINK_MAP": DB["LINK_MAP"], "SCHEDULED_DELETES": DB.get("SCHEDULED_DELETES", []),
-            "TEST_BOT_LINK": DB.get("TEST_BOT_LINK", ""), "CATEGORIES": DB.get("CATEGORIES", DEFAULT_CATEGORIES),
-            "MAINTENANCE_MODE": DB.get("MAINTENANCE_MODE", False),
+            "TEST_BOT_LINK": DB.get("TEST_BOT_LINK", ""), 
+            "CATEGORIES": DB.get("CATEGORIES", DEFAULT_CATEGORIES),
             "BATCH_CATEGORIES": {str(k): v for k, v in DB.get("BATCH_CATEGORIES", {}).items()},
+            "MAINTENANCE_MODE": DB.get("MAINTENANCE_MODE", False),
+            
+            # ✅ FIX: Yahan Database aur JSON file me Session ko permanent save karne ke liye commands lagaye gaye hain
+            "USERBOT_SESSION": DB.get("USERBOT_SESSION"), 
+            "USERBOT_PHONE": DB.get("USERBOT_PHONE"),
+            
             "CUSTOM_WELCOMES": {str(k): v for k, v in DB["CUSTOM_WELCOMES"].items()},
             "FREE_CHANNELS": {str(k): v for k, v in DB["FREE_CHANNELS"].items()},
             "PAID_CHANNELS": {str(k): v for k, v in DB["PAID_CHANNELS"].items()},
