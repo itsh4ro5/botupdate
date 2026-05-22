@@ -63,8 +63,11 @@ def load_data():
                 loaded = data["data"]
                 if "ADMIN_IDS" in loaded: DB["ADMIN_IDS"] = [int(x) for x in loaded["ADMIN_IDS"] if str(x).isdigit()]
                 if "BLOCKED_USERS" in loaded: DB["BLOCKED_USERS"] = loaded["BLOCKED_USERS"]
-                for k in ["LINK_MAP", "NEW_USERS_ALLOWED", "FREE_LOCKED", "PAID_LOCKED", "TEST_BOT_LOCKED", "SCHEDULED_DELETES", "TEST_BOT_LINK", "MAINTENANCE_MODE"]:
+                
+                # ✅ FIX: Is list me "CATEGORIES" aur "BATCH_CATEGORIES" add kiya hai taaki MongoDB se load ho sake
+                for k in ["LINK_MAP", "NEW_USERS_ALLOWED", "FREE_LOCKED", "PAID_LOCKED", "TEST_BOT_LOCKED", "SCHEDULED_DELETES", "TEST_BOT_LINK", "MAINTENANCE_MODE", "CATEGORIES", "BATCH_CATEGORIES"]:
                     if k in loaded: DB[k] = loaded[k]
+                    
                 for k in ["CUSTOM_WELCOMES", "FREE_CHANNELS", "PAID_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
                     if k in loaded: DB[k] = {int(i): v for i, v in loaded[k].items()}
                 if OWNER_ID not in DB["ADMIN_IDS"]: DB["ADMIN_IDS"].append(OWNER_ID)
@@ -79,8 +82,11 @@ def load_data():
             loaded = json.load(f)
             if "ADMIN_IDS" in loaded: DB["ADMIN_IDS"] = [int(x) for x in loaded["ADMIN_IDS"] if str(x).isdigit()]
             if "BLOCKED_USERS" in loaded: DB["BLOCKED_USERS"] = loaded["BLOCKED_USERS"]
-            for k in ["LINK_MAP", "NEW_USERS_ALLOWED", "FREE_LOCKED", "PAID_LOCKED", "TEST_BOT_LOCKED", "SCHEDULED_DELETES", "TEST_BOT_LINK", "MAINTENANCE_MODE"]:
+            
+            # ✅ FIX: Local JSON file se bhi load karne ke liye yahan dono keys add ki hain
+            for k in ["LINK_MAP", "NEW_USERS_ALLOWED", "FREE_LOCKED", "PAID_LOCKED", "TEST_BOT_LOCKED", "SCHEDULED_DELETES", "TEST_BOT_LINK", "MAINTENANCE_MODE", "CATEGORIES", "BATCH_CATEGORIES"]:
                 if k in loaded: DB[k] = loaded[k]
+                
             for k in ["CUSTOM_WELCOMES", "FREE_CHANNELS", "PAID_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
                 if k in loaded: DB[k] = {int(i): v for i, v in loaded[k].items()}
             if OWNER_ID not in DB["ADMIN_IDS"]: DB["ADMIN_IDS"].append(OWNER_ID)
