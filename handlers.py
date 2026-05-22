@@ -171,29 +171,37 @@ async def cmd_emptybatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         await userbot.start()
-        removed_count = 0
         
+        # 👇 NAYA LOGIC: Peer Invalid error se bachne ke liye pehle chats ko sync karna
+        try:
+            await userbot.get_chat(cid)
+        except Exception:
+            await msg.edit_text("🔄 **Userbot Syncing...**\nChat list ko memory me load kar raha hu taaki ID mil sake. Isme 5-10 seconds lag sakte hain...")
+            async for dialog in userbot.get_dialogs():
+                if dialog.chat.id == cid:
+                    break
+            await msg.edit_text(f"⏳ **Emptying Batch `{cid}`...**\nSync complete! Ab members remove kar raha hu...")
+        # 👆 END OF NAYA LOGIC
+
+        removed_count = 0
         async for member in userbot.get_chat_members(cid):
             uid = member.user.id
-            # Admin, bot aur Owner ko nahi nikalega
             if uid != OWNER_ID and not member.user.is_bot and not is_admin(uid):
                 try:
-                    # Ban karke turant Unban karega (Kick) taaki Removed Users list me na jaye
                     await context.bot.ban_chat_member(cid, uid)
                     await context.bot.unban_chat_member(cid, uid)
                     removed_count += 1
                     
-                    # Database se bhi is batch ka data hata dega
                     if uid in DB["USER_DATA"] and "demos" in DB["USER_DATA"][uid]:
                         if str(cid) in DB["USER_DATA"][uid]["demos"]:
                             del DB["USER_DATA"][uid]["demos"][str(cid)]
                             
-                    await asyncio.sleep(1.5) # Flood restriction se bachne ke liye delay
+                    await asyncio.sleep(1.5)
                 except Exception: pass
         
         await save_data_async()
         await userbot.stop()
-        await msg.edit_text(f"✅ **Batch `{cid}` Pura Khali Ho Gaya!**\n\nTotal `{removed_count}` users ko remove kiya aur Removed List/DB se clean kar diya.", parse_mode=ParseMode.MARKDOWN)
+        await msg.edit_text(f"✅ **Batch `{cid}` Pura Khali Ho Gaya!**\n\nTotal `{removed_count}` users ko remove kiya aur DB se clean kar diya.", parse_mode=ParseMode.MARKDOWN)
     except Exception as e:
         await msg.edit_text(f"❌ Error: `{e}`")
 
@@ -506,14 +514,25 @@ async def cmd_locktestbot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID: return
+    
     session_string = DB.get("USERBOT_SESSION")
     if not session_string or not API_ID: return await update.effective_message.reply_text("❌ **Userbot Not Logged In!** Dashboard se login karein.")
+    
     msg = await update.effective_message.reply_text("⏳ **Super Exit /clear Start...**")
     userbot = Client("clear_bot", api_id=API_ID, api_hash=API_HASH, session_string=session_string, in_memory=True)
+    
     try:
         await userbot.start()
+        
+        # 👇 NAYA LOGIC YAHAN BHI: Sync All Chats
+        await msg.edit_text("🔄 **Userbot Syncing...**\nSaare chats ko memory me load kar raha hu (Peer ID Error bachane ke liye)...")
+        async for _ in userbot.get_dialogs():
+            pass # Saare chats memory me sync kar raha hai
+        await msg.edit_text("⏳ **Super Exit /clear Start...**\nSync complete! Ab removing process chalu hai...")
+
         all_channels = list(DB["FREE_CHANNELS"].keys()) + list(DB["PAID_CHANNELS"].keys())
         removed_count = checked_users = safe_users = 0
+        
         for bid in all_channels:
             try:
                 bname = DB["ALL_CHATS"].get(int(bid), f"Batch {bid}")
@@ -528,8 +547,11 @@ async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             except Exception: pass
                     await asyncio.sleep(0.1)
             except Exception: pass
-        await userbot.stop(); await msg.edit_text(f"✅ **/clear Process Pura Hua!**\n\nChecked: `{checked_users}`\nSafe: `{safe_users}`\nRemoved: `{removed_count}`", parse_mode=ParseMode.MARKDOWN)
-    except Exception as e: await msg.edit_text(f"❌ Error: `{e}`")
+            
+        await userbot.stop()
+        await msg.edit_text(f"✅ **/clear Process Pura Hua!**\n\nChecked: `{checked_users}`\nSafe: `{safe_users}`\nRemoved: `{removed_count}`", parse_mode=ParseMode.MARKDOWN)
+    except Exception as e: 
+        await msg.edit_text(f"❌ Error: `{e}`")
 
 async def cmd_maintenance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
