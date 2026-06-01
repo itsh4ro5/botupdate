@@ -668,7 +668,9 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     PROCESSING_USERS.add(uid)
     try:
-        if data.startswith("wiz_"): return await wizard_callback(update, context)
+        # 👇 Yahan bas "or data.startswith('wcat_')" add kiya gaya hai 👇
+        if data.startswith("wiz_") or data.startswith("wcat_"): return await wizard_callback(update, context)
+        
         if data.startswith("bc_"): return await broadcast_callback(update, context)
         
         if data == "dash_home":
