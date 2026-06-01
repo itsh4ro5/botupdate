@@ -754,30 +754,33 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
             await q.edit_message_text("🔒 **Security & Access Control**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
-       elif data.startswith("toggle_"):
+        elif data.startswith("toggle_"):
             key = data.split("_")[1].upper()
-            if key == "LOCKDOWN": DB["NEW_USERS_ALLOWED"] = not DB.get("NEW_USERS_ALLOWED", True)
+            if key == "LOCKDOWN": 
+                DB["NEW_USERS_ALLOWED"] = not DB.get("NEW_USERS_ALLOWED", True)
             elif key == "MAINTENANCE": 
                 is_maint = not DB.get("MAINTENANCE_MODE", False)
                 DB["MAINTENANCE_MODE"] = is_maint
-                if not is_maint: # Agar Maintenance OFF hua hai
+                if not is_maint:
                     affected_users = DB.get("MAINTENANCE_AFFECTED_USERS", [])
-                    DB["MAINTENANCE_AFFECTED_USERS"] = [] # List ko wapas khali kar diya
-                    
-                    # Background me message bhejne ka function
+                    DB["MAINTENANCE_AFFECTED_USERS"] = []
                     async def notify_users():
                         for auid in affected_users:
                             try:
                                 await context.bot.send_message(auid, "✅ **Maintenance is Over!**\nBot ab normally kaam kar raha hai. Aap apna pending kaam ya link generation ab wapas try kar sakte hain.", parse_mode=ParseMode.MARKDOWN)
                                 await asyncio.sleep(0.05)
                             except: pass
-                    asyncio.create_task(notify_users()) # Background Task Start
+                    asyncio.create_task(notify_users())
+            elif key == "FREE": 
+                DB["FREE_LOCKED"] = not DB.get("FREE_LOCKED", False)
+            elif key == "PAID": 
+                DB["PAID_LOCKED"] = not DB.get("PAID_LOCKED", False)
+            elif key == "TESTBOT": 
+                DB["TEST_BOT_LOCKED"] = not DB.get("TEST_BOT_LOCKED", False)
             
-            elif key == "FREE": DB["FREE_LOCKED"] = not DB.get("FREE_LOCKED", False)
-            elif key == "PAID": DB["PAID_LOCKED"] = not DB.get("PAID_LOCKED", False)
-            elif key == "TESTBOT": DB["TEST_BOT_LOCKED"] = not DB.get("TEST_BOT_LOCKED", False)
             await save_data_async()
             
+            # Dashboard Menu UI wapas refresh karne ke liye
             kb = [
                 [InlineKeyboardButton(f"System Lockdown: {'🔴 ON' if not DB.get('NEW_USERS_ALLOWED', True) else '🟢 OFF'}", callback_data="toggle_lockdown")],
                 [InlineKeyboardButton(f"Free Batches: {'🔴 LOCKED' if DB.get('FREE_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_free"), InlineKeyboardButton(f"Paid Batches: {'🔴 LOCKED' if DB.get('PAID_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_paid")],
