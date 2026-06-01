@@ -60,7 +60,7 @@ def load_data():
     keys_to_load = [
         "LINK_MAP", "NEW_USERS_ALLOWED", "FREE_LOCKED", "PAID_LOCKED", "TEST_BOT_LOCKED", 
         "SCHEDULED_DELETES", "TEST_BOT_LINK", "MAINTENANCE_MODE", "CATEGORIES", "BATCH_CATEGORIES", 
-        "USERBOT_SESSION", "USERBOT_PHONE"
+        "USERBOT_SESSION", "USERBOT_PHONE", "MAINTENANCE_AFFECTED_USERS" # 👈 YE ADD HUA HAI
     ]
     
     if MONGO_URL and mongo_collection is not None:
@@ -111,6 +111,7 @@ def save_data_sync():
             "CATEGORIES": DB.get("CATEGORIES", DEFAULT_CATEGORIES),
             "BATCH_CATEGORIES": {str(k): v for k, v in DB.get("BATCH_CATEGORIES", {}).items()},
             "MAINTENANCE_MODE": DB.get("MAINTENANCE_MODE", False),
+            "MAINTENANCE_AFFECTED_USERS": DB.get("MAINTENANCE_AFFECTED_USERS", []), # 👈 YE ADD HUA HAI
             
             # ✅ FIX: Yahan Database aur JSON file me Session ko permanent save karne ke liye commands lagaye gaye hain
             "USERBOT_SESSION": DB.get("USERBOT_SESSION"), 
