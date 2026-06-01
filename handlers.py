@@ -410,7 +410,9 @@ async def cmd_approve_demo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args; link = None
     
     if hasattr(update, 'message') and update.message and update.message.reply_to_message:
-        m = re.search(r'(https?://t\.me/(?:\+|joinchat/)[a-zA-Z0-9_\-]+)', update.message.reply_to_message.text or "")
+        m = re.search(r'(https?://t\.me/(?:\+|joinchat/)[a-zA-Z0-9_\-]+)', update.message.reply_to_message.text or "")replied = update.message.reply_to_message
+        msg_text = replied.text or replied.caption or ""
+        m = re.search(r'(https?://t\.me/(?:\+|joinchat/)[a-zA-Z0-9_\-]+)', msg_text)
         if m: link = m.group(1)
         
     if not link and args and "t.me" in args[0]: link = args[0].strip()
@@ -443,8 +445,17 @@ async def cmd_approve_perm(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_delbatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id) or len(context.args) < 2: return
-    t, cid = context.args[0].lower(), int(context.args[1]); d = DB["FREE_CHANNELS"] if t == "free" else DB["PAID_CHANNELS"]
-    if cid in d: del d[cid]; await save_data_async(); await update.effective_message.reply_text("✅ Deleted")
+    t, cid = context.args[0].lower(), int(context.args[1])
+    d = DB["FREE_CHANNELS"] if t == "free" else DB["PAID_CHANNELS"]
+    
+    if cid in d: 
+        del d[cid]
+        # Pura clean up karein
+        if cid in DB["ALL_CHATS"]: del DB["ALL_CHATS"][cid]
+        if str(cid) in DB.get("BATCH_CATEGORIES", {}): del DB["BATCH_CATEGORIES"][str(cid)]
+        
+        await save_data_async()
+        await update.effective_message.reply_text("✅ Batch poori tarah database se Delete ho gaya.")
 
 async def cmd_addbatch_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
