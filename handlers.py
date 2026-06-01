@@ -696,8 +696,17 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if uid in DB["BLOCKED_USERS"]: return await q.answer("🚫 You are blocked by the admin.", show_alert=True)
     
     # Anti-Spam: State Lock Method (Bina popup ke loading spinner rok dega)
+    # Anti-Spam: State Lock Method (Bina popup ke loading spinner rok dega)
     if uid in PROCESSING_USERS: return await q.answer() 
     
+    # 👇 NAYA: Maintenance Check & Link Blocker 👇
+    if DB.get("MAINTENANCE_MODE", False) and not is_admin(uid):
+        if uid not in DB.setdefault("MAINTENANCE_AFFECTED_USERS", []):
+            DB["MAINTENANCE_AFFECTED_USERS"].append(uid)
+            await save_data_async()
+        return await q.answer("🛠️ Bot is under Maintenance!\nAbhi koi bhi link generate nahi hoga. Kaam khatam hote hi aapko auto-notify kar diya jayega.", show_alert=True)
+
+    # 👆 YAHAN TAK 👆
     PROCESSING_USERS.add(uid)
     try:
         # 👇 Yahan bas "or data.startswith('wcat_')" add kiya gaya hai 👇
@@ -720,10 +729,25 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
             await q.edit_message_text("🔒 **Security & Access Control**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
-        elif data.startswith("toggle_"):
+       elif data.startswith("toggle_"):
             key = data.split("_")[1].upper()
             if key == "LOCKDOWN": DB["NEW_USERS_ALLOWED"] = not DB.get("NEW_USERS_ALLOWED", True)
-            elif key == "MAINTENANCE": DB["MAINTENANCE_MODE"] = not DB.get("MAINTENANCE_MODE", False)
+            elif key == "MAINTENANCE": 
+                is_maint = not DB.get("MAINTENANCE_MODE", False)
+                DB["MAINTENANCE_MODE"] = is_maint
+                if not is_maint: # Agar Maintenance OFF hua hai
+                    affected_users = DB.get("MAINTENANCE_AFFECTED_USERS", [])
+                    DB["MAINTENANCE_AFFECTED_USERS"] = [] # List ko wapas khali kar diya
+                    
+                    # Background me message bhejne ka function
+                    async def notify_users():
+                        for auid in affected_users:
+                            try:
+                                await context.bot.send_message(auid, "✅ **Maintenance is Over!**\nBot ab normally kaam kar raha hai. Aap apna pending kaam ya link generation ab wapas try kar sakte hain.", parse_mode=ParseMode.MARKDOWN)
+                                await asyncio.sleep(0.05)
+                            except: pass
+                    asyncio.create_task(notify_users()) # Background Task Start
+            
             elif key == "FREE": DB["FREE_LOCKED"] = not DB.get("FREE_LOCKED", False)
             elif key == "PAID": DB["PAID_LOCKED"] = not DB.get("PAID_LOCKED", False)
             elif key == "TESTBOT": DB["TEST_BOT_LOCKED"] = not DB.get("TEST_BOT_LOCKED", False)
@@ -1041,6 +1065,13 @@ async def main_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         if await wizard_message(update, context): return
         if await handle_broadcast_flow(update, context): return
     if chat.type == ChatType.PRIVATE:
+        # 👇 NAYA MESSAGE MAINTENANCE LOGIC 👇
+        if DB.get("MAINTENANCE_MODE", False) and not is_admin(user.id): 
+            if user.id not in DB.setdefault("MAINTENANCE_AFFECTED_USERS", []):
+                DB["MAINTENANCE_AFFECTED_USERS"].append(user.id)
+                await save_data_async()
+            return await update.effective_message.reply_text("🛠️ **Under Maintenance.**\nBot abhi maintenance mode me hai. Kaam khatam hote hi aapko message ke dwara bata diya jayega.", parse_mode=ParseMode.MARKDOWN)
+        # 👆 YAHAN TAK 👆
         if DB.get("MAINTENANCE_MODE", False) and not is_admin(user.id): return await update.effective_message.reply_text("⚠️ **Under Maintenance.**")
         topic_id = await get_or_create_topic(user, context)
         if topic_id:
