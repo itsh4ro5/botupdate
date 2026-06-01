@@ -917,13 +917,11 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try: await q.edit_message_text("💎 **Premium Access:**\nClick below.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
             except Exception: pass
 
-        # 👇 Naya VERIFY logic 👇
+        # 👇 Naya VERIFY logic (Fixed) 👇
         elif data == "verify":
-            # Check karega ki sach me join kiya hai ya nahi
             if await check_membership(uid, context):
                 await q.answer("✅ Verification Successful!", show_alert=True)
-                # Purana warning message delete karke fresh Main Menu dikhayega
-                await q.message.delete()
+                # Yahan message delete nahi karna hai, bot apne aap us message ko T&C (Notice) me badal dega
                 await start(update, context)
             else:
                 await q.answer("❌ Abhi tak join nahi kiya hai. Kripya pehle channel join karein!", show_alert=True)
@@ -952,11 +950,23 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
 # --- START, MENUS & CORE EVENTS ---
 async def show_tnc_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    kb = [[InlineKeyboardButton("✅ I Accept", callback_data="accept_tnc")]]
-    txt = "📜 **WELCOME!**\n⚠️ Rules: Do not leave main channel. Do not block bot."
-    if update.callback_query: await update.callback_query.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-    else: await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-
+    kb = [[InlineKeyboardButton("✅ I Read & Accept", callback_data="accept_tnc")]]
+    txt = (
+        "🚨 **STRICT WARNING & TERMS OF SERVICE** 🚨\n\n"
+        "🇬🇧 **ENGLISH:**\n"
+        "If you leave the Main Channel or block this bot, your account will be **INSTANTLY BANNED** and removed from ALL joined groups and channels. You will lose permanent access. There is NO unban policy.\n\n"
+        "🇮🇳 **HINDI:**\n"
+        "Agar aapne Main Channel ko chhoda (leave kiya) ya is bot ko block kiya, toh aapka account **TURANT BAN** kar diya jayega. Aapko sabhi groups aur channels se hamesha ke liye nikal diya jayega. Aapka saara access hamesha ke liye khatam ho jayega aur dobara kabhi unban nahi kiya jayega.\n\n"
+        "⚠️ *Click 'I Read & Accept' only if you agree to these terms.*"
+    )
+    if update.callback_query: 
+        try:
+            await update.callback_query.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        except Exception:
+            await context.bot.send_message(update.effective_chat.id, txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+    else: 
+        await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        
 async def show_user_menu(update: Update):
     kb = [[InlineKeyboardButton("📚 My Batches", callback_data="my_batches_0"), InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0")], [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")], [InlineKeyboardButton("🆘 Support", url=f"tg://user?id={SUPPORT_GROUP_ID}")], [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")]]
     txt = "🌟 **Welcome to the Premium Hub!** 🌟\nYour centralized portal for exclusive communities.\n\n👇 *Select an option below:*"
