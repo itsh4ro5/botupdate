@@ -255,7 +255,10 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID: return
-    save_data_sync()
+    
+    # 👇 FIX: Ab ye True Async tarike se wait karega
+    await save_data_async() 
+    
     if os.path.exists(DATA_FILE): await update.effective_message.reply_document(document=open(DATA_FILE, "rb"), caption="DB Backup")
 
 async def cmd_all_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
