@@ -587,8 +587,30 @@ async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_maintenance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
-    DB["MAINTENANCE_MODE"] = not DB.get("MAINTENANCE_MODE", False); await save_data_async()
-    msg = await update.effective_message.reply_text("🛠️ **Maintenance Mode Enabled!**\nNormal users ka support message ab aana band ho gaya hai." if DB["MAINTENANCE_MODE"] else "✅ **Maintenance Mode Disabled!**\nBot ab normally kaam kar raha hai.", parse_mode=ParseMode.MARKDOWN)
+    
+    is_maint = not DB.get("MAINTENANCE_MODE", False)
+    DB["MAINTENANCE_MODE"] = is_maint
+    
+    if not is_maint: # Turned OFF
+        affected = DB.get("MAINTENANCE_AFFECTED_USERS", [])
+        DB["MAINTENANCE_AFFECTED_USERS"] = []
+        await save_data_async()
+        
+        msg = await update.effective_message.reply_text(f"✅ **Maintenance Mode Disabled!**\nBot ab normally kaam kar raha hai.\n🔔 Notifying `{len(affected)}` waiting users in background...", parse_mode=ParseMode.MARKDOWN)
+        
+        # Background Notification Task
+        async def notify_maint():
+            for uid in affected:
+                try:
+                    await context.bot.send_message(uid, "✅ **Maintenance is Over!**\nBot ab normally kaam kar raha hai. Aap apna pending kaam ya link generation ab wapas try kar sakte hain.", parse_mode=ParseMode.MARKDOWN)
+                    await asyncio.sleep(0.05)
+                except: pass
+        asyncio.create_task(notify_maint())
+        
+    else: # Turned ON
+        await save_data_async()
+        msg = await update.effective_message.reply_text("🛠️ **Maintenance Mode Enabled!**\nNormal users ka support message aur link generation ab band ho gaya hai.", parse_mode=ParseMode.MARKDOWN)
+        
     await schedule_delete(context, msg)
 
 
