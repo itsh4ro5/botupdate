@@ -41,31 +41,32 @@ SPAM_CACHE = {}
 data_lock = asyncio.Lock()
 mongo_client = mongo_collection = None
 
-# --- MONGODB SETUP ---
+# --- MONGODB SETUP (TRUE ASYNC) ---
 if MONGO_URL:
     try:
-        from pymongo import MongoClient
+        from motor.motor_asyncio import AsyncIOMotorClient
         import certifi
-        mongo_client = MongoClient(MONGO_URL, tlsCAFile=certifi.where())
+        # ✅ Motor ka Async Client lagaya gaya hai
+        mongo_client = AsyncIOMotorClient(MONGO_URL, tlsCAFile=certifi.where())
         mongo_db = mongo_client.get_database("telegram_bot_db")
         mongo_collection = mongo_db.get_collection("bot_settings")
-        logger.info("✅ Connected to MongoDB Atlas")
+        logger.info("✅ Connected to MongoDB Atlas (True Async via Motor 🚀)")
     except Exception as e:
         logger.error(f"❌ MongoDB Connection Failed: {e}"); MONGO_URL = None
 
-# --- DATABASE FUNCTIONS ---
-def load_data():
+# --- DATABASE FUNCTIONS (ASYNC OPTIMIZED) ---
+async def load_data_async():
     global DB
-    # ✅ FIX: Yahan sari nayi keys add kar di gayi hain, jisme USERBOT_SESSION aur USERBOT_PHONE bhi shamil hain
     keys_to_load = [
         "LINK_MAP", "NEW_USERS_ALLOWED", "FREE_LOCKED", "PAID_LOCKED", "TEST_BOT_LOCKED", 
         "SCHEDULED_DELETES", "TEST_BOT_LINK", "MAINTENANCE_MODE", "CATEGORIES", "BATCH_CATEGORIES", 
-        "USERBOT_SESSION", "USERBOT_PHONE", "MAINTENANCE_AFFECTED_USERS" # 👈 YE ADD HUA HAI
+        "USERBOT_SESSION", "USERBOT_PHONE", "MAINTENANCE_AFFECTED_USERS"
     ]
     
     if MONGO_URL and mongo_collection is not None:
         try:
-            data = mongo_collection.find_one({"_id": "main_settings"})
+            # ✅ True Async Read (Bina bot ko roke)
+            data = await mongo_collection.find_one({"_id": "main_settings"})
             if data and "data" in data:
                 loaded = data["data"]
                 if "ADMIN_IDS" in loaded: DB["ADMIN_IDS"] = [int(x) for x in loaded["ADMIN_IDS"] if str(x).isdigit()]
@@ -82,7 +83,7 @@ def load_data():
                 return
         except Exception as e: logger.error(f"MongoDB Load Error: {e}")
 
-    if not os.path.exists(DATA_FILE): save_data_sync(); return
+    if not os.path.exists(DATA_FILE): await save_data_async(); return
     try:
         with open(DATA_FILE, "r") as f:
             loaded = json.load(f)
@@ -99,40 +100,50 @@ def load_data():
             for cid, name in DB["PAID_CHANNELS"].items(): DB["ALL_CHATS"][cid] = name
     except Exception as e: logger.error(f"Local Load Error: {e}")
 
-
-def save_data_sync():
+def load_data():
+    """Sync wrapper for Bot Startup Process"""
     try:
-        to_save = {
-            "ADMIN_IDS": DB["ADMIN_IDS"], "BLOCKED_USERS": DB["BLOCKED_USERS"],
-            "NEW_USERS_ALLOWED": DB.get("NEW_USERS_ALLOWED", True), "FREE_LOCKED": DB.get("FREE_LOCKED", False),
-            "PAID_LOCKED": DB.get("PAID_LOCKED", False), "TEST_BOT_LOCKED": DB.get("TEST_BOT_LOCKED", False),
-            "LINK_MAP": DB["LINK_MAP"], "SCHEDULED_DELETES": DB.get("SCHEDULED_DELETES", []),
-            "TEST_BOT_LINK": DB.get("TEST_BOT_LINK", ""), 
-            "CATEGORIES": DB.get("CATEGORIES", DEFAULT_CATEGORIES),
-            "BATCH_CATEGORIES": {str(k): v for k, v in DB.get("BATCH_CATEGORIES", {}).items()},
-            "MAINTENANCE_MODE": DB.get("MAINTENANCE_MODE", False),
-            "MAINTENANCE_AFFECTED_USERS": DB.get("MAINTENANCE_AFFECTED_USERS", []), # 👈 YE ADD HUA HAI
-            
-            # ✅ FIX: Yahan Database aur JSON file me Session ko permanent save karne ke liye commands lagaye gaye hain
-            "USERBOT_SESSION": DB.get("USERBOT_SESSION"), 
-            "USERBOT_PHONE": DB.get("USERBOT_PHONE"),
-            
-            "CUSTOM_WELCOMES": {str(k): v for k, v in DB["CUSTOM_WELCOMES"].items()},
-            "FREE_CHANNELS": {str(k): v for k, v in DB["FREE_CHANNELS"].items()},
-            "PAID_CHANNELS": {str(k): v for k, v in DB["PAID_CHANNELS"].items()},
-            "ALL_CHATS": {str(k): v for k, v in DB["ALL_CHATS"].items()},
-            "USER_DATA": {str(k): v for k, v in DB["USER_DATA"].items()},
-            "USER_TOPICS": {str(k): v for k, v in DB["USER_TOPICS"].items()},
-            "PENDING_REQUESTS": {str(k): v for k, v in DB["PENDING_REQUESTS"].items()}
-        }
-        if MONGO_URL and mongo_collection is not None:
-            try: mongo_collection.replace_one({"_id": "main_settings"}, {"_id": "main_settings", "data": to_save}, upsert=True)
-            except Exception as e: logger.error(f"MongoDB Save Error: {e}")
-        with open(DATA_FILE, "w") as f: json.dump(to_save, f, indent=4)
-    except Exception as e: logger.error(f"Save Error: {e}")
+        loop = asyncio.get_event_loop()
+        if loop.is_running(): loop.create_task(load_data_async())
+        else: loop.run_until_complete(load_data_async())
+    except RuntimeError:
+        asyncio.run(load_data_async())
 
 async def save_data_async():
-    async with data_lock: await asyncio.to_thread(save_data_sync)
+    async with data_lock:
+        try:
+            to_save = {
+                "ADMIN_IDS": DB["ADMIN_IDS"], "BLOCKED_USERS": DB["BLOCKED_USERS"],
+                "NEW_USERS_ALLOWED": DB.get("NEW_USERS_ALLOWED", True), "FREE_LOCKED": DB.get("FREE_LOCKED", False),
+                "PAID_LOCKED": DB.get("PAID_LOCKED", False), "TEST_BOT_LOCKED": DB.get("TEST_BOT_LOCKED", False),
+                "LINK_MAP": DB["LINK_MAP"], "SCHEDULED_DELETES": DB.get("SCHEDULED_DELETES", []),
+                "TEST_BOT_LINK": DB.get("TEST_BOT_LINK", ""), 
+                "CATEGORIES": DB.get("CATEGORIES", DEFAULT_CATEGORIES),
+                "BATCH_CATEGORIES": {str(k): v for k, v in DB.get("BATCH_CATEGORIES", {}).items()},
+                "MAINTENANCE_MODE": DB.get("MAINTENANCE_MODE", False),
+                "MAINTENANCE_AFFECTED_USERS": DB.get("MAINTENANCE_AFFECTED_USERS", []),
+                "USERBOT_SESSION": DB.get("USERBOT_SESSION"), 
+                "USERBOT_PHONE": DB.get("USERBOT_PHONE"),
+                
+                "CUSTOM_WELCOMES": {str(k): v for k, v in DB["CUSTOM_WELCOMES"].items()},
+                "FREE_CHANNELS": {str(k): v for k, v in DB["FREE_CHANNELS"].items()},
+                "PAID_CHANNELS": {str(k): v for k, v in DB["PAID_CHANNELS"].items()},
+                "ALL_CHATS": {str(k): v for k, v in DB["ALL_CHATS"].items()},
+                "USER_DATA": {str(k): v for k, v in DB["USER_DATA"].items()},
+                "USER_TOPICS": {str(k): v for k, v in DB["USER_TOPICS"].items()},
+                "PENDING_REQUESTS": {str(k): v for k, v in DB["PENDING_REQUESTS"].items()}
+            }
+            if MONGO_URL and mongo_collection is not None:
+                try: 
+                    # ✅ True Async Write (Ye background me save karega, bot slow nahi hoga)
+                    await mongo_collection.replace_one({"_id": "main_settings"}, {"_id": "main_settings", "data": to_save}, upsert=True)
+                except Exception as e: logger.error(f"MongoDB Save Error: {e}")
+                
+            # Local file fallback background process
+            def save_local():
+                with open(DATA_FILE, "w") as f: json.dump(to_save, f, indent=4)
+            await asyncio.to_thread(save_local)
+        except Exception as e: logger.error(f"Save Error: {e}")
 
 # --- CORE HELPERS ---
 async def execute_universal_kick(user_id, context, permanent_ban=False):
