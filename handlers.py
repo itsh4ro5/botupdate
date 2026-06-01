@@ -408,23 +408,42 @@ async def cmd_myinfo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_approve_demo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     args = context.args; link = None
+    hours = 3.0 # Default time agar admin time dena bhool jaye toh 3 ghante
     
+    # Agar admin ne forward kiye gaye message par reply kiya hai
     if hasattr(update, 'message') and update.message and update.message.reply_to_message:
         replied = update.message.reply_to_message
         msg_text = replied.text or replied.caption or ""
         m = re.search(r'(https?://t\.me/(?:\+|joinchat/)[a-zA-Z0-9_\-]+)', msg_text)
         if m: link = m.group(1)
-        
-    if not link and args and "t.me" in args[0]: link = args[0].strip()
+        if args: # Agar reply karke "/demo 5h" likha hai
+            try: hours = float(args[0].lower().replace('h', ''))
+            except: pass
+            
+    # Agar directly wizard me ya text me command diya hai: /demo link 10h
+    if not link and args:
+        for arg in args:
+            if "t.me" in arg: link = arg.strip()
+            elif 'h' in arg.lower():
+                try: hours = float(arg.lower().replace('h', ''))
+                except: pass
+                
     if not link: return await update.effective_message.reply_text("❌ Link nahi mila.")
     
     ld = DB["LINK_MAP"].get(link); target_uid = ld.get("u") if isinstance(ld, dict) else None; batch_id = ld.get("b") if isinstance(ld, dict) else ld
-    if not target_uid or not batch_id: return
+    if not target_uid or not batch_id: return await update.effective_message.reply_text("❌ Ye link database me registered nahi hai.")
+    
     try:
         await context.bot.approve_chat_join_request(batch_id, target_uid)
-        DB["USER_DATA"].setdefault(target_uid, {}).setdefault("demos", {})[str(batch_id)] = {"expiry": time.time() + 10800, "warned": False}
-        await save_data_async(); await update.effective_message.reply_text("✅ **APPROVED (DEMO)**")
-    except Exception: pass
+        
+        # Hours ko seconds me convert karke expiry set karna (hours * 3600)
+        expiry_time = time.time() + (hours * 3600) 
+        DB["USER_DATA"].setdefault(target_uid, {}).setdefault("demos", {})[str(batch_id)] = {"expiry": expiry_time, "warned": False}
+        await save_data_async()
+        
+        await update.effective_message.reply_text(f"✅ **APPROVED (DEMO)**\n⏳ Time Given: `{hours} Hours`", parse_mode=ParseMode.MARKDOWN)
+    except Exception as e: 
+        await update.effective_message.reply_text(f"❌ Approval failed: {e}")
 
 async def cmd_approve_perm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
@@ -897,6 +916,17 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             kb = [[InlineKeyboardButton("🔗 Request Access", callback_data=f"req_access_{cid}")], [InlineKeyboardButton("🔙 Back", callback_data="u_main")]]
             try: await q.edit_message_text("💎 **Premium Access:**\nClick below.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
             except Exception: pass
+
+        # 👇 Naya VERIFY logic 👇
+        elif data == "verify":
+            # Check karega ki sach me join kiya hai ya nahi
+            if await check_membership(uid, context):
+                await q.answer("✅ Verification Successful!", show_alert=True)
+                # Purana warning message delete karke fresh Main Menu dikhayega
+                await q.message.delete()
+                await start(update, context)
+            else:
+                await q.answer("❌ Abhi tak join nahi kiya hai. Kripya pehle channel join karein!", show_alert=True)
 
         elif data.startswith("req_access_"):
             cid = int(data.split("_")[2])
