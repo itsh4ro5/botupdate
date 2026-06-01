@@ -346,7 +346,7 @@ async def cmd_setcategory(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     
     # Message se saari IDs (numbers) nikalna
-    raw_text = update.message.text
+    raw_text = update.message.text or update.message.caption or ""
     ids = re.findall(r'-?\d+', raw_text) # Ye automatically comma aur spaces ko handle kar lega
     
     if not ids:
@@ -410,7 +410,7 @@ async def cmd_approve_demo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args; link = None
     
     if hasattr(update, 'message') and update.message and update.message.reply_to_message:
-        m = re.search(r'(https?://t\.me/(?:\+|joinchat/)[a-zA-Z0-9_\-]+)', update.message.reply_to_message.text or "")replied = update.message.reply_to_message
+        replied = update.message.reply_to_message
         msg_text = replied.text or replied.caption or ""
         m = re.search(r'(https?://t\.me/(?:\+|joinchat/)[a-zA-Z0-9_\-]+)', msg_text)
         if m: link = m.group(1)
@@ -430,7 +430,9 @@ async def cmd_approve_perm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     link = None
     if hasattr(update, 'message') and update.message and update.message.reply_to_message:
-        m = re.search(r'(https?://t\.me/(?:\+|joinchat/)[a-zA-Z0-9_\-]+)', update.message.reply_to_message.text or "")
+        replied = update.message.reply_to_message
+        msg_text = replied.text or replied.caption or ""
+        m = re.search(r'(https?://t\.me/(?:\+|joinchat/)[a-zA-Z0-9_\-]+)', msg_text)
         if m: link = m.group(1)
         
     if not link and context.args: link = context.args[0]
@@ -450,13 +452,13 @@ async def cmd_delbatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if cid in d: 
         del d[cid]
-        # Pura clean up karein
+        # Ghost batches ko bhi clean up karein
         if cid in DB["ALL_CHATS"]: del DB["ALL_CHATS"][cid]
         if str(cid) in DB.get("BATCH_CATEGORIES", {}): del DB["BATCH_CATEGORIES"][str(cid)]
         
         await save_data_async()
         await update.effective_message.reply_text("✅ Batch poori tarah database se Delete ho gaya.")
-
+        
 async def cmd_addbatch_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     ADMIN_WIZARD[update.effective_user.id] = {"step": "ask_cat"}; kb = []
