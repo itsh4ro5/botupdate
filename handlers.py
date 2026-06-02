@@ -1033,10 +1033,18 @@ async def show_tnc_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
         
 async def show_user_menu(update: Update):
-    kb = [[InlineKeyboardButton("📚 My Batches", callback_data="my_batches_0"), InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0")], [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")], [InlineKeyboardButton("🆘 Support", url=f"tg://user?id={SUPPORT_GROUP_ID}")], [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")]]
+    # 👇 Yahan "url=" ke aage apna Video ka Link daalna hai 👇
+    kb = [
+        [InlineKeyboardButton("📚 My Batches", callback_data="my_batches_0"), InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0")], 
+        [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")], 
+        [InlineKeyboardButton("🎥 How to use the bot", url="https://t.me/H4R_Backup/267")], 
+        [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")]
+    ]
     txt = "🌟 **Welcome to the Premium Hub!** 🌟\nYour centralized portal for exclusive communities.\n\n👇 *Select an option below:*"
-    if update.callback_query: await update.callback_query.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-    else: await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+    if update.callback_query: 
+        await update.callback_query.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+    else: 
+        await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user; await set_role_based_commands(user.id, context)
