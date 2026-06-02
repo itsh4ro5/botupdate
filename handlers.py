@@ -281,8 +281,6 @@ async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(uid): return
 
     target_id = None
-
-    # Case 1 & 2: Chat se command aaya ho (/unban 12345) ya Wizard input ho
     if context.args:
         target_id = context.args[0]
     elif update.message and update.message.text:
@@ -296,14 +294,30 @@ async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except (ValueError, TypeError): 
         return await update.effective_message.reply_text("❌ Error: Kripya ek valid Numeric User ID bhejein.")
 
-    # 1. Database se unban karna (Agar list me hai)
-    db_msg = "Database me pehle se unbanned tha."
+    # 1. Database se unban karna aur "Auto-Ban Loop" fix karna
+    modified = False
+    
+    # ID ko properly remove karna
     if target in DB.get("BLOCKED_USERS", []): 
         DB["BLOCKED_USERS"].remove(target)
-        await save_data_async()
-        db_msg = "Database se unban kiya gaya."
+        modified = True
+    if str(target) in DB.get("BLOCKED_USERS", []): 
+        DB["BLOCKED_USERS"].remove(str(target))
+        modified = True
+        
+    # FIX: Profile me T&C accept status reset karna (Taki background_sync wapas auto-ban na kare)
+    user_key = target if target in DB.get("USER_DATA", {}) else (str(target) if str(target) in DB.get("USER_DATA", {}) else None)
+    if user_key:
+        DB["USER_DATA"][user_key]["tnc_accepted"] = False
+        modified = True
 
-    # 2. Main aur baaki sabhi channels se force unban karna (Bina check kiye ki wo DB me ban tha ya nahi)
+    if modified:
+        await save_data_async()
+        db_msg = "✅ Database se unban kiya gaya aur Profile reset kar di gayi."
+    else:
+        db_msg = "ℹ️ Database me pehle se unbanned tha."
+
+    # 2. Main aur baaki sabhi channels se force unban karna
     all_channels = list(DB.get("FREE_CHANNELS", {}).keys()) + list(DB.get("PAID_CHANNELS", {}).keys())
     if MANDATORY_CHANNEL_ID:
         all_channels.append(MANDATORY_CHANNEL_ID)
@@ -318,11 +332,10 @@ async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.effective_message.reply_text(
         f"✅ **User `{target}` Successfully Unbanned!**\n"
-        f"ℹ️ {db_msg}\n"
+        f"{db_msg}\n"
         f"📢 `{success_count}` channels/groups se unban request bheji gayi.", 
         parse_mode=ParseMode.MARKDOWN
     )
-
 async def cmd_reset_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id) or len(context.args) == 0: return
     target_uid = int(context.args[0]); user_key = target_uid if target_uid in DB["USER_DATA"] else str(target_uid)
@@ -1145,7 +1158,13 @@ async def background_sync(context: ContextTypes.DEFAULT_TYPE):
         if user_id in DB["BLOCKED_USERS"] or is_admin(user_id): continue
         try: status = (await context.bot.get_chat_member(MANDATORY_CHANNEL_ID, user_id)).status
         except Exception: continue 
-        if status in [ChatMember.LEFT, ChatMember.BANNED]: await execute_universal_kick(user_id, context)
+        
+        # FIX: Sirf Banned ya un-users ko kick karein jo pehle T&C accept kar chuke the aur ab LEFT hain
+        if status == ChatMember.BANNED:
+            await execute_universal_kick(user_id, context)
+        elif status == ChatMember.LEFT and DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
+            await execute_universal_kick(user_id, context)
+            
         await asyncio.sleep(0.5)
 
 async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
