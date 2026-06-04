@@ -3,10 +3,11 @@ import threading
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, 
-    ChatJoinRequestHandler, ChatMemberHandler, MessageReactionHandler, filters
+    ChatJoinRequestHandler, ChatMemberHandler, MessageReactionHandler, filters, ContextTypes
 )
+from telegram.error import Conflict
 
-from config import TELEGRAM_BOT_TOKEN, load_data, logger
+from config import TELEGRAM_BOT_TOKEN, LOG_CHANNEL_ID, load_data, logger
 from handlers import *
 
 try:
@@ -15,12 +16,28 @@ try:
         port = int(os.environ.get("PORT", "7860"))
         app = Flask(__name__)
         @app.route('/')
-        def index(): return "Bot Running - v37.0 (Fixed)", 200
+        def index(): return "Bot Running - Premium Level 🚀", 200
         def run(): app.run(host="0.0.0.0", port=port, use_reloader=False)
         t = threading.Thread(target=run, daemon=True)
         t.start()
 except ImportError:
     def _start_keepalive(): pass
+
+# 👇 NAYA: Global Error Handler (Ye bot ko crash hone se bachayega) 👇
+async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    # Agar Conflict error hai toh use ignore karo bina spam kiye
+    if isinstance(context.error, Conflict):
+        logger.warning("⚠️ Conflict Error: Purana aur naya bot ek sath chal raha hai. Ignoring...")
+        return
+
+    logger.error(msg="Exception while handling an update:", exc_info=context.error)
+    try:
+        if LOG_CHANNEL_ID:
+            error_msg = f"⚠️ **CRITICAL ERROR** ⚠️\n\n`{context.error}`"
+            await context.bot.send_message(chat_id=LOG_CHANNEL_ID, text=error_msg, parse_mode="Markdown")
+    except Exception:
+        pass
+
 
 def main():
     _start_keepalive()
@@ -58,20 +75,24 @@ def main():
     app.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS | filters.StatusUpdate.LEFT_CHAT_MEMBER, delete_service_messages))
     
-    # Jo reaction & edit commands miss the wo fix kar diye hain
     app.add_handler(MessageReactionHandler(handle_reaction))
     app.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE, handle_edit))
     
     # Message Handler (Wizards ke liye)
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, main_message_handler))
     
+    # 👇 NAYA: Error handler ko bot se connect kiya 👇
+    app.add_error_handler(global_error_handler)
+    
     if app.job_queue: 
         app.job_queue.run_repeating(check_demos, interval=60, first=10)
         app.job_queue.run_repeating(background_sync, interval=600, first=30)
         app.job_queue.run_repeating(auto_backup_db, interval=86400, first=60)
     
-    logger.info("✅ Bot v37.0 Started Successfully!")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    logger.info("✅ Bot v38.0 Started Successfully!")
+    
+    # 👇 FIX: drop_pending_updates=True lagaya taaki deploy ke waqt purane pending messages conflict na karein 👇
+    app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
