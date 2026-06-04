@@ -2,7 +2,6 @@ import io, os, re, time, asyncio
 from pyrogram import Client
 from pyrogram.errors import SessionPasswordNeeded
 from datetime import datetime
-from pyrogram import Client
 from pyrogram.errors import FloodWait
 from telegram import Update, ChatMember, InlineKeyboardButton, InlineKeyboardMarkup, BotCommandScopeChat, BotCommand, InputMediaPhoto, InputMediaVideo, InputMediaDocument, InputMediaAudio, InputMediaAnimation
 from telegram.constants import ChatType, ParseMode
@@ -40,22 +39,18 @@ async def cmd_userbotphone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     phone = update.message.text.replace(" ", "")
     msg = await update.message.reply_text("⏳ OTP request bhej raha hu, kripya wait karein...")
     
-    # Client banakar connect karenge
     client = Client("temp_login", api_id=API_ID, api_hash=API_HASH, in_memory=True)
     await client.connect()
     
     try:
         sent_code = await client.send_code(phone)
-        
-        # 🟢 FIX: Yahan session export nahi karenge! Balki poore client ko memory me zinda rakhenge
         context.user_data['login_client'] = client
         context.user_data['login_phone'] = phone
         context.user_data['phone_code_hash'] = sent_code.phone_code_hash
-        
         ADMIN_WIZARD[uid] = {"step": "call_cmd_userbototp"}
         await msg.edit_text("✅ **OTP Bhej diya gaya hai!**\n\nKripya apna OTP yahan type karein.\n⚠️ **DHYAN DEIN:** OTP space lagakar likhein (Example: `1 2 3 4 5`)")
     except Exception as e:
-        await client.disconnect() # Error aane par hi disconnect karenge
+        await client.disconnect()
         await msg.edit_text(f"❌ Error: `{e}`")
 
 
@@ -66,7 +61,7 @@ async def cmd_userbototp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     otp = update.message.text.replace(" ", "").replace("-", "")
     phone = context.user_data.get('login_phone')
     phone_code_hash = context.user_data.get('phone_code_hash')
-    client = context.user_data.get('login_client') # 🟢 Zinda connection wapas nikala
+    client = context.user_data.get('login_client') 
     
     if not phone or not phone_code_hash or not client:
         return await update.message.reply_text("❌ Session expire ho gaya. Kripya wapas login par click karein.")
@@ -75,14 +70,11 @@ async def cmd_userbototp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         await client.sign_in(phone, phone_code_hash, otp)
-        
-        # 🟢 FIX: Login successful hone ke baad hi Session String export karenge
         session_string = await client.export_session_string()
         DB["USERBOT_SESSION"] = session_string
         DB["USERBOT_PHONE"] = phone
         await save_data_async()
         
-        # Kaam khatam hone ke baad disconnect aur memory saaf
         await client.disconnect()
         context.user_data.pop('login_client', None)
         context.user_data.pop('login_phone', None)
@@ -104,7 +96,7 @@ async def cmd_userbotpass(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     password = update.message.text
     phone = context.user_data.get('login_phone')
-    client = context.user_data.get('login_client') # 🟢 Connection yahan tak zinda hai
+    client = context.user_data.get('login_client') 
     
     if not phone or not client:
         return await update.message.reply_text("❌ Session expire ho gaya. Kripya wapas login par click karein.")
@@ -113,8 +105,6 @@ async def cmd_userbotpass(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         await client.check_password(password)
-        
-        # 🟢 FIX: 2FA successful hone ke baad Session export karenge
         session_string = await client.export_session_string()
         DB["USERBOT_SESSION"] = session_string
         DB["USERBOT_PHONE"] = phone
@@ -131,7 +121,6 @@ async def cmd_userbotpass(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text(f"❌ Password Error: `{e}`")
         
 async def cmd_del_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin command to delete the replied-to message."""
     if not is_admin(update.effective_user.id) or not update.message or not update.message.reply_to_message: 
         return
     
@@ -171,8 +160,6 @@ async def cmd_emptybatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         await userbot.start()
-        
-        # 👇 NAYA LOGIC: Peer Invalid error se bachne ke liye pehle chats ko sync karna
         try:
             await userbot.get_chat(cid)
         except Exception:
@@ -181,7 +168,6 @@ async def cmd_emptybatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if dialog.chat.id == cid:
                     break
             await msg.edit_text(f"⏳ **Emptying Batch `{cid}`...**\nSync complete! Ab members remove kar raha hu...")
-        # 👆 END OF NAYA LOGIC
 
         removed_count = 0
         async for member in userbot.get_chat_members(cid):
@@ -255,10 +241,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID: return
-    
-    # 👇 FIX: Ab ye True Async tarike se wait karega
-    await save_data_async() 
-    
+    save_data_sync()
     if os.path.exists(DATA_FILE): await update.effective_message.reply_document(document=open(DATA_FILE, "rb"), caption="DB Backup")
 
 async def cmd_all_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -289,15 +272,11 @@ async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not target_id:
         return await update.effective_message.reply_text("❌ Error: Kripya ek User ID bhejein.")
 
-    try: 
-        target = int(target_id)
-    except (ValueError, TypeError): 
-        return await update.effective_message.reply_text("❌ Error: Kripya ek valid Numeric User ID bhejein.")
+    try: target = int(target_id)
+    except (ValueError, TypeError): return await update.effective_message.reply_text("❌ Error: Kripya ek valid Numeric User ID bhejein.")
 
-    # 1. Database se unban karna aur "Auto-Ban Loop" fix karna
     modified = False
     
-    # ID ko properly remove karna
     if target in DB.get("BLOCKED_USERS", []): 
         DB["BLOCKED_USERS"].remove(target)
         modified = True
@@ -305,8 +284,7 @@ async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
         DB["BLOCKED_USERS"].remove(str(target))
         modified = True
         
-    # FIX: Profile me T&C accept status reset karna (Taki background_sync wapas auto-ban na kare)
-    user_key = target if target in DB.get("USER_DATA", {}) else (str(target) if str(target) in DB.get("USER_DATA", {}) else None)
+    user_key = target if target in DB["USER_DATA"] else (str(target) if str(target) in DB.get("USER_DATA", {}) else None)
     if user_key:
         DB["USER_DATA"][user_key]["tnc_accepted"] = False
         modified = True
@@ -317,18 +295,15 @@ async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         db_msg = "ℹ️ Database me pehle se unbanned tha."
 
-    # 2. Main aur baaki sabhi channels se force unban karna
     all_channels = list(DB.get("FREE_CHANNELS", {}).keys()) + list(DB.get("PAID_CHANNELS", {}).keys())
-    if MANDATORY_CHANNEL_ID:
-        all_channels.append(MANDATORY_CHANNEL_ID)
+    if MANDATORY_CHANNEL_ID: all_channels.append(MANDATORY_CHANNEL_ID)
         
     success_count = 0
     for bid in all_channels:
         try: 
             await context.bot.unban_chat_member(int(bid), target)
             success_count += 1
-        except Exception: 
-            pass
+        except Exception: pass
 
     await update.effective_message.reply_text(
         f"✅ **User `{target}` Successfully Unbanned!**\n"
@@ -336,6 +311,7 @@ async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📢 `{success_count}` channels/groups se unban request bheji gayi.", 
         parse_mode=ParseMode.MARKDOWN
     )
+
 async def cmd_reset_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id) or len(context.args) == 0: return
     target_uid = int(context.args[0]); user_key = target_uid if target_uid in DB["USER_DATA"] else str(target_uid)
@@ -361,17 +337,14 @@ async def cmd_addcat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_setcategory(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     
-    # Message se saari IDs (numbers) nikalna
     raw_text = update.message.text or update.message.caption or ""
-    ids = re.findall(r'-?\d+', raw_text) # Ye automatically comma aur spaces ko handle kar lega
+    ids = re.findall(r'-?\d+', raw_text) 
     
     if not ids:
         return await update.effective_message.reply_text("❌ Error: Koi valid ID nahi mili.")
     
-    # Agle step ke liye in saari IDs ko temporary memory me save kar lo
     context.user_data['setcat_ids'] = ids
     
-    # Category buttons dikhana
     kb = [[InlineKeyboardButton(c, callback_data=f"setextcat_{i}")] for i, c in enumerate(DB.get("CATEGORIES", DEFAULT_CATEGORIES))]
     await update.effective_message.reply_text(f"📁 **{len(ids)} Batches** detect hue hain.\nIn sabhi ke liye nayi category select karein:", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
@@ -424,19 +397,17 @@ async def cmd_myinfo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_approve_demo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     args = context.args; link = None
-    hours = 3.0 # Default time agar admin time dena bhool jaye toh 3 ghante
+    hours = 3.0
     
-    # Agar admin ne forward kiye gaye message par reply kiya hai
     if hasattr(update, 'message') and update.message and update.message.reply_to_message:
         replied = update.message.reply_to_message
         msg_text = replied.text or replied.caption or ""
         m = re.search(r'(https?://t\.me/(?:\+|joinchat/)[a-zA-Z0-9_\-]+)', msg_text)
         if m: link = m.group(1)
-        if args: # Agar reply karke "/demo 5h" likha hai
+        if args:
             try: hours = float(args[0].lower().replace('h', ''))
             except: pass
             
-    # Agar directly wizard me ya text me command diya hai: /demo link 10h
     if not link and args:
         for arg in args:
             if "t.me" in arg: link = arg.strip()
@@ -451,12 +422,9 @@ async def cmd_approve_demo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         await context.bot.approve_chat_join_request(batch_id, target_uid)
-        
-        # Hours ko seconds me convert karke expiry set karna (hours * 3600)
-        expiry_time = time.time() + (hours * 3600) 
+        expiry_time = time.time() + (hours * 3600)
         DB["USER_DATA"].setdefault(target_uid, {}).setdefault("demos", {})[str(batch_id)] = {"expiry": expiry_time, "warned": False}
         await save_data_async()
-        
         await update.effective_message.reply_text(f"✅ **APPROVED (DEMO)**\n⏳ Time Given: `{hours} Hours`", parse_mode=ParseMode.MARKDOWN)
     except Exception as e: 
         await update.effective_message.reply_text(f"❌ Approval failed: {e}")
@@ -487,13 +455,12 @@ async def cmd_delbatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if cid in d: 
         del d[cid]
-        # Ghost batches ko bhi clean up karein
         if cid in DB["ALL_CHATS"]: del DB["ALL_CHATS"][cid]
         if str(cid) in DB.get("BATCH_CATEGORIES", {}): del DB["BATCH_CATEGORIES"][str(cid)]
         
         await save_data_async()
         await update.effective_message.reply_text("✅ Batch poori tarah database se Delete ho gaya.")
-        
+
 async def cmd_addbatch_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     ADMIN_WIZARD[update.effective_user.id] = {"step": "ask_cat"}; kb = []
@@ -571,11 +538,8 @@ async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         await userbot.start()
-        
-        # 👇 NAYA LOGIC YAHAN BHI: Sync All Chats
         await msg.edit_text("🔄 **Userbot Syncing...**\nSaare chats ko memory me load kar raha hu (Peer ID Error bachane ke liye)...")
-        async for _ in userbot.get_dialogs():
-            pass # Saare chats memory me sync kar raha hai
+        async for _ in userbot.get_dialogs(): pass
         await msg.edit_text("⏳ **Super Exit /clear Start...**\nSync complete! Ab removing process chalu hai...")
 
         all_channels = list(DB["FREE_CHANNELS"].keys()) + list(DB["PAID_CHANNELS"].keys())
@@ -603,30 +567,8 @@ async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_maintenance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
-    
-    is_maint = not DB.get("MAINTENANCE_MODE", False)
-    DB["MAINTENANCE_MODE"] = is_maint
-    
-    if not is_maint: # Turned OFF
-        affected = DB.get("MAINTENANCE_AFFECTED_USERS", [])
-        DB["MAINTENANCE_AFFECTED_USERS"] = []
-        await save_data_async()
-        
-        msg = await update.effective_message.reply_text(f"✅ **Maintenance Mode Disabled!**\nBot ab normally kaam kar raha hai.\n🔔 Notifying `{len(affected)}` waiting users in background...", parse_mode=ParseMode.MARKDOWN)
-        
-        # Background Notification Task
-        async def notify_maint():
-            for uid in affected:
-                try:
-                    await context.bot.send_message(uid, "✅ **Maintenance is Over!**\nBot ab normally kaam kar raha hai. Aap apna pending kaam ya link generation ab wapas try kar sakte hain.", parse_mode=ParseMode.MARKDOWN)
-                    await asyncio.sleep(0.05)
-                except: pass
-        asyncio.create_task(notify_maint())
-        
-    else: # Turned ON
-        await save_data_async()
-        msg = await update.effective_message.reply_text("🛠️ **Maintenance Mode Enabled!**\nNormal users ka support message aur link generation ab band ho gaya hai.", parse_mode=ParseMode.MARKDOWN)
-        
+    DB["MAINTENANCE_MODE"] = not DB.get("MAINTENANCE_MODE", False); await save_data_async()
+    msg = await update.effective_message.reply_text("🛠️ **Maintenance Mode Enabled!**\nNormal users ka support message ab aana band ho gaya hai." if DB["MAINTENANCE_MODE"] else "✅ **Maintenance Mode Disabled!**\nBot ab normally kaam kar raha hai.", parse_mode=ParseMode.MARKDOWN)
     await schedule_delete(context, msg)
 
 
@@ -669,40 +611,17 @@ async def wizard_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif state["step"].startswith("call_cmd_"):
         cmd_name = state["step"].replace("call_cmd_", "")
         context.args = update.message.text.split()
-        
-        # 👈 Ye line naya add hua hai: Bot current step ko yaad rakhega
         current_step = state["step"] 
         
         try:
             cmds = {"addadmin": cmd_add_admin, "deladmin": cmd_del_admin, "ban": cmd_ban, "unban": cmd_unban, "kick": cmd_kick_user, "find": cmd_find_user, "resetuser": cmd_reset_user, "demo": cmd_approve_demo, "perm": cmd_approve_perm, "extend": cmd_extend_demo, "settestbot": cmd_set_testbot, "setwelcome": cmd_set_welcome, "delbatch": cmd_delbatch, "addcat": cmd_addcat, "setcat": cmd_setcategory, "emptybatch": cmd_emptybatch, "userbotphone": cmd_userbotphone, "userbototp": cmd_userbototp, "userbotpass": cmd_userbotpass}
-            
-            if cmd_name in cmds: 
-                await cmds[cmd_name](update, context)
-        except Exception: 
-            pass
+            if cmd_name in cmds: await cmds[cmd_name](update, context)
+        except Exception: pass
         
-        # 👈 Naya Logic: Sirf tabhi memory delete hogi jab command poora khatam ho jaye
-        # Agar OTP ya Password maanga gaya hai, toh memory delete nahi hogi!
         if uid in ADMIN_WIZARD and ADMIN_WIZARD[uid].get("step") == current_step: 
             del ADMIN_WIZARD[uid]
-        
         return True
 
-    elif state["step"].startswith("call_cmd_"):
-        cmd_name = state["step"].replace("call_cmd_", "")
-        context.args = update.message.text.split()
-        try:
-            # Dhyan dein: Ye 'cmds' wali line 'try:' ke muqable 4 spaces aage honi chahiye
-            cmds = {"addadmin": cmd_add_admin, "deladmin": cmd_del_admin, "ban": cmd_ban, "unban": cmd_unban, "kick": cmd_kick_user, "find": cmd_find_user, "resetuser": cmd_reset_user, "demo": cmd_approve_demo, "perm": cmd_approve_perm, "extend": cmd_extend_demo, "settestbot": cmd_set_testbot, "setwelcome": cmd_set_welcome, "delbatch": cmd_delbatch, "addcat": cmd_addcat, "setcat": cmd_setcategory, "emptybatch": cmd_emptybatch, "userbotphone": cmd_userbotphone, "userbototp": cmd_userbototp, "userbotpass": cmd_userbotpass}
-            
-            if cmd_name in cmds: 
-                await cmds[cmd_name](update, context)
-        except Exception: 
-            pass
-        
-        if uid in ADMIN_WIZARD: 
-            del ADMIN_WIZARD[uid]
-        return True
 async def handle_broadcast_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or update.effective_user.id not in BROADCAST_STATE: return False
     state = BROADCAST_STATE[update.effective_user.id]
@@ -733,23 +652,11 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if uid in DB["BLOCKED_USERS"]: return await q.answer("🚫 You are blocked by the admin.", show_alert=True)
     
-    # Anti-Spam: State Lock Method (Bina popup ke loading spinner rok dega)
-    # Anti-Spam: State Lock Method (Bina popup ke loading spinner rok dega)
     if uid in PROCESSING_USERS: return await q.answer() 
     
-    # 👇 NAYA: Maintenance Check & Link Blocker 👇
-    if DB.get("MAINTENANCE_MODE", False) and not is_admin(uid):
-        if uid not in DB.setdefault("MAINTENANCE_AFFECTED_USERS", []):
-            DB["MAINTENANCE_AFFECTED_USERS"].append(uid)
-            await save_data_async()
-        return await q.answer("🛠️ Bot is under Maintenance!\nAbhi koi bhi link generate nahi hoga. Kaam khatam hote hi aapko auto-notify kar diya jayega.", show_alert=True)
-
-    # 👆 YAHAN TAK 👆
     PROCESSING_USERS.add(uid)
     try:
-        # 👇 Yahan bas "or data.startswith('wcat_')" add kiya gaya hai 👇
         if data.startswith("wiz_") or data.startswith("wcat_"): return await wizard_callback(update, context)
-        
         if data.startswith("bc_"): return await broadcast_callback(update, context)
         
         if data == "dash_home":
@@ -769,31 +676,13 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif data.startswith("toggle_"):
             key = data.split("_")[1].upper()
-            if key == "LOCKDOWN": 
-                DB["NEW_USERS_ALLOWED"] = not DB.get("NEW_USERS_ALLOWED", True)
-            elif key == "MAINTENANCE": 
-                is_maint = not DB.get("MAINTENANCE_MODE", False)
-                DB["MAINTENANCE_MODE"] = is_maint
-                if not is_maint:
-                    affected_users = DB.get("MAINTENANCE_AFFECTED_USERS", [])
-                    DB["MAINTENANCE_AFFECTED_USERS"] = []
-                    async def notify_users():
-                        for auid in affected_users:
-                            try:
-                                await context.bot.send_message(auid, "✅ **Maintenance is Over!**\nBot ab normally kaam kar raha hai. Aap apna pending kaam ya link generation ab wapas try kar sakte hain.", parse_mode=ParseMode.MARKDOWN)
-                                await asyncio.sleep(0.05)
-                            except: pass
-                    asyncio.create_task(notify_users())
-            elif key == "FREE": 
-                DB["FREE_LOCKED"] = not DB.get("FREE_LOCKED", False)
-            elif key == "PAID": 
-                DB["PAID_LOCKED"] = not DB.get("PAID_LOCKED", False)
-            elif key == "TESTBOT": 
-                DB["TEST_BOT_LOCKED"] = not DB.get("TEST_BOT_LOCKED", False)
-            
+            if key == "LOCKDOWN": DB["NEW_USERS_ALLOWED"] = not DB.get("NEW_USERS_ALLOWED", True)
+            elif key == "MAINTENANCE": DB["MAINTENANCE_MODE"] = not DB.get("MAINTENANCE_MODE", False)
+            elif key == "FREE": DB["FREE_LOCKED"] = not DB.get("FREE_LOCKED", False)
+            elif key == "PAID": DB["PAID_LOCKED"] = not DB.get("PAID_LOCKED", False)
+            elif key == "TESTBOT": DB["TEST_BOT_LOCKED"] = not DB.get("TEST_BOT_LOCKED", False)
             await save_data_async()
             
-            # Dashboard Menu UI wapas refresh karne ke liye
             kb = [
                 [InlineKeyboardButton(f"System Lockdown: {'🔴 ON' if not DB.get('NEW_USERS_ALLOWED', True) else '🟢 OFF'}", callback_data="toggle_lockdown")],
                 [InlineKeyboardButton(f"Free Batches: {'🔴 LOCKED' if DB.get('FREE_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_free"), InlineKeyboardButton(f"Paid Batches: {'🔴 LOCKED' if DB.get('PAID_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_paid")],
@@ -825,7 +714,6 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             kb = [[InlineKeyboardButton("📢 Broadcast", callback_data="act_broadcast"), InlineKeyboardButton("📝 Post Message", callback_data="act_post")], [InlineKeyboardButton("🔗 Set Test Bot", callback_data="input_settestbot"), InlineKeyboardButton("👋 Set Welcome", callback_data="input_setwelcome")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
             await q.edit_message_text("📢 **Communications**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
-        # Login Details Menu & Advanced Stats
         elif data == "userbot_details":
             if uid != OWNER_ID: return await q.answer("❌ Access Denied! Owner only.", show_alert=True)
             
@@ -884,6 +772,14 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif data == "accept_tnc": DB.setdefault("USER_DATA", {}).setdefault(uid, {})["tnc_accepted"] = True; await save_data_async(); await show_user_menu(update)
         elif data == "u_main": await show_user_menu(update)
         elif data == "my_info": await q.answer(); await cmd_myinfo(update, context)
+        
+        elif data == "verify":
+            if await check_membership(uid, context):
+                await q.answer("✅ Verification Successful!", show_alert=True)
+                await start(update, context)
+            else:
+                await q.answer("❌ Abhi tak join nahi kiya hai. Kripya pehle channel join karein!", show_alert=True)
+                
         elif data == "test_bot":
             if DB.get("TEST_BOT_LOCKED", False): return await q.answer("🔒 Locked by Admin.", show_alert=True)
             if not await check_membership(uid, context): return await q.answer("❌ Join Main Channel First!", show_alert=True)
@@ -982,15 +878,6 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try: await q.edit_message_text("💎 **Premium Access:**\nClick below.", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
             except Exception: pass
 
-        # 👇 Naya VERIFY logic (Fixed) 👇
-        elif data == "verify":
-            if await check_membership(uid, context):
-                await q.answer("✅ Verification Successful!", show_alert=True)
-                # Yahan message delete nahi karna hai, bot apne aap us message ko T&C (Notice) me badal dega
-                await start(update, context)
-            else:
-                await q.answer("❌ Abhi tak join nahi kiya hai. Kripya pehle channel join karein!", show_alert=True)
-
         elif data.startswith("req_access_"):
             cid = int(data.split("_")[2])
             if not await check_membership(uid, context): return await q.answer("❌ Join Main First!", show_alert=True)
@@ -1010,7 +897,6 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Callback Error: {e}")
     finally:
-        # Ye sabse zaroori line hai: Process khatam hote hi Lock hata deta hai
         PROCESSING_USERS.discard(uid)
         
 # --- START, MENUS & CORE EVENTS ---
@@ -1019,32 +905,26 @@ async def show_tnc_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = (
         "🚨 **STRICT WARNING & TERMS OF SERVICE** 🚨\n\n"
         "🇬🇧 **ENGLISH:**\n"
-        "If you leave the Main Channel or block this bot, your account will be **INSTANTLY BANNED** and removed from ALL joined groups and channels. You will lose permanent access. There is NO unban policy.\n\n"
+        "If you leave the Main Channel or block this bot, you will be **INSTANTLY REMOVED** from ALL joined groups and channels.\n\n"
         "🇮🇳 **HINDI:**\n"
-        "Agar aapne Main Channel ko chhoda (leave kiya) ya is bot ko block kiya, toh aapka account **TURANT BAN** kar diya jayega. Aapko sabhi groups aur channels se hamesha ke liye nikal diya jayega. Aapka saara access hamesha ke liye khatam ho jayega aur dobara kabhi unban nahi kiya jayega.\n\n"
+        "Agar aapne Main Channel ko chhoda (leave kiya) ya is bot ko block kiya, toh aapko sabhi groups aur channels se **TURANT NIKAL** diya jayega.\n\n"
         "⚠️ *Click 'I Read & Accept' only if you agree to these terms.*"
     )
     if update.callback_query: 
-        try:
-            await update.callback_query.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-        except Exception:
-            await context.bot.send_message(update.effective_chat.id, txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-    else: 
-        await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-        
+        try: await update.callback_query.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        except Exception: await context.bot.send_message(update.effective_chat.id, txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+    else: await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
 async def show_user_menu(update: Update):
-    # 👇 Yahan "url=" ke aage apna Video ka Link daalna hai 👇
     kb = [
         [InlineKeyboardButton("📚 My Batches", callback_data="my_batches_0"), InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0")], 
         [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")], 
-        [InlineKeyboardButton("🎥 How to use the bot", url="https://t.me/H4R_Backup/267")], 
+        [InlineKeyboardButton("🎥 How to use the bot", url="YAHAN_APNA_VIDEO_LINK_DAALEIN")], 
         [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")]
     ]
     txt = "🌟 **Welcome to the Premium Hub!** 🌟\nYour centralized portal for exclusive communities.\n\n👇 *Select an option below:*"
-    if update.callback_query: 
-        await update.callback_query.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-    else: 
-        await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+    if update.callback_query: await update.callback_query.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+    else: await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user; await set_role_based_commands(user.id, context)
@@ -1114,13 +994,6 @@ async def main_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         if await wizard_message(update, context): return
         if await handle_broadcast_flow(update, context): return
     if chat.type == ChatType.PRIVATE:
-        # 👇 NAYA MESSAGE MAINTENANCE LOGIC 👇
-        if DB.get("MAINTENANCE_MODE", False) and not is_admin(user.id): 
-            if user.id not in DB.setdefault("MAINTENANCE_AFFECTED_USERS", []):
-                DB["MAINTENANCE_AFFECTED_USERS"].append(user.id)
-                await save_data_async()
-            return await update.effective_message.reply_text("🛠️ **Under Maintenance.**\nBot abhi maintenance mode me hai. Kaam khatam hote hi aapko message ke dwara bata diya jayega.", parse_mode=ParseMode.MARKDOWN)
-        # 👆 YAHAN TAK 👆
         if DB.get("MAINTENANCE_MODE", False) and not is_admin(user.id): return await update.effective_message.reply_text("⚠️ **Under Maintenance.**")
         topic_id = await get_or_create_topic(user, context)
         if topic_id:
@@ -1167,7 +1040,6 @@ async def background_sync(context: ContextTypes.DEFAULT_TYPE):
         try: status = (await context.bot.get_chat_member(MANDATORY_CHANNEL_ID, user_id)).status
         except Exception: continue 
         
-        # FIX: Sirf Banned ya un-users ko kick karein jo pehle T&C accept kar chuke the aur ab LEFT hain
         if status == ChatMember.BANNED:
             await execute_universal_kick(user_id, context)
         elif status == ChatMember.LEFT and DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
@@ -1208,9 +1080,23 @@ async def check_demos(context: ContextTypes.DEFAULT_TYPE):
                 try: await context.bot.ban_chat_member(int(bid), int(uid)); await context.bot.unban_chat_member(int(bid), int(uid))
                 except Exception: pass
                 if bid in data["demos"]: del data["demos"][bid]; mod = True
+                
     if DB.get("SCHEDULED_DELETES"):
-        surviving = [item for item in DB["SCHEDULED_DELETES"] if now <= item["t"]]
-        if len(surviving) != len(DB["SCHEDULED_DELETES"]): DB["SCHEDULED_DELETES"] = surviving; mod = True
+        surviving = []
+        for item in DB["SCHEDULED_DELETES"]:
+            if now > item["t"]:
+                try:
+                    await context.bot.delete_message(chat_id=item["c"], message_id=item["m"])
+                except Exception as e:
+                    logger.error(f"Failed to delete scheduled msg: {e}")
+                mod = True
+            else:
+                surviving.append(item)
+                
+        if len(surviving) != len(DB.get("SCHEDULED_DELETES", [])): 
+            DB["SCHEDULED_DELETES"] = surviving
+            mod = True
+            
     if mod: await save_data_async()
 
 async def auto_backup_db(context: ContextTypes.DEFAULT_TYPE):
