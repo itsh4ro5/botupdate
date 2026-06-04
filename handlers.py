@@ -919,13 +919,18 @@ async def show_user_menu(update: Update):
     kb = [
         [InlineKeyboardButton("📚 My Batches", callback_data="my_batches_0"), InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0")], 
         [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")], 
-        [InlineKeyboardButton("🎥 How to use the bot", url="YAHAN_APNA_VIDEO_LINK_DAALEIN")], 
+        
+        # 👇 MUKHYA FIX: Yahan maine ek valid https:// link daal diya hai 👇
+        [InlineKeyboardButton("🎥 How to use the bot", url="https://t.me/telegram")], 
+        
         [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")]
     ]
     txt = "🌟 **Welcome to the Premium Hub!** 🌟\nYour centralized portal for exclusive communities.\n\n👇 *Select an option below:*"
-    if update.callback_query: await update.callback_query.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-    else: await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-
+    if update.callback_query: 
+        try: await update.callback_query.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        except Exception: await context.bot.send_message(update.effective_chat.id, txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+    else: 
+        await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user; await set_role_based_commands(user.id, context)
     if user.id not in DB["USER_DATA"]: 
