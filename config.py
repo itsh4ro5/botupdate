@@ -41,32 +41,30 @@ SPAM_CACHE = {}
 data_lock = asyncio.Lock()
 mongo_client = mongo_collection = None
 
-# --- MONGODB SETUP (TRUE ASYNC) ---
+# --- MONGODB SETUP ---
 if MONGO_URL:
     try:
-        from motor.motor_asyncio import AsyncIOMotorClient
+        from pymongo import MongoClient
         import certifi
-        # ✅ Motor ka Async Client lagaya gaya hai
-        mongo_client = AsyncIOMotorClient(MONGO_URL, tlsCAFile=certifi.where())
+        mongo_client = MongoClient(MONGO_URL, tlsCAFile=certifi.where())
         mongo_db = mongo_client.get_database("telegram_bot_db")
         mongo_collection = mongo_db.get_collection("bot_settings")
-        logger.info("✅ Connected to MongoDB Atlas (True Async via Motor 🚀)")
+        logger.info("✅ Connected to MongoDB Atlas")
     except Exception as e:
         logger.error(f"❌ MongoDB Connection Failed: {e}"); MONGO_URL = None
 
-# --- DATABASE FUNCTIONS (ASYNC OPTIMIZED) ---
-async def load_data_async():
+# --- DATABASE FUNCTIONS ---
+def load_data():
     global DB
     keys_to_load = [
         "LINK_MAP", "NEW_USERS_ALLOWED", "FREE_LOCKED", "PAID_LOCKED", "TEST_BOT_LOCKED", 
         "SCHEDULED_DELETES", "TEST_BOT_LINK", "MAINTENANCE_MODE", "CATEGORIES", "BATCH_CATEGORIES", 
-        "USERBOT_SESSION", "USERBOT_PHONE", "MAINTENANCE_AFFECTED_USERS"
+        "USERBOT_SESSION", "USERBOT_PHONE"
     ]
     
     if MONGO_URL and mongo_collection is not None:
         try:
-            # ✅ True Async Read (Bina bot ko roke)
-            data = await mongo_collection.find_one({"_id": "main_settings"})
+            data = mongo_collection.find_one({"_id": "main_settings"})
             if data and "data" in data:
                 loaded = data["data"]
                 if "ADMIN_IDS" in loaded: DB["ADMIN_IDS"] = [int(x) for x in loaded["ADMIN_IDS"] if str(x).isdigit()]
@@ -83,7 +81,7 @@ async def load_data_async():
                 return
         except Exception as e: logger.error(f"MongoDB Load Error: {e}")
 
-    if not os.path.exists(DATA_FILE): await save_data_async(); return
+    if not os.path.exists(DATA_FILE): save_data_sync(); return
     try:
         with open(DATA_FILE, "r") as f:
             loaded = json.load(f)
@@ -100,52 +98,38 @@ async def load_data_async():
             for cid, name in DB["PAID_CHANNELS"].items(): DB["ALL_CHATS"][cid] = name
     except Exception as e: logger.error(f"Local Load Error: {e}")
 
-def load_data():
-    """Sync wrapper for Bot Startup Process"""
+
+def save_data_sync():
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running(): loop.create_task(load_data_async())
-        else: loop.run_until_complete(load_data_async())
-    except RuntimeError:
-        asyncio.run(load_data_async())
+        to_save = {
+            "ADMIN_IDS": DB["ADMIN_IDS"], "BLOCKED_USERS": DB["BLOCKED_USERS"],
+            "NEW_USERS_ALLOWED": DB.get("NEW_USERS_ALLOWED", True), "FREE_LOCKED": DB.get("FREE_LOCKED", False),
+            "PAID_LOCKED": DB.get("PAID_LOCKED", False), "TEST_BOT_LOCKED": DB.get("TEST_BOT_LOCKED", False),
+            "LINK_MAP": DB["LINK_MAP"], "SCHEDULED_DELETES": DB.get("SCHEDULED_DELETES", []),
+            "TEST_BOT_LINK": DB.get("TEST_BOT_LINK", ""), 
+            "CATEGORIES": DB.get("CATEGORIES", DEFAULT_CATEGORIES),
+            "BATCH_CATEGORIES": {str(k): v for k, v in DB.get("BATCH_CATEGORIES", {}).items()},
+            "MAINTENANCE_MODE": DB.get("MAINTENANCE_MODE", False),
+            "USERBOT_SESSION": DB.get("USERBOT_SESSION"), 
+            "USERBOT_PHONE": DB.get("USERBOT_PHONE"),
+            "CUSTOM_WELCOMES": {str(k): v for k, v in DB["CUSTOM_WELCOMES"].items()},
+            "FREE_CHANNELS": {str(k): v for k, v in DB["FREE_CHANNELS"].items()},
+            "PAID_CHANNELS": {str(k): v for k, v in DB["PAID_CHANNELS"].items()},
+            "ALL_CHATS": {str(k): v for k, v in DB["ALL_CHATS"].items()},
+            "USER_DATA": {str(k): v for k, v in DB["USER_DATA"].items()},
+            "USER_TOPICS": {str(k): v for k, v in DB["USER_TOPICS"].items()},
+            "PENDING_REQUESTS": {str(k): v for k, v in DB["PENDING_REQUESTS"].items()}
+        }
+        if MONGO_URL and mongo_collection is not None:
+            try: mongo_collection.replace_one({"_id": "main_settings"}, {"_id": "main_settings", "data": to_save}, upsert=True)
+            except Exception as e: logger.error(f"MongoDB Save Error: {e}")
+        with open(DATA_FILE, "w") as f: json.dump(to_save, f, indent=4)
+    except Exception as e: logger.error(f"Save Error: {e}")
 
 async def save_data_async():
-    async with data_lock:
-        try:
-            to_save = {
-                "ADMIN_IDS": DB["ADMIN_IDS"], "BLOCKED_USERS": DB["BLOCKED_USERS"],
-                "NEW_USERS_ALLOWED": DB.get("NEW_USERS_ALLOWED", True), "FREE_LOCKED": DB.get("FREE_LOCKED", False),
-                "PAID_LOCKED": DB.get("PAID_LOCKED", False), "TEST_BOT_LOCKED": DB.get("TEST_BOT_LOCKED", False),
-                "LINK_MAP": DB["LINK_MAP"], "SCHEDULED_DELETES": DB.get("SCHEDULED_DELETES", []),
-                "TEST_BOT_LINK": DB.get("TEST_BOT_LINK", ""), 
-                "CATEGORIES": DB.get("CATEGORIES", DEFAULT_CATEGORIES),
-                "BATCH_CATEGORIES": {str(k): v for k, v in DB.get("BATCH_CATEGORIES", {}).items()},
-                "MAINTENANCE_MODE": DB.get("MAINTENANCE_MODE", False),
-                "MAINTENANCE_AFFECTED_USERS": DB.get("MAINTENANCE_AFFECTED_USERS", []),
-                "USERBOT_SESSION": DB.get("USERBOT_SESSION"), 
-                "USERBOT_PHONE": DB.get("USERBOT_PHONE"),
-                
-                "CUSTOM_WELCOMES": {str(k): v for k, v in DB["CUSTOM_WELCOMES"].items()},
-                "FREE_CHANNELS": {str(k): v for k, v in DB["FREE_CHANNELS"].items()},
-                "PAID_CHANNELS": {str(k): v for k, v in DB["PAID_CHANNELS"].items()},
-                "ALL_CHATS": {str(k): v for k, v in DB["ALL_CHATS"].items()},
-                "USER_DATA": {str(k): v for k, v in DB["USER_DATA"].items()},
-                "USER_TOPICS": {str(k): v for k, v in DB["USER_TOPICS"].items()},
-                "PENDING_REQUESTS": {str(k): v for k, v in DB["PENDING_REQUESTS"].items()}
-            }
-            if MONGO_URL and mongo_collection is not None:
-                try: 
-                    # ✅ True Async Write (Ye background me save karega, bot slow nahi hoga)
-                    await mongo_collection.replace_one({"_id": "main_settings"}, {"_id": "main_settings", "data": to_save}, upsert=True)
-                except Exception as e: logger.error(f"MongoDB Save Error: {e}")
-                
-            # Local file fallback background process
-            def save_local():
-                with open(DATA_FILE, "w") as f: json.dump(to_save, f, indent=4)
-            await asyncio.to_thread(save_local)
-        except Exception as e: logger.error(f"Save Error: {e}")
+    async with data_lock: await asyncio.to_thread(save_data_sync)
 
-# --- CORE HELPERS ---
+# --- CORE HELPERS (FIXED BAN LOGIC) ---
 async def execute_universal_kick(user_id, context, permanent_ban=False):
     mod = False
     for bid in list(DB["FREE_CHANNELS"].keys()):
@@ -153,19 +137,30 @@ async def execute_universal_kick(user_id, context, permanent_ban=False):
             await context.bot.ban_chat_member(int(bid), user_id)
             if not permanent_ban: await context.bot.unban_chat_member(int(bid), user_id)
         except Exception: pass
+        
     for bid in list(DB["PAID_CHANNELS"].keys()):
         try:
             bid_str = str(bid); is_demo = False
             if user_id in DB["USER_DATA"] and "demos" in DB["USER_DATA"][user_id] and bid_str in DB["USER_DATA"][user_id]["demos"]: is_demo = True
-            if permanent_ban:
-                await context.bot.ban_chat_member(int(bid), user_id)
-                if is_demo: del DB["USER_DATA"][user_id]["demos"][bid_str]; mod = True
-            else:
-                if is_demo:
-                    await context.bot.ban_chat_member(int(bid), user_id); await context.bot.unban_chat_member(int(bid), user_id)
-                    del DB["USER_DATA"][user_id]["demos"][bid_str]; mod = True
+            
+            await context.bot.ban_chat_member(int(bid), user_id)
+            if not permanent_ban: await context.bot.unban_chat_member(int(bid), user_id)
+            
+            if is_demo: 
+                del DB["USER_DATA"][user_id]["demos"][bid_str]
+                mod = True
         except Exception: pass
-    if user_id not in DB["BLOCKED_USERS"]: DB["BLOCKED_USERS"].append(user_id); mod = True
+        
+    if permanent_ban:
+        if user_id not in DB["BLOCKED_USERS"]: 
+            DB["BLOCKED_USERS"].append(user_id)
+            mod = True
+    else:
+        user_key = user_id if user_id in DB["USER_DATA"] else (str(user_id) if str(user_id) in DB["USER_DATA"] else None)
+        if user_key and DB["USER_DATA"].get(user_key, {}).get("tnc_accepted", False):
+            DB["USER_DATA"][user_key]["tnc_accepted"] = False
+            mod = True
+
     if mod: await save_data_async()
 
 def is_admin(uid):
