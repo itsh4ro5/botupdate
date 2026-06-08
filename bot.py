@@ -13,11 +13,22 @@ from handlers import *
 try:
     from flask import Flask
     def _start_keepalive():
-        port = int(os.environ.get("PORT", "7860"))
+        # Render ke liye port update
+        port = int(os.environ.get("PORT", "10000"))
         app = Flask(__name__)
+        
         @app.route('/')
-        def index(): return "Bot Running - Premium Level 🚀", 200
-        def run(): app.run(host="0.0.0.0", port=port, use_reloader=False)
+        def index(): 
+            return "Bot Running - Premium Level 🚀", 200
+            
+        # Naya health check route jisse bot baar-baar restart nahi hoga
+        @app.route('/health')
+        def health(): 
+            return "OK", 200
+            
+        def run(): 
+            app.run(host="0.0.0.0", port=port, use_reloader=False)
+            
         t = threading.Thread(target=run, daemon=True)
         t.start()
 except ImportError:
