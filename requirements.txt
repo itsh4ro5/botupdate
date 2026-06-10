@@ -7,3 +7,8 @@ certifi>=2023.7.22
 pyrogram
 tgcrypto
 pymongo[srv]>=4.0
+python-telegram-bot
+pymongo
+certifi
+quart
+hypercorn
