@@ -7,21 +7,22 @@ from telegram.ext import (
 )
 from telegram.error import Conflict
 
+print("🚀 BOT SCRIPT EXECUTING...", flush=True)
+
 from config import TELEGRAM_BOT_TOKEN, LOG_CHANNEL_ID, load_data, logger
 from handlers import *
 
 try:
     from flask import Flask
     def _start_keepalive():
-        # Render ke liye port update
-        port = int(os.environ.get("PORT", "10000"))
+        print("⏳ Starting Flask Keep-Alive Server...", flush=True)
+        port = int(os.environ.get("PORT", "7860"))
         app = Flask(__name__)
         
         @app.route('/')
         def index(): 
             return "Bot Running - Premium Level 🚀", 200
             
-        # Naya health check route jisse bot baar-baar restart nahi hoga
         @app.route('/health')
         def health(): 
             return "OK", 200
@@ -31,12 +32,12 @@ try:
             
         t = threading.Thread(target=run, daemon=True)
         t.start()
+        print("✅ Flask Keep-Alive Started!", flush=True)
 except ImportError:
-    def _start_keepalive(): pass
+    def _start_keepalive(): 
+        print("⚠️ Flask module not found. Skipping Keep-Alive.", flush=True)
 
-# 👇 NAYA: Global Error Handler (Ye bot ko crash hone se bachayega) 👇
 async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-    # Agar Conflict error hai toh use ignore karo bina spam kiye
     if isinstance(context.error, Conflict):
         logger.warning("⚠️ Conflict Error: Purana aur naya bot ek sath chal raha hai. Ignoring...")
         return
@@ -49,14 +50,16 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
     except Exception:
         pass
 
-
 def main():
     _start_keepalive()
-    load_data()
     
+    print("🔄 Calling load_data()...", flush=True)
+    load_data()
+    print("✅ load_data() Completed!", flush=True)
+    
+    print("🤖 Building Telegram Bot...", flush=True)
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     
-    # --- SARE COMMANDS WAPAS REGISTER KIYE GAYE HAIN ---
     commands = [
         ("start", cmd_start), ("id", cmd_id), ("del", cmd_del_msg),
         ("addadmin", cmd_add_admin), ("deladmin", cmd_del_admin), ("backup", cmd_backup),
@@ -89,10 +92,8 @@ def main():
     app.add_handler(MessageReactionHandler(handle_reaction))
     app.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE, handle_edit))
     
-    # Message Handler (Wizards ke liye)
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, main_message_handler))
     
-    # 👇 NAYA: Error handler ko bot se connect kiya 👇
     app.add_error_handler(global_error_handler)
     
     if app.job_queue: 
@@ -100,9 +101,8 @@ def main():
         app.job_queue.run_repeating(background_sync, interval=600, first=30)
         app.job_queue.run_repeating(auto_backup_db, interval=86400, first=60)
     
-    logger.info("✅ Bot v38.0 Started Successfully!")
+    print("✅ Bot v38.0 Started Successfully! Starting Polling...", flush=True)
     
-    # 👇 FIX: drop_pending_updates=True lagaya taaki deploy ke waqt purane pending messages conflict na karein 👇
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
