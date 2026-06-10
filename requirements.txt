@@ -6,3 +6,4 @@ dnspython>=2.0
 certifi>=2023.7.22
 pyrogram
 tgcrypto
+pymongo[srv]>=4.0
