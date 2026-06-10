@@ -6,7 +6,7 @@ from telegram.ext import (
     ChatJoinRequestHandler, ChatMemberHandler, MessageReactionHandler, filters, ContextTypes
 )
 from telegram.request import HTTPXRequest
-from telegram.error import Conflict
+from telegram.error import Conflict, TimedOut, NetworkError
 from hypercorn.asyncio import serve
 from hypercorn.config import Config as HyperConfig
 
@@ -15,7 +15,7 @@ print("🚀 ADVANCED ASYNC BOT SCRIPT EXECUTING...", flush=True)
 import config
 from config import TELEGRAM_BOT_TOKEN, LOG_CHANNEL_ID, load_data, logger
 from handlers import *
-from app import app as web_app  # Quart Web App import
+from app import app as web_app  
 
 async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     if isinstance(context.error, Conflict):
@@ -27,18 +27,40 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
             await context.bot.send_message(chat_id=LOG_CHANNEL_ID, text=f"⚠️ **CRITICAL ERROR**\n`{context.error}`", parse_mode="Markdown")
     except Exception: pass
 
+# 👇 NAYA ROBUST INITIALIZATION ENGINE 👇
+async def init_bot_with_retry(bot_app, retries=5):
+    """Network Timeout bypass karne ke liye aggressive retry engine"""
+    for attempt in range(1, retries + 1):
+        try:
+            print(f"⏳ Attempt {attempt}/{retries} - Connecting to Telegram API...", flush=True)
+            await bot_app.initialize()
+            print("✅ Bot Initialized!", flush=True)
+            return True
+        except (TimedOut, NetworkError) as e:
+            print(f"⚠️ Timeout on attempt {attempt}: {e}", flush=True)
+            if attempt == retries:
+                print("❌ Failed to connect after multiple attempts. Exiting.", flush=True)
+                return False
+            print("🔄 Retrying in 3 seconds...", flush=True)
+            await asyncio.sleep(3)
+            
 async def run_bot_and_server():
     print("🔄 Loading Database...", flush=True)
     load_data()
     
     print("🤖 Building Telegram Bot...", flush=True)
     
-    # 👇 SOLUTION FIX: Network Connection Timeout ko 5s se badhakar 60s kar diya gaya hai. Ab server weak hone par bhi timeout nahi hoga!
-    t_request = HTTPXRequest(connection_pool_size=100, connect_timeout=60.0, read_timeout=60.0)
+    # HTTP/2 Force Enable and aggressive pool handling to bypass HF limits
+    t_request = HTTPXRequest(
+        connection_pool_size=100, 
+        connect_timeout=120.0,  # Extreme timeout to counter HF lag
+        read_timeout=120.0,
+        write_timeout=120.0,
+        pool_timeout=120.0,
+        http_version="2.0" # Sometimes HF blocks 1.1, HTTP/2 works better
+    )
     
     bot_app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).request(t_request).build()
-    
-    # Is bot instance ko globally save kar rahe hain taaki app.py ise use kar sake
     config.bot_app = bot_app 
     
     commands = [
@@ -76,30 +98,34 @@ async def run_bot_and_server():
         bot_app.job_queue.run_repeating(background_sync, interval=600, first=30)
         bot_app.job_queue.run_repeating(auto_backup_db, interval=86400, first=60)
 
-    # 1. Start Telegram Bot Asynchronously
-    print("⏳ Initializing Bot connection to Telegram API...", flush=True)
-    await bot_app.initialize()
-    await bot_app.start()
-    await bot_app.updater.start_polling(drop_pending_updates=True)
-    print("✅ Bot Started Polling successfully!", flush=True)
+    # Naya Retry Initialization Call
+    is_connected = await init_bot_with_retry(bot_app)
+    
+    if not is_connected:
+        print("⚠️ Skipping bot start due to network failure. Dashboard will still run.")
+    else:
+        await bot_app.start()
+        await bot_app.updater.start_polling(drop_pending_updates=True)
+        print("✅ Bot Started Polling successfully!", flush=True)
 
-    # 2. Start Quart Web Server on the SAME Event Loop (Hypercorn)
+    # Web Server Startup
     port = int(os.environ.get("PORT", "7860"))
     hyper_config = HyperConfig()
     hyper_config.bind = [f"0.0.0.0:{port}"]
     print(f"⏳ Starting Quart Web Server on port {port}...", flush=True)
     
-    # Ye function server ko live rakhega aur dono (Web + Bot) ko smoothly chalayega
     await serve(web_app, hyper_config)
     
-    # Graceful Shutdown
-    await bot_app.updater.stop()
-    await bot_app.stop()
-    await bot_app.shutdown()
+    if is_connected:
+        await bot_app.updater.stop()
+        await bot_app.stop()
+        await bot_app.shutdown()
 
 if __name__ == "__main__":
+    import nest_asyncio
+    nest_asyncio.apply() # Fixes deep nested loop errors in some environments
+    
     try:
-        # Run everything in a single master event loop
         asyncio.run(run_bot_and_server())
     except KeyboardInterrupt:
         print("Shutdown requested", flush=True)
