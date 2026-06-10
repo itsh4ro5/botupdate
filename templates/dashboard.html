@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Premium Web Dashboard</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--tg-theme-bg-color, #1e1e1e);
+            color: var(--tg-theme-text-color, #ffffff);
+            padding: 15px;
+            text-align: center;
+            margin: 0;
+        }
+        .header {
+            margin-bottom: 20px;
+        }
+        h2 {
+            color: var(--tg-theme-link-color, #3390ec);
+            margin-bottom: 5px;
+        }
+        .card {
+            background-color: var(--tg-theme-secondary-bg-color, #2d2d2d);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+            text-align: left;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        .batch-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .batch-item:last-child {
+            border-bottom: none;
+        }
+        .badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        .badge-active { background-color: #28a745; color: white; }
+        .badge-expired { background-color: #dc3545; color: white; }
+        small { color: #aaaaaa; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2 id="user-greeting">Loading...</h2>
+        <p id="user-sub">Checking subscription profile</p>
+    </div>
+
+    <div id="dashboard-content">
+        </div>
+
+    <script>
+        let tg = window.Telegram.WebApp;
+        tg.expand(); // Webview full size screen expand karein
+
+        let userId = tg.initDataUnsafe?.user?.id;
+        let firstName = tg.initDataUnsafe?.user?.first_name || "User";
+
+        if (!userId) {
+            document.getElementById("user-greeting").innerText = "⚠️ Access Denied";
+            document.getElementById("user-sub").innerText = "Please open this inside the Telegram App.";
+        } else {
+            document.getElementById("user-greeting").innerText = "Hello, " + firstName + "!";
+            document.getElementById("user-sub").innerText = "ID: " + userId;
+
+            // app.py ke API endpoint se data fetch karein
+            fetch('/api/user/' + userId)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        document.getElementById("dashboard-content").innerHTML = "<div class='card'><p>❌ No subscription details found. Chat with the bot first.</p></div>";
+                        return;
+                    }
+
+                    let mainHtml = "";
+
+                    // Demos Section
+                    if (data.demos && data.demos.length > 0) {
+                        mainHtml += "<div class='card'><h3>⏳ Demo & Trial Batches</h3>";
+                        data.demos.forEach(demo => {
+                            let statusBadge = demo.is_expired ? 
+                                "<span class='badge badge-expired'>Expired</span>" : 
+                                "<span class='badge badge-active'>Active ✅</span>";
+                            
+                            mainHtml += "<div class='batch-item'><div><b>" + demo.name + "</b><br><small>Ends: " + demo.expiry_date + "</small></div>" + statusBadge + "</div>";
+                        });
+                        mainHtml += "</div>";
+                    }
+
+                    if (mainHtml === "") {
+                        mainHtml = "<div class='card'><p>ℹ️ You don't have any active demo batches currently.</p></div>";
+                    }
+
+                    document.getElementById("dashboard-content").innerHTML = mainHtml;
+                })
+                .catch(err => {
+                    document.getElementById("dashboard-content").innerHTML = "<div class='card'><p>❌ Error connecting to backend server dashboard.</p></div>";
+                });
+        }
+    </script>
+</body>
+</html>
