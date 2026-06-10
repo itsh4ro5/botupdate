@@ -12,30 +12,14 @@ print("🚀 BOT SCRIPT EXECUTING...", flush=True)
 from config import TELEGRAM_BOT_TOKEN, LOG_CHANNEL_ID, load_data, logger
 from handlers import *
 
-try:
-    from flask import Flask
-    def _start_keepalive():
-        print("⏳ Starting Flask Keep-Alive Server...", flush=True)
-        port = int(os.environ.get("PORT", "7860"))
-        app = Flask(__name__)
-        
-        @app.route('/')
-        def index(): 
-            return "Bot Running - Premium Level 🚀", 200
-            
-        @app.route('/health')
-        def health(): 
-            return "OK", 200
-            
-        def run(): 
-            app.run(host="0.0.0.0", port=port, use_reloader=False)
-            
-        t = threading.Thread(target=run, daemon=True)
-        t.start()
-        print("✅ Flask Keep-Alive Started!", flush=True)
-except ImportError:
-    def _start_keepalive(): 
-        print("⚠️ Flask module not found. Skipping Keep-Alive.", flush=True)
+# 👇 YAHAN BADLAV KIYA GAYA HAI: Flask server ko app.py se connect kiya 👇
+def _start_keepalive():
+    try:
+        from app import start_background_server
+        start_background_server()
+    except Exception as e:
+        print(f"⚠️ Failed to load background server from app.py: {e}", flush=True)
+# 👆 ================================================================ 👆
 
 async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     if isinstance(context.error, Conflict):
