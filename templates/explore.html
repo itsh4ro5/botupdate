@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Explore Store Hub</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg-dark: #090d16;
+            --card-bg: rgba(22, 30, 49, 0.75);
+            --neon-blue: #0ea5e9;
+            --neon-purple: #a855f7;
+            --neon-green: #10b981;
+            --text-main: #f8fafc;
+            --text-muted: #64748b;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            background: radial-gradient(circle at top right, #1e1b4b, var(--bg-dark));
+            color: var(--text-main);
+            margin: 0;
+            padding: 15px;
+            min-height: 100vh;
+        }
+
+        .header-area {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .header-area h2 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+
+        /* 👇 ACCORDION MATRIX UI FOR CATEGORIES 👇 */
+        .accordion-item {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 16px;
+            margin-bottom: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .accordion-header {
+            padding: 16px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.01);
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .accordion-header:active { background: rgba(255, 255, 255, 0.04); }
+
+        .accordion-icon {
+            font-size: 14px;
+            color: var(--text-muted);
+            transition: transform 0.3s ease;
+        }
+
+        .accordion-item.open .accordion-icon { transform: rotate(180deg); color: var(--neon-blue); }
+
+        .accordion-content {
+            display: none;
+            padding: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(9, 13, 22, 0.4);
+        }
+
+        /* 👇 FREE AND PAID HUB SECTIONS 👇 */
+        .section-divider {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin: 15px 0 8px 0;
+            letter-spacing: 0.8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .section-divider:first-child { margin-top: 0; }
+
+        .sub-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.02);
+            margin-bottom: 8px;
+            border-radius: 12px;
+            border-left: 3.5px solid var(--neon-blue);
+            cursor: pointer;
+        }
+        .sub-row.paid-border { border-left-color: var(--neon-purple); }
+
+        .sub-row b { font-size: 13.5px; color: #fff; max-width: 70%; word-wrap: break-word; overflow-wrap: break-word; word-break: break-all; }
+
+        .badge { padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+        .bg-blue { background: rgba(14, 165, 233, 0.15); color: var(--neon-blue); }
+        .bg-purple { background: rgba(168, 85, 247, 0.15); color: var(--neon-purple); }
+        
+        .empty-text { font-size: 12px; color: var(--text-muted); font-style: italic; padding: 4px 0; }
+    </style>
+</head>
+<body>
+
+    <div class="header-area">
+        <h2>🌐 Explore Educational Hub</h2>
+    </div>
+
+    <div id="categories-accordion-wrapper">
+        <p style="color: var(--text-muted); font-size: 13px; text-align: center;">Mapping course categories...</p>
+    </div>
+
+    <script>
+        let tg = window.Telegram.WebApp;
+        tg.expand();
+        
+        // Telegram Native Back Button handler implementation 
+        tg.BackButton.show();
+        tg.BackButton.onClick(() => { window.location.href = '/'; });
+
+        let uid = tg.initDataUnsafe?.user?.id || 9999999;
+
+        function openBatch(chatId) {
+            if (!chatId) return;
+            tg.openTelegramLink("https://t.me/c/" + String(chatId).replace("-100", "") + "/1");
+        }
+
+        // Toggle Accordion Panels Action
+        function toggleAccordion(headerElement) {
+            let item = headerElement.parentElement;
+            let content = item.querySelector('.accordion-content');
+            let isOpen = item.classList.contains('open');
+
+            // Close all other elements first to look clean
+            document.querySelectorAll('.accordion-item').forEach(i => {
+                i.classList.remove('open');
+                i.querySelector('.accordion-content').style.display = 'none';
+            });
+
+            if (!isOpen) {
+                item.classList.add('open');
+                content.style.display = 'block';
+            }
+        }
+
+        // Fetch complete structured layout map
+        fetch('/api/explore/' + uid)
+            .then(res => res.json())
+            .then(data => {
+                let accordionHtml = "";
+
+                data.categories.forEach(cat => {
+                    let catData = data.explore_data[cat] || { "free": [], "paid": [] };
+                    
+                    // Skip printing empty categories to keep UI clean
+                    if (catData.free.length === 0 && catData.paid.length === 0) return;
+
+                    accordionHtml += `
+                        <div class="accordion-item">
+                            <div class="accordion-header" onclick="toggleAccordion(this)">
+                                <span>📁 ${cat}</span>
+                                <span class="accordion-icon">▼</span>
+                            </div>
+                            <div class="accordion-content">
+                                <div class="section-divider">📂 Free Section</div>
+                                <div class="section-box">
+                    `;
+
+                    if (catData.free.length > 0) {
+                        catData.free.forEach(b => {
+                            accordionHtml += `
+                                <div class="sub-row" onclick="openBatch('${b.id}')">
+                                    <b>${b.name}</b>
+                                    <span class="badge bg-blue">${b.status}</span>
+                                </div>
+                            `;
+                        });
+                    } else {
+                        accordionHtml += `<p class="empty-text">No free batches listed in this segment.</p>`;
+                    }
+
+                    accordionHtml += `
+                                </div>
+                                <div class="section-divider">🔐 Paid Section</div>
+                                <div class="section-box">
+                    `;
+
+                    if (catData.paid.length > 0) {
+                        catData.paid.forEach(b => {
+                            accordionHtml += `
+                                <div class="sub-row paid-border" onclick="openBatch('${b.id}')">
+                                    <b>${b.name}</b>
+                                    <span class="badge bg-purple">${b.status}</span>
+                                </div>
+                            `;
+                        });
+                    } else {
+                        accordionHtml += `<p class="empty-text">No premium channels listed in this segment.</p>`;
+                    }
+
+                    accordionHtml += `
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                document.getElementById("categories-accordion-wrapper").innerHTML = accordionHtml || `<p style="color: var(--text-muted); font-size:13px; text-align:center;">No courses active in system registry.</p>`;
+            })
+            .catch(() => {
+                document.getElementById("categories-accordion-wrapper").innerHTML = `<p style="color: var(--neon-red); font-size:13px; text-align:center;">❌ Failed to load explore server layer.</p>`;
+            });
+    </script>
+</body>
+</html>
