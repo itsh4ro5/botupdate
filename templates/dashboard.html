@@ -24,7 +24,7 @@
             margin: 0;
             padding: 15px;
             min-height: 100vh;
-            overflow-x: hidden; /* Android screen vibration aur horizontal scroll rokne ke liye */
+            overflow-x: hidden;
         }
 
         .glass-card {
@@ -128,7 +128,7 @@
 
         .stat-box .label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
 
-        /* 👇 FIXED MOBILE RESPONSIVE & CLICKABLE ROW DESIGN 👇 */
+        /* 📱 ANDROID HIGH RESPONSIVE WRAP LAYOUT ENGINE 📱 */
         .item-row {
             display: flex;
             justify-content: space-between;
@@ -138,23 +138,22 @@
             margin-bottom: 8px;
             border-radius: 10px;
             border-left: 4px solid var(--neon-blue);
-            cursor: pointer; /* User ko click karne ka hint dikhega */
+            cursor: pointer;
             transition: all 0.2s ease-in-out;
-            -webkit-tap-highlight-color: transparent; /* Android click blue highlight effect fix */
+            -webkit-tap-highlight-color: transparent;
         }
         
         .item-row:active {
             background: rgba(255,255,255,0.08);
-            transform: scale(0.99); /* Mobile tap haptic animation click feedback */
+            transform: scale(0.99);
         }
         
-        /* Text layout wrap framework logic for preventing boxes breaking */
         .item-row > div:first-child {
-            max-width: 72%; /* Right-side space box strict calculation */
+            max-width: 70%;
             text-align: left;
             word-wrap: break-word;
             overflow-wrap: break-word;
-            word-break: break-word; /* Underscores aur continuous codes ko break-wrap karega */
+            word-break: break-all; /* Fixed continuous underscore bugs */
         }
 
         .item-row > div:first-child b {
@@ -163,7 +162,7 @@
             display: block;
         }
 
-        .item-row.paid { border-left-color: var(--neon-purple); }
+        .item-row.paid-type { border-left-color: var(--neon-purple); }
         .item-row.demo-item { border-left-color: var(--neon-green); }
         .item-row.expired-item { border-left-color: var(--neon-red); opacity: 0.4; cursor: not-allowed; }
 
@@ -172,22 +171,16 @@
             border-radius: 6px;
             font-size: 11px;
             font-weight: bold;
-            flex-shrink: 0; /* 🌟 MAIN FIX: Text chahe jitna bada ho, badge ko pichakne nahi dega */
+            flex-shrink: 0; /* Prevents badges compression */
             text-align: center;
         }
-        /* 👆 ============================================================ 👆 */
 
         .bg-blue { background: rgba(56,189,248,0.2); color: var(--neon-blue); }
-        .bg-purple { background: rgba(168,85,247,0.2); color: var(--neon-purple); }
+        .bg-purple { background: rgba(168, 85, 247, 0.2); color: var(--neon-purple); }
         .bg-green { background: rgba(74,222,128,0.2); color: var(--neon-green); }
         .bg-red { background: rgba(248,113,113,0.2); color: var(--neon-red); }
 
         h3 { font-size: 16px; margin-top: 0; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
     </style>
 </head>
 <body>
@@ -218,6 +211,13 @@
             <h3>📚 My Active Batches (Subscribed)</h3>
             <div id="user-batches-list">
                 <p style="color: var(--text-muted); font-size: 13px;">Checking your community records...</p>
+            </div>
+        </div>
+
+        <div class="glass-card">
+            <h3>🌐 Explore Other Available Batches</h3>
+            <div id="explore-hub-list">
+                <p style="color: var(--text-muted); font-size: 13px;">Loading system courses...</p>
             </div>
         </div>
     </div>
@@ -267,30 +267,26 @@
 
         let avatarImg = document.getElementById("user-avatar");
         let avatarLetters = document.getElementById("avatar-letters");
-
         avatarImg.src = '/api/user/avatar/' + uid;
         
         avatarImg.onload = function() {
             avatarImg.style.display = "block";
             avatarLetters.style.display = "none";
         };
-        
         avatarImg.onerror = function() {
             avatarImg.style.display = "none";
             avatarLetters.style.display = "inline";
             avatarLetters.innerText = uName.charAt(0).toUpperCase();
         };
 
-        // 👇 NATIVE TELEGRAM SYSTEM OPENER 👇
+        // Official Native Redirection Trigger
         function openBatch(chatId) {
             if (!chatId) return;
-            // Negative chat id me se -100 string ko clean karega redirect link banane ke liye
             let cleanId = String(chatId).replace("-100", "");
-            let directLink = "https://t.me/c/" + cleanId + "/1";
-            tg.openTelegramLink(directLink); // Native redirect without external browser popup
+            tg.openTelegramLink("https://t.me/c/" + cleanId + "/1");
         }
 
-        // API Data Call
+        // Fast Data Engine Call
         fetch('/api/user/' + uid)
             .then(res => res.json())
             .then(data => {
@@ -310,11 +306,9 @@
                     }
                 }
 
-                let batchHtml = "";
-                
-                // Active / Expired Demos Handling
+                // 1. Demos Rendering
                 if (data.demos && data.demos.length > 0) {
-                    document.getElementById("demo-card-sec").style.display = "block"; // Typo fixed
+                    document.getElementById("demo-card-sec").style.display = "block";
                     let demoHtml = "";
                     data.demos.forEach(d => {
                         let bClass = d.is_expired ? "item-row expired-item" : "item-row demo-item";
@@ -327,24 +321,36 @@
                     document.getElementById("demo-list").innerHTML = demoHtml;
                 }
 
-                // Free Batches Mapping with native redirection click event
-                data.free_batches.forEach(b => {
-                    batchHtml += `<div class="item-row" onclick="openBatch('${b.id}')"><div><b>${b.name}</b><br><small>Type: Free Channel</small></div><span class="badge bg-blue">${b.status}</span></div>`;
-                });
-
-                // Paid Batches Mapping with native redirection click event
-                data.paid_batches.forEach(b => {
-                    batchHtml += `<div class="item-row paid" onclick="openBatch('${b.id}')"><div><b>${b.name}</b><br><small>Type: Premium Core</small></div><span class="badge bg-purple">${b.status}</span></div>`;
-                });
-
-                if(batchHtml !== "") {
-                    document.getElementById("user-batches-list").innerHTML = batchHtml;
+                // 2. My Batches Rendering (Only joined items)
+                let myBatchesHtml = "";
+                if(data.my_batches && data.my_batches.length > 0) {
+                    data.my_batches.forEach(b => {
+                        let isPremium = b.type === "Premium Core";
+                        let rowClass = isPremium ? "item-row paid-type" : "item-row";
+                        let badgeColor = isPremium ? "badge bg-purple" : "badge bg-blue";
+                        myBatchesHtml += `<div class="${rowClass}" onclick="openBatch('${b.id}')"><div><b>${b.name}</b><br><small>Type: ${b.type}</small></div><span class="${badgeColor}">${b.status}</span></div>`;
+                    });
+                    document.getElementById("user-batches-list").innerHTML = myBatchesHtml;
                 } else {
-                    document.getElementById("user-batches-list").innerHTML = `<p style="color: var(--text-muted); font-size: 13px;">Aap abhi kisi batch me added nahi hain. Bot se join karein.</p>`;
+                    document.getElementById("user-batches-list").innerHTML = `<p style="color: var(--text-muted); font-size: 13px;">Aap abhi kisi batch me added nahi hain.</p>`;
+                }
+
+                // 3. Explore Hub Rendering (Unjoined items)
+                let exploreHtml = "";
+                if(data.explore_hub && data.explore_hub.length > 0) {
+                    data.explore_hub.forEach(b => {
+                        let isPremium = b.type === "Premium Core";
+                        let rowClass = isPremium ? "item-row paid-type" : "item-row";
+                        let badgeColor = isPremium ? "badge bg-purple" : "badge bg-blue";
+                        exploreHtml += `<div class="${rowClass}" onclick="openBatch('${b.id}')"><div><b>${b.name}</b><br><small>Type: ${b.type}</small></div><span class="${badgeColor}">${b.status}</span></div>`;
+                    });
+                    document.getElementById("explore-hub-list").innerHTML = exploreHtml;
+                } else {
+                    document.getElementById("explore-hub-list").innerHTML = `<p style="color: var(--text-muted); font-size: 13px;">No new courses to display.</p>`;
                 }
             })
             .catch(err => {
-                document.getElementById("user-batches-list").innerHTML = `<p style="color: var(--neon-red); font-size: 13px;">❌ Error loading dynamic profile components.</p>`;
+                document.getElementById("user-batches-list").innerHTML = `<p style="color: var(--neon-red); font-size: 13px;">❌ Error loading dashboard layers.</p>`;
             });
 
         function switchTab(panelId) {
