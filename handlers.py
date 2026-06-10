@@ -637,6 +637,7 @@ async def broadcast_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if uid not in BROADCAST_STATE: return await q.answer("Expired")
     if q.data == "bc_no": del BROADCAST_STATE[uid]; return await q.edit_message_text("❌ Cancelled")
     if q.data == "bc_yes":
+        await q.answer() # Instant loading removal
         await q.edit_message_text("⏳ Processing..."); count = 0
         targets = list(DB["USER_DATA"].keys()) if BROADCAST_STATE[uid]["type"] == "broadcast" else list(DB["FREE_CHANNELS"].keys()) + list(DB["PAID_CHANNELS"].keys())
         for tid in targets:
@@ -645,16 +646,13 @@ async def broadcast_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             except Exception: pass
         await context.bot.send_message(uid, f"✅ Done. Sent to {count}."); del BROADCAST_STATE[uid]
 
-PROCESSING_USERS = set()
+# NOTE: PROCESSING_USERS HAS BEEN REMOVED FOR LAG-FREE EXPERIENCE!
 
 async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; uid = q.from_user.id; data = q.data
     
     if uid in DB["BLOCKED_USERS"]: return await q.answer("🚫 You are blocked by the admin.", show_alert=True)
     
-    if uid in PROCESSING_USERS: return await q.answer() 
-    
-    PROCESSING_USERS.add(uid)
     try:
         if data.startswith("wiz_") or data.startswith("wcat_"): return await wizard_callback(update, context)
         if data.startswith("bc_"): return await broadcast_callback(update, context)
@@ -665,6 +663,7 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await start(update, context)
 
         elif data == "dash_locks":
+            await q.answer()
             kb = [
                 [InlineKeyboardButton(f"System Lockdown: {'🔴 ON' if not DB.get('NEW_USERS_ALLOWED', True) else '🟢 OFF'}", callback_data="toggle_lockdown")],
                 [InlineKeyboardButton(f"Free Batches: {'🔴 LOCKED' if DB.get('FREE_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_free"), InlineKeyboardButton(f"Paid Batches: {'🔴 LOCKED' if DB.get('PAID_LOCKED', False) else '🟢 OPEN'}", callback_data="toggle_paid")],
@@ -675,6 +674,7 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text("🔒 **Security & Access Control**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
         elif data.startswith("toggle_"):
+            await q.answer()
             key = data.split("_")[1].upper()
             if key == "LOCKDOWN": DB["NEW_USERS_ALLOWED"] = not DB.get("NEW_USERS_ALLOWED", True)
             elif key == "MAINTENANCE": DB["MAINTENANCE_MODE"] = not DB.get("MAINTENANCE_MODE", False)
@@ -693,10 +693,12 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text("🔒 **Security & Access Control**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
         elif data == "dash_db":
+            await q.answer()
             kb = [[InlineKeyboardButton("📥 Download Backup", callback_data="act_backup"), InlineKeyboardButton("🔄 Run Sync", callback_data="act_sync")], [InlineKeyboardButton("👥 Download All Users List", callback_data="act_allusers")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
             await q.edit_message_text("🗄️ **Database Tools**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
         elif data in ["dash_batches", "adash_batches"]:
+            await q.answer()
             kb = [
                 [InlineKeyboardButton("➕ Add Batch", callback_data="act_addbatch"), InlineKeyboardButton("🗑️ Delete Batch", callback_data="input_delbatch")], 
                 [InlineKeyboardButton("📁 Add Category", callback_data="input_addcat"), InlineKeyboardButton("🗑️ Delete Category", callback_data="act_delcat")], 
@@ -707,14 +709,17 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text("📦 **Batches Management**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
         elif data == "dash_staff":
+            await q.answer()
             kb = [[InlineKeyboardButton("👮 Add Admin", callback_data="input_addadmin"), InlineKeyboardButton("🚫 Remove Admin", callback_data="input_deladmin")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
             await q.edit_message_text("👥 **Staff Management**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
         elif data in ["dash_comms", "adash_comms"]:
+            await q.answer()
             kb = [[InlineKeyboardButton("📢 Broadcast", callback_data="act_broadcast"), InlineKeyboardButton("📝 Post Message", callback_data="act_post")], [InlineKeyboardButton("🔗 Set Test Bot", callback_data="input_settestbot"), InlineKeyboardButton("👋 Set Welcome", callback_data="input_setwelcome")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
             await q.edit_message_text("📢 **Communications**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
         elif data == "userbot_details":
+            await q.answer()
             if uid != OWNER_ID: return await q.answer("❌ Access Denied! Owner only.", show_alert=True)
             
             session = DB.get("USERBOT_SESSION")
@@ -740,6 +745,7 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text("❌ **Userbot is now LOGGED OUT.**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]))
 
         elif data.startswith("input_"):
+            await q.answer()
             cmd_name = data.split("_")[1]; ADMIN_WIZARD[uid] = {"step": f"call_cmd_{cmd_name}"}
             prompts = {
                 "addadmin": "Send User ID to make Admin:", "deladmin": "Send User ID to remove from Admin:", "ban": "Send User ID to Ban:", "unban": "Send User ID to Unban:", "kick": "Send User ID and Batch ID\nFormat: `uid bid`", "find": "Send Username to find:", "resetuser": "Send User ID to reset:", "demo": "Send Link and Time:\nFormat: `link 10h`", "perm": "Send Link to approve:", "extend": "Send User ID, Batch ID, Hours:\nFormat: `uid bid 24`", "settestbot": "Send new Test Bot link:", "setwelcome": "Send Batch ID and Welcome Msg:\nFormat: `bid message`", "delbatch": "Send Type and ID:\nFormat: `free 123` or `paid 123`", "addcat": "Send Name for new Category:", "setcat": "Send Batch ID(s) (comma ya space lagakar):\nFormat: `-100x, -100y`", 
@@ -753,10 +759,12 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif data == "dash_stats": await q.answer("Generating Stats..."); await cmd_stats(update, context)
 
         elif data == "adash_users":
+            await q.answer()
             kb = [[InlineKeyboardButton("🚫 Ban", callback_data="input_ban"), InlineKeyboardButton("✅ Unban", callback_data="input_unban")], [InlineKeyboardButton("🥾 Kick", callback_data="input_kick"), InlineKeyboardButton("🔍 Find", callback_data="input_find")], [InlineKeyboardButton("🔄 Reset User Data", callback_data="input_resetuser")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
             await q.edit_message_text("👤 **User Management**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
         elif data == "adash_approvals":
+            await q.answer()
             kb = [[InlineKeyboardButton("⏳ Approve Demo", callback_data="input_demo"), InlineKeyboardButton("💎 Approve Perm", callback_data="input_perm")], [InlineKeyboardButton("➕ Extend Demo Time", callback_data="input_extend")], [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]]
             await q.edit_message_text("✅ **Access Approvals**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
@@ -764,14 +772,20 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif data == "act_sync": await q.answer("Sync Started!"); await cmd_sync(update, context)
         elif data == "act_allusers": await q.answer("Generating..."); await cmd_all_users(update, context)
         elif data == "act_batchstats": await q.answer("Calculating..."); await cmd_batch_stats(update, context)
-        elif data == "act_addbatch": await cmd_addbatch_start(update, context)
-        elif data == "act_delcat": await cmd_delcat(update, context)
-        elif data == "act_broadcast": await cmd_broadcast_start(update, context)
-        elif data == "act_post": await cmd_post_start(update, context)
+        elif data == "act_addbatch": await q.answer(); await cmd_addbatch_start(update, context)
+        elif data == "act_delcat": await q.answer(); await cmd_delcat(update, context)
+        elif data == "act_broadcast": await q.answer(); await cmd_broadcast_start(update, context)
+        elif data == "act_post": await q.answer(); await cmd_post_start(update, context)
         
-        elif data == "accept_tnc": DB.setdefault("USER_DATA", {}).setdefault(uid, {})["tnc_accepted"] = True; await save_data_async(); await show_user_menu(update)
-        elif data == "u_main": await show_user_menu(update)
-        elif data == "my_info": await q.answer(); await cmd_myinfo(update, context)
+        elif data == "accept_tnc": 
+            await q.answer()
+            DB.setdefault("USER_DATA", {}).setdefault(uid, {})["tnc_accepted"] = True; await save_data_async(); await show_user_menu(update)
+        elif data == "u_main": 
+            await q.answer()
+            await show_user_menu(update)
+        elif data == "my_info": 
+            await q.answer()
+            await cmd_myinfo(update, context)
         
         elif data == "verify":
             if await check_membership(uid, context):
@@ -790,6 +804,7 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception: pass
 
         elif data.startswith("my_batches_"):
+            await q.answer()
             if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False): return await show_tnc_menu(update, context)
             await q.edit_message_text("⏳ **Aapke batches fetch kiye ja rahe hain... Please wait.**", parse_mode=ParseMode.MARKDOWN)
             page = int(data.split("_")[-1])
@@ -812,13 +827,17 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text(f"📚 **My Batches (Page {page+1})**\n\nYahan wo sabhi batches hain jisme aap successfully join hain. Click karke direct channel access karein:", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
         elif data.startswith("all_batches_"):
+            await q.answer()
             kb = [[InlineKeyboardButton(cat, callback_data=f"showcat_{i}")] for i, cat in enumerate(DB.get("CATEGORIES", DEFAULT_CATEGORIES))] + [[InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")]]
             await q.edit_message_text("🌐 **All Batches - Select Category:**", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        
         elif data.startswith("showcat_"):
+            await q.answer()
             cat_idx = int(data.split("_")[1]); kb = [[InlineKeyboardButton("🆓 Free Batches", callback_data=f"listcat_{cat_idx}_free_0"), InlineKeyboardButton("💎 Paid Batches", callback_data=f"listcat_{cat_idx}_paid_0")], [InlineKeyboardButton("🔙 Back to Categories", callback_data="all_batches_0")]]
             await q.edit_message_text(f"📂 **Category: {DB.get('CATEGORIES', DEFAULT_CATEGORIES)[cat_idx]}**\n\nAapko kis type ke batch chahiye?", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
         
         elif data.startswith("setextcat_"):
+            await q.answer()
             cat_idx = int(data.split("_")[1])
             selected_cat = DB.get("CATEGORIES", DEFAULT_CATEGORIES)[cat_idx]
             ids = context.user_data.get('setcat_ids', [])
@@ -832,6 +851,7 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text(f"✅ **Success!**\n\nTotal `{len(ids)}` batches ko successfully **{selected_cat}** category me shift kar diya gaya hai!", parse_mode=ParseMode.MARKDOWN)
         
         elif data.startswith("listcat_"):
+            await q.answer()
             if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False): return await show_tnc_menu(update, context)
             parts = data.split("_"); cat_idx, b_type, page = int(parts[1]), parts[2], int(parts[3])
             cat_name = DB.get("CATEGORIES", DEFAULT_CATEGORIES)[cat_idx]
@@ -850,6 +870,7 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text(f"📚 **{cat_name} ({b_type.title()})**\n\nNeeche diye gaye batches par click karke join karein:", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
         elif data.startswith("delcat_"):
+            await q.answer()
             cat_idx = int(data.split("_")[1]); categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES)
             if cat_idx >= len(categories): return await q.answer("Invalid category", show_alert=True)
             deleted_cat = categories[cat_idx]
@@ -860,7 +881,9 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if cat == deleted_cat: DB["BATCH_CATEGORIES"][cid] = "Other Batches"; shifted_count += 1
             await save_data_async(); await q.edit_message_text(f"✅ Category **{deleted_cat}** delete kar di gayi hai.\n\n🔄 Uske **{shifted_count} batches** automatically 'Other Batches' me shift ho gaye hain.", parse_mode=ParseMode.MARKDOWN)
 
-        elif data == "cancel_delcat": await q.edit_message_text("❌ Category deletion cancelled.")
+        elif data == "cancel_delcat": 
+            await q.answer()
+            await q.edit_message_text("❌ Category deletion cancelled.")
 
         elif data.startswith("get_f_"):
             cid = int(data.split("_")[2])
@@ -896,8 +919,6 @@ async def general_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         logger.error(f"Callback Error: {e}")
-    finally:
-        PROCESSING_USERS.discard(uid)
         
 # --- START, MENUS & CORE EVENTS ---
 async def show_tnc_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -920,7 +941,6 @@ async def show_user_menu(update: Update):
         [InlineKeyboardButton("📚 My Batches", callback_data="my_batches_0"), InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0")], 
         [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")], 
         
-        # 👇 MUKHYA FIX: Yahan maine ek valid https:// link daal diya hai 👇
         [InlineKeyboardButton("🎥 How to use the bot", url="https://t.me/telegram")], 
         
         [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")]
@@ -931,6 +951,7 @@ async def show_user_menu(update: Update):
         except Exception: await context.bot.send_message(update.effective_chat.id, txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
     else: 
         await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user; await set_role_based_commands(user.id, context)
     if user.id not in DB["USER_DATA"]: 
