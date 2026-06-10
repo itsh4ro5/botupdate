@@ -2,190 +2,156 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Enterprise Management Terminal</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root {
-            --bg-dark: #0f172a;
-            --card-bg: rgba(30, 41, 59, 0.7);
-            --neon-blue: #38bdf8;
+            --bg-dark: #090d16;
+            --card-bg: rgba(22, 30, 49, 0.75);
+            --neon-blue: #0ea5e9;
             --neon-purple: #a855f7;
-            --neon-green: #4ade80;
-            --neon-red: #f87171;
+            --neon-green: #10b981;
+            --neon-red: #ef4444;
             --text-main: #f8fafc;
-            --text-muted: #94a3b8;
+            --text-muted: #64748b;
         }
 
         body {
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Segoe UI', Roboto, sans-serif;
             background: radial-gradient(circle at top right, #1e1b4b, var(--bg-dark));
             color: var(--text-main);
             margin: 0;
-            padding: 15px;
+            padding: 15px 15px 90px 15px;
             min-height: 100vh;
             overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
         }
 
         .glass-card {
             background: var(--card-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 18px;
+            margin-bottom: 16px;
+            box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.5);
         }
 
-        .profile-section {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
+        .profile-container { display: flex; align-items: center; gap: 15px; }
 
         .avatar {
-            width: 55px;
-            height: 55px;
+            width: 58px;
+            height: 58px;
             border-radius: 50%;
             background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple));
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 22px;
+            font-size: 24px;
             font-weight: bold;
-            box-shadow: 0 0 15px rgba(56, 189, 248, 0.5);
+            box-shadow: 0 0 20px rgba(14, 165, 233, 0.4);
             overflow: hidden;
+            border: 2px solid rgba(255, 255, 255, 0.1);
         }
 
-        .avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: none;
-        }
-
-        .user-meta h2 { margin: 0; font-size: 20px; letter-spacing: 0.5px; }
-        .user-meta p { margin: 4px 0 0 0; color: var(--text-muted); font-size: 13px; }
-
-        .tab-container {
-            display: flex;
-            background: rgba(15, 23, 42, 0.6);
-            border-radius: 10px;
-            padding: 4px;
-            margin-bottom: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .tab-btn {
-            flex: 1;
-            padding: 10px;
-            background: transparent;
-            border: none;
-            color: var(--text-muted);
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-        }
-
-        .tab-btn.active {
-            background: linear-gradient(90deg, var(--neon-blue), var(--neon-purple));
-            color: var(--text-main);
-            box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3);
-        }
-
-        .tab-panel { display: none; }
-        .tab-panel.active { display: block; animation: fadeIn 0.4s ease; }
+        .avatar img { width: 100%; height: 100%; object-fit: cover; display: none; }
+        .user-meta h2 { margin: 0; font-size: 19px; font-weight: 700; }
+        .user-meta p { margin: 3px 0 0 0; color: var(--text-muted); font-size: 12px; }
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: 1fr 1fr;
             gap: 12px;
-            margin-bottom: 20px;
+            margin-bottom: 16px;
         }
 
         .stat-box {
-            background: rgba(15, 23, 42, 0.4);
+            background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 15px;
+            border-radius: 14px;
+            padding: 12px;
             text-align: center;
         }
 
-        .stat-box .num {
-            font-size: 26px;
-            font-weight: 800;
-            display: block;
-            margin-bottom: 4px;
-        }
+        .stat-box .count { font-size: 22px; font-weight: 800; margin-bottom: 2px; display: block; }
+        .stat-box .label { font-size: 10px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; display: block; }
+        .blue-text { color: var(--neon-blue); }
+        .green-text { color: var(--neon-green); }
 
-        .blue-text { color: var(--neon-blue); text-shadow: 0 0 10px rgba(56,189,248,0.3); }
-        .purple-text { color: var(--neon-purple); text-shadow: 0 0 10px rgba(168,85,247,0.3); }
-        .red-text { color: var(--neon-red); text-shadow: 0 0 10px rgba(248,113,113,0.3); }
-        .green-text { color: var(--neon-green); text-shadow: 0 0 10px rgba(74,222,128,0.3); }
-
-        .stat-box .label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
-
-        /* 📱 ANDROID HIGH RESPONSIVE WRAP LAYOUT ENGINE 📱 */
         .item-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px;
-            background: rgba(255,255,255,0.02);
-            margin-bottom: 8px;
-            border-radius: 10px;
+            padding: 14px;
+            background: rgba(255, 255, 255, 0.02);
+            margin-bottom: 10px;
+            border-radius: 14px;
             border-left: 4px solid var(--neon-blue);
             cursor: pointer;
-            transition: all 0.2s ease-in-out;
-            -webkit-tap-highlight-color: transparent;
-        }
-        
-        .item-row:active {
-            background: rgba(255,255,255,0.08);
-            transform: scale(0.99);
-        }
-        
-        .item-row > div:first-child {
-            max-width: 70%;
-            text-align: left;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-            word-break: break-all; /* Fixed continuous underscore bugs */
+            transition: all 0.2s ease;
         }
 
-        .item-row > div:first-child b {
-            font-size: 14px;
-            line-height: 1.3;
-            display: block;
-        }
-
+        .item-row:active { transform: scale(0.99); background: rgba(255, 255, 255, 0.05); }
         .item-row.paid-type { border-left-color: var(--neon-purple); }
         .item-row.demo-item { border-left-color: var(--neon-green); }
-        .item-row.expired-item { border-left-color: var(--neon-red); opacity: 0.4; cursor: not-allowed; }
+        .item-row.expired-item { border-left-color: var(--neon-red); opacity: 0.3; }
 
-        .badge {
-            padding: 5px 10px;
-            border-radius: 6px;
-            font-size: 11px;
-            font-weight: bold;
-            flex-shrink: 0; /* Prevents badges compression */
-            text-align: center;
+        .item-row b { font-size: 14px; display: block; color: #fff; word-break: break-all; }
+        .item-row small { font-size: 11px; color: var(--text-muted); display: block; margin-top: 3px; }
+
+        .badge { padding: 5px 9px; border-radius: 7px; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+        .bg-blue { background: rgba(14, 165, 233, 0.15); color: var(--neon-blue); }
+        .bg-purple { background: rgba(168, 85, 247, 0.15); color: var(--neon-purple); }
+        .bg-green { background: rgba(16, 185, 129, 0.15); color: var(--neon-green); }
+
+        /* 👇 EXPLORE MASTER BUTTON DESIGN 👇 */
+        .explore-master-btn {
+            width: 100%;
+            background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple));
+            border: none;
+            padding: 15px;
+            border-radius: 16px;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(168, 85, 247, 0.35);
+            transition: all 0.2s ease;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .explore-master-btn:active { transform: scale(0.98); opacity: 0.9; }
+
+        .bottom-nav {
+            position: fixed;
+            bottom: 16px; left: 16px; right: 16px; height: 64px;
+            background: rgba(15, 22, 42, 0.85);
+            backdrop-filter: blur(30px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            z-index: 9999;
         }
 
-        .bg-blue { background: rgba(56,189,248,0.2); color: var(--neon-blue); }
-        .bg-purple { background: rgba(168, 85, 247, 0.2); color: var(--neon-purple); }
-        .bg-green { background: rgba(74,222,128,0.2); color: var(--neon-green); }
-        .bg-red { background: rgba(248,113,113,0.2); color: var(--neon-red); }
+        .nav-item { display: flex; flex-direction: column; align-items: center; color: var(--text-muted); cursor: pointer; font-size: 10px; font-weight: 600; }
+        .nav-item.active { color: var(--neon-blue); }
 
-        h3 { font-size: 16px; margin-top: 0; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+        h3 { font-size: 15px; margin: 0 0 14px 0; color: #cbd5e1; }
     </style>
 </head>
 <body>
 
-    <div class="glass-card profile-section">
+    <div class="glass-card profile-container">
         <div class="avatar" id="avatar-box">
             <img id="user-avatar" src="" alt="DP">
             <span id="avatar-letters">U</span>
@@ -196,69 +162,56 @@
         </div>
     </div>
 
-    <div class="tab-container" id="tab-bar">
-        <button class="tab-btn active" onclick="switchTab('user-panel')">My Dashboard</button>
-        <button class="tab-btn" id="owner-tab" style="display: none;" onclick="switchTab('owner-panel')">👑 Owner Terminal</button>
+    <div class="stats-grid">
+        <div class="stat-box"><span class="count blue-text" id="cnt-my">0</span><span class="label">Subscribed</span></div>
+        <div class="stat-box"><span class="count green-text" id="cnt-demo">0</span><span class="label">Active Trials</span></div>
     </div>
 
-    <div id="user-panel" class="tab-panel active">
+    <div id="panel-home" class="tab-panel active">
         <div class="glass-card" id="demo-card-sec" style="display: none;">
             <h3>⏳ Active Trial & Demo Accounts</h3>
             <div id="demo-list"></div>
         </div>
-
         <div class="glass-card">
-            <h3>📚 My Active Batches (Subscribed)</h3>
-            <div id="user-batches-list">
-                <p style="color: var(--text-muted); font-size: 13px;">Checking your community records...</p>
-            </div>
+            <h3>📚 My Subscribed Batches</h3>
+            <div id="user-batches-list"><p style="color: var(--text-muted); font-size: 13px;">Syncing matrix layers...</p></div>
+            
+            <button class="explore-master-btn" onclick="navigateToExplore()">
+                Explore Batches 🌐
+            </button>
         </div>
+    </div>
 
+    <div id="panel-admin" class="tab-panel">
+        <div class="glass-card" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: center;">
+            <div class="stat-box"><span class="count blue-text" id="stat-total-users">0</span><span class="label">Total Users</span></div>
+            <div class="stat-box"><span class="count red-text" id="cnt-blocked-users">0</span><span class="label">Blocked</span></div>
+        </div>
         <div class="glass-card">
-            <h3>🌐 Explore Other Available Batches</h3>
-            <div id="explore-hub-list">
-                <p style="color: var(--text-muted); font-size: 13px;">Loading system courses...</p>
+            <h3>🛡️ Security Engine & Mode Flags</h3>
+            <div class="item-row" style="border-left-color: #cbd5e1; cursor: default;">
+                <div><b>Maintenance Mode</b><br><small>Restricts bot requests</small></div>
+                <span class="badge" id="flag-maintenance">OFF</span>
+            </div>
+            <div class="item-row" style="border-left-color: #cbd5e1; cursor: default;">
+                <div><b>System Lockdown</b><br><small>Blocks registrations</small></div>
+                <span class="badge" id="flag-lockdown">OFF</span>
             </div>
         </div>
     </div>
 
-    <div id="owner-panel" class="tab-panel">
-        <div class="stats-grid">
-            <div class="stat-box">
-                <span class="num blue-text" id="stat-total-users">0</span>
-                <span class="label">Total Users</span>
-            </div>
-            <div class="stat-box">
-                <span class="num red-text" id="stat-blocked-users">0</span>
-                <span class="label">Blocked Bot</span>
-            </div>
-            <div class="stat-box">
-                <span class="num green-text" id="stat-free-count">0</span>
-                <span class="label">Free Channels</span>
-            </div>
-            <div class="stat-box">
-                <span class="num purple-text" id="stat-paid-count">0</span>
-                <span class="label">Paid Channels</span>
-            </div>
+    <div class="bottom-nav">
+        <div class="nav-item active" id="btn-nav-home" onclick="switchNavigation('panel-home', 'btn-nav-home')">
+            <span style="font-size:18px; margin-bottom:2px;">🏠</span><span>Dashboard</span>
         </div>
-
-        <div class="glass-card">
-            <h3>🛡️ Security Engine & System Flags</h3>
-            <div class="item-row" style="border-left-color: #cbd5e1; cursor: default;">
-                <div><b>Maintenance Mode</b><br><small>Restricts support messages</small></div>
-                <span class="badge" id="flag-maintenance">OFF</span>
-            </div>
-            <div class="item-row" style="border-left-color: #cbd5e1; cursor: default;">
-                <div><b>System Lockdown</b><br><small>Blocks new accounts registration</small></div>
-                <span class="badge" id="flag-lockdown">OFF</span>
-            </div>
+        <div class="nav-item" id="btn-nav-admin" style="display: none;" onclick="switchNavigation('panel-admin', 'btn-nav-admin')">
+            <span style="font-size:18px; margin-bottom:2px;">👑</span><span>Admin Panel</span>
         </div>
     </div>
 
     <script>
         let tg = window.Telegram.WebApp;
         tg.expand();
-
         let uid = tg.initDataUnsafe?.user?.id || 9999999; 
         let uName = tg.initDataUnsafe?.user?.first_name || "Premium User";
 
@@ -268,98 +221,59 @@
         let avatarImg = document.getElementById("user-avatar");
         let avatarLetters = document.getElementById("avatar-letters");
         avatarImg.src = '/api/user/avatar/' + uid;
-        
-        avatarImg.onload = function() {
-            avatarImg.style.display = "block";
-            avatarLetters.style.display = "none";
-        };
-        avatarImg.onerror = function() {
-            avatarImg.style.display = "none";
-            avatarLetters.style.display = "inline";
-            avatarLetters.innerText = uName.charAt(0).toUpperCase();
-        };
+        avatarImg.onload = () => { avatarImg.style.display = "block"; avatarLetters.style.display = "none"; };
+        avatarImg.onerror = () => { avatarImg.style.display = "none"; avatarLetters.style.display = "inline"; avatarLetters.innerText = uName.charAt(0).toUpperCase(); };
 
-        // Official Native Redirection Trigger
-        function openBatch(chatId) {
-            if (!chatId) return;
-            let cleanId = String(chatId).replace("-100", "");
-            tg.openTelegramLink("https://t.me/c/" + cleanId + "/1");
+        function navigateToExplore() {
+            window.location.href = '/explore';
         }
 
-        // Fast Data Engine Call
+        function switchNavigation(panelId, btnId) {
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+            document.getElementById(panelId).classList.add('active');
+            document.getElementById(btnId).classList.add('active');
+        }
+
+        function openBatch(chatId) {
+            if (!chatId) return;
+            tg.openTelegramLink("https://t.me/c/" + String(chatId).replace("-100", "") + "/1");
+        }
+
         fetch('/api/user/' + uid)
             .then(res => res.json())
             .then(data => {
                 if (data.is_owner || data.is_admin) {
-                    document.getElementById("owner-tab").style.display = "block";
+                    document.getElementById("btn-nav-admin").style.display = "flex";
                     if (data.system_stats) {
                         document.getElementById("stat-total-users").innerText = data.system_stats.total_users;
-                        document.getElementById("stat-blocked-users").innerText = data.system_stats.blocked_users;
-                        document.getElementById("stat-free-count").innerText = data.system_stats.free_batches_count;
-                        document.getElementById("stat-paid-count").innerText = data.system_stats.paid_batches_count;
-                        
+                        document.getElementById("cnt-blocked-users").innerText = data.system_stats.blocked_users;
                         document.getElementById("flag-maintenance").innerText = data.system_stats.maintenance_mode ? "ACTIVE 🔴" : "STABLE 🟢";
                         document.getElementById("flag-maintenance").className = data.system_stats.maintenance_mode ? "badge bg-red" : "badge bg-green";
-                        
                         document.getElementById("flag-lockdown").innerText = data.system_stats.lockdown_mode ? "LOCKED 🔴" : "OPEN 🟢";
                         document.getElementById("flag-lockdown").className = data.system_stats.lockdown_mode ? "badge bg-red" : "badge bg-green";
                     }
                 }
 
-                // 1. Demos Rendering
                 if (data.demos && data.demos.length > 0) {
                     document.getElementById("demo-card-sec").style.display = "block";
+                    document.getElementById("cnt-demo").innerText = data.demos.filter(d => !d.is_expired).length;
                     let demoHtml = "";
                     data.demos.forEach(d => {
                         let bClass = d.is_expired ? "item-row expired-item" : "item-row demo-item";
-                        let badgeColor = d.is_expired ? "badge bg-red" : "badge bg-green";
-                        let badgeText = d.is_expired ? "Expired" : d.time_left_hours + "h Left";
-                        let clickAction = d.is_expired ? "" : `onclick="openBatch('${d.id}')"`;
-                        
-                        demoHtml += `<div class="${bClass}" ${clickAction}><div><b>${d.name}</b><br><small>Ends: ${d.expiry_date}</small></div><span class="${badgeColor}">${badgeText}</span></div>`;
+                        demoHtml += `<div class="${bClass}" onclick="openBatch('${d.id}')"><div><b>${d.name}</b><br><small>Ends: ${d.expiry_date}</small></div><span class="badge bg-green">${d.time_left_hours}h</span></div>`;
                     });
                     document.getElementById("demo-list").innerHTML = demoHtml;
                 }
 
-                // 2. My Batches Rendering (Only joined items)
                 let myBatchesHtml = "";
-                if(data.my_batches && data.my_batches.length > 0) {
-                    data.my_batches.forEach(b => {
-                        let isPremium = b.type === "Premium Core";
-                        let rowClass = isPremium ? "item-row paid-type" : "item-row";
-                        let badgeColor = isPremium ? "badge bg-purple" : "badge bg-blue";
-                        myBatchesHtml += `<div class="${rowClass}" onclick="openBatch('${b.id}')"><div><b>${b.name}</b><br><small>Type: ${b.type}</small></div><span class="${badgeColor}">${b.status}</span></div>`;
-                    });
-                    document.getElementById("user-batches-list").innerHTML = myBatchesHtml;
-                } else {
-                    document.getElementById("user-batches-list").innerHTML = `<p style="color: var(--text-muted); font-size: 13px;">Aap abhi kisi batch me added nahi hain.</p>`;
-                }
-
-                // 3. Explore Hub Rendering (Unjoined items)
-                let exploreHtml = "";
-                if(data.explore_hub && data.explore_hub.length > 0) {
-                    data.explore_hub.forEach(b => {
-                        let isPremium = b.type === "Premium Core";
-                        let rowClass = isPremium ? "item-row paid-type" : "item-row";
-                        let badgeColor = isPremium ? "badge bg-purple" : "badge bg-blue";
-                        exploreHtml += `<div class="${rowClass}" onclick="openBatch('${b.id}')"><div><b>${b.name}</b><br><small>Type: ${b.type}</small></div><span class="${badgeColor}">${b.status}</span></div>`;
-                    });
-                    document.getElementById("explore-hub-list").innerHTML = exploreHtml;
-                } else {
-                    document.getElementById("explore-hub-list").innerHTML = `<p style="color: var(--text-muted); font-size: 13px;">No new courses to display.</p>`;
-                }
-            })
-            .catch(err => {
-                document.getElementById("user-batches-list").innerHTML = `<p style="color: var(--neon-red); font-size: 13px;">❌ Error loading dashboard layers.</p>`;
+                data.my_batches.forEach(b => {
+                    let isPremium = b.type === "Premium Core";
+                    myBatchesHtml += `<div class="${isPremium ? 'item-row paid-type' : 'item-row'}" onclick="openBatch('${b.id}')"><div><b>${b.name}</b><br><small>Category: ${b.category}</small></div><span class="badge ${isPremium ? 'bg-purple' : 'bg-blue'}">${b.status}</span></div>`;
+                });
+                document.getElementById("user-batches-list").innerHTML = myBatchesHtml || `<p style="color: var(--text-muted); font-size: 13px;">Aapne koi batch join nahi kiya hai.</p>`;
+                document.getElementById("cnt-my").innerText = data.my_batches.length;
             });
-
-        function switchTab(panelId) {
-            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            
-            document.getElementById(panelId).classList.add('active');
-            event.currentTarget.classList.add('active');
-        }
     </script>
 </body>
 </html>
