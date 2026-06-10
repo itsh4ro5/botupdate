@@ -4,23 +4,73 @@ import time
 import urllib.request
 import json
 import io
+import asyncio
 from flask import Flask, jsonify, render_template, send_file
-from config import DB, OWNER_ID, is_admin, logger
+import config
+from config import DB, OWNER_ID, is_admin, logger, save_data_async
 
 app = Flask(__name__)
+
+AVATAR_CACHE = {}  # In-memory memory optimization cache
+LAST_SYNC = {}    # Prevents spamming Telegram requests
+
+# 👇 BACKGROUND LIVE SYNC: Page load hone ke baad piche se membership sync karega 👇
+def sync_user_batches_background(user_id):
+    now = time.time()
+    if now - LAST_SYNC.get(user_id, 0) < 180:  # 3 Minute cooldown per user
+        return
+    LAST_SYNC[user_id] = now
+    
+    if not hasattr(config, 'bot_app') or not config.bot_app:
+        return
+
+    def run_sync():
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            async def do_async_check():
+                user_data = DB["USER_DATA"].get(str(user_id)) or DB["USER_DATA"].get(user_id)
+                if not user_data: return
+                
+                joined = []
+                all_batches = {**DB.get("FREE_CHANNELS", {}), **DB.get("PAID_CHANNELS", {})}
+                
+                for bid in all_batches.keys():
+                    try:
+                        m = await config.bot_app.bot.get_chat_member(chat_id=int(bid), user_id=user_id)
+                        if m.status in ['member', 'administrator', 'creator', 'restricted']:
+                            joined.append(int(bid))
+                    except Exception:
+                        pass
+                
+                user_data["joined_batches"] = joined
+                await save_data_async()
+                print(f"🔄 [Sync Completed] Updated live channels cache for User: {user_id}", flush=True)
+
+            loop.run_until_complete(do_async_check())
+            loop.close()
+        except Exception as e:
+            print(f"❌ Background Sync Thread Failed: {e}", flush=True)
+
+    threading.Thread(target=run_sync, daemon=True).start()
+
 
 @app.route('/')
 def index():
     return render_template('dashboard.html')
 
-# 👇 NAYA SECURE ROUTE: Telegram se DP fetch karne ke liye 👇
+
 @app.route('/api/user/avatar/<int:user_id>')
 def get_user_avatar(user_id):
+    now = time.time()
+    # If already cached in memory less than 1 hour ago -> Instant return!
+    if user_id in AVATAR_CACHE and now - AVATAR_CACHE[user_id]["time"] < 3600:
+        return send_file(io.BytesIO(AVATAR_CACHE[user_id]["bytes"]), mimetype='image/jpeg')
+
     from config import TELEGRAM_BOT_TOKEN
-    if not TELEGRAM_BOT_TOKEN:
-        return "Token missing", 400
+    if not TELEGRAM_BOT_TOKEN: return "Token missing", 400
     try:
-        # 1. User ki profile photos ki list mangwate hain
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUserProfilePhotos?user_id={user_id}&limit=1"
         req = urllib.request.Request(url)
         with urllib.request.urlopen(req) as response:
@@ -28,30 +78,31 @@ def get_user_avatar(user_id):
         
         if res_data.get("ok") and res_data["result"]["total_count"] > 0:
             photos = res_data["result"]["photos"][0]
-            # Medium size photo select karte hain bandwidth bachane ke liye
             file_id = photos[1]["file_id"] if len(photos) > 1 else photos[0]["file_id"]
             
-            # 2. File ka internal path nikalte hain
             file_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getFile?file_id={file_id}"
             with urllib.request.urlopen(file_url) as file_res:
                 file_data = json.loads(file_res.read().decode())
             
             if file_data.get("ok"):
                 file_path = file_data["result"]["file_path"]
-                # 3. Actual image bytes download karke Flask se stream karte hain
                 img_url = f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}/{file_path}"
                 with urllib.request.urlopen(img_url) as img_res:
                     img_bytes = img_res.read()
                 
+                # Save into cache structure
+                AVATAR_CACHE[user_id] = {"bytes": img_bytes, "time": now}
                 return send_file(io.BytesIO(img_bytes), mimetype='image/jpeg')
-    except Exception as e:
-        print(f"⚠️ Error fetching avatar: {e}", flush=True)
-    
-    # Agar DP nahi set hoto 404 return karega jisse HTML fallback trigger ho sake
+    except Exception:
+        pass
     return "No avatar", 404
+
 
 @app.route('/api/user/<int:user_id>')
 def get_user_data(user_id):
+    # Trigger background sync thread (Dashboard remains fast, data updates silently!)
+    sync_user_batches_background(user_id)
+
     user_data = DB["USER_DATA"].get(str(user_id)) or DB["USER_DATA"].get(user_id)
     is_user_owner = (str(user_id) == str(OWNER_ID)) or (user_id == OWNER_ID)
     is_user_admin = is_admin(user_id)
@@ -62,11 +113,10 @@ def get_user_data(user_id):
         "user_info": {
             "id": user_id,
             "name": user_data.get("name", "Premium Member") if user_data else "Guest User",
-            "username": user_data.get("username", "N/A") if user_data else "N/A",
-            "tnc_accepted": user_data.get("tnc_accepted", False) if user_data else False
+            "username": user_data.get("username", "N/A") if user_data else "N/A"
         },
-        "free_batches": [],
-        "paid_batches": [],
+        "my_batches": [],      # User ke actual joined channels yahan aayenge
+        "explore_hub": [],     # Jo channels user ne join nahi kiye, wo yahan dikhenge
         "demos": []
     }
     
@@ -74,6 +124,11 @@ def get_user_data(user_id):
     now = time.time()
 
     if user_data:
+        # User ke cached joined channel list check karein
+        joined_list = user_data.get("joined_batches", [])
+        demo_keys = list(user_data.get("demos", {}).keys())
+
+        # Demos Parsing
         if "demos" in user_data:
             for bid, d_data in user_data["demos"].items():
                 bname = all_chats_dict.get(bid) or all_chats_dict.get(int(bid)) or f"Batch {bid}"
@@ -86,13 +141,35 @@ def get_user_data(user_id):
                     "id": bid, "name": bname, "is_expired": is_expired, "expiry_date": expiry_str, "time_left_hours": round(time_left / 3600, 1)
                 })
 
+        # Free Batches Sorting Logic
         for bid, name in DB.get("FREE_CHANNELS", {}).items():
-            response["free_batches"].append({"id": bid, "name": name, "status": "Joined ✅"})
+            is_joined = (int(bid) in joined_list) or (str(bid) in joined_list)
+            batch_payload = {"id": bid, "name": name, "type": "Free Channel"}
             
+            if is_joined:
+                batch_payload["status"] = "Joined ✅"
+                response["my_batches"].append(batch_payload)
+            else:
+                batch_payload["status"] = "Join Now 📂"
+                response["explore_hub"].append(batch_payload)
+                
+        # Paid Batches Sorting Logic
         for bid, name in DB.get("PAID_CHANNELS", {}).items():
-            has_demo = str(bid) in user_data.get("demos", {})
-            status = "Demo Run ⏳" if has_demo else "Lifetime Access 💎"
-            response["paid_batches"].append({"id": bid, "name": name, "status": status})
+            bid_str = str(bid)
+            is_joined = (int(bid) in joined_list) or (bid_str in joined_list)
+            has_demo = bid_str in demo_keys
+            
+            batch_payload = {"id": bid, "name": name, "type": "Premium Core"}
+            
+            if is_joined:
+                batch_payload["status"] = "Lifetime Access 💎"
+                response["my_batches"].append(batch_payload)
+            elif has_demo:
+                batch_payload["status"] = "Demo Run ⏳"
+                response["my_batches"].append(batch_payload)
+            else:
+                batch_payload["status"] = "Buy Access 🔐"
+                response["explore_hub"].append(batch_payload)
 
     if is_user_owner or is_user_admin:
         response["system_stats"] = {
@@ -105,9 +182,6 @@ def get_user_data(user_id):
         }
 
     return jsonify(response), 200
-
-def health():
-    return "OK", 200
 
 def start_background_server():
     print("⏳ Starting Premium Multi-Role Flask Server...", flush=True)
