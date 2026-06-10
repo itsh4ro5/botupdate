@@ -9,17 +9,16 @@ from telegram.error import Conflict
 
 print("🚀 BOT SCRIPT EXECUTING...", flush=True)
 
+import config
 from config import TELEGRAM_BOT_TOKEN, LOG_CHANNEL_ID, load_data, logger
 from handlers import *
 
-# 👇 YAHAN BADLAV KIYA GAYA HAI: Flask server ko app.py se connect kiya 👇
 def _start_keepalive():
     try:
         from app import start_background_server
         start_background_server()
     except Exception as e:
         print(f"⚠️ Failed to load background server from app.py: {e}", flush=True)
-# 👆 ================================================================ 👆
 
 async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     if isinstance(context.error, Conflict):
@@ -35,14 +34,17 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
         pass
 
 def main():
+    print("🤖 Building Telegram Bot...", flush=True)
+    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    
+    # 👇 NAYI LINE: Bot App instance ko config me save kiya app.py ke liye 👇
+    config.bot_app = app 
+    
     _start_keepalive()
     
     print("🔄 Calling load_data()...", flush=True)
     load_data()
     print("✅ load_data() Completed!", flush=True)
-    
-    print("🤖 Building Telegram Bot...", flush=True)
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     
     commands = [
         ("start", cmd_start), ("id", cmd_id), ("del", cmd_del_msg),
