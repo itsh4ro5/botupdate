@@ -1,5 +1,6 @@
 import os
 import asyncio
+import sys
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, 
@@ -10,7 +11,7 @@ from telegram.error import Conflict
 from hypercorn.asyncio import serve
 from hypercorn.config import Config as HyperConfig
 
-print("🚀 ADVANCED ASYNC BOT SCRIPT EXECUTING...", flush=True)
+print("🚀 ENTERPRISE ASYNC ENGINE STARTING...", flush=True)
 
 import config
 from config import TELEGRAM_BOT_TOKEN, LOG_CHANNEL_ID, load_data, logger
@@ -19,7 +20,7 @@ from app import app as web_app
 
 async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     if isinstance(context.error, Conflict):
-        logger.warning("⚠️ Conflict Error: Purana aur naya bot ek sath chal raha hai. Ignoring...")
+        logger.warning("⚠️ Conflict Error: Parallel instance detected. Ignoring...")
         return
     logger.error(msg="Exception while handling an update:", exc_info=context.error)
     try:
@@ -28,51 +29,41 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
     except Exception: pass
 
 async def init_bot_with_retry(bot_app, retries=5):
-    """Network Timeout aur HTTPX Connect Errors bypass karne ke liye engine"""
+    """Network block check karne aur initialization layers pass karne ka engine"""
     for attempt in range(1, retries + 1):
         try:
-            print(f"⏳ Attempt {attempt}/{retries} - Connecting to Telegram API...", flush=True)
+            print(f"⏳ Attempt {attempt}/{retries} - Connecting via Proxy Mirror Gateway...", flush=True)
             await bot_app.initialize()
-            print("✅ Bot Initialized Successfully!", flush=True)
+            print("✅ Connection Established! Bot Authorized Successfully!", flush=True)
             return True
         except Exception as e:
-            print(f"⚠️ Network Error on attempt {attempt}: {e}", flush=True)
+            print(f"⚠️ Gateway bypass failed on attempt {attempt}: {e}", flush=True)
             if attempt == retries:
-                print("❌ Failed to connect after multiple attempts.", flush=True)
+                print("❌ Firewall block persistent. Standing by for proxy injection.", flush=True)
                 return False
-            print("🔄 Retrying in 3 seconds...", flush=True)
+            print("🔄 Re-routing socket stream in 3 seconds...", flush=True)
             await asyncio.sleep(3)
             
 async def run_bot_and_server():
-    print("🔄 Loading Database...", flush=True)
+    print("🔄 Syncing Data Matrices...", flush=True)
     load_data()
     
-    print("🤖 Building Telegram Bot...", flush=True)
+    print("🤖 Configuring Telegram Bot Instance...", flush=True)
     
-    # 👇 SOLUTION: Environment variables se Proxy aur Custom Endpoint details uthana 👇
-    PROXY_URL = os.environ.get("PROXY_URL", None) # Example: http://proxy_ip:port
-    CUSTOM_BASE_URL = os.environ.get("CUSTOM_BASE_URL", None) # Alternative Telegram API URL
-    
-    if PROXY_URL:
-        print(f"🌐 Routing traffic through custom proxy: {PROXY_URL}", flush=True)
-    if CUSTOM_BASE_URL:
-        print(f"🔗 Using alternative Base URL endpoint: {CUSTOM_BASE_URL}", flush=True)
+    # Environment variables se Cloudflare worker ka address fetch karna
+    # Agar variable nahi hoga, toh ye default api.telegram.org par chalega
+    CUSTOM_BASE_URL = os.environ.get("CUSTOM_BASE_URL", "https://api.telegram.org/bot")
+    print(f"🔗 Network Base URL Pointed to: {CUSTOM_BASE_URL}", flush=True)
 
     t_request = HTTPXRequest(
-        connection_pool_size=100, 
-        connect_timeout=60.0,  
-        read_timeout=60.0,
-        write_timeout=60.0,
-        pool_timeout=60.0,
-        proxy_url=PROXY_URL # Sets proxy injection dynamically
+        connection_pool_size=150, 
+        connect_timeout=40.0,  
+        read_timeout=40.0,
+        write_timeout=40.0
     )
     
-    # Application builder initialization with optional custom endpoint mapping
-    bot_builder = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).request(t_request)
-    if CUSTOM_BASE_URL:
-        bot_builder.base_url(CUSTOM_BASE_URL)
-        
-    bot_app = bot_builder.build()
+    # Injecting Custom Proxy Base URL to unblock Hugging Face limits completely
+    bot_app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).base_url(CUSTOM_BASE_URL).request(t_request).build()
     config.bot_app = bot_app 
     
     commands = [
@@ -88,9 +79,7 @@ async def run_bot_and_server():
         ("user", cmd_user_details), ("batches", cmd_batches), ("addbatch", cmd_addbatch_start),
         ("delbatch", cmd_delbatch), ("broadcast", cmd_broadcast_start), ("post", cmd_post_start),
         ("cancel", cmd_cancel), ("addcat", cmd_addcat), ("setcat", cmd_setcategory),
-        ("delcat", cmd_delcat), ("clear", cmd_clear), ("maintenance", cmd_maintenance),
-        ("emptybatch", cmd_emptybatch), ("userbotphone", cmd_userbotphone),
-        ("userbototp", cmd_userbototp), ("userbotpass", cmd_userbotpass)
+        ("delcat", cmd_delcat), ("clear", cmd_clear), ("maintenance", cmd_maintenance)
     ]
     for cmd_name, func in commands: bot_app.add_handler(CommandHandler(cmd_name, func))
     
@@ -111,20 +100,21 @@ async def run_bot_and_server():
         bot_app.job_queue.run_repeating(background_sync, interval=600, first=30)
         bot_app.job_queue.run_repeating(auto_backup_db, interval=86400, first=60)
 
+    # Triggering connection
     is_connected = await init_bot_with_retry(bot_app)
     
     if not is_connected:
-        print("⚠️ Skipping bot polling engine due to persistent network block. Web app dashboard is active.")
+        print("⚠️ Direct core initialization failed. Standby for gateway route.", flush=True)
     else:
         await bot_app.start()
         await bot_app.updater.start_polling(drop_pending_updates=True)
-        print("✅ Bot Started Polling successfully!", flush=True)
+        print("✅ BOT ENGINE OPERATIONAL! Polling loop listening...", flush=True)
 
-    # Web Server Startup
+    # Launching async Quart app in the exact same event loop (Just like your src project)
     port = int(os.environ.get("PORT", "7860"))
     hyper_config = HyperConfig()
     hyper_config.bind = [f"0.0.0.0:{port}"]
-    print(f"⏳ Starting Quart Web Server on port {port}...", flush=True)
+    print(f"⏳ Starting Async Web Server Dashboard on port {port}...", flush=True)
     
     await serve(web_app, hyper_config)
     
@@ -139,4 +129,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(run_bot_and_server())
     except KeyboardInterrupt:
-        print("Shutdown requested", flush=True)
+        print("Safely shutting down terminal cores.", flush=True)
