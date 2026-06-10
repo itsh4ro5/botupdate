@@ -12,3 +12,6 @@ pymongo
 certifi
 quart
 hypercorn
+python-telegram-bot
+httpx[http2]
+nest_asyncio
