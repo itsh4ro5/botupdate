@@ -44,18 +44,21 @@ mongo_client = mongo_collection = None
 # --- MONGODB SETUP ---
 if MONGO_URL:
     try:
+        logger.info("⏳ Connecting to MongoDB Atlas...")
         from pymongo import MongoClient
         import certifi
         mongo_client = MongoClient(MONGO_URL, tlsCAFile=certifi.where())
         mongo_db = mongo_client.get_database("telegram_bot_db")
         mongo_collection = mongo_db.get_collection("bot_settings")
-        logger.info("✅ Connected to MongoDB Atlas")
+        logger.info("✅ Connected to MongoDB Atlas Successfully!")
     except Exception as e:
-        logger.error(f"❌ MongoDB Connection Failed: {e}"); MONGO_URL = None
+        logger.error(f"❌ MongoDB Connection Failed: {e}")
+        MONGO_URL = None
 
 # --- DATABASE FUNCTIONS ---
 def load_data():
     global DB
+    logger.info("🔄 Loading Data...")
     keys_to_load = [
         "LINK_MAP", "NEW_USERS_ALLOWED", "FREE_LOCKED", "PAID_LOCKED", "TEST_BOT_LOCKED", 
         "SCHEDULED_DELETES", "TEST_BOT_LINK", "MAINTENANCE_MODE", "CATEGORIES", "BATCH_CATEGORIES", 
@@ -78,9 +81,11 @@ def load_data():
                 if OWNER_ID not in DB["ADMIN_IDS"]: DB["ADMIN_IDS"].append(OWNER_ID)
                 for cid, name in DB["FREE_CHANNELS"].items(): DB["ALL_CHATS"][cid] = name
                 for cid, name in DB["PAID_CHANNELS"].items(): DB["ALL_CHATS"][cid] = name
+                logger.info("✅ Data Loaded from MongoDB!")
                 return
-        except Exception as e: logger.error(f"MongoDB Load Error: {e}")
+        except Exception as e: logger.error(f"❌ MongoDB Load Error: {e}")
 
+    logger.info("⚠️ Falling back to Local JSON Data...")
     if not os.path.exists(DATA_FILE): save_data_sync(); return
     try:
         with open(DATA_FILE, "r") as f:
@@ -96,7 +101,8 @@ def load_data():
             if OWNER_ID not in DB["ADMIN_IDS"]: DB["ADMIN_IDS"].append(OWNER_ID)
             for cid, name in DB["FREE_CHANNELS"].items(): DB["ALL_CHATS"][cid] = name
             for cid, name in DB["PAID_CHANNELS"].items(): DB["ALL_CHATS"][cid] = name
-    except Exception as e: logger.error(f"Local Load Error: {e}")
+            logger.info("✅ Data Loaded from Local JSON!")
+    except Exception as e: logger.error(f"❌ Local Load Error: {e}")
 
 
 def save_data_sync():
@@ -121,13 +127,25 @@ def save_data_sync():
             "PENDING_REQUESTS": {str(k): v for k, v in DB["PENDING_REQUESTS"].items()}
         }
         if MONGO_URL and mongo_collection is not None:
-            try: mongo_collection.replace_one({"_id": "main_settings"}, {"_id": "main_settings", "data": to_save}, upsert=True)
-            except Exception as e: logger.error(f"MongoDB Save Error: {e}")
+            try: 
+                mongo_collection.replace_one({"_id": "main_settings"}, {"_id": "main_settings", "data": to_save}, upsert=True)
+            except Exception as e: logger.error(f"❌ MongoDB Save Error: {e}")
         with open(DATA_FILE, "w") as f: json.dump(to_save, f, indent=4)
-    except Exception as e: logger.error(f"Save Error: {e}")
+    except Exception as e: logger.error(f"❌ Save Error: {e}")
+
+# 👇 NAYA BACKGROUND SAVE LOGIC 👇
+async def _background_save():
+    async with data_lock:
+        try:
+            logger.info("💾 Saving Data in Background...")
+            await asyncio.to_thread(save_data_sync)
+            logger.info("✅ Background Save Complete!")
+        except Exception as e:
+            logger.error(f"❌ Background Save Failed: {e}")
 
 async def save_data_async():
-    async with data_lock: await asyncio.to_thread(save_data_sync)
+    # Tasks run in background, button won't freeze!
+    asyncio.create_task(_background_save())
 
 # --- CORE HELPERS (FIXED BAN LOGIC) ---
 async def execute_universal_kick(user_id, context, permanent_ban=False):
@@ -210,5 +228,7 @@ async def get_or_create_topic(user, context):
         text = f"👤 **NEW USER TICKET**\n📛 {user.full_name}\n🆔 `{user.id}`\n📜 [Click to Check History](https://t.me/c/{group_id_str}?q={user.id})"
         await context.bot.send_message(SUPPORT_GROUP_ID, text, message_thread_id=topic.message_thread_id, parse_mode=ParseMode.MARKDOWN)
         return topic.message_thread_id
-    except Exception: return None
+    except Exception as e: 
+        logger.error(f"Topic Creation Error: {e}")
+        return None
     finally: TOPIC_CREATION_LOCK.discard(user.id)
