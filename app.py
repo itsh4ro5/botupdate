@@ -10,8 +10,12 @@ AVATAR_CACHE = {}
 
 @app.route('/')
 async def index():
-    # Quart me templates direct async render hote hain
     return await render_template('dashboard.html')
+
+# 👇 NAYA ROUTE: Explore Batches ka dedicated page render karne ke liye 👇
+@app.route('/explore')
+async def explore_page():
+    return await render_template('explore.html')
 
 @app.route('/api/user/avatar/<int:user_id>')
 async def get_user_avatar(user_id):
@@ -23,23 +27,21 @@ async def get_user_avatar(user_id):
         return "Bot not ready", 503
 
     try:
-        # Direct Bot Object se photo fetch kar rahe hain (No extra API loops)
         bot = config.bot_app.bot
         photos = await bot.get_user_profile_photos(user_id, limit=1)
         
         if photos.total_count > 0:
-            photo = photos.photos[0][-1] # Get best resolution
+            photo = photos.photos[0][-1]
             file = await bot.get_file(photo.file_id)
             
-            # Download file into memory async
             out = bytearray()
             await file.download_to_memory(out)
             img_bytes = bytes(out)
             
             AVATAR_CACHE[user_id] = {"bytes": img_bytes, "time": now}
             return await send_file(io.BytesIO(img_bytes), mimetype='image/jpeg')
-    except Exception as e:
-        print(f"⚠️ Avatar fetch error: {e}")
+    except Exception:
+        pass
         
     return "No avatar", 404
 
@@ -58,41 +60,34 @@ async def get_user_data(user_id):
             "username": user_data.get("username", "N/A")
         },
         "my_batches": [],
-        "explore_hub": [],
         "demos": []
     }
     
     all_chats_dict = DB.get("ALL_CHATS", {})
+    batch_cats = DB.get("BATCH_CATEGORIES", {})
     now = time.time()
-    
     joined_list = []
     
-    # 🌟 MAGIC: Parallel Async Batch Checking (Like src project)
     if hasattr(config, 'bot_app') and config.bot_app:
         bot = config.bot_app.bot
-        
         async def check_membership(bid):
             try:
                 m = await bot.get_chat_member(int(bid), user_id)
                 if m.status in ['member', 'administrator', 'creator', 'restricted']:
                     return int(bid)
-            except Exception:
-                pass
+            except Exception: pass
             return None
 
-        # Check all batches at the SAME time, not one-by-one!
         tasks = [check_membership(bid) for bid in all_chats_dict.keys()]
         results = await asyncio.gather(*tasks)
         joined_list = [r for r in results if r is not None]
 
-        # Update Live cache for other features
         if str(user_id) in DB["USER_DATA"]:
             DB["USER_DATA"][str(user_id)]["joined_batches"] = joined_list
-            asyncio.create_task(config.save_data_async()) # Fire and forget save
+            asyncio.create_task(config.save_data_async())
 
     demo_keys = list(user_data.get("demos", {}).keys()) if user_data else []
 
-    # 1. Demos Logic
     if "demos" in user_data:
         for bid, d_data in user_data["demos"].items():
             bname = all_chats_dict.get(bid) or all_chats_dict.get(int(bid)) or f"Batch {bid}"
@@ -106,51 +101,77 @@ async def get_user_data(user_id):
                 "time_left_hours": round(time_left / 3600, 1)
             })
 
-    # 2. Free Batches
+    # Subscribed Free Batches
     for bid, name in DB.get("FREE_CHANNELS", {}).items():
         is_joined = int(bid) in joined_list or str(bid) in joined_list
-        batch = {"id": bid, "name": name, "type": "Free Channel"}
         if is_joined:
-            batch["status"] = "Joined ✅"
-            response["my_batches"].append(batch)
-        else:
-            batch["status"] = "Join Now 📂"
-            response["explore_hub"].append(batch)
+            response["my_batches"].append({"id": bid, "name": name, "type": "Free Channel", "status": "Joined ✅", "category": batch_cats.get(str(bid), "Other Batches")})
             
-    # 3. Paid Batches
+    # Subscribed Paid Batches
     for bid, name in DB.get("PAID_CHANNELS", {}).items():
         bid_str = str(bid)
         is_joined = int(bid) in joined_list or bid_str in joined_list
         has_demo = bid_str in demo_keys
-        batch = {"id": bid, "name": name, "type": "Premium Core"}
         
-        if is_joined:
-            batch["status"] = "Lifetime Access 💎"
-            response["my_batches"].append(batch)
-        elif has_demo:
-            exp = user_data["demos"][bid_str]["expiry"] if isinstance(user_data["demos"][bid_str], dict) else float(user_data["demos"][bid_str])
-            if now > exp:
-                batch["status"] = "Expired ❌"
-                response["explore_hub"].append(batch)
-            else:
-                batch["status"] = "Demo Run ⏳"
-                response["my_batches"].append(batch)
-        else:
-            batch["status"] = "Buy Access 🔐"
-            response["explore_hub"].append(batch)
+        if is_joined or has_demo:
+            status = "Lifetime Access 💎" if is_joined else "Demo Run ⏳"
+            if has_demo:
+                exp = user_data["demos"][bid_str]["expiry"] if isinstance(user_data["demos"][bid_str], dict) else float(user_data["demos"][bid_str])
+                if now > exp: continue
+            response["my_batches"].append({"id": bid, "name": name, "type": "Premium Core", "status": status, "category": batch_cats.get(bid_str, "Other Batches")})
 
     if is_user_owner or is_user_admin:
         response["system_stats"] = {
             "total_users": len(DB.get("USER_DATA", {})),
             "blocked_users": len(DB.get("BLOCKED_USERS", [])),
-            "free_batches_count": len(DB.get("FREE_CHANNELS", {})),
-            "paid_batches_count": len(DB.get("PAID_CHANNELS", {})),
             "maintenance_mode": DB.get("MAINTENANCE_MODE", False),
             "lockdown_mode": not DB.get("NEW_USERS_ALLOWED", True)
         }
 
     return jsonify(response)
 
-@app.route('/health')
-async def health():
-    return "OK", 200
+# 👇 NAYA API ENDPOINT: Explore Page ke liye Category wise Free/Paid distribute karne ke liye 👇
+@app.route('/api/explore/<int:user_id>')
+async def api_explore_data(user_id):
+    user_data = DB["USER_DATA"].get(str(user_id)) or DB["USER_DATA"].get(user_id) or {}
+    joined_list = user_data.get("joined_batches", [])
+    demo_keys = list(user_data.get("demos", {}).keys())
+    now = time.time()
+
+    categories = DB.get("CATEGORIES", [])
+    free_channels = DB.get("FREE_CHANNELS", {})
+    paid_channels = DB.get("PAID_CHANNELS", {})
+    batch_cats = DB.get("BATCH_CATEGORIES", {})
+
+    # Structure initialization
+    explore_data = {cat: {"free": [], "paid": []} for cat in categories}
+    if "Other Batches" not in explore_data:
+        explore_data["Other Batches"] = {"free": [], "paid": []}
+
+    # Free Sorting
+    for bid, name in free_channels.items():
+        cat = batch_cats.get(str(bid), "Other Batches")
+        if cat not in explore_data: explore_data[cat] = {"free": [], "paid": []}
+        is_joined = int(bid) in joined_list or str(bid) in joined_list
+        status = "Joined ✅" if is_joined else "Join Now 📂"
+        explore_data[cat]["free"].append({"id": bid, "name": name, "status": status})
+
+    # Paid Sorting
+    for bid, name in paid_channels.items():
+        bid_str = str(bid)
+        cat = batch_cats.get(bid_str, "Other Batches")
+        if cat not in explore_data: explore_data[cat] = {"free": [], "paid": []}
+        is_joined = int(bid) in joined_list or bid_str in joined_list
+        has_demo = bid_str in demo_keys
+        
+        status = "Lifetime Access 💎" if is_joined else ("Demo Run ⏳" if has_demo else "Buy Access 🔐")
+        if has_demo:
+            exp = user_data["demos"][bid_str]["expiry"] if isinstance(user_data["demos"][bid_str], dict) else float(user_data["demos"][bid_str])
+            if now > exp: status = "Expired ❌"
+
+        explore_data[cat]["paid"].append({"id": bid, "name": name, "status": status})
+
+    return jsonify({
+        "categories": categories,
+        "explore_data": explore_data
+    })
