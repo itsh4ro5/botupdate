@@ -33,9 +33,9 @@ async def init_bot_with_retry(bot_app, retries=5):
         try:
             print(f"⏳ Attempt {attempt}/{retries} - Connecting to Telegram API...", flush=True)
             await bot_app.initialize()
-            print("✅ Bot Initialized!", flush=True)
+            print("✅ Bot Initialized Successfully!", flush=True)
             return True
-        except Exception as e:  # Ab ye sabhi tarah ke HTTPX/Timeout errors pakdega
+        except Exception as e:
             print(f"⚠️ Network Error on attempt {attempt}: {e}", flush=True)
             if attempt == retries:
                 print("❌ Failed to connect after multiple attempts.", flush=True)
@@ -49,16 +49,30 @@ async def run_bot_and_server():
     
     print("🤖 Building Telegram Bot...", flush=True)
     
-    # 👇 FIX: http_version="2.0" Hata diya gaya hai. Ab HF ka network ise block nahi karega. 👇
+    # 👇 SOLUTION: Environment variables se Proxy aur Custom Endpoint details uthana 👇
+    PROXY_URL = os.environ.get("PROXY_URL", None) # Example: http://proxy_ip:port
+    CUSTOM_BASE_URL = os.environ.get("CUSTOM_BASE_URL", None) # Alternative Telegram API URL
+    
+    if PROXY_URL:
+        print(f"🌐 Routing traffic through custom proxy: {PROXY_URL}", flush=True)
+    if CUSTOM_BASE_URL:
+        print(f"🔗 Using alternative Base URL endpoint: {CUSTOM_BASE_URL}", flush=True)
+
     t_request = HTTPXRequest(
         connection_pool_size=100, 
         connect_timeout=60.0,  
         read_timeout=60.0,
         write_timeout=60.0,
-        pool_timeout=60.0
+        pool_timeout=60.0,
+        proxy_url=PROXY_URL # Sets proxy injection dynamically
     )
     
-    bot_app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).request(t_request).build()
+    # Application builder initialization with optional custom endpoint mapping
+    bot_builder = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).request(t_request)
+    if CUSTOM_BASE_URL:
+        bot_builder.base_url(CUSTOM_BASE_URL)
+        
+    bot_app = bot_builder.build()
     config.bot_app = bot_app 
     
     commands = [
@@ -86,10 +100,11 @@ async def run_bot_and_server():
     bot_app.add_handler(ChatMemberHandler(on_chat_member_update, ChatMemberHandler.CHAT_MEMBER))
     bot_app.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
     bot_app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS | filters.StatusUpdate.LEFT_CHAT_MEMBER, delete_service_messages))
+    bot_app.add_error_handler(global_error_handler)
+    
     bot_app.add_handler(MessageReactionHandler(handle_reaction))
     bot_app.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE, handle_edit))
     bot_app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, main_message_handler))
-    bot_app.add_error_handler(global_error_handler)
     
     if bot_app.job_queue: 
         bot_app.job_queue.run_repeating(check_demos, interval=60, first=10)
@@ -99,7 +114,7 @@ async def run_bot_and_server():
     is_connected = await init_bot_with_retry(bot_app)
     
     if not is_connected:
-        print("⚠️ Skipping bot start due to network failure. Dashboard will still run.")
+        print("⚠️ Skipping bot polling engine due to persistent network block. Web app dashboard is active.")
     else:
         await bot_app.start()
         await bot_app.updater.start_polling(drop_pending_updates=True)
@@ -121,7 +136,6 @@ async def run_bot_and_server():
 if __name__ == "__main__":
     import nest_asyncio
     nest_asyncio.apply() 
-    
     try:
         asyncio.run(run_bot_and_server())
     except KeyboardInterrupt:
