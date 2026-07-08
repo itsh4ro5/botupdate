@@ -2242,184 +2242,170 @@ async def delete_service_messages(client: Client, message: Message):
 
 
 # =====================================================================
-# 🔥 LIVE EDITED MESSAGES SYNC ENGINE
+# 🔄 LIVE EDITED MESSAGES SYNC ENGINE
 # =====================================================================
 async def handle_edit(client: Client, message: Message):
-  m = message
-  key = (m.chat.id, m.id)
-  if key in MESSAGE_MAP:
-    tc, tm = MESSAGE_MAP[key]
-    try:
-      if (
-          not m.photo
-          and not m.video
-          and not m.document
-          and not m.audio
-          and not m.animation
-      ):
-        if m.text:
-          await client.edit_message_text(tc, tm, m.text, entities=m.entities)
-      else:
-        new_media = None
-        if m.photo:
-          new_media = InputMediaPhoto(
-              m.photo.file_id,
-              caption=m.caption,
-              caption_entities=m.caption_entities,
-          )
-        elif m.video:
-          new_media = InputMediaVideo(
-              m.video.file_id,
-              caption=m.caption,
-              caption_entities=m.caption_entities,
-          )
-        elif m.document:
-          new_media = InputMediaDocument(
-              m.document.file_id,
-              caption=m.caption,
-              caption_entities=m.caption_entities,
-          )
-        elif m.audio:
-          new_media = InputMediaAudio(
-              m.audio.file_id,
-              caption=m.caption,
-              caption_entities=m.caption_entities,
-          )
-        elif m.animation:
-          new_media = InputMediaAnimation(
-              m.animation.file_id,
-              caption=m.caption,
-              caption_entities=m.caption_entities,
-          )
-        if new_media:
-          await client.edit_message_media(tc, tm, media=new_media)
-        elif m.caption is not None:
-          await client.edit_message_caption(
-              tc, tm, caption=m.caption, caption_entities=m.caption_entities
-          )
-    except Exception as e:
-      logger.error(f"Edit Sync Error: {e}")
-
-
-# =====================================================================
-# 💖 LIVE REACTION SYNC ENGINE (NAYA FEATURE!)
-# =====================================================================
-async def handle_reaction(client: Client, update):
-  """Syncs emojis reactions between User DM and Support Topic"""
-  try:
-    chat_id = getattr(update, "chat", None)
-    if not chat_id:
-      return
-    cid = chat_id.id if hasattr(chat_id, "id") else int(chat_id)
-    msg_id = getattr(update, "message_id", None) or getattr(
-        update, "message_ids", [None]
-    )[0]
-    if not msg_id:
-      return
-
-    key = (cid, msg_id)
+    key = (message.chat.id, message.id)
     if key in MESSAGE_MAP:
-      tc, tm = MESSAGE_MAP[key]
-      reactions = getattr(update, "reactions", [])
-      if reactions:
-        emoji = getattr(reactions[0], "emoji", None) or getattr(
-            reactions[0], "emoticon", ""
-        )
-        if emoji:
-          await client.send_reaction(tc, tm, emoji)
-      else:
-        # Clear reaction if removed
-        await client.send_reaction(tc, tm, "")
-  except Exception as e:
-    logger.debug(f"Reaction Sync ignored: {e}")
-
+        tc, tm = MESSAGE_MAP[key]
+        try:
+            if message.text:
+                await client.edit_message_text(tc, tm, message.text, entities=message.entities)
+            elif message.caption is not None:
+                await client.edit_message_caption(tc, tm, caption=message.caption, caption_entities=message.caption_entities)
+        except Exception:
+            pass
 
 # =====================================================================
-# 🗑️ LIVE DELETED MESSAGES SYNC ENGINE (NAYA FEATURE!)
+# 🗑️ LIVE DELETED MESSAGES SYNC ENGINE
 # =====================================================================
 async def handle_delete(client: Client, messages):
-  """If Admin deletes reply in Topic, deletes from User DM too!"""
-  try:
-    for msg in messages if isinstance(messages, list) else [messages]:
-      chat_id = msg.chat.id if hasattr(msg, "chat") else None
-      msg_id = msg.id if hasattr(msg, "id") else getattr(msg, "message_id", None)
-      if chat_id and msg_id:
-        key = (chat_id, msg_id)
-        if key in MESSAGE_MAP:
-          tc, tm = MESSAGE_MAP[key]
-          await client.delete_messages(tc, tm)
-          del MESSAGE_MAP[key]
-          if (tc, tm) in MESSAGE_MAP:
-            del MESSAGE_MAP[(tc, tm)]
-  except Exception:
-    pass
-
+    try:
+        for msg in messages if isinstance(messages, list) else [messages]:
+            chat_id = getattr(msg, "chat", None)
+            if not chat_id: continue
+            key = (chat_id.id, msg.id)
+            if key in MESSAGE_MAP:
+                tc, tm = MESSAGE_MAP[key]
+                await client.delete_messages(tc, tm)
+                # Cleanup map
+                del MESSAGE_MAP[key]
+                if (tc, tm) in MESSAGE_MAP: del MESSAGE_MAP[(tc, tm)]
+    except Exception:
+        pass
 
 # =====================================================================
-# 💬 REGULAR MESSAGES & SUPPORT TICKETS ENGINE (PYROGRAM 2.0.106 FIX)
+# 💬 REGULAR MESSAGES & SUPPORT TICKETS ENGINE (2-WAY FIX)
 # =====================================================================
-async def main_message_handler(client: Client, message: Message):
-  user, chat = message.from_user, message.chat
-  if not user or check_spam(user.id):
-    return
-  if user.id not in DB["BLOCKED_USERS"]:
-    if await wizard_message(client, message):
-      return
-    if await handle_broadcast_flow(client, message):
-      return
-  if chat.type == ChatType.PRIVATE:
-    if DB.get("MAINTENANCE_MODE", False) and not is_admin(user.id):
-      return await message.reply_text("⚠️ **Under Maintenance.**")
-    
-    topic_id = await get_or_create_topic(user, client)
-    if topic_id:
-      reply_id = None
-      if message.reply_to_message:
-        reply_key = (chat.id, message.reply_to_message.id)
-        if reply_key in MESSAGE_MAP:
-          _, reply_id = MESSAGE_MAP[reply_key]
-      try:
-        # 🔥 THE MAGIC FIX: Pyrogram 2.0.106 me topic_id ko reply_to_message_id me bhejna padta hai
-        target_reply_id = reply_id if reply_id else topic_id
+async def main_message_handler(client: Client, message: Message, is_retry=False):
+    user, chat = message.from_user, message.chat
+    if not user or check_spam(user.id): return
+    if user.id not in DB.get("BLOCKED_USERS", []):
+        if await wizard_message(client, message): return
+        if await handle_broadcast_flow(client, message): return
+
+    # -------------------------------------------------------------
+    # 1. USER ➔ ADMIN (DM se Support Group Topic Me)
+    # -------------------------------------------------------------
+    if chat.type == ChatType.PRIVATE:
+        if DB.get("MAINTENANCE_MODE", False) and not is_admin(user.id):
+            return await message.reply_text("⚠️ **Under Maintenance.**")
         
-        sent = await message.copy(
-            int(SUPPORT_GROUP_ID),
-            reply_to_message_id=target_reply_id,
-        )
-        MESSAGE_MAP[(chat.id, message.id)] = (int(SUPPORT_GROUP_ID), sent.id)
-        MESSAGE_MAP[(int(SUPPORT_GROUP_ID), sent.id)] = (chat.id, message.id)
-      except Exception as e:
-        logger.error(f"❌ Support Group Forwarding Error: {e}")
-        await message.reply_text(
-            "⚠️ **Message deliver nahi ho paya!**\n\nKripya check karein ki"
-            " Admin ne `SUPPORT_GROUP_ID` sahi set kiya hai aur bot ko Support"
-            " Group me **Admin (with Manage Topics permission)** banaya gaya"
-            " hai."
-        )
-  elif chat.id == int(SUPPORT_GROUP_ID) and message.message_thread_id:
-    if message.from_user.id == (await client.get_me()).id:
+        topic_id = await get_or_create_topic(user, client)
+        if topic_id:
+            reply_id = None
+            if message.reply_to_message:
+                reply_key = (chat.id, message.reply_to_message.id)
+                if reply_key in MESSAGE_MAP:
+                    _, reply_id = MESSAGE_MAP[reply_key]
+            try:
+                target_reply_id = reply_id if reply_id else topic_id
+                sent = await message.copy(int(SUPPORT_GROUP_ID), reply_to_message_id=target_reply_id)
+                MESSAGE_MAP[(chat.id, message.id)] = (int(SUPPORT_GROUP_ID), sent.id)
+                MESSAGE_MAP[(int(SUPPORT_GROUP_ID), sent.id)] = (chat.id, message.id)
+            except Exception as e:
+                err_str = str(e).lower()
+                if "peer" in err_str and "invalid" in err_str and not is_retry:
+                    try:
+                        await message.reply_text("⏳ Server sync in progress... 5 sec.")
+                        async for _ in client.get_dialogs(): pass
+                        return await main_message_handler(client, message, is_retry=True)
+                    except: pass
+                elif ("reply" in err_str or "deleted" in err_str or "topic" in err_str) and not is_retry:
+                    if user.id in DB["USER_TOPICS"]:
+                        del DB["USER_TOPICS"][user.id]
+                        await save_data_async()
+                        return await main_message_handler(client, message, is_retry=True)
+                if not is_retry:
+                    await message.reply_text("⚠️ **Message deliver nahi ho paya!** Support Group issue.")
+
+    # -------------------------------------------------------------
+    # 2. ADMIN ➔ USER (Support Group Topic se DM Me)
+    # -------------------------------------------------------------
+    elif str(chat.id) == str(SUPPORT_GROUP_ID):
+        # Bot khud ke messages ko ignore karega (Infinite loop block)
+        if message.from_user and message.from_user.id == (await client.get_me()).id:
+            return
+
+        # 🔥 SUPER ROBUST TOPIC ID EXTRACTION (For Pyrogram 2.0.106)
+        topic_id = getattr(message, "message_thread_id", None)
+        if not topic_id:
+            topic_id = getattr(message, "reply_to_top_message_id", None)
+        if not topic_id and message.reply_to_message:
+            topic_id = getattr(message.reply_to_message, "message_thread_id", None)
+            if not topic_id:
+                topic_id = message.reply_to_message.id
+        
+        target_uid = None
+        if topic_id:
+            for u, t in DB.get("USER_TOPICS", {}).items():
+                # Agar kisi bhi tarah ID match hui, target user pakad lo
+                if str(t) == str(topic_id) or (message.reply_to_message and str(t) == str(message.reply_to_message.id)):
+                    target_uid = int(u)
+                    break
+        
+        if target_uid:
+            reply_id = None
+            if message.reply_to_message:
+                reply_key = (int(SUPPORT_GROUP_ID), message.reply_to_message.id)
+                if reply_key in MESSAGE_MAP:
+                    _, reply_id = MESSAGE_MAP[reply_key]
+            try:
+                # Direct User ke DM me copy karo
+                try:
+                    sent = await message.copy(target_uid, reply_to_message_id=reply_id)
+                except RPCError:
+                    sent = await message.copy(target_uid) # Fallback (agar user ne DM se purana msg delete kar diya ho)
+                    
+                MESSAGE_MAP[(int(SUPPORT_GROUP_ID), message.id)] = (target_uid, sent.id)
+                MESSAGE_MAP[(target_uid, sent.id)] = (int(SUPPORT_GROUP_ID), message.id)
+            except Exception as e:
+                await message.reply_text(f"⚠️ **User ko deliver nahi hua!** Error: {e}")
+  # -------------------------------------------------------------
+  # 2. SUPPORT GROUP SE USER KO BHEJNA (Admin ➔ User)
+  # -------------------------------------------------------------
+  elif chat.id == int(SUPPORT_GROUP_ID):
+    # Ignore messages sent by the bot itself
+    if message.from_user and message.from_user.id == (await client.get_me()).id:
       return
+      
+    # Topic ID nikalne ka bulletproof tarika
     topic_id = message.message_thread_id
+    if not topic_id and message.reply_to_message:
+        topic_id = message.reply_to_message.message_thread_id
+        
+    if not topic_id:
+        return  # Message kisi topic ke andar nahi hai
+        
+    # Topic ID se User ID dhoondho
     target_uid = None
-    for u, t in DB["USER_TOPICS"].items():
-      if t == topic_id:
+    for u, t in DB.get("USER_TOPICS", {}).items():
+      if int(t) == int(topic_id):
         target_uid = int(u)
         break
+        
     if target_uid:
       reply_id = None
       if message.reply_to_message:
         reply_key = (int(SUPPORT_GROUP_ID), message.reply_to_message.id)
         if reply_key in MESSAGE_MAP:
           _, reply_id = MESSAGE_MAP[reply_key]
+          
       try:
-        sent = await message.copy(target_uid, reply_to_message_id=reply_id)
+        # 🔥 MAGIC FIX: Agar user ne purana message DM se delete kar diya hoga,
+        # Toh bot normal copy bhej dega (crash nahi hoga!)
+        try:
+            sent = await message.copy(target_uid, reply_to_message_id=reply_id)
+        except RPCError: 
+            sent = await message.copy(target_uid) # Fallback without reply
+            
         MESSAGE_MAP[(int(SUPPORT_GROUP_ID), message.id)] = (target_uid, sent.id)
-        MESSAGE_MAP[(target_uid, sent.id)] = (
-            int(SUPPORT_GROUP_ID),
-            message.id,
-        )
-      except Exception:
-        pass
+        MESSAGE_MAP[(target_uid, sent.id)] = (int(SUPPORT_GROUP_ID), message.id)
+        
+      except Exception as e:
+        logger.error(f"❌ Admin Reply Delivery Error: {e}")
+        # Ab admin ko pata chalega ki message fail kyun hua (e.g., User Blocked)
+        await message.reply_text(f"⚠️ **User ko message deliver nahi ho paya!**\nError: `{e}`")
 
 
 async def on_chat_member_update(client: Client, update: ChatMemberUpdated):
