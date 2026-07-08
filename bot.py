@@ -54,25 +54,29 @@ async def cmd_ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await msg.edit_text(f"🏓 **Pong!**\n⚡ **Response Speed:** `{ping_time}ms`", parse_mode="Markdown")
             
 async def run_bot_and_server():
-    print("🔄 Syncing Data Matrices...", flush=True)
-    load_data()
-    
-    # 👇 STEP 1: Web Server ko SABSE PEHLE background me start karo! 👇
-    # Isse Hugging Face ka Port 7860 turant bind hoga aur Space "Running" show karega!
+    # 👇 STEP 1: Web Server ko Sabse Pehle Independent Task me Start Karo! 👇
+    # Isse Hugging Face ko 1 second ke andar Port 7860 mil jayega aur container KABHI restart nahi hoga!
     port = int(os.environ.get("PORT", "7860"))
     hyper_config = HyperConfig()
     hyper_config.bind = [f"0.0.0.0:{port}"]
-    print(f"⏳ Starting Async Web Server Dashboard on port {port} in background...", flush=True)
+    print(f"⏳ Starting Async Web Server Dashboard on port {port}...", flush=True)
     web_server_task = asyncio.create_task(serve(web_app, hyper_config))
     
-    # 👇 STEP 2: Telegram Bot Instance Configure Karo 👇
-    print("🤖 Configuring Telegram Bot Instance...", flush=True)
+    # 3 second wait karo taaki web server acche se bind ho jaye aur HF "Running" mark kar de
+    await asyncio.sleep(3)
+    print("✅ Web Server Active! Now initializing Bot Engine...", flush=True)
+
+    try:
+        print("🔄 Syncing Data Matrices...", flush=True)
+        load_data()
+    except Exception as e:
+        print(f"⚠️ Database load warning (Continuing startup): {e}", flush=True)
     
-    # Cloudflare Proxy URL fetch karna (Hugging Face block bypass karne ke liye)
+    # 👇 STEP 2: Bot Configuration 👇
+    print("🤖 Configuring Telegram Bot Instance...", flush=True)
     CUSTOM_BASE_URL = os.environ.get("CUSTOM_BASE_URL", "https://api.telegram.org/bot")
     print(f"🔗 Network Base URL Pointed to: {CUSTOM_BASE_URL}", flush=True)
 
-    # Connection pool size ko optimize kiya hai taaki Telegram IP block na kare
     t_request = HTTPXRequest(
         connection_pool_size=50, 
         connect_timeout=20.0,  
@@ -83,6 +87,7 @@ async def run_bot_and_server():
     bot_app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).base_url(CUSTOM_BASE_URL).request(t_request).build()
     config.bot_app = bot_app 
     
+    # Commands & Handlers registration
     commands = [
         ("start", cmd_start), ("id", cmd_id), ("del", cmd_del_msg),
         ("addadmin", cmd_add_admin), ("deladmin", cmd_del_admin), ("backup", cmd_backup),
@@ -96,8 +101,7 @@ async def run_bot_and_server():
         ("user", cmd_user_details), ("batches", cmd_batches), ("addbatch", cmd_addbatch_start),
         ("delbatch", cmd_delbatch), ("broadcast", cmd_broadcast_start), ("post", cmd_post_start),
         ("cancel", cmd_cancel), ("addcat", cmd_addcat), ("setcat", cmd_setcategory),
-        ("delcat", cmd_delcat), ("clear", cmd_clear), ("maintenance", cmd_maintenance),
-        ("ping", cmd_ping) # <-- Naya Ping Command
+        ("delcat", cmd_delcat), ("clear", cmd_clear), ("maintenance", cmd_maintenance)
     ]
     for cmd_name, func in commands: bot_app.add_handler(CommandHandler(cmd_name, func))
     
@@ -115,7 +119,6 @@ async def run_bot_and_server():
     
     if bot_app.job_queue: 
         bot_app.job_queue.run_repeating(check_demos, interval=60, first=10)
-        # ⚠️ Sync interval ko 600 se badha kar 21600 (6 hours) kiya hai taaki FloodWait na ho!
         bot_app.job_queue.run_repeating(background_sync, interval=21600, first=60)
         bot_app.job_queue.run_repeating(auto_backup_db, interval=86400, first=60)
 
@@ -123,49 +126,33 @@ async def run_bot_and_server():
     is_connected = await init_bot_with_retry(bot_app)
     
     if not is_connected:
-        print("⚠️ Direct core initialization failed. Standby for gateway route.", flush=True)
+        print("⚠️ Direct core initialization failed. Web server will stay alive.", flush=True)
     else:
-        await bot_app.start()
-        
-        # 👇 STEP 3: CLOUDFLARE PROXY KE LIYE MAGIC TIMEOUT SETTINGS 👇
-        # timeout=3 rakhne se Cloudflare socket ko kabhi kill (524 Timeout) nahi karega!
-        await bot_app.updater.start_polling(
-            drop_pending_updates=True,
-            timeout=3,          # 🛑 Lambe timeout ko 3 second par limit kiya
-            poll_interval=0.5,  # ⚡ Har 0.5 second me fast message checking
-            allowed_updates=Update.ALL_TYPES
-        )
-        print("✅ BOT ENGINE OPERATIONAL! Polling loop listening...", flush=True)
-        
-        # 👇 STEP 4: Automatic Startup Alert Notification 👇
-        # 👇 STEP 4: Super-Fast Startup Alert (ONLY FOR OWNER DM) 👇
         try:
-            # Sirf OWNER_ID check karega, channel me bilkul nahi jayega!
+            await bot_app.start()
+            await bot_app.updater.start_polling(
+                drop_pending_updates=True,
+                timeout=3,          
+                poll_interval=0.5,  
+                allowed_updates=Update.ALL_TYPES
+            )
+            print("✅ BOT ENGINE OPERATIONAL! Polling loop listening...", flush=True)
+            
+            # Fast Startup Alert (Strictly for Owner DM)
             if OWNER_ID and OWNER_ID != 0:
-                start_msg = (
-                    "🟢 **BOT IS LIVE & OPERATIONAL!**\n\n"
-                    "🚀 **Status:** `Running Smoothly without Load`\n"
-                    "⚡ **Polling Mode:** `Cloudflare Anti-Timeout (3s)`\n"
-                    f"👤 **Target:** `Owner DM Only`\n\n"
-                    "💡 *Send /ping to check response speed!*"
-                )
-                await bot_app.bot.send_message(
-                    chat_id=OWNER_ID,  # <-- Strictly Owner ID par bhejega
-                    text=start_msg, 
-                    parse_mode="Markdown"
-                )
-                print(f"📬 Fast startup alert sent directly to Owner ({OWNER_ID})!", flush=True)
+                try:
+                    await bot_app.bot.send_message(
+                        chat_id=OWNER_ID, 
+                        text="🟢 **BOT IS LIVE & OPERATIONAL!**\n⚡ *Hugging Face Container Running Smoothly*", 
+                        parse_mode="Markdown"
+                    )
+                except Exception as e:
+                    print(f"⚠️ Owner DM alert failed: {e}", flush=True)
         except Exception as e:
-            # Agar Owner ne bot ko pehle kabhi DM (/start) nahi kiya hoga tabhi error aayega
-            print(f"⚠️ Owner DM alert failed (Pehle bot ko DM me /start karein): {e}", flush=True)
+            print(f"❌ Polling start error: {e}", flush=True)
 
-    # 👇 Web server task ko chalne do taaki container kabhi stop na ho 👇
+    # 👇 Hamesha Web Server Task ko zinda rakho taaki container kabhi stop na ho! 👇
     await web_server_task
-    
-    if is_connected:
-        await bot_app.updater.stop()
-        await bot_app.stop()
-        await bot_app.shutdown()
 
 if __name__ == "__main__":
     import nest_asyncio
