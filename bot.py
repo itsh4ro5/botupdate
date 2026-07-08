@@ -174,16 +174,42 @@ async def main():
     await web_task
 
 if __name__ == "__main__":
-    import nest_asyncio
-    nest_asyncio.apply() 
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("🛑 Safely shutting down terminal cores.", flush=True)
-    except Exception as e:
-        print("=========================================================", flush=True)
-        print("🚨 FATAL CRASH DETECTED! PREVENTING CONTAINER EXIT...", flush=True)
-        print("=========================================================", flush=True)
-        traceback.print_exc()
-        print("\n⏳ Diagnostic Mode: Container sleeping for 10 minutes...", flush=True)
-        time.sleep(600)
+  import nest_asyncio
+  import time
+  import traceback
+
+  nest_asyncio.apply()
+  try:
+    # 👇 YAHAN EXPLICITLY main() CALL KARNA HAI 👇
+    asyncio.run(main())
+  except KeyboardInterrupt:
+    print("🛑 Safely shutting down terminal cores.", flush=True)
+  except Exception as e:
+    print(
+        "=========================================================", flush=True
+    )
+    print("🚨 FATAL CRASH DETECTED! PREVENTING CONTAINER EXIT...", flush=True)
+    print(
+        "=========================================================", flush=True
+    )
+    print("👇 ASLI ERROR NEECHE LIKHI HAI (DHYAN SE PADHO) 👇\n", flush=True)
+
+    traceback.print_exc()
+
+    print(
+        "\n=========================================================", flush=True
+    )
+    print(
+        "⏳ Diagnostic Mode: Container ko 10 minute ke liye zinda rakha ja"
+        " raha hai...",
+        flush=True,
+    )
+    print(
+        "👉 Ab aaram se Hugging Face ke 'Logs' tab me ja kar error padho!",
+        flush=True,
+    )
+    print(
+        "=========================================================", flush=True
+    )
+
+    time.sleep(600)
