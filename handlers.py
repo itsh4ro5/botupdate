@@ -7,7 +7,7 @@ from telegram import Update, ChatMember, InlineKeyboardButton, InlineKeyboardMar
 from telegram.constants import ChatType, ParseMode
 from telegram.error import Forbidden, RetryAfter, BadRequest
 from telegram.ext import ContextTypes
-
+_SYNC_IN_PROGRESS = False
 from config import *
 
 # --- MENU SETTERS ---
@@ -1058,20 +1058,38 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat.type == ChatType.PRIVATE and status == ChatMember.BANNED: await execute_universal_kick(chat.id, context)
 
 async def background_sync(context: ContextTypes.DEFAULT_TYPE):
-    global SPAM_CACHE; SPAM_CACHE = {k: v for k, v in SPAM_CACHE.items() if time.time() - v < 2.0} 
+    global SPAM_CACHE, _SYNC_IN_PROGRESS
+    SPAM_CACHE = {k: v for k, v in SPAM_CACHE.items() if time.time() - v < 2.0} 
     if len(MESSAGE_MAP) > 5000: MESSAGE_MAP.clear()
-    for uid in list(DB["USER_DATA"].keys()):
-        user_id = int(uid)
-        if user_id in DB["BLOCKED_USERS"] or is_admin(user_id): continue
-        try: status = (await context.bot.get_chat_member(MANDATORY_CHANNEL_ID, user_id)).status
-        except Exception: continue 
+    
+    # 🛑 Prevent overlapping execution if previous job is still running
+    if _SYNC_IN_PROGRESS:
+        logger.warning("⚠️ Background sync already running. Skipping this cycle.")
+        return
         
-        if status == ChatMember.BANNED:
-            await execute_universal_kick(user_id, context)
-        elif status == ChatMember.LEFT and DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
-            await execute_universal_kick(user_id, context)
+    _SYNC_IN_PROGRESS = True
+    try:
+        user_ids = list(DB["USER_DATA"].keys())
+        for idx, uid in enumerate(user_ids):
+            user_id = int(uid)
+            if user_id in DB["BLOCKED_USERS"] or is_admin(user_id): continue
+            try: 
+                status = (await context.bot.get_chat_member(MANDATORY_CHANNEL_ID, user_id)).status
+                if status == ChatMember.BANNED:
+                    await execute_universal_kick(user_id, context)
+                elif status == ChatMember.LEFT and DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
+                    await execute_universal_kick(user_id, context)
+            except Exception as e: 
+                pass
             
-        await asyncio.sleep(0.5)
+            # 🛡️ Sleep longer and yield loop control to keep sockets free for incoming messages
+            await asyncio.sleep(1.0)
+            
+            # Save progress in smaller batches every 100 users instead of locking at the end
+            if idx > 0 and idx % 100 == 0:
+                await save_data_async()
+    finally:
+        _SYNC_IN_PROGRESS = False
 
 async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req = update.chat_join_request; chat = req.chat; user = req.from_user
