@@ -9,15 +9,28 @@ logger = logging.getLogger(__name__)
 # --- CONFIGURATION & DEFAULTS ---
 DEFAULTS = {"TOKEN": "", "OWNER": 0, "SUPPORT": 0, "MAIN_CH": 0, "LOG_CH": 0}
 
-API_ID = int(os.environ.get("API_ID", 0))
-API_HASH = os.environ.get("API_HASH", "")
-SESSION_STRING = os.environ.get("SESSION_STRING", "")
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", DEFAULTS["TOKEN"])
-OWNER_ID = int(os.environ.get("OWNER_ID", DEFAULTS["OWNER"]))
-SUPPORT_GROUP_ID = int(os.environ.get("SUPPORT_GROUP_ID", DEFAULTS["SUPPORT"]))
-MANDATORY_CHANNEL_ID = int(os.environ.get("MANDATORY_CHANNEL_ID", DEFAULTS["MAIN_CH"]))
-LOG_CHANNEL_ID = int(os.environ.get("LOG_CHANNEL_ID", DEFAULTS["LOG_CH"]))
-MONGO_URL = os.environ.get("MONGO_URL", None) 
+def _safe_int(env_name, default=0):
+    raw = os.environ.get(env_name, None)
+    if raw is None or str(raw).strip() == "":
+        return default
+    try:
+        return int(str(raw).strip())
+    except (ValueError, TypeError):
+        logger.warning("Env var " + env_name + "=" + repr(raw) + " is not a valid integer. Using default " + str(default))
+        return default
+
+API_ID = _safe_int("API_ID", 0)
+API_HASH = os.environ.get("API_HASH", "") or ""
+SESSION_STRING = os.environ.get("SESSION_STRING", "") or ""
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", DEFAULTS["TOKEN"]) or DEFAULTS["TOKEN"]
+OWNER_ID = _safe_int("OWNER_ID", DEFAULTS["OWNER"])
+SUPPORT_GROUP_ID = _safe_int("SUPPORT_GROUP_ID", DEFAULTS["SUPPORT"])
+MANDATORY_CHANNEL_ID = _safe_int("MANDATORY_CHANNEL_ID", DEFAULTS["MAIN_CH"])
+LOG_CHANNEL_ID = _safe_int("LOG_CHANNEL_ID", DEFAULTS["LOG_CH"])
+MONGO_URL = os.environ.get("MONGO_URL", None) or None
+
+if not TELEGRAM_BOT_TOKEN:
+    logger.warning("TELEGRAM_BOT_TOKEN is empty! Bot engine will not start until this Space secret is set. Web dashboard will still run.")
 MANDATORY_CHANNEL_LINK = os.environ.get("MANDATORY_CHANNEL_LINK", "https://t.me/YourChannel")
 DATA_FILE = os.environ.get("DATA_FILE", "bot_data.json")
 
