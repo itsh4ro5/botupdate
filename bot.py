@@ -69,7 +69,7 @@ async def run_bot_and_server():
         write_timeout=40.0
     )
     
-    bot_app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).base_url(CUSTOM_BASE_URL).request(t_request).build()
+    bot_app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).request(t_request).build()
     config.bot_app = bot_app 
     
     commands = [
@@ -112,14 +112,12 @@ async def run_bot_and_server():
         print("⚠️ Direct core initialization failed. Standby for gateway route.", flush=True)
     else:
         await bot_app.start()
-        # 👇 YAHAN TIMEOUT=5 AUR POLL_INTERVAL ADD KARNA HAI 👇
-        # Isse Cloudflare Worker socket ko kabhi kill nahi karega aur messages instant aayenge!
+        # Direct connection me timeout=30 (standard) sabse best aur stable chalta hai!
         await bot_app.updater.start_polling(
             drop_pending_updates=True,
-            timeout=5,          # Long-polling ko 5 seconds par limit karo
-            poll_interval=0.5   # Har 0.5 second me fast message checking
+            timeout=30
         )
-        print("✅ BOT ENGINE OPERATIONAL! Polling loop listening...", flush=True)
+        print("✅ BOT ENGINE OPERATIONAL DIRECTLY! Polling loop listening...", flush=True)
         
         # 👇 Startup Alert Notification 👇
         try:
