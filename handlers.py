@@ -2275,7 +2275,7 @@ async def handle_delete(client: Client, messages):
         pass
 
 # =====================================================================
-# 💬 REGULAR MESSAGES & SUPPORT TICKETS ENGINE (2-WAY FIX)
+# 💬 REGULAR MESSAGES & SUPPORT TICKETS ENGINE (BULLETPROOF 2-WAY)
 # =====================================================================
 async def main_message_handler(client: Client, message: Message, is_retry=False):
     user, chat = message.from_user, message.chat
@@ -2288,49 +2288,58 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
             return
 
     # -------------------------------------------------------------
-    # 1. USER ➔ ADMIN (DM se Support Group Topic Me)
+    # 1. USER ➔ ADMIN (DM se Support Group Topic Me Forward)
     # -------------------------------------------------------------
     if chat.type == ChatType.PRIVATE:
         if DB.get("MAINTENANCE_MODE", False) and not is_admin(user.id):
             return await message.reply_text("⚠️ **Under Maintenance.**")
         
-        topic_id = await get_or_create_topic(user, client)
-        if topic_id:
+        try:
+            topic_id = await get_or_create_topic(user, client)
+            if not topic_id:
+                return await message.reply_text("⚠️ **Support Ticket Error:** Admin ne Support Group me Forum Topics enable nahi kiya hai ya bot ko permission nahi hai.")
+            
             reply_id = None
             if message.reply_to_message:
                 reply_key = (chat.id, message.reply_to_message.id)
                 if reply_key in MESSAGE_MAP:
                     _, reply_id = MESSAGE_MAP[reply_key]
-            try:
-                target_reply_id = reply_id if reply_id else topic_id
-                sent = await message.copy(int(SUPPORT_GROUP_ID), reply_to_message_id=target_reply_id)
-                MESSAGE_MAP[(chat.id, message.id)] = (int(SUPPORT_GROUP_ID), sent.id)
-                MESSAGE_MAP[(int(SUPPORT_GROUP_ID), sent.id)] = (chat.id, message.id)
-            except Exception as e:
-                err_str = str(e).lower()
-                if "peer" in err_str and "invalid" in err_str and not is_retry:
-                    try:
-                        await message.reply_text("⏳ Server sync in progress... 5 sec.")
-                        async for _ in client.get_dialogs(): pass
-                        return await main_message_handler(client, message, is_retry=True)
-                    except: pass
-                elif ("reply" in err_str or "deleted" in err_str or "topic" in err_str) and not is_retry:
-                    if user.id in DB["USER_TOPICS"]:
-                        del DB["USER_TOPICS"][user.id]
-                        await save_data_async()
-                        return await main_message_handler(client, message, is_retry=True)
-                if not is_retry:
-                    await message.reply_text("⚠️ **Message deliver nahi ho paya!** Support Group issue.")
+            
+            target_reply_id = reply_id if reply_id else topic_id
+            sent = await message.copy(int(SUPPORT_GROUP_ID), reply_to_message_id=target_reply_id)
+            MESSAGE_MAP[(chat.id, message.id)] = (int(SUPPORT_GROUP_ID), sent.id)
+            MESSAGE_MAP[(int(SUPPORT_GROUP_ID), sent.id)] = (chat.id, message.id)
+        except Exception as e:
+            err_str = str(e).lower()
+            logger.error(f"❌ Ticket Forward Error: {e}")
+            
+            # 🔥 AUTO-HEALING: Agar purana topic delete ho gaya ya peer cache empty hai
+            if not is_retry:
+                logger.info(f"🔄 Auto-healing: Deleting old topic cache for user {user.id} and syncing peers...")
+                if user.id in DB.get("USER_TOPICS", {}):
+                    del DB["USER_TOPICS"][user.id]
+                    await save_data_async()
+                try:
+                    async for _ in client.get_dialogs(limit=50): 
+                        pass
+                except Exception:
+                    pass
+                # Naye topic ke sath auto-retry karo!
+                return await main_message_handler(client, message, is_retry=True)
+                
+            await message.reply_text(
+                "⚠️ **Message deliver nahi ho paya!**\n\n"
+                f"**Exact Error:** `{e}`\n"
+                "👉 **Solution:** Check karein ki Support Group me **Topics (Forum)** enabled hai aur Bot group ka **Admin (with Manage Topics)** hai."
+            )
 
     # -------------------------------------------------------------
-    # 2. ADMIN ➔ USER (Support Group Topic se DM Me)
+    # 2. ADMIN ➔ USER (Support Group Topic se DM Me Reply)
     # -------------------------------------------------------------
     elif str(chat.id) == str(SUPPORT_GROUP_ID):
-        # Bot khud ke messages ko ignore karega (Infinite loop block)
         if message.from_user and message.from_user.id == (await client.get_me()).id:
             return
 
-        # 🔥 SUPER ROBUST TOPIC ID EXTRACTION (For Pyrogram 2.0.106)
         topic_id = getattr(message, "message_thread_id", None)
         if not topic_id:
             topic_id = getattr(message, "reply_to_top_message_id", None)
@@ -2342,7 +2351,6 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
         target_uid = None
         if topic_id:
             for u, t in DB.get("USER_TOPICS", {}).items():
-                # Agar kisi bhi tarah ID match hui, target user pakad lo
                 if str(t) == str(topic_id) or (message.reply_to_message and str(t) == str(message.reply_to_message.id)):
                     target_uid = int(u)
                     break
@@ -2354,17 +2362,15 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
                 if reply_key in MESSAGE_MAP:
                     _, reply_id = MESSAGE_MAP[reply_key]
             try:
-                # Direct User ke DM me copy karo
                 try:
                     sent = await message.copy(target_uid, reply_to_message_id=reply_id)
                 except Exception:
-                    sent = await message.copy(target_uid) # Fallback (agar user ne DM se purana msg delete kar diya ho)
+                    sent = await message.copy(target_uid) # Fallback
                     
                 MESSAGE_MAP[(int(SUPPORT_GROUP_ID), message.id)] = (target_uid, sent.id)
                 MESSAGE_MAP[(target_uid, sent.id)] = (int(SUPPORT_GROUP_ID), message.id)
             except Exception as e:
-                await message.reply_text(f"⚠️ **User ko deliver nahi hua!** Error: {e}")
-
+                await message.reply_text(f"⚠️ **User ko deliver nahi hua!** Error: `{e}`")
 
 async def on_chat_member_update(client: Client, update: ChatMemberUpdated):
   user = update.new_chat_member.user
