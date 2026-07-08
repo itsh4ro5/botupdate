@@ -113,12 +113,26 @@ async def _run_bot_engine():
         await m.edit_text(f"🏓 *Pong!*\n⚡ `{round((time.time() - t) * 1000)}ms`",
                           parse_mode="Markdown")
 
-    base_url = os.environ.get("CUSTOM_BASE_URL", "").strip() or "https://api.telegram.org/bot"
-    print(f"🟡 BOT: API base URL = {base_url}", flush=True)
+    # 👇 PROXY PURI TARAH REMOVE KAR DIYA GAYA HAI (Strictly Direct Telegram API) 👇
+    print(
+        "🟡 BOT: Connecting DIRECTLY to official Telegram API"
+        " (api.telegram.org)...",
+        flush=True,
+    )
 
-    request = HTTPXRequest(connection_pool_size=50, connect_timeout=20.0,
-                           read_timeout=20.0, write_timeout=20.0)
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).base_url(base_url).request(request).build()
+    request = HTTPXRequest(
+        connection_pool_size=50,
+        connect_timeout=20.0,
+        read_timeout=20.0,
+        write_timeout=20.0,
+    )
+    # .base_url() ko yahan se hamesha ke liye remove kar diya hai!
+    app = (
+        ApplicationBuilder()
+        .token(TELEGRAM_BOT_TOKEN)
+        .request(request)
+        .build()
+    )
     config.bot_app = app
 
     commands = [
