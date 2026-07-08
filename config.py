@@ -1,6 +1,6 @@
 import os, json, asyncio, logging, time
-from telegram import ChatMember
-from telegram.constants import ParseMode
+from pyrogram.enums import ChatMemberStatus, ParseMode
+from pyrogram.errors import RPCError
 
 # --- LOGGING SETUP ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -16,7 +16,7 @@ def _safe_int(env_name, default=0):
     try:
         return int(str(raw).strip())
     except (ValueError, TypeError):
-        logger.warning("Env var " + env_name + "=" + repr(raw) + " is not a valid integer. Using default " + str(default))
+        logger.warning(f"Env var {env_name}={repr(raw)} is not a valid integer. Using default {default}")
         return default
 
 API_ID = _safe_int("API_ID", 0)
@@ -54,13 +54,20 @@ SPAM_CACHE = {}
 data_lock = asyncio.Lock()
 mongo_client = mongo_collection = None
 
-# --- MONGODB SETUP ---
+# --- MONGODB SETUP (WITH 5-SECOND TIMEOUT SAFETY) ---
 if MONGO_URL:
     try:
         logger.info("⏳ Connecting to MongoDB Atlas...")
         from pymongo import MongoClient
         import certifi
-        mongo_client = MongoClient(MONGO_URL, tlsCAFile=certifi.where())
+        # 🔥 5-Second timeout lagaya hai taaki Hugging Face startup par hang na ho!
+        mongo_client = MongoClient(
+            MONGO_URL, 
+            tlsCAFile=certifi.where(),
+            serverSelectionTimeoutMS=5000,
+            socketTimeoutMS=5000,
+            connectTimeoutMS=5000
+        )
         mongo_db = mongo_client.get_database("telegram_bot_db")
         mongo_collection = mongo_db.get_collection("bot_settings")
         logger.info("✅ Connected to MongoDB Atlas Successfully!")
@@ -117,7 +124,6 @@ def load_data():
             logger.info("✅ Data Loaded from Local JSON!")
     except Exception as e: logger.error(f"❌ Local Load Error: {e}")
 
-
 def save_data_sync():
     try:
         to_save = {
@@ -146,7 +152,6 @@ def save_data_sync():
         with open(DATA_FILE, "w") as f: json.dump(to_save, f, indent=4)
     except Exception as e: logger.error(f"❌ Save Error: {e}")
 
-# 👇 NAYA BACKGROUND SAVE LOGIC 👇
 async def _background_save():
     async with data_lock:
         try:
@@ -157,16 +162,15 @@ async def _background_save():
             logger.error(f"❌ Background Save Failed: {e}")
 
 async def save_data_async():
-    # Tasks run in background, button won't freeze!
     asyncio.create_task(_background_save())
 
-# --- CORE HELPERS (FIXED BAN LOGIC) ---
-async def execute_universal_kick(user_id, context, permanent_ban=False):
+# --- CORE HELPERS (100% PYROGRAM CONVERTED) ---
+async def execute_universal_kick(user_id, client, permanent_ban=False):
     mod = False
     for bid in list(DB["FREE_CHANNELS"].keys()):
         try:
-            await context.bot.ban_chat_member(int(bid), user_id)
-            if not permanent_ban: await context.bot.unban_chat_member(int(bid), user_id)
+            await client.ban_chat_member(int(bid), user_id)
+            if not permanent_ban: await client.unban_chat_member(int(bid), user_id)
         except Exception: pass
         
     for bid in list(DB["PAID_CHANNELS"].keys()):
@@ -174,8 +178,8 @@ async def execute_universal_kick(user_id, context, permanent_ban=False):
             bid_str = str(bid); is_demo = False
             if user_id in DB["USER_DATA"] and "demos" in DB["USER_DATA"][user_id] and bid_str in DB["USER_DATA"][user_id]["demos"]: is_demo = True
             
-            await context.bot.ban_chat_member(int(bid), user_id)
-            if not permanent_ban: await context.bot.unban_chat_member(int(bid), user_id)
+            await client.ban_chat_member(int(bid), user_id)
+            if not permanent_ban: await client.unban_chat_member(int(bid), user_id)
             
             if is_demo: 
                 del DB["USER_DATA"][user_id]["demos"][bid_str]
@@ -206,28 +210,32 @@ def check_spam(uid):
     SPAM_CACHE[uid] = now
     return True if now - last < 1.5 else False
 
-async def check_membership(user_id, context):
+async def check_membership(user_id, client):
     if is_admin(user_id): return True
     if not MANDATORY_CHANNEL_ID: return True
     try:
-        m = await context.bot.get_chat_member(MANDATORY_CHANNEL_ID, user_id)
-        return m.status in [ChatMember.MEMBER, ChatMember.ADMINISTRATOR, ChatMember.OWNER]
+        m = await client.get_chat_member(int(MANDATORY_CHANNEL_ID), user_id)
+        return m.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER, ChatMemberStatus.RESTRICTED]
     except Exception: return False
 
-async def is_already_in_channel(context, chat_id, user_id):
+async def is_already_in_channel(client, chat_id, user_id):
     try:
-        member = await context.bot.get_chat_member(chat_id, user_id)
-        return member.status in [ChatMember.MEMBER, ChatMember.ADMINISTRATOR, ChatMember.OWNER]
+        member = await client.get_chat_member(int(chat_id), user_id)
+        return member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER, ChatMemberStatus.RESTRICTED]
     except Exception: return False
 
-async def delete_later(context):
-    try: await context.bot.delete_message(chat_id=context.job.data['chat_id'], message_id=context.job.data['msg_id'])
+# 🔥 PYROGRAM ASYNC DELAYED DELETE FUNCTION
+async def _delayed_delete(client, chat_id, msg_id, delay):
+    await asyncio.sleep(delay)
+    try:
+        await client.delete_messages(chat_id=int(chat_id), message_ids=int(msg_id))
     except Exception: pass
 
-async def schedule_delete(context, message, delay=1200):
-    if message: context.job_queue.run_once(delete_later, delay, data={'chat_id': message.chat.id, 'msg_id': message.message_id})
+async def schedule_delete(client, message, delay=1200):
+    if message: 
+        asyncio.create_task(_delayed_delete(client, message.chat.id, message.id, delay))
 
-async def get_or_create_topic(user, context):
+async def get_or_create_topic(user, client):
     if not SUPPORT_GROUP_ID: return None
     if user.id in DB["USER_TOPICS"]: return DB["USER_TOPICS"][user.id]
     if user.id in TOPIC_CREATION_LOCK:
@@ -235,11 +243,11 @@ async def get_or_create_topic(user, context):
         if user.id in DB["USER_TOPICS"]: return DB["USER_TOPICS"][user.id]
     TOPIC_CREATION_LOCK.add(user.id)
     try:
-        topic = await context.bot.create_forum_topic(SUPPORT_GROUP_ID, f"{user.first_name[:20]} ({user.id})")
+        topic = await client.create_forum_topic(int(SUPPORT_GROUP_ID), f"{user.first_name[:20]} ({user.id})")
         DB["USER_TOPICS"][user.id] = topic.message_thread_id; await save_data_async()
         group_id_str = str(SUPPORT_GROUP_ID).replace("-100", "")
-        text = f"👤 **NEW USER TICKET**\n📛 {user.full_name}\n🆔 `{user.id}`\n📜 [Click to Check History](https://t.me/c/{group_id_str}?q={user.id})"
-        await context.bot.send_message(SUPPORT_GROUP_ID, text, message_thread_id=topic.message_thread_id, parse_mode=ParseMode.MARKDOWN)
+        text = f"👤 **NEW USER TICKET**\n📛 {user.first_name}\n🆔 `{user.id}`\n📜 [Click to Check History](https://t.me/c/{group_id_str}?q={user.id})"
+        await client.send_message(int(SUPPORT_GROUP_ID), text, message_thread_id=topic.message_thread_id, parse_mode=ParseMode.MARKDOWN)
         return topic.message_thread_id
     except Exception as e: 
         logger.error(f"Topic Creation Error: {e}")
