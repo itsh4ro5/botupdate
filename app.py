@@ -8,14 +8,31 @@ from config import DB, OWNER_ID, is_admin
 app = Quart(__name__)
 AVATAR_CACHE = {}
 
+@app.route('/health')
+async def health():
+    # Lightweight route with zero dependencies, so platform health checks
+    # (Koyeb/HF/etc.) always get a fast 200 even if templates/DB have issues.
+    return "OK", 200
+
 @app.route('/')
 async def index():
-    return await render_template('dashboard.html')
+    try:
+        return await render_template('dashboard.html')
+    except Exception as e:
+        # Don't let a missing/broken template take the whole Space down.
+        # Without this, HF's health probe on "/" keeps failing -> endless restart loop.
+        return (
+            f"Dashboard template error: {e}. "
+            f"Make sure templates/dashboard.html exists in your repo.", 200
+        )
 
 # 👇 NAYA ROUTE: Explore Batches ka dedicated page render karne ke liye 👇
 @app.route('/explore')
 async def explore_page():
-    return await render_template('explore.html')
+    try:
+        return await render_template('explore.html')
+    except Exception as e:
+        return f"Explore template error: {e}. Make sure templates/explore.html exists.", 200
 
 @app.route('/api/user/avatar/<int:user_id>')
 async def get_user_avatar(user_id):
