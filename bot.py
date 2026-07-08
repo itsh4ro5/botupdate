@@ -238,7 +238,28 @@ async def main():
 
 
 if __name__ == "__main__":
+    import nest_asyncio
+    import traceback
+    import time
+    
+    nest_asyncio.apply() 
     try:
-        asyncio.run(main())
+        asyncio.run(run_bot_and_server())
     except KeyboardInterrupt:
-        print("Shutting down.", flush=True)
+        print("🛑 Safely shutting down terminal cores.", flush=True)
+    except Exception as e:
+        # 👇 CRASH TRAP ENGINE (Ye Container ko turant marne nahi dega) 👇
+        print("=========================================================", flush=True)
+        print("🚨 FATAL CRASH DETECTED! PREVENTING CONTAINER EXIT...", flush=True)
+        print("=========================================================", flush=True)
+        print("👇 ASLI ERROR NEECHE LIKHI HAI (DHYAN SE PADHO) 👇\n", flush=True)
+        
+        traceback.print_exc()  # Ye exact line number aur error bata dega
+        
+        print("\n=========================================================", flush=True)
+        print("⏳ Diagnostic Mode: Container ko 10 minute ke liye zinda rakha ja raha hai...", flush=True)
+        print("👉 Ab aaram se Hugging Face ke 'Logs' tab me ja kar error padho!", flush=True)
+        print("=========================================================", flush=True)
+        
+        # 10 minute wait karega taaki Hugging Face ka Log Stream disconnect na ho!
+        time.sleep(600)
