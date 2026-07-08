@@ -1,54 +1,55 @@
-import os
-import time
 import asyncio
-import traceback
 import importlib
+import os
+import threading
+import time
+import traceback
+from flask import Flask, jsonify
 
-print("🟢 BOOT[1/5]: Pyrogram MTProto Engine Starting...", flush=True)
+print("🟢 BOOT[1/4]: Starting Flask Health Check Server...", flush=True)
 
-def _safe_port(default=7860):
-    raw = (os.environ.get("PORT", "") or "").strip()
-    return int(raw) if raw.isdigit() else default
+# 1. FLASK WEB SERVER (Keeps Hugging Face Space 'Running 🟢' 24/7)
+app = Flask(__name__)
 
-PORT = _safe_port()
 
-# Light imports for Web Dashboard
-from hypercorn.asyncio import serve
-from hypercorn.config import Config as HyperConfig
+@app.route("/")
+def home():
+  return "🟢 Kamal Master Bot Engine is Live & Running Smoothly!"
 
-print("🟢 BOOT[2/5]: Web server libs loaded.", flush=True)
 
-def _load_web_app():
-    try:
-        from app import app as web_app
-        print("🟢 BOOT[3/5]: Dashboard app imported.", flush=True)
-        return web_app
-    except Exception:
-        print("❌ Dashboard import failed — Serving fallback page.", flush=True)
-        traceback.print_exc()
-        from quart import Quart
-        fb = Quart(__name__)
-        @fb.route("/")
-        async def _root():
-            return "Web layer import failed. Check container logs.", 500
-        return fb
+@app.route("/health")
+def health():
+  return jsonify({"status": "healthy", "engine": "Pyrogram MTProto"})
 
-WEB_APP = _load_web_app()
 
-async def _run_pyrogram_engine():
-    """Pyrogram MTProto Sockets Worker Engine (Zero Proxy Required)"""
-    print("🟡 BOT: Loading Config & Handlers...", flush=True)
+def run_flask():
+  port = int(os.environ.get("PORT", 7860))
+  print(f"🟢 BOOT[2/4]: Binding Flask Web Dashboard on port {port}...", flush=True)
+  # Flask synchronously chalta hai, HF ko turant port mil jayega!
+  app.run(host="0.0.0.0", port=port, use_reloader=False)
 
-    try:
-        import config
-        import handlers as H
-    except Exception:
-        print("❌ BOT IMPORT FAILED. Dashboard stays up (Space = Running). Traceback:", flush=True)
-        traceback.print_exc()
-        return
 
+# 2. PYROGRAM BOT BACKGROUND WORKER
+def run_bot_thread():
+  print(
+      "🟢 BOOT[3/4]: Initializing Pyrogram Engine in Background Thread...",
+      flush=True,
+  )
+  loop = asyncio.new_event_loop()
+  asyncio.set_event_loop(loop)
+
+  try:
+    import config
+    import handlers as H
     from pyrogram import Client, filters
-    from pyrogram.types import Message, CallbackQuery
+    from pyrogram.types import CallbackQuery, Message
+
+    # Load Data synchronously
+    try:
+      config.load_data()
+      print("🟢 BOOT[4/4]: Database matrices loaded successfully!", flush=True)
+    except Exception as e:
+      print(f"⚠️ Database load warning: {e}", flush=True)
 
     API_ID = getattr(config, "API_ID", 0)
     API_HASH = getattr(config, "API_HASH", "")
@@ -56,160 +57,106 @@ async def _run_pyrogram_engine():
     OWNER_ID = getattr(config, "OWNER_ID", 0)
 
     if not BOT_TOKEN or not API_ID or not API_HASH:
-        print("❌ TELEGRAM_BOT_TOKEN, API_ID ya API_HASH missing hai! HF Secrets check karein.", flush=True)
-        return
+      print(
+          "❌ TELEGRAM_BOT_TOKEN, API_ID ya API_HASH missing hai! HF Secrets"
+          " check karein.",
+          flush=True,
+      )
+      return
 
-    # 🔥 PYROGRAM MTPROTO CLIENT (Direct TCP Connection - Zero Proxy!)
-    app = Client(
+    # 🔥 PYROGRAM MTPROTO CLIENT (Direct TCP Connection - Zero Proxy Required!)
+    bot = Client(
         "kamal_master_bot",
         api_id=int(API_ID),
         api_hash=str(API_HASH),
         bot_token=str(BOT_TOKEN),
-        in_memory=True, # Disk I/O bachane ke liye memory me session
-        workers=50      # 50 Parallel async workers for super fast speed!
+        in_memory=True,  # Disk I/O bachane ke liye memory me session
+        workers=50,  # 50 Parallel workers for turbo speed!
     )
-    config.bot_app = app
+    config.bot_app = bot
 
-    # --- COMMAND HANDLERS REGISTRATION ---
-    @app.on_message(filters.command("start") & filters.private)
+    # --- ROUTING HANDLERS ---
+    @bot.on_message(filters.command("start") & filters.private)
     async def _on_start(client: Client, message: Message):
-        await H.cmd_start(client, message)
+      await H.cmd_start(client, message)
 
-    @app.on_message(filters.command("ping"))
+    @bot.on_message(filters.command("ping"))
     async def _on_ping(client: Client, message: Message):
-        t = time.time()
-        m = await message.reply_text("🏓 **Pinging MTProto Sockets...**")
-        await m.edit_text(f"🏓 **Pong!**\n⚡ **Speed:** `{round((time.time() - t) * 1000)}ms`\n🛡️ **Protocol:** `Pyrogram MTProto`")
+      t = time.time()
+      m = await message.reply_text("🏓 **Pinging MTProto Sockets...**")
+      await m.edit_text(
+          f"🏓 **Pong!**\n⚡ **Speed:** `{round((time.time() - t) * 1000)}ms`\n🛡️"
+          " **Protocol:** `Pyrogram MTProto`"
+      )
 
-    @app.on_message(filters.command("stats") & filters.user(OWNER_ID))
+    @bot.on_message(filters.command("stats") & filters.user(OWNER_ID))
     async def _on_stats(client: Client, message: Message):
-        await H.cmd_stats(client, message)
+      await H.cmd_stats(client, message)
 
-    @app.on_callback_query()
+    @bot.on_callback_query()
     async def _on_callback(client: Client, query: CallbackQuery):
-        await H.general_callback(client, query)
+      await H.general_callback(client, query)
 
-    # --- STARTING THE MTPROTO CONNECTION ---
-    for attempt in range(1, 6):
-        try:
-            print(f"🟡 BOT: Connecting via Pyrogram MTProto Sockets (Attempt {attempt}/5)...", flush=True)
-            await app.start()
-            me = await app.get_me()
-            print(f"🟢 BOT: Authorized successfully as @{me.username} (ID: {me.id})!", flush=True)
-            break
-        except Exception as e:
-            print(f"⚠️ Socket Connect Error: {type(e).__name__}: {e}", flush=True)
-            if attempt == 5:
-                print("❌ Could not connect to Telegram servers.", flush=True)
-                return
-            await asyncio.sleep(3)
+    @bot.on_message(filters.all & ~filters.command(""))
+    async def _on_all_msg(client: Client, message: Message):
+      if message.text and message.text.startswith("/"):
+        return
+      await H.main_message_handler(client, message)
 
-    print("🟢 BOT: OPERATIONAL — MTProto Socket Listening...", flush=True)
+    print(
+        "🚀 BOT ENGINE OPERATIONAL! Connecting to Telegram MTProto Sockets...",
+        flush=True,
+      )
+    bot.start()
+    me = loop.run_until_complete(bot.get_me())
+    print(
+        f"✅ BOT LIVE! Authorized successfully as @{me.username} (ID: {me.id})!",
+        flush=True,
+    )
 
     try:
-        if OWNER_ID:
-            await app.send_message(
-                int(OWNER_ID), 
-                "🟢 **BOT IS LIVE ON HUGGING FACE (PYROGRAM MODE)!**\n\n"
-                "⚡ **Status:** `Running Smoothly without Proxy`\n"
-                "🛡️ **Engine:** `Pyrogram MTProto TCP Sockets`\n"
-                "💡 *Send /ping to test speed!*"
+      if OWNER_ID:
+        loop.run_until_complete(
+            bot.send_message(
+                int(OWNER_ID),
+                "🟢 **BOT IS LIVE ON HUGGING FACE!**\n\n⚡ **Status:** `Running"
+                " Smoothly (Flask + Pyrogram Hybrid)`\n🛡️ **Engine:**"
+                " `Pyrogram MTProto TCP Sockets`\n💡 *Send /ping to test"
+                " speed!*",
             )
+        )
     except Exception as e:
-        print(f"⚠️ Owner alert failed: {e}", flush=True)
+      print(f"⚠️ Owner alert failed: {e}", flush=True)
 
-    # Background Tasks Scheduler
-    async def run_jobs():
-        while True:
-            try:
-                await asyncio.sleep(60)
-                if hasattr(H, "check_demos"):
-                    await H.check_demos(app)
-            except Exception as e:
-                print(f"Job Error: {e}", flush=True)
-                
-    asyncio.create_task(run_jobs())
-
-    # Keep alive loop
-    try:
-        while True:
-            await asyncio.sleep(15)
-    finally:
-        try:
-            await app.stop()
-        except Exception:
-            pass
-        print("⚠️ BOT: Socket disconnected.", flush=True)
-
-async def _bot_supervisor():
+    # Infinite idle loop to keep bot running
     while True:
-        try:
-            await _run_pyrogram_engine()
-        except Exception:
-            print("❌ Bot engine crashed; Rebuilding in 15s. Traceback:", flush=True)
-            traceback.print_exc()
-        await asyncio.sleep(15)
+      time.sleep(10)
 
-async def main():
-    cfg = HyperConfig()
-    cfg.bind = [f"0.0.0.0:{PORT}"]
-    cfg.accesslog = "-"
-    print(f"🟢 BOOT[4/5]: Opening web port 0.0.0.0:{PORT} (Hugging Face Health Check)...", flush=True)
-
-    # Start Dashboard first
-    web_task = asyncio.create_task(serve(WEB_APP, cfg))
-    await asyncio.sleep(1) 
-
-    async def _late_start():
-        try:
-            import config
-            await asyncio.to_thread(config.load_data)
-            print("🟢 BOOT[5/5]: Database matrices loaded.", flush=True)
-        except Exception:
-            print("⚠️ load_data failed; Continuing. Traceback:", flush=True)
-            traceback.print_exc()
-        asyncio.create_task(_bot_supervisor())
-
-    asyncio.create_task(_late_start())
-    await web_task
-
-if __name__ == "__main__":
-  import nest_asyncio
-  import time
-  import traceback
-
-  nest_asyncio.apply()
-  try:
-    # 👇 YAHAN EXPLICITLY main() CALL KARNA HAI 👇
-    asyncio.run(main())
-  except KeyboardInterrupt:
-    print("🛑 Safely shutting down terminal cores.", flush=True)
   except Exception as e:
     print(
         "=========================================================", flush=True
     )
-    print("🚨 FATAL CRASH DETECTED! PREVENTING CONTAINER EXIT...", flush=True)
+    print("🚨 BOT THREAD CRASHED! READ THE EXACT ERROR BELOW:", flush=True)
     print(
         "=========================================================", flush=True
     )
-    print("👇 ASLI ERROR NEECHE LIKHI HAI (DHYAN SE PADHO) 👇\n", flush=True)
-
     traceback.print_exc()
-
-    print(
-        "\n=========================================================", flush=True
-    )
-    print(
-        "⏳ Diagnostic Mode: Container ko 10 minute ke liye zinda rakha ja"
-        " raha hai...",
-        flush=True,
-    )
-    print(
-        "👉 Ab aaram se Hugging Face ke 'Logs' tab me ja kar error padho!",
-        flush=True,
-    )
     print(
         "=========================================================", flush=True
     )
+    print(
+        "💡 Note: Flask Server abhi bhi chalu hai taaki Space 'Running' rahe"
+        " aur tum logs padh sako!",
+        flush=True,
+    )
+    while True:
+      time.sleep(60)  # Keeps thread alive so Docker doesn't restart
 
-    time.sleep(600)
+
+if __name__ == "__main__":
+  # Step 1: Start Pyrogram Bot in a Background Thread
+  bot_worker = threading.Thread(target=run_bot_thread, daemon=True)
+  bot_worker.start()
+
+  # Step 2: Start Flask Web Server on Main Thread (Instantly opens Port 7860)
+  run_flask()
