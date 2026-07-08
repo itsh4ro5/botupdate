@@ -67,7 +67,6 @@ async def _run_pyrogram_engine():
         api_id=int(API_ID),
         api_hash=str(API_HASH),
         bot_token=str(BOT_TOKEN),
-        in_memory=True,
         workers=50
     )
     config.bot_app = bot
