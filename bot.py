@@ -21,7 +21,7 @@ from app import app as web_app
 
 async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     if isinstance(context.error, Conflict):
-        logger.warning("⚠️ Conflict Error: Parallel instance detected. Ignoring...")
+        logger.warning("⚠️ Conflict Error: Telegram says another process is already polling this same bot token (an old Render/Heroku deploy, a duplicate Space, or a stuck previous container). Stop every other running instance, then fully restart this Space. Updates will be silently dropped until only ONE poller is active.")
         return
     logger.error(msg="Exception while handling an update:", exc_info=context.error)
     try:
@@ -34,12 +34,13 @@ async def init_bot_with_retry(bot_app, retries=5):
         try:
             print(f"⏳ Attempt {attempt}/{retries} - Connecting via Gateway...", flush=True)
             await bot_app.initialize()
-            print("✅ Connection Established! Bot Authorized Successfully!", flush=True)
+            me = await bot_app.bot.get_me()
+            print(f"✅ Connection Established! Authorized as @{me.username} (id={me.id})", flush=True)
             return True
         except Exception as e:
-            print(f"⚠️ Gateway bypass failed on attempt {attempt}: {e}", flush=True)
+            print(f"⚠️ Gateway bypass failed on attempt {attempt}: {type(e).__name__}: {e}", flush=True)
             if attempt == retries:
-                print("❌ Firewall block persistent.", flush=True)
+                print("❌ Could not connect to Telegram after all retries. Bot will NOT respond to commands until this is fixed. Web dashboard stays up.", flush=True)
                 return False
             print("🔄 Re-routing socket stream in 3 seconds...", flush=True)
             await asyncio.sleep(3)
