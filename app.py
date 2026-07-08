@@ -34,9 +34,9 @@ async def get_user_avatar(user_id):
             photo = photos.photos[0][-1]
             file = await bot.get_file(photo.file_id)
             
-            out = bytearray()
-            await file.download_to_memory(out)
-            img_bytes = bytes(out)
+            buf = io.BytesIO()
+            await file.download_to_memory(buf)
+            img_bytes = buf.getvalue()
             
             AVATAR_CACHE[user_id] = {"bytes": img_bytes, "time": now}
             return await send_file(io.BytesIO(img_bytes), mimetype='image/jpeg')
