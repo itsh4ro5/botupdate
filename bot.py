@@ -97,7 +97,7 @@ async def run_bot_and_server():
     
     if bot_app.job_queue: 
         bot_app.job_queue.run_repeating(check_demos, interval=60, first=10)
-        bot_app.job_queue.run_repeating(background_sync, interval=600, first=30)
+        bot_app.job_queue.run_repeating(background_sync, interval=21600, first=60)
         bot_app.job_queue.run_repeating(auto_backup_db, interval=86400, first=60)
 
     # Triggering connection
