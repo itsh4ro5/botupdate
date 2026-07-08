@@ -1,8 +1,14 @@
-import io, os, re, time, asyncio
-from pyrogram import Client
-from pyrogram.errors import SessionPasswordNeeded
 from datetime import datetime
-from pyrogram.errors import FloodWait
+try:
+    from pyrogram import Client
+    from pyrogram.errors import SessionPasswordNeeded, FloodWait
+    _PYROGRAM_OK = True
+except Exception as _pyro_err:
+    print(f"⚠️ pyrogram unavailable ({_pyro_err}); userbot features disabled, bot still runs.", flush=True)
+    _PYROGRAM_OK = False
+    Client = None
+    class SessionPasswordNeeded(Exception): pass
+    class FloodWait(Exception): pass
 from telegram import Update, ChatMember, InlineKeyboardButton, InlineKeyboardMarkup, BotCommandScopeChat, BotCommand, InputMediaPhoto, InputMediaVideo, InputMediaDocument, InputMediaAudio, InputMediaAnimation
 from telegram.constants import ChatType, ParseMode
 from telegram.error import Forbidden, RetryAfter, BadRequest
