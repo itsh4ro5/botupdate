@@ -2279,10 +2279,13 @@ async def handle_delete(client: Client, messages):
 # =====================================================================
 async def main_message_handler(client: Client, message: Message, is_retry=False):
     user, chat = message.from_user, message.chat
-    if not user or check_spam(user.id): return
+    if not user or check_spam(user.id): 
+        return
     if user.id not in DB.get("BLOCKED_USERS", []):
-        if await wizard_message(client, message): return
-        if await handle_broadcast_flow(client, message): return
+        if await wizard_message(client, message): 
+            return
+        if await handle_broadcast_flow(client, message): 
+            return
 
     # -------------------------------------------------------------
     # 1. USER ➔ ADMIN (DM se Support Group Topic Me)
@@ -2354,58 +2357,13 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
                 # Direct User ke DM me copy karo
                 try:
                     sent = await message.copy(target_uid, reply_to_message_id=reply_id)
-                except RPCError:
+                except Exception:
                     sent = await message.copy(target_uid) # Fallback (agar user ne DM se purana msg delete kar diya ho)
                     
                 MESSAGE_MAP[(int(SUPPORT_GROUP_ID), message.id)] = (target_uid, sent.id)
                 MESSAGE_MAP[(target_uid, sent.id)] = (int(SUPPORT_GROUP_ID), message.id)
             except Exception as e:
                 await message.reply_text(f"⚠️ **User ko deliver nahi hua!** Error: {e}")
-  # -------------------------------------------------------------
-  # 2. SUPPORT GROUP SE USER KO BHEJNA (Admin ➔ User)
-  # -------------------------------------------------------------
-  elif chat.id == int(SUPPORT_GROUP_ID):
-    # Ignore messages sent by the bot itself
-    if message.from_user and message.from_user.id == (await client.get_me()).id:
-      return
-      
-    # Topic ID nikalne ka bulletproof tarika
-    topic_id = message.message_thread_id
-    if not topic_id and message.reply_to_message:
-        topic_id = message.reply_to_message.message_thread_id
-        
-    if not topic_id:
-        return  # Message kisi topic ke andar nahi hai
-        
-    # Topic ID se User ID dhoondho
-    target_uid = None
-    for u, t in DB.get("USER_TOPICS", {}).items():
-      if int(t) == int(topic_id):
-        target_uid = int(u)
-        break
-        
-    if target_uid:
-      reply_id = None
-      if message.reply_to_message:
-        reply_key = (int(SUPPORT_GROUP_ID), message.reply_to_message.id)
-        if reply_key in MESSAGE_MAP:
-          _, reply_id = MESSAGE_MAP[reply_key]
-          
-      try:
-        # 🔥 MAGIC FIX: Agar user ne purana message DM se delete kar diya hoga,
-        # Toh bot normal copy bhej dega (crash nahi hoga!)
-        try:
-            sent = await message.copy(target_uid, reply_to_message_id=reply_id)
-        except RPCError: 
-            sent = await message.copy(target_uid) # Fallback without reply
-            
-        MESSAGE_MAP[(int(SUPPORT_GROUP_ID), message.id)] = (target_uid, sent.id)
-        MESSAGE_MAP[(target_uid, sent.id)] = (int(SUPPORT_GROUP_ID), message.id)
-        
-      except Exception as e:
-        logger.error(f"❌ Admin Reply Delivery Error: {e}")
-        # Ab admin ko pata chalega ki message fail kyun hua (e.g., User Blocked)
-        await message.reply_text(f"⚠️ **User ko message deliver nahi ho paya!**\nError: `{e}`")
 
 
 async def on_chat_member_update(client: Client, update: ChatMemberUpdated):
