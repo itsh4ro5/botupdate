@@ -30,22 +30,21 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
     except Exception: pass
 
 async def init_bot_with_retry(bot_app, retries=5):
-    """Network block check karne aur initialization layers pass karne ka engine"""
     for attempt in range(1, retries + 1):
         try:
-            print(f"⏳ Attempt {attempt}/{retries} - Connecting via Proxy Mirror Gateway...", flush=True)
+            print(f"⏳ Attempt {attempt}/{retries} - Connecting via Gateway...", flush=True)
             await bot_app.initialize()
             print("✅ Connection Established! Bot Authorized Successfully!", flush=True)
             return True
         except Exception as e:
             print(f"⚠️ Gateway bypass failed on attempt {attempt}: {e}", flush=True)
             if attempt == retries:
-                print("❌ Firewall block persistent. Standing by for proxy injection.", flush=True)
+                print("❌ Firewall block persistent.", flush=True)
                 return False
             print("🔄 Re-routing socket stream in 3 seconds...", flush=True)
             await asyncio.sleep(3)
 
-# 👇 BONUS: Response Speed Check Karne Ke Liye /ping Command
+# Speed test command
 async def cmd_ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
     start_time = time.time()
     msg = await update.message.reply_text("🏓 Pinging...")
@@ -54,25 +53,20 @@ async def cmd_ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await msg.edit_text(f"🏓 **Pong!**\n⚡ **Response Speed:** `{ping_time}ms`", parse_mode="Markdown")
             
 async def run_bot_and_server():
-    # 👇 STEP 1: Web Server ko Sabse Pehle Independent Task me Start Karo! 👇
-    # Isse Hugging Face ko 1 second ke andar Port 7860 mil jayega aur container KABHI restart nahi hoga!
+    # 👇 MAGIC FIX: Web Server ko SABSE PEHLE background task me start karo! 👇
+    # Isse Hugging Face ko 1 second me Port 7860 mil jayega aur Space TURANT "RUNNING" show karega!
     port = int(os.environ.get("PORT", "7860"))
     hyper_config = HyperConfig()
     hyper_config.bind = [f"0.0.0.0:{port}"]
-    print(f"⏳ Starting Async Web Server Dashboard on port {port}...", flush=True)
+    print(f"⏳ Starting Async Web Server Dashboard on port {port} immediately...", flush=True)
     web_server_task = asyncio.create_task(serve(web_app, hyper_config))
     
-    # 3 second wait karo taaki web server acche se bind ho jaye aur HF "Running" mark kar de
+    # 3 second wait karo taaki HF Health Check complete ho jaye aur green label aa jaye
     await asyncio.sleep(3)
-    print("✅ Web Server Active! Now initializing Bot Engine...", flush=True)
-
-    try:
-        print("🔄 Syncing Data Matrices...", flush=True)
-        load_data()
-    except Exception as e:
-        print(f"⚠️ Database load warning (Continuing startup): {e}", flush=True)
     
-    # 👇 STEP 2: Bot Configuration 👇
+    print("🔄 Syncing Data Matrices...", flush=True)
+    load_data()
+    
     print("🤖 Configuring Telegram Bot Instance...", flush=True)
     CUSTOM_BASE_URL = os.environ.get("CUSTOM_BASE_URL", "https://api.telegram.org/bot")
     print(f"🔗 Network Base URL Pointed to: {CUSTOM_BASE_URL}", flush=True)
@@ -87,7 +81,6 @@ async def run_bot_and_server():
     bot_app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).base_url(CUSTOM_BASE_URL).request(t_request).build()
     config.bot_app = bot_app 
     
-    # Commands & Handlers registration
     commands = [
         ("start", cmd_start), ("id", cmd_id), ("del", cmd_del_msg),
         ("addadmin", cmd_add_admin), ("deladmin", cmd_del_admin), ("backup", cmd_backup),
@@ -101,7 +94,8 @@ async def run_bot_and_server():
         ("user", cmd_user_details), ("batches", cmd_batches), ("addbatch", cmd_addbatch_start),
         ("delbatch", cmd_delbatch), ("broadcast", cmd_broadcast_start), ("post", cmd_post_start),
         ("cancel", cmd_cancel), ("addcat", cmd_addcat), ("setcat", cmd_setcategory),
-        ("delcat", cmd_delcat), ("clear", cmd_clear), ("maintenance", cmd_maintenance)
+        ("delcat", cmd_delcat), ("clear", cmd_clear), ("maintenance", cmd_maintenance),
+        ("ping", cmd_ping)
     ]
     for cmd_name, func in commands: bot_app.add_handler(CommandHandler(cmd_name, func))
     
@@ -122,37 +116,39 @@ async def run_bot_and_server():
         bot_app.job_queue.run_repeating(background_sync, interval=21600, first=60)
         bot_app.job_queue.run_repeating(auto_backup_db, interval=86400, first=60)
 
-    # Triggering connection
     is_connected = await init_bot_with_retry(bot_app)
     
     if not is_connected:
-        print("⚠️ Direct core initialization failed. Web server will stay alive.", flush=True)
+        print("⚠️ Direct core initialization failed. Web dashboard will remain active.", flush=True)
     else:
+        await bot_app.start()
+        # 👇 Cloudflare Timeout bypass karne ke liye timeout=3 rakha hai 👇
+        await bot_app.updater.start_polling(
+            drop_pending_updates=True,
+            timeout=3,          
+            poll_interval=0.5,  
+            allowed_updates=Update.ALL_TYPES
+        )
+        print("✅ BOT ENGINE OPERATIONAL! Polling loop listening...", flush=True)
+        
+        # 👇 Sirf OWNER_ID par fast alert bhejega bina load ke 👇
         try:
-            await bot_app.start()
-            await bot_app.updater.start_polling(
-                drop_pending_updates=True,
-                timeout=3,          
-                poll_interval=0.5,  
-                allowed_updates=Update.ALL_TYPES
-            )
-            print("✅ BOT ENGINE OPERATIONAL! Polling loop listening...", flush=True)
-            
-            # Fast Startup Alert (Strictly for Owner DM)
             if OWNER_ID and OWNER_ID != 0:
-                try:
-                    await bot_app.bot.send_message(
-                        chat_id=OWNER_ID, 
-                        text="🟢 **BOT IS LIVE & OPERATIONAL!**\n⚡ *Hugging Face Container Running Smoothly*", 
-                        parse_mode="Markdown"
-                    )
-                except Exception as e:
-                    print(f"⚠️ Owner DM alert failed: {e}", flush=True)
+                await bot_app.bot.send_message(
+                    chat_id=OWNER_ID, 
+                    text="🟢 **BOT IS LIVE & RUNNING ON HUGGING FACE!**\n⚡ *Web Dashboard & Polling Engine Active!*", 
+                    parse_mode="Markdown"
+                )
         except Exception as e:
-            print(f"❌ Polling start error: {e}", flush=True)
+            print(f"⚠️ Owner DM alert failed: {e}", flush=True)
 
-    # 👇 Hamesha Web Server Task ko zinda rakho taaki container kabhi stop na ho! 👇
+    # Web server task ko infinite chalne do taaki container kabhi stop ya restart na ho
     await web_server_task
+    
+    if is_connected:
+        await bot_app.updater.stop()
+        await bot_app.stop()
+        await bot_app.shutdown()
 
 if __name__ == "__main__":
     import nest_asyncio
