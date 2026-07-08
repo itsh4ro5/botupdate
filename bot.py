@@ -1,23 +1,12 @@
 import os
-import asyncio
 import time
+import asyncio
 import traceback
-from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler,
-    ChatJoinRequestHandler, ChatMemberHandler, MessageReactionHandler, filters, ContextTypes
-)
-from telegram.request import HTTPXRequest
-from telegram.error import Conflict
-from hypercorn.asyncio import serve
-from hypercorn.config import Config as HyperConfig
+import importlib
 
-print("🚀 ENTERPRISE ASYNC ENGINE STARTING...", flush=True)
-
-import config
-from config import TELEGRAM_BOT_TOKEN, LOG_CHANNEL_ID, OWNER_ID, load_data, logger
-from handlers import *
-from app import app as web_app
+# If you don't even see THIS line in the logs, the container never reached
+# Python (a build/entrypoint problem, not a code problem).
+print("🟢 BOOT[1/5]: bot.py process started.", flush=True)
 
 
 def _safe_port(default=7860):
@@ -27,204 +16,229 @@ def _safe_port(default=7860):
     try:
         return int(raw)
     except ValueError:
-        print(f"⚠️ PORT env var '{raw}' is not a valid integer. Using default {default}.", flush=True)
+        print(f"⚠️ PORT '{raw}' invalid, using {default}.", flush=True)
         return default
 
 
-async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-    if isinstance(context.error, Conflict):
-        logger.warning(
-            "⚠️ Conflict: another process is polling this same bot token "
-            "(an old deploy, a duplicate Space, or a stuck container). "
-            "Stop every other instance, then restart this Space."
-        )
-        return
-    logger.error(msg="Exception while handling an update:", exc_info=context.error)
+PORT = _safe_port()
+
+# ONLY light, rock-solid imports at module level. Nothing you edited, nothing
+# heavy (no telegram / pyrogram / handlers here) so this file can ALWAYS reach
+# main() and open the port no matter what.
+from hypercorn.asyncio import serve
+from hypercorn.config import Config as HyperConfig
+
+print("🟢 BOOT[2/5]: web server libs loaded.", flush=True)
+
+
+def _load_web_app():
+    """Import the Quart dashboard. If it fails, serve a tiny fallback so the
+    port still opens (HF shows 'Running') and the error is visible in logs."""
     try:
-        if LOG_CHANNEL_ID:
-            await context.bot.send_message(
-                chat_id=LOG_CHANNEL_ID,
-                text=f"⚠️ **CRITICAL ERROR**\n`{context.error}`",
-                parse_mode="Markdown"
-            )
+        from app import app as web_app
+        print("🟢 BOOT[3/5]: dashboard app imported.", flush=True)
+        return web_app
     except Exception:
-        pass
+        print("❌ dashboard import failed — serving fallback page so the Space "
+              "still shows Running. Traceback:", flush=True)
+        traceback.print_exc()
+        from quart import Quart
+        fb = Quart(__name__)
+
+        @fb.route("/")
+        async def _root():
+            return "Web layer import failed. Check container logs.", 500
+
+        return fb
 
 
-async def init_bot_with_retry(bot_app, retries=5):
-    for attempt in range(1, retries + 1):
+WEB_APP = _load_web_app()
+
+
+async def _run_bot_engine():
+    """Everything that can possibly break lives here and runs as a background
+    task. Heavy imports happen in a worker THREAD, so even a hang or a slow
+    import can never freeze the web server or the HF health check."""
+    print("🟡 BOT: importing telegram + your handlers (in worker thread)...", flush=True)
+
+    def _heavy_imports():
+        import config as _config
+        _handlers = importlib.import_module("handlers")
+        return _config, _handlers
+
+    try:
+        config, H = await asyncio.to_thread(_heavy_imports)
+    except Exception:
+        print("❌ BOT IMPORT FAILED. Dashboard stays up (Space = Running) but the "
+              "bot can't start until this import is fixed. Traceback:", flush=True)
+        traceback.print_exc()
+        return
+
+    from telegram import Update
+    from telegram.request import HTTPXRequest
+    from telegram.error import Conflict
+    from telegram.ext import (
+        ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler,
+        ChatJoinRequestHandler, ChatMemberHandler, MessageReactionHandler,
+        filters, ContextTypes,
+    )
+
+    logger = config.logger
+    TELEGRAM_BOT_TOKEN = config.TELEGRAM_BOT_TOKEN
+    OWNER_ID = config.OWNER_ID
+    LOG_CHANNEL_ID = config.LOG_CHANNEL_ID
+
+    if not TELEGRAM_BOT_TOKEN:
+        print("❌ TELEGRAM_BOT_TOKEN secret is empty. Set it in HF Space settings "
+              "→ Variables & secrets. Dashboard stays up.", flush=True)
+        return
+
+    async def global_error_handler(update, context):
+        if isinstance(context.error, Conflict):
+            logger.warning("⚠️ Conflict: another process is polling this same token "
+                           "(old deploy / duplicate Space). Stop all other instances.")
+            return
+        logger.error(msg="Exception while handling an update:", exc_info=context.error)
         try:
-            print(f"⏳ Attempt {attempt}/{retries} - Connecting to Telegram...", flush=True)
-            await bot_app.initialize()
-            me = await bot_app.bot.get_me()
-            print(f"✅ Connected! Authorized as @{me.username} (id={me.id})", flush=True)
-            return True
+            if LOG_CHANNEL_ID:
+                await context.bot.send_message(
+                    LOG_CHANNEL_ID, f"⚠️ *CRITICAL ERROR*\n`{context.error}`",
+                    parse_mode="Markdown")
+        except Exception:
+            pass
+
+    async def cmd_ping(update, context):
+        t = time.time()
+        m = await update.message.reply_text("🏓 Pinging...")
+        await m.edit_text(f"🏓 *Pong!*\n⚡ `{round((time.time() - t) * 1000)}ms`",
+                          parse_mode="Markdown")
+
+    base_url = os.environ.get("CUSTOM_BASE_URL", "").strip() or "https://api.telegram.org/bot"
+    print(f"🟡 BOT: API base URL = {base_url}", flush=True)
+
+    request = HTTPXRequest(connection_pool_size=50, connect_timeout=20.0,
+                           read_timeout=20.0, write_timeout=20.0)
+    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).base_url(base_url).request(request).build()
+    config.bot_app = app
+
+    commands = [
+        ("start", H.cmd_start), ("id", H.cmd_id), ("del", H.cmd_del_msg),
+        ("addadmin", H.cmd_add_admin), ("deladmin", H.cmd_del_admin), ("backup", H.cmd_backup),
+        ("allusers", H.cmd_all_users), ("ban", H.cmd_ban), ("unban", H.cmd_unban),
+        ("resetuser", H.cmd_reset_user), ("find", H.cmd_find_user), ("extend", H.cmd_extend_demo),
+        ("kick", H.cmd_kick_user), ("myinfo", H.cmd_myinfo), ("batchstats", H.cmd_batch_stats),
+        ("setwelcome", H.cmd_set_welcome), ("settestbot", H.cmd_set_testbot),
+        ("locktestbot", H.cmd_locktestbot), ("lockdown", H.cmd_lockdown), ("lockfree", H.cmd_lockfree),
+        ("lockpaid", H.cmd_lockpaid), ("sync", H.cmd_sync), ("joinall", H.cmd_joinall),
+        ("demo", H.cmd_approve_demo), ("per", H.cmd_approve_perm), ("stats", H.cmd_stats),
+        ("user", H.cmd_user_details), ("batches", H.cmd_batches), ("addbatch", H.cmd_addbatch_start),
+        ("delbatch", H.cmd_delbatch), ("broadcast", H.cmd_broadcast_start), ("post", H.cmd_post_start),
+        ("cancel", H.cmd_cancel), ("addcat", H.cmd_addcat), ("setcat", H.cmd_setcategory),
+        ("delcat", H.cmd_delcat), ("clear", H.cmd_clear), ("maintenance", H.cmd_maintenance),
+        ("ping", cmd_ping),
+    ]
+    for name, fn in commands:
+        app.add_handler(CommandHandler(name, fn))
+
+    app.add_handler(MessageHandler(filters.Regex(r"^/id(@\w+)?$") & filters.ChatType.CHANNEL, H.cmd_id))
+    app.add_handler(CallbackQueryHandler(H.general_callback))
+    app.add_handler(ChatJoinRequestHandler(H.handle_join_request))
+    app.add_handler(ChatMemberHandler(H.on_chat_member_update, ChatMemberHandler.CHAT_MEMBER))
+    app.add_handler(ChatMemberHandler(H.track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
+    app.add_handler(MessageHandler(
+        filters.StatusUpdate.NEW_CHAT_MEMBERS | filters.StatusUpdate.LEFT_CHAT_MEMBER,
+        H.delete_service_messages))
+    app.add_handler(MessageReactionHandler(H.handle_reaction))
+    app.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE, H.handle_edit))
+    app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, H.main_message_handler))
+    app.add_error_handler(global_error_handler)
+
+    if app.job_queue:
+        app.job_queue.run_repeating(H.check_demos, interval=60, first=10)
+        app.job_queue.run_repeating(H.background_sync, interval=21600, first=60)
+        app.job_queue.run_repeating(H.auto_backup_db, interval=86400, first=60)
+
+    for attempt in range(1, 6):
+        try:
+            print(f"🟡 BOT: connecting to Telegram (attempt {attempt}/5)...", flush=True)
+            await app.initialize()
+            me = await app.bot.get_me()
+            print(f"🟢 BOT: authorized as @{me.username} (id={me.id}).", flush=True)
+            break
         except Exception as e:
-            print(f"⚠️ Connect failed on attempt {attempt}: {type(e).__name__}: {e}", flush=True)
-            if attempt == retries:
-                print("❌ Could not reach Telegram after all retries. Web dashboard stays up.", flush=True)
-                return False
+            print(f"⚠️ connect failed: {type(e).__name__}: {e}", flush=True)
+            if attempt == 5:
+                print("❌ Could not reach Telegram after 5 tries. If HF's IP is "
+                      "rate-limited, set a CUSTOM_BASE_URL proxy secret. Dashboard stays up.",
+                      flush=True)
+                return
             await asyncio.sleep(3)
 
-
-async def cmd_ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    start_time = time.time()
-    msg = await update.message.reply_text("🏓 Pinging...")
-    ping_time = round((time.time() - start_time) * 1000)
-    await msg.edit_text(f"🏓 **Pong!**\n⚡ **Response Speed:** `{ping_time}ms`", parse_mode="Markdown")
-
-
-async def build_and_run_bot_engine():
-    if not TELEGRAM_BOT_TOKEN:
-        print("❌ TELEGRAM_BOT_TOKEN missing. Skipping bot engine, web dashboard stays up.", flush=True)
-        return None
+    await app.start()
+    await app.updater.start_polling(
+        drop_pending_updates=True, timeout=20, poll_interval=1.0,
+        allowed_updates=Update.ALL_TYPES,
+    )
+    print("🟢 BOT: OPERATIONAL — polling for commands.", flush=True)
 
     try:
-        print("🤖 Configuring Telegram Bot Instance...", flush=True)
-        CUSTOM_BASE_URL = os.environ.get("CUSTOM_BASE_URL", "").strip() or "https://api.telegram.org/bot"
-        print(f"🔗 API Base URL: {CUSTOM_BASE_URL}", flush=True)
+        if OWNER_ID:
+            await app.bot.send_message(
+                OWNER_ID, "🟢 *BOT LIVE ON HUGGING FACE!*\n⚡ Dashboard + polling active.",
+                parse_mode="Markdown")
+    except Exception as e:
+        print(f"⚠️ owner DM failed: {e}", flush=True)
 
-        t_request = HTTPXRequest(
-            connection_pool_size=50,
-            connect_timeout=20.0,
-            read_timeout=20.0,
-            write_timeout=20.0,
-        )
-
-        bot_app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).base_url(CUSTOM_BASE_URL).request(t_request).build()
-        config.bot_app = bot_app
-
-        commands = [
-            ("start", cmd_start), ("id", cmd_id), ("del", cmd_del_msg),
-            ("addadmin", cmd_add_admin), ("deladmin", cmd_del_admin), ("backup", cmd_backup),
-            ("allusers", cmd_all_users), ("ban", cmd_ban), ("unban", cmd_unban),
-            ("resetuser", cmd_reset_user), ("find", cmd_find_user), ("extend", cmd_extend_demo),
-            ("kick", cmd_kick_user), ("myinfo", cmd_myinfo), ("batchstats", cmd_batch_stats),
-            ("setwelcome", cmd_set_welcome), ("settestbot", cmd_set_testbot),
-            ("locktestbot", cmd_locktestbot), ("lockdown", cmd_lockdown), ("lockfree", cmd_lockfree),
-            ("lockpaid", cmd_lockpaid), ("sync", cmd_sync), ("joinall", cmd_joinall),
-            ("demo", cmd_approve_demo), ("per", cmd_approve_perm), ("stats", cmd_stats),
-            ("user", cmd_user_details), ("batches", cmd_batches), ("addbatch", cmd_addbatch_start),
-            ("delbatch", cmd_delbatch), ("broadcast", cmd_broadcast_start), ("post", cmd_post_start),
-            ("cancel", cmd_cancel), ("addcat", cmd_addcat), ("setcat", cmd_setcategory),
-            ("delcat", cmd_delcat), ("clear", cmd_clear), ("maintenance", cmd_maintenance),
-            ("ping", cmd_ping),
-        ]
-        for cmd_name, func in commands:
-            bot_app.add_handler(CommandHandler(cmd_name, func))
-
-        bot_app.add_handler(MessageHandler(filters.Regex(r"^/id(@\w+)?$") & filters.ChatType.CHANNEL, cmd_id))
-        bot_app.add_handler(CallbackQueryHandler(general_callback))
-        bot_app.add_handler(ChatJoinRequestHandler(handle_join_request))
-        bot_app.add_handler(ChatMemberHandler(on_chat_member_update, ChatMemberHandler.CHAT_MEMBER))
-        bot_app.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
-        bot_app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS | filters.StatusUpdate.LEFT_CHAT_MEMBER, delete_service_messages))
-        bot_app.add_error_handler(global_error_handler)
-
-        bot_app.add_handler(MessageReactionHandler(handle_reaction))
-        bot_app.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE, handle_edit))
-        bot_app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, main_message_handler))
-
-        if bot_app.job_queue:
-            bot_app.job_queue.run_repeating(check_demos, interval=60, first=10)
-            bot_app.job_queue.run_repeating(background_sync, interval=21600, first=60)
-            bot_app.job_queue.run_repeating(auto_backup_db, interval=86400, first=60)
-
-        if not await init_bot_with_retry(bot_app):
-            print("⚠️ Bot engine could not connect. Web dashboard remains active.", flush=True)
-            return None
-
-        await bot_app.start()
-        await bot_app.updater.start_polling(
-            drop_pending_updates=True,
-            timeout=20,
-            poll_interval=1.0,
-            allowed_updates=Update.ALL_TYPES,
-        )
-        print("✅ BOT ENGINE OPERATIONAL! Polling loop listening...", flush=True)
-
+    try:
+        while app.updater.running:
+            await asyncio.sleep(15)
+    finally:
         try:
-            if OWNER_ID and OWNER_ID != 0:
-                await bot_app.bot.send_message(
-                    chat_id=OWNER_ID,
-                    text="🟢 **BOT IS LIVE & RUNNING ON HUGGING FACE!**\n⚡ *Web Dashboard & Polling Engine Active!*",
-                    parse_mode="Markdown"
-                )
-        except Exception as e:
-            print(f"⚠️ Owner DM alert failed: {e}", flush=True)
-
-        return bot_app
-
-    except Exception:
-        print("❌ BOT ENGINE FAILED TO START. Web dashboard stays up. Full error below:", flush=True)
-        traceback.print_exc()
-        return None
-
-
-async def bot_supervisor_loop():
-    while True:
-        bot_app = await build_and_run_bot_engine()
-        if bot_app is None:
-            print("🔁 Retrying bot engine startup in 30 seconds...", flush=True)
-            await asyncio.sleep(30)
-            continue
-
-        try:
-            while True:
-                await asyncio.sleep(15)
-                if not bot_app.updater.running:
-                    print("⚠️ Polling stopped unexpectedly. Rebuilding bot engine...", flush=True)
-                    break
+            await app.updater.stop()
+            await app.stop()
+            await app.shutdown()
         except Exception:
-            print("❌ Supervisor watch loop crashed. Rebuilding. Full error below:", flush=True)
-            traceback.print_exc()
-        finally:
-            try:
-                if bot_app.updater.running:
-                    await bot_app.updater.stop()
-                if bot_app.running:
-                    await bot_app.stop()
-                await bot_app.shutdown()
-            except Exception:
-                pass
+            pass
+    print("⚠️ BOT: polling stopped; supervisor will rebuild.", flush=True)
 
-        await asyncio.sleep(5)
+
+async def _bot_supervisor():
+    while True:
+        try:
+            await _run_bot_engine()
+        except Exception:
+            print("❌ bot engine crashed; rebuilding in 15s. Traceback:", flush=True)
+            traceback.print_exc()
+        await asyncio.sleep(15)
 
 
 async def main():
-    port = _safe_port(7860)
-    hyper_config = HyperConfig()
-    hyper_config.bind = [f"0.0.0.0:{port}"]
-    print(f"⏳ Starting web dashboard on 0.0.0.0:{port}...", flush=True)
+    cfg = HyperConfig()
+    cfg.bind = [f"0.0.0.0:{PORT}"]
+    cfg.accesslog = "-"
+    print(f"🟢 BOOT[4/5]: opening web port 0.0.0.0:{PORT} "
+          f"(this is what makes HF show 'Running')...", flush=True)
 
-    # Web server owns the process. Health check passes immediately -> HF shows "Running".
-    web_server_task = asyncio.create_task(serve(web_app, hyper_config))
+    # The web server is the heartbeat. It starts FIRST, before any bot code.
+    web_task = asyncio.create_task(serve(WEB_APP, cfg))
+    await asyncio.sleep(1)  # let the socket bind
 
-    await asyncio.sleep(2)
+    async def _late_start():
+        try:
+            import config
+            await asyncio.to_thread(config.load_data)  # off-thread: slow DB can't stall the port
+            print("🟢 BOOT[5/5]: data loaded.", flush=True)
+        except Exception:
+            print("⚠️ load_data failed; continuing with empty DB. Traceback:", flush=True)
+            traceback.print_exc()
+        asyncio.create_task(_bot_supervisor())
 
-    print("🔄 Loading data...", flush=True)
-    try:
-        load_data()
-    except Exception:
-        print("❌ load_data() failed. Continuing with empty in-memory DB.", flush=True)
-        traceback.print_exc()
-
-    # Bot engine runs as a supervised background task, decoupled from the web server.
-    asyncio.create_task(bot_supervisor_loop())
-
-    await web_server_task
+    asyncio.create_task(_late_start())
+    await web_task
 
 
 if __name__ == "__main__":
-    while True:
-        try:
-            asyncio.run(main())
-            print("⚠️ main() returned unexpectedly. Restarting in 5s...", flush=True)
-            time.sleep(5)
-        except KeyboardInterrupt:
-            print("Shutting down.", flush=True)
-            break
-        except Exception:
-            print("❌ FATAL TOP-LEVEL ERROR. Restarting instead of exiting.", flush=True)
-            traceback.print_exc()
-            time.sleep(5)
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("Shutting down.", flush=True)
