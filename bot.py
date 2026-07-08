@@ -110,6 +110,26 @@ async def run_bot_and_server():
         await bot_app.updater.start_polling(drop_pending_updates=True)
         print("✅ BOT ENGINE OPERATIONAL! Polling loop listening...", flush=True)
 
+        # 👇 NAYA STARTUP ALERT CODE (Yahan Se Add Karo) 👇
+        try:
+            # Ye automatically LOG_CHANNEL_ID ya OWNER_ID check karega
+            target_chat = LOG_CHANNEL_ID or OWNER_ID
+            if target_chat:
+                start_msg = (
+                    "🟢 **BOT IS LIVE & OPERATIONAL!**\n\n"
+                    "🚀 **Status:** `Polling Loop Connected Successfully`\n"
+                    f"🔗 **Gateway:** `{CUSTOM_BASE_URL}`\n"
+                    "⚡ *Ready to receive commands & requests!*"
+                )
+                await bot_app.bot.send_message(
+                    chat_id=target_chat, 
+                    text=start_msg, 
+                    parse_mode="Markdown"
+                )
+                print(f"📬 Startup alert sent to {target_chat}!", flush=True)
+        except Exception as e:
+            print(f"⚠️ Startup alert failed (Check LOG_CHANNEL_ID/OWNER_ID permissions): {e}", flush=True)
+        # 👆 YAHAN TAK ADD KARNA HAI 👆
     # Launching async Quart app in the exact same event loop (Just like your src project)
     port = int(os.environ.get("PORT", "7860"))
     hyper_config = HyperConfig()
