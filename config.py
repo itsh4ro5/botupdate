@@ -244,12 +244,16 @@ async def get_or_create_topic(user, client):
     TOPIC_CREATION_LOCK.add(user.id)
     try:
         topic = await client.create_forum_topic(int(SUPPORT_GROUP_ID), f"{user.first_name[:20]} ({user.id})")
-        DB["USER_TOPICS"][user.id] = topic.message_thread_id; await save_data_async()
+        DB["USER_TOPICS"][user.id] = topic.message_thread_id
+        await save_data_async()
         group_id_str = str(SUPPORT_GROUP_ID).replace("-100", "")
         text = f"👤 **NEW USER TICKET**\n📛 {user.first_name}\n🆔 `{user.id}`\n📜 [Click to Check History](https://t.me/c/{group_id_str}?q={user.id})"
         await client.send_message(int(SUPPORT_GROUP_ID), text, message_thread_id=topic.message_thread_id, parse_mode=ParseMode.MARKDOWN)
         return topic.message_thread_id
     except Exception as e: 
         logger.error(f"Topic Creation Error: {e}")
-        return None
-    finally: TOPIC_CREATION_LOCK.discard(user.id)
+        if user.id in DB.get("USER_TOPICS", {}):
+            del DB["USER_TOPICS"][user.id]
+        raise e  # Error ko forward karo taaki handler auto-heal kar sake
+    finally: 
+        TOPIC_CREATION_LOCK.discard(user.id)
