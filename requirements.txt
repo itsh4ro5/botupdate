@@ -9,4 +9,3 @@ nest_asyncio
 aiofiles>=23.2.1
 motor>=3.3.2
 dnspython>=2.0
-Flask>=3,<4
