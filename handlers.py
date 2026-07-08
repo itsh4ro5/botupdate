@@ -2356,7 +2356,7 @@ async def handle_delete(client: Client, messages):
 
 
 # =====================================================================
-# 💬 REGULAR MESSAGES & SUPPORT TICKETS ENGINE (WITH ERROR ALERTING)
+# 💬 REGULAR MESSAGES & SUPPORT TICKETS ENGINE (PYROGRAM 2.0.106 FIX)
 # =====================================================================
 async def main_message_handler(client: Client, message: Message):
   user, chat = message.from_user, message.chat
@@ -2370,6 +2370,7 @@ async def main_message_handler(client: Client, message: Message):
   if chat.type == ChatType.PRIVATE:
     if DB.get("MAINTENANCE_MODE", False) and not is_admin(user.id):
       return await message.reply_text("⚠️ **Under Maintenance.**")
+    
     topic_id = await get_or_create_topic(user, client)
     if topic_id:
       reply_id = None
@@ -2378,10 +2379,12 @@ async def main_message_handler(client: Client, message: Message):
         if reply_key in MESSAGE_MAP:
           _, reply_id = MESSAGE_MAP[reply_key]
       try:
+        # 🔥 THE MAGIC FIX: Pyrogram 2.0.106 me topic_id ko reply_to_message_id me bhejna padta hai
+        target_reply_id = reply_id if reply_id else topic_id
+        
         sent = await message.copy(
             int(SUPPORT_GROUP_ID),
-            message_thread_id=topic_id,
-            reply_to_message_id=reply_id,
+            reply_to_message_id=target_reply_id,
         )
         MESSAGE_MAP[(chat.id, message.id)] = (int(SUPPORT_GROUP_ID), sent.id)
         MESSAGE_MAP[(int(SUPPORT_GROUP_ID), sent.id)] = (chat.id, message.id)
