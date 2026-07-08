@@ -78,8 +78,10 @@ async def run_bot_and_server():
 
     try:
         print("🤖 Configuring Telegram Bot Instance...", flush=True)
-        CUSTOM_BASE_URL = os.environ.get("CUSTOM_BASE_URL", "https://api.telegram.org/bot")
+        CUSTOM_BASE_URL = os.environ.get("CUSTOM_BASE_URL", "").strip() or "https://api.telegram.org/bot"
         print(f"🔗 Network Base URL Pointed to: {CUSTOM_BASE_URL}", flush=True)
+        if "api.telegram.org" not in CUSTOM_BASE_URL:
+            print("⚠️ WARNING: This is NOT the official Telegram API domain. You're routing through a third-party relay/proxy. Long-polling (getUpdates) often breaks silently through such relays because they don't hold connections open long enough. Remove the CUSTOM_BASE_URL Space variable to go direct.", flush=True)
 
         t_request = HTTPXRequest(
             connection_pool_size=50, 
