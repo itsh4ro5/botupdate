@@ -158,34 +158,32 @@ async def _run_pyrogram_engine():
         if message.caption and message.caption.startswith("/"): return
         await H.main_message_handler(client, message)
 
-    # =====================================================================
-    # 3. STARTING THE MTPROTO CONNECTION
-    # =====================================================================
-    print("🚀 BOT ENGINE OPERATIONAL! Connecting to Telegram MTProto Sockets...", flush=True)
-    for attempt in range(1, 6):
-        try:
-            await bot.start()
-            me = await bot.get_me()
-            print(f"✅ BOT LIVE! Authorized successfully as @{me.username} (ID: {me.id})!", flush=True)
-            break
-        except Exception as e:
-            print(f"⚠️ Socket Connect Error: {type(e).__name__}: {e}", flush=True)
-            if attempt == 5:
-                print("❌ Could not connect to Telegram servers.", flush=True)
-                return
-            await asyncio.sleep(3)
-
-    try:
-        if OWNER_ID:
-            await bot.send_message(
-                int(OWNER_ID),
-                "🟢 **BOT IS LIVE ON HUGGING FACE!**\n\n"
-                "⚡ **Status:** `Running Smoothly (Quart + Pyrogram)`\n"
-                "🛡️ **Engine:** `100% Synced with handlers.py & app.py`\n"
-                "💡 *Send /ping to test response speed!*"
-            )
-    except Exception as e:
-        print(f"⚠️ Owner DM alert failed: {e}", flush=True)
+   # =====================================================================
+        # 3. STARTING THE MTPROTO CONNECTION
+        # =====================================================================
+        print("🚀 BOT ENGINE OPERATIONAL! Connecting to Telegram MTProto Sockets...", flush=True)
+        for attempt in range(1, 6):
+            try:
+                await bot.start()
+                me = await bot.get_me()
+                print(f"✅ BOT LIVE! Authorized successfully as @{me.username} (ID: {me.id})!", flush=True)
+                
+                # 🔥 AUTOMATIC PEER CACHE SYNC (Prevents PeerIdInvalid on Hugging Face reboot)
+                print("🔄 Syncing dialogs & peers from Telegram cache...", flush=True)
+                try:
+                    async for _ in bot.get_dialogs(limit=100):
+                        pass
+                    print("✅ Peer cache synced successfully!", flush=True)
+                except Exception as diag_err:
+                    print(f"⚠️ Dialog sync warning: {diag_err}", flush=True)
+                    
+                break
+            except Exception as e:
+                print(f"⚠️ Socket Connect Error: {type(e).__name__}: {e}", flush=True)
+                if attempt == 5:
+                    print("❌ Could not connect to Telegram servers.", flush=True)
+                    return
+                await asyncio.sleep(3)
 
     # =====================================================================
     # 4. BACKGROUND JOBS SCHEDULER
