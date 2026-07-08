@@ -67,88 +67,109 @@ async def run_bot_and_server():
     print("🔄 Syncing Data Matrices...", flush=True)
     load_data()
     
-    print("🤖 Configuring Telegram Bot Instance...", flush=True)
-    CUSTOM_BASE_URL = os.environ.get("CUSTOM_BASE_URL", "https://api.telegram.org/bot")
-    print(f"🔗 Network Base URL Pointed to: {CUSTOM_BASE_URL}", flush=True)
+    is_connected = False
+    bot_app = None
 
-    t_request = HTTPXRequest(
-        connection_pool_size=50, 
-        connect_timeout=20.0,  
-        read_timeout=20.0,
-        write_timeout=20.0
-    )
-    
-    bot_app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).base_url(CUSTOM_BASE_URL).request(t_request).build()
-    config.bot_app = bot_app 
-    
-    commands = [
-        ("start", cmd_start), ("id", cmd_id), ("del", cmd_del_msg),
-        ("addadmin", cmd_add_admin), ("deladmin", cmd_del_admin), ("backup", cmd_backup),
-        ("allusers", cmd_all_users), ("ban", cmd_ban), ("unban", cmd_unban),
-        ("resetuser", cmd_reset_user), ("find", cmd_find_user), ("extend", cmd_extend_demo),
-        ("kick", cmd_kick_user), ("myinfo", cmd_myinfo), ("batchstats", cmd_batch_stats),
-        ("setwelcome", cmd_set_welcome), ("settestbot", cmd_set_testbot),
-        ("locktestbot", cmd_locktestbot), ("lockdown", cmd_lockdown), ("lockfree", cmd_lockfree),
-        ("lockpaid", cmd_lockpaid), ("sync", cmd_sync), ("joinall", cmd_joinall),
-        ("demo", cmd_approve_demo), ("per", cmd_approve_perm), ("stats", cmd_stats),
-        ("user", cmd_user_details), ("batches", cmd_batches), ("addbatch", cmd_addbatch_start),
-        ("delbatch", cmd_delbatch), ("broadcast", cmd_broadcast_start), ("post", cmd_post_start),
-        ("cancel", cmd_cancel), ("addcat", cmd_addcat), ("setcat", cmd_setcategory),
-        ("delcat", cmd_delcat), ("clear", cmd_clear), ("maintenance", cmd_maintenance),
-        ("ping", cmd_ping)
-    ]
-    for cmd_name, func in commands: bot_app.add_handler(CommandHandler(cmd_name, func))
-    
-    bot_app.add_handler(MessageHandler(filters.Regex(r"^/id(@\w+)?$") & filters.ChatType.CHANNEL, cmd_id))
-    bot_app.add_handler(CallbackQueryHandler(general_callback))
-    bot_app.add_handler(ChatJoinRequestHandler(handle_join_request))
-    bot_app.add_handler(ChatMemberHandler(on_chat_member_update, ChatMemberHandler.CHAT_MEMBER))
-    bot_app.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
-    bot_app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS | filters.StatusUpdate.LEFT_CHAT_MEMBER, delete_service_messages))
-    bot_app.add_error_handler(global_error_handler)
-    
-    bot_app.add_handler(MessageReactionHandler(handle_reaction))
-    bot_app.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE, handle_edit))
-    bot_app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, main_message_handler))
-    
-    if bot_app.job_queue: 
-        bot_app.job_queue.run_repeating(check_demos, interval=60, first=10)
-        bot_app.job_queue.run_repeating(background_sync, interval=21600, first=60)
-        bot_app.job_queue.run_repeating(auto_backup_db, interval=86400, first=60)
+    if not TELEGRAM_BOT_TOKEN:
+        print("❌ TELEGRAM_BOT_TOKEN is missing/empty. Skipping bot engine, web dashboard stays up.", flush=True)
+        await web_server_task
+        return
 
-    is_connected = await init_bot_with_retry(bot_app)
-    
-    if not is_connected:
-        print("⚠️ Direct core initialization failed. Web dashboard will remain active.", flush=True)
-    else:
-        await bot_app.start()
-        # 👇 Cloudflare Timeout bypass karne ke liye timeout=3 rakha hai 👇
-        await bot_app.updater.start_polling(
-            drop_pending_updates=True,
-            timeout=3,          
-            poll_interval=0.5,  
-            allowed_updates=Update.ALL_TYPES
+    try:
+        print("🤖 Configuring Telegram Bot Instance...", flush=True)
+        CUSTOM_BASE_URL = os.environ.get("CUSTOM_BASE_URL", "https://api.telegram.org/bot")
+        print(f"🔗 Network Base URL Pointed to: {CUSTOM_BASE_URL}", flush=True)
+
+        t_request = HTTPXRequest(
+            connection_pool_size=50, 
+            connect_timeout=20.0,  
+            read_timeout=20.0,
+            write_timeout=20.0
         )
-        print("✅ BOT ENGINE OPERATIONAL! Polling loop listening...", flush=True)
-        
-        # 👇 Sirf OWNER_ID par fast alert bhejega bina load ke 👇
-        try:
-            if OWNER_ID and OWNER_ID != 0:
-                await bot_app.bot.send_message(
-                    chat_id=OWNER_ID, 
-                    text="🟢 **BOT IS LIVE & RUNNING ON HUGGING FACE!**\n⚡ *Web Dashboard & Polling Engine Active!*", 
-                    parse_mode="Markdown"
-                )
-        except Exception as e:
-            print(f"⚠️ Owner DM alert failed: {e}", flush=True)
+
+        bot_app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).base_url(CUSTOM_BASE_URL).request(t_request).build()
+        config.bot_app = bot_app
+
+        commands = [
+            ("start", cmd_start), ("id", cmd_id), ("del", cmd_del_msg),
+            ("addadmin", cmd_add_admin), ("deladmin", cmd_del_admin), ("backup", cmd_backup),
+            ("allusers", cmd_all_users), ("ban", cmd_ban), ("unban", cmd_unban),
+            ("resetuser", cmd_reset_user), ("find", cmd_find_user), ("extend", cmd_extend_demo),
+            ("kick", cmd_kick_user), ("myinfo", cmd_myinfo), ("batchstats", cmd_batch_stats),
+            ("setwelcome", cmd_set_welcome), ("settestbot", cmd_set_testbot),
+            ("locktestbot", cmd_locktestbot), ("lockdown", cmd_lockdown), ("lockfree", cmd_lockfree),
+            ("lockpaid", cmd_lockpaid), ("sync", cmd_sync), ("joinall", cmd_joinall),
+            ("demo", cmd_approve_demo), ("per", cmd_approve_perm), ("stats", cmd_stats),
+            ("user", cmd_user_details), ("batches", cmd_batches), ("addbatch", cmd_addbatch_start),
+            ("delbatch", cmd_delbatch), ("broadcast", cmd_broadcast_start), ("post", cmd_post_start),
+            ("cancel", cmd_cancel), ("addcat", cmd_addcat), ("setcat", cmd_setcategory),
+            ("delcat", cmd_delcat), ("clear", cmd_clear), ("maintenance", cmd_maintenance),
+            ("ping", cmd_ping)
+        ]
+        for cmd_name, func in commands: bot_app.add_handler(CommandHandler(cmd_name, func))
+
+        bot_app.add_handler(MessageHandler(filters.Regex(r"^/id(@\w+)?$") & filters.ChatType.CHANNEL, cmd_id))
+        bot_app.add_handler(CallbackQueryHandler(general_callback))
+        bot_app.add_handler(ChatJoinRequestHandler(handle_join_request))
+        bot_app.add_handler(ChatMemberHandler(on_chat_member_update, ChatMemberHandler.CHAT_MEMBER))
+        bot_app.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
+        bot_app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS | filters.StatusUpdate.LEFT_CHAT_MEMBER, delete_service_messages))
+        bot_app.add_error_handler(global_error_handler)
+
+        bot_app.add_handler(MessageReactionHandler(handle_reaction))
+        bot_app.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE, handle_edit))
+        bot_app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, main_message_handler))
+
+        if bot_app.job_queue:
+            bot_app.job_queue.run_repeating(check_demos, interval=60, first=10)
+            bot_app.job_queue.run_repeating(background_sync, interval=21600, first=60)
+            bot_app.job_queue.run_repeating(auto_backup_db, interval=86400, first=60)
+
+        is_connected = await init_bot_with_retry(bot_app)
+
+        if not is_connected:
+            print("⚠️ Direct core initialization failed. Web dashboard will remain active.", flush=True)
+        else:
+            await bot_app.start()
+            # 👇 Cloudflare Timeout bypass karne ke liye timeout=3 rakha hai 👇
+            await bot_app.updater.start_polling(
+                drop_pending_updates=True,
+                timeout=3,
+                poll_interval=0.5,
+                allowed_updates=Update.ALL_TYPES
+            )
+            print("✅ BOT ENGINE OPERATIONAL! Polling loop listening...", flush=True)
+
+            # 👇 Sirf OWNER_ID par fast alert bhejega bina load ke 👇
+            try:
+                if OWNER_ID and OWNER_ID != 0:
+                    await bot_app.bot.send_message(
+                        chat_id=OWNER_ID,
+                        text="🟢 **BOT IS LIVE & RUNNING ON HUGGING FACE!**\n⚡ *Web Dashboard & Polling Engine Active!*",
+                        parse_mode="Markdown"
+                    )
+            except Exception as e:
+                print(f"⚠️ Owner DM alert failed: {e}", flush=True)
+
+    except Exception:
+        # 👇 CRITICAL: koi bhi bot-engine error web dashboard ko kabhi crash
+        # nahi karega. Poora traceback log me print hoga taaki aap Space
+        # logs me exact wajah dekh sakein, lekin container zinda rahega. 👇
+        import traceback
+        print("❌ BOT ENGINE FAILED TO START. Web dashboard stays up. Full error below:", flush=True)
+        traceback.print_exc()
+        is_connected = False
 
     # Web server task ko infinite chalne do taaki container kabhi stop ya restart na ho
     await web_server_task
-    
-    if is_connected:
-        await bot_app.updater.stop()
-        await bot_app.stop()
-        await bot_app.shutdown()
+
+    if is_connected and bot_app is not None:
+        try:
+            await bot_app.updater.stop()
+            await bot_app.stop()
+            await bot_app.shutdown()
+        except Exception:
+            pass
 
 if __name__ == "__main__":
     import nest_asyncio
