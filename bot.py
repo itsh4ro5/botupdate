@@ -53,35 +53,17 @@ async def _run_pyrogram_engine():
 
     # 🔥 Reaction sync (best-effort): Pyrogram 2.0.106 has NO
     # @app.on_message_reaction() decorator — that convenience wrapper only
-    # exists in newer forks/betas. We hook the raw MTProto updates instead
-    # (see the on_raw_update handler registered further down). Two distinct
-    # raw update types carry reaction changes and BOTH must be handled:
-    #   - UpdateBotMessageReaction: delivered for reactions on messages the
-    #     bot can see with per-user attribution (this is what fires for a
-    #     user reacting to the bot in a private DM).
-    #   - UpdateMessageReactions: delivered as an aggregate reaction-count
-    #     snapshot for a message (this is what fires for reactions added by
-    #     an Admin inside the Support Group — UpdateBotMessageReaction alone
-    #     never fires there, which is why Admin reactions were being missed
-    #     entirely).
-    # Each is imported defensively: if this frozen build's bundled TL schema
-    # is missing one (or both), reaction sync just narrows itself to
-    # whichever type(s) are actually available instead of crashing the
-    # whole engine.
+    # exists in newer forks/betas. We hook the raw MTProto update instead
+    # (see the on_raw_update handler registered further down). Imported
+    # defensively: if this frozen build's bundled TL schema doesn't have
+    # the raw type either, reaction sync just disables itself below
+    # instead of crashing the whole engine.
     try:
         from pyrogram.raw.types import UpdateBotMessageReaction
+        REACTION_RAW_TYPE_AVAILABLE = True
     except ImportError:
         UpdateBotMessageReaction = None
-
-    try:
-        from pyrogram.raw.types import UpdateMessageReactions
-    except ImportError:
-        UpdateMessageReactions = None
-
-    REACTION_UPDATE_TYPES = tuple(
-        t for t in (UpdateBotMessageReaction, UpdateMessageReactions) if t is not None
-    )
-    REACTION_RAW_TYPE_AVAILABLE = bool(REACTION_UPDATE_TYPES)
+        REACTION_RAW_TYPE_AVAILABLE = False
 
     async def _start_with_floodwait_guard(client):
         """
@@ -217,19 +199,15 @@ async def _run_pyrogram_engine():
     if REACTION_RAW_TYPE_AVAILABLE:
         @app.on_raw_update()
         async def _on_raw_update(client: Client, update, users, chats):
-            if isinstance(update, REACTION_UPDATE_TYPES) and hasattr(H, "handle_reaction"):
+            if isinstance(update, UpdateBotMessageReaction) and hasattr(H, "handle_reaction"):
                 try:
                     await H.handle_reaction(client, update)
                 except Exception:
                     print("⚠️ Reaction sync error:", flush=True)
                     traceback.print_exc()
-        print(
-            f"🟢 Reaction sync ENABLED (raw updates): "
-            f"{', '.join(t.__name__ for t in REACTION_UPDATE_TYPES)}.",
-            flush=True,
-        )
+        print("🟢 Reaction sync ENABLED (raw updates).", flush=True)
     else:
-        print("⚠️ Reaction sync DISABLED — this Pyrogram build's raw schema has no UpdateBotMessageReaction/UpdateMessageReactions. Everything else (2-way text routing, edits, deletes) is unaffected.", flush=True)
+        print("⚠️ Reaction sync DISABLED — this Pyrogram build's raw schema has no UpdateBotMessageReaction. Everything else (2-way text routing, edits, deletes) is unaffected.", flush=True)
 
     # =====================================================================
     # 5. REGULAR MESSAGES & SUPPORT TICKETS (🔥 YAHAN SOLVE HUA AAPKA BUG 🔥)
