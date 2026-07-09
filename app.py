@@ -10,8 +10,6 @@ AVATAR_CACHE = {}
 
 @app.route('/health')
 async def health():
-    # Lightweight route with zero dependencies, so platform health checks
-    # (Koyeb/HF/etc.) always get a fast 200 even if templates/DB have issues.
     return "OK", 200
 
 @app.route('/')
@@ -19,14 +17,8 @@ async def index():
     try:
         return await render_template('dashboard.html')
     except Exception as e:
-        # Don't let a missing/broken template take the whole Space down.
-        # Without this, HF's health probe on "/" keeps failing -> endless restart loop.
-        return (
-            f"Dashboard template error: {e}. "
-            f"Make sure templates/dashboard.html exists in your repo.", 200
-        )
+        return f"Dashboard template error: {e}. Make sure templates/dashboard.html exists in your repo.", 200
 
-# 👇 NAYA ROUTE: Explore Batches ka dedicated page render karne ke liye 👇
 @app.route('/explore')
 async def explore_page():
     try:
@@ -44,7 +36,8 @@ async def get_user_avatar(user_id):
         return "Bot not ready", 503
 
     try:
-        bot = config.bot_app.bot
+        # 🔥 FIX: Pyrogram me config.bot_app hi Client hota hai (.bot lagane ki zaroorat nahi)
+        bot = getattr(config.bot_app, 'bot', config.bot_app)
         photos = await bot.get_user_profile_photos(user_id, limit=1)
         
         if photos.total_count > 0:
@@ -86,7 +79,8 @@ async def get_user_data(user_id):
     joined_list = []
     
     if hasattr(config, 'bot_app') and config.bot_app:
-        bot = config.bot_app.bot
+        # 🔥 FIX: Solved AttributeError: 'Client' object has no attribute 'bot'
+        bot = getattr(config.bot_app, 'bot', config.bot_app)
         async def check_membership(bid):
             try:
                 m = await bot.get_chat_member(int(bid), user_id)
@@ -118,13 +112,11 @@ async def get_user_data(user_id):
                 "time_left_hours": round(time_left / 3600, 1)
             })
 
-    # Subscribed Free Batches
     for bid, name in DB.get("FREE_CHANNELS", {}).items():
         is_joined = int(bid) in joined_list or str(bid) in joined_list
         if is_joined:
             response["my_batches"].append({"id": bid, "name": name, "type": "Free Channel", "status": "Joined ✅", "category": batch_cats.get(str(bid), "Other Batches")})
             
-    # Subscribed Paid Batches
     for bid, name in DB.get("PAID_CHANNELS", {}).items():
         bid_str = str(bid)
         is_joined = int(bid) in joined_list or bid_str in joined_list
@@ -147,7 +139,6 @@ async def get_user_data(user_id):
 
     return jsonify(response)
 
-# 👇 NAYA API ENDPOINT: Explore Page ke liye Category wise Free/Paid distribute karne ke liye 👇
 @app.route('/api/explore/<int:user_id>')
 async def api_explore_data(user_id):
     user_data = DB["USER_DATA"].get(str(user_id)) or DB["USER_DATA"].get(user_id) or {}
@@ -160,12 +151,10 @@ async def api_explore_data(user_id):
     paid_channels = DB.get("PAID_CHANNELS", {})
     batch_cats = DB.get("BATCH_CATEGORIES", {})
 
-    # Structure initialization
     explore_data = {cat: {"free": [], "paid": []} for cat in categories}
     if "Other Batches" not in explore_data:
         explore_data["Other Batches"] = {"free": [], "paid": []}
 
-    # Free Sorting
     for bid, name in free_channels.items():
         cat = batch_cats.get(str(bid), "Other Batches")
         if cat not in explore_data: explore_data[cat] = {"free": [], "paid": []}
@@ -173,7 +162,6 @@ async def api_explore_data(user_id):
         status = "Joined ✅" if is_joined else "Join Now 📂"
         explore_data[cat]["free"].append({"id": bid, "name": name, "status": status})
 
-    # Paid Sorting
     for bid, name in paid_channels.items():
         bid_str = str(bid)
         cat = batch_cats.get(bid_str, "Other Batches")
