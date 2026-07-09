@@ -210,31 +210,27 @@ async def _run_pyrogram_engine():
         if hasattr(H, "handle_delete"):
             await H.handle_delete(client, messages)
 
-   # =====================================================================
-    # 4b. LIVE REACTION SYNCING (RAW UPDATES)
+    # =====================================================================
+    # 4b. LIVE REACTION SYNCING (RAW UPDATES — no on_message_reaction in
+    # Pyrogram 2.0.106, so we hook the raw MTProto update directly)
     # =====================================================================
     if REACTION_RAW_TYPE_AVAILABLE:
         @app.on_raw_update()
         async def _on_raw_update(client: Client, update, users, chats):
-            # Telegram updates ko containers me wrap karta hai, hume unhe unwrap karna hoga
-            from pyrogram.raw.types import Updates, UpdateShort
-            updates_list = []
-            if isinstance(update, Updates):
-                updates_list = update.updates
-            elif isinstance(update, UpdateShort):
-                updates_list = [update.update]
-            else:
-                updates_list = [update]
-                
-            for u in updates_list:
-                if isinstance(u, REACTION_UPDATE_TYPES) and hasattr(H, "handle_reaction"):
-                    try:
-                        await H.handle_reaction(client, u)
-                    except Exception:
-                        pass
-        print(f"🟢 Reaction sync ENABLED (raw updates).", flush=True)
+            if isinstance(update, REACTION_UPDATE_TYPES) and hasattr(H, "handle_reaction"):
+                try:
+                    await H.handle_reaction(client, update)
+                except Exception:
+                    print("⚠️ Reaction sync error:", flush=True)
+                    traceback.print_exc()
+        print(
+            f"🟢 Reaction sync ENABLED (raw updates): "
+            f"{', '.join(t.__name__ for t in REACTION_UPDATE_TYPES)}.",
+            flush=True,
+        )
     else:
-        print("⚠️ Reaction sync DISABLED.", flush=True)
+        print("⚠️ Reaction sync DISABLED — this Pyrogram build's raw schema has no UpdateBotMessageReaction/UpdateMessageReactions. Everything else (2-way text routing, edits, deletes) is unaffected.", flush=True)
+
     # =====================================================================
     # 5. REGULAR MESSAGES & SUPPORT TICKETS (🔥 YAHAN SOLVE HUA AAPKA BUG 🔥)
     # Ye handler normal text/photo/video ko Support Group me forward karega
