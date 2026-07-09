@@ -35,6 +35,7 @@ from pyrogram.types import (
 )
 
 _SYNC_IN_PROGRESS = False
+_BOT_SELF_ID = None
 
 
 # --- HELPER: COMMAND ARGUMENTS EXTRACTOR ---
@@ -2305,21 +2306,36 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
                 if reply_key in MESSAGE_MAP:
                     _, reply_id = MESSAGE_MAP[reply_key]
             
-            target_reply_id = reply_id if reply_id else topic_id
-            sent = await message.copy(int(SUPPORT_GROUP_ID), reply_to_message_id=target_reply_id)
+            # 🔥 FIX: message_thread_id reliably files the message under the
+            # user's topic in the forum group. reply_to_message_id is only
+            # used to additionally quote a specific earlier message inside
+            # that same thread. Some Pyrogram builds don't accept
+            # message_thread_id on copy(), so we fall back to the proven
+            # "reply to the topic's root message" technique if that happens.
+            try:
+                sent = await message.copy(
+                    int(SUPPORT_GROUP_ID),
+                    message_thread_id=topic_id,
+                    reply_to_message_id=reply_id,
+                )
+            except TypeError:
+                target_reply_id = reply_id if reply_id else topic_id
+                sent = await message.copy(int(SUPPORT_GROUP_ID), reply_to_message_id=target_reply_id)
             MESSAGE_MAP[(chat.id, message.id)] = (int(SUPPORT_GROUP_ID), sent.id)
             MESSAGE_MAP[(int(SUPPORT_GROUP_ID), sent.id)] = (chat.id, message.id)
         except Exception as e:
             err_str = str(e).lower()
             
-            # 🔥 AUTO-HEALING: Agar Pyrogram Memory bhool gaya (PeerIdInvalid)
-            if "peer" in err_str and "invalid" in err_str and not is_retry:
-                try:
-                    await message.reply_text("⏳ Connection sync in progress... please wait 5 seconds.")
-                    import config
-                    await config.force_peer_discovery(SUPPORT_GROUP_ID)
-                    return await main_message_handler(client, message, is_retry=True)
-                except: pass
+            # 🔥 AUTO-HEALING: Agar Pyrogram peer cache stale ho gaya (PeerIdInvalid)
+            if isinstance(e, (PeerIdInvalid,)) or "peer" in err_str and "invalid" in err_str:
+                if not is_retry:
+                    try:
+                        await message.reply_text("⏳ Connection sync in progress... please wait a moment.")
+                        import config
+                        await config.refresh_peer_cache(client, SUPPORT_GROUP_ID)
+                        return await main_message_handler(client, message, is_retry=True)
+                    except Exception:
+                        pass
                 
             # 🔥 AUTO-HEALING: Agar purana topic delete ho gaya ho
             elif ("reply" in err_str or "deleted" in err_str or "topic" in err_str) and not is_retry:
@@ -2335,7 +2351,10 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
     # 2. ADMIN ➔ USER (Support Group Topic se DM Me Reply)
     # -------------------------------------------------------------
     elif str(chat.id) == str(SUPPORT_GROUP_ID):
-        if message.from_user and message.from_user.id == (await client.get_me()).id:
+        global _BOT_SELF_ID
+        if _BOT_SELF_ID is None:
+            _BOT_SELF_ID = (await client.get_me()).id
+        if message.from_user and message.from_user.id == _BOT_SELF_ID:
             return
 
         topic_id = getattr(message, "message_thread_id", None)
