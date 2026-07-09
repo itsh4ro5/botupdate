@@ -235,17 +235,49 @@ async def schedule_delete(client, message, delay=1200):
     if message: 
         asyncio.create_task(_delayed_delete(client, message.chat.id, message.id, delay))
 
-async def get_or_create_topic(user, client):
+# =====================================================================
+# 🧠 THE GENIUS HACK: HTTP PEER DISCOVERY
+# =====================================================================
+import urllib.request
+
+async def force_peer_discovery(chat_id):
+    """HACK: Sends an invisible message via HTTP API to force Telegram to push the Chat ID cache to Pyrogram!"""
+    if not TELEGRAM_BOT_TOKEN: return
+    try:
+        logger.info(f"🔄 Firing HTTP Ping to wake up Peer Cache for {chat_id}...")
+        
+        # 1. Send dummy message (HTTP API doesn't need access_hash)
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        data = json.dumps({"chat_id": chat_id, "text": "🔄 System Sync...", "disable_notification": True}).encode('utf-8')
+        req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
+        res = await asyncio.to_thread(urllib.request.urlopen, req)
+        msg_id = json.loads(res.read().decode('utf-8'))['result']['message_id']
+        
+        # 2. Delete it instantly
+        del_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/deleteMessage"
+        del_data = json.dumps({"chat_id": chat_id, "message_id": msg_id}).encode('utf-8')
+        del_req = urllib.request.Request(del_url, data=del_data, headers={'Content-Type': 'application/json'})
+        await asyncio.to_thread(urllib.request.urlopen, del_req)
+        
+        # Wait 2 seconds for Pyrogram to absorb the MTProto cache update
+        await asyncio.sleep(2)
+        logger.info("✅ Peer Cache forcefully absorbed!")
+    except Exception as e:
+        logger.error(f"HTTP Ping Failed: {e}")
+
+# =====================================================================
+# RAW API FORUM TOPIC ENGINE
+# =====================================================================
+async def get_or_create_topic(user, client, is_retry=False):
     if not SUPPORT_GROUP_ID: return None
-    if user.id in DB["USER_TOPICS"]: return DB["USER_TOPICS"][user.id]
+    if user.id in DB.get("USER_TOPICS", {}): return DB["USER_TOPICS"][user.id]
     if user.id in TOPIC_CREATION_LOCK:
         await asyncio.sleep(1) 
-        if user.id in DB["USER_TOPICS"]: return DB["USER_TOPICS"][user.id]
+        if user.id in DB.get("USER_TOPICS", {}): return DB["USER_TOPICS"][user.id]
     TOPIC_CREATION_LOCK.add(user.id)
     try:
         from pyrogram.raw.functions.channels import CreateForumTopic
         
-        # 🔥 RAW API FIX: Pyrogram 2.0.106 ke liye direct Telegram Core se topic banwana
         peer = await client.resolve_peer(int(SUPPORT_GROUP_ID))
         r = await client.invoke(
             CreateForumTopic(
@@ -254,7 +286,6 @@ async def get_or_create_topic(user, client):
             )
         )
         
-        # Topic ID nikalna
         topic_id = None
         for update in r.updates:
             if hasattr(update, "message") and hasattr(update.message, "id"):
@@ -264,20 +295,21 @@ async def get_or_create_topic(user, client):
         if not topic_id:
             raise Exception("Topic ID fetch fail ho gaya.")
 
-        DB["USER_TOPICS"][user.id] = topic_id
+        DB.setdefault("USER_TOPICS", {})[user.id] = topic_id
         await save_data_async()
         
         group_id_str = str(SUPPORT_GROUP_ID).replace("-100", "")
         text = f"👤 **NEW USER TICKET**\n📛 {user.first_name}\n🆔 `{user.id}`\n📜 [Click to Check History](https://t.me/c/{group_id_str}?q={user.id})"
-        
-        await client.send_message(
-            int(SUPPORT_GROUP_ID), 
-            text, 
-            reply_to_message_id=topic_id, 
-            parse_mode=ParseMode.MARKDOWN
-        )
+        await client.send_message(int(SUPPORT_GROUP_ID), text, reply_to_message_id=topic_id, parse_mode=ParseMode.MARKDOWN)
         return topic_id
     except Exception as e: 
+        err_str = str(e).lower()
+        if "peer" in err_str and "invalid" in err_str and not is_retry:
+            logger.warning("Peer ID missing in Topic Engine. Triggering HTTP Hack...")
+            await force_peer_discovery(SUPPORT_GROUP_ID)
+            TOPIC_CREATION_LOCK.discard(user.id)
+            return await get_or_create_topic(user, client, is_retry=True)
+            
         logger.error(f"Topic Creation Error: {e}")
         if user.id in DB.get("USER_TOPICS", {}):
             del DB["USER_TOPICS"][user.id]
