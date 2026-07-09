@@ -59,13 +59,11 @@ async def _run_pyrogram_engine():
         print("❌ TELEGRAM_BOT_TOKEN, API_ID ya API_HASH missing hai! HF Secrets check karein.", flush=True)
         return
 
-    # 🔥 PYROGRAM MTPROTO CLIENT
     app = Client(
         "kamal_master_bot",
         api_id=int(API_ID),
         api_hash=str(API_HASH),
         bot_token=str(BOT_TOKEN),
-        in_memory=True, 
         workers=50      
     )
     config.bot_app = app
