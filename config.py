@@ -243,17 +243,44 @@ async def get_or_create_topic(user, client):
         if user.id in DB["USER_TOPICS"]: return DB["USER_TOPICS"][user.id]
     TOPIC_CREATION_LOCK.add(user.id)
     try:
-        topic = await client.create_forum_topic(int(SUPPORT_GROUP_ID), f"{user.first_name[:20]} ({user.id})")
-        DB["USER_TOPICS"][user.id] = topic.message_thread_id
+        from pyrogram.raw.functions.channels import CreateForumTopic
+        
+        # 🔥 RAW API FIX: Pyrogram 2.0.106 ke liye direct Telegram Core se topic banwana
+        peer = await client.resolve_peer(int(SUPPORT_GROUP_ID))
+        r = await client.invoke(
+            CreateForumTopic(
+                channel=peer,
+                title=f"{user.first_name[:20]} ({user.id})"
+            )
+        )
+        
+        # Topic ID nikalna
+        topic_id = None
+        for update in r.updates:
+            if hasattr(update, "message") and hasattr(update.message, "id"):
+                topic_id = update.message.id
+                break
+                
+        if not topic_id:
+            raise Exception("Topic ID fetch fail ho gaya.")
+
+        DB["USER_TOPICS"][user.id] = topic_id
         await save_data_async()
+        
         group_id_str = str(SUPPORT_GROUP_ID).replace("-100", "")
         text = f"👤 **NEW USER TICKET**\n📛 {user.first_name}\n🆔 `{user.id}`\n📜 [Click to Check History](https://t.me/c/{group_id_str}?q={user.id})"
-        await client.send_message(int(SUPPORT_GROUP_ID), text, message_thread_id=topic.message_thread_id, parse_mode=ParseMode.MARKDOWN)
-        return topic.message_thread_id
+        
+        await client.send_message(
+            int(SUPPORT_GROUP_ID), 
+            text, 
+            reply_to_message_id=topic_id, 
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return topic_id
     except Exception as e: 
         logger.error(f"Topic Creation Error: {e}")
         if user.id in DB.get("USER_TOPICS", {}):
             del DB["USER_TOPICS"][user.id]
-        raise e  # Error ko forward karo taaki handler auto-heal kar sake
+        raise e
     finally: 
         TOPIC_CREATION_LOCK.discard(user.id)
