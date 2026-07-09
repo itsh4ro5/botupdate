@@ -10,7 +10,16 @@ AVATAR_CACHE = {}
 
 @app.route('/health')
 async def health():
-    return "OK", 200
+    is_active, remaining = config.get_flood_wait_status()
+    # NOTE: always returns HTTP 200 — a FloodWait is a temporary Telegram
+    # rate-limit, not a real outage. Returning non-200 here would make
+    # platforms like Hugging Face think the container is unhealthy and
+    # restart it, which only makes an active FloodWait worse.
+    return jsonify({
+        "status": "OK",
+        "flood_wait_active": is_active,
+        "flood_wait_seconds": remaining
+    }), 200
 
 @app.route('/')
 async def index():
@@ -66,10 +75,13 @@ async def get_user_data(user_id):
     user_data = DB["USER_DATA"].get(str(user_id)) or DB["USER_DATA"].get(user_id) or {}
     is_user_owner = (str(user_id) == str(OWNER_ID)) or (user_id == OWNER_ID)
     is_user_admin = is_admin(user_id)
+    flood_active, flood_seconds = config.get_flood_wait_status()
     
     response = {
         "is_owner": is_user_owner,
         "is_admin": is_user_admin,
+        "flood_wait_active": flood_active,
+        "flood_wait_seconds": flood_seconds,
         "user_info": {
             "id": user_id,
             "name": user_data.get("name", "Premium Member"),
