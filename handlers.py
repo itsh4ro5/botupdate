@@ -45,6 +45,34 @@ def get_args(message: Message):
   return []
 
 
+# --- HELPER: CRASH-SAFE SENDER CHECKS (Anonymous Admin / Linked-Channel safe) ---
+# 🔥 FIX: message.from_user is None whenever a message is sent by an
+# "Anonymous Admin" (group setting) or on behalf of a linked channel.
+# Every command handler used to read message.from_user.id directly, which
+# raised AttributeError: 'NoneType' object has no attribute 'id' the moment
+# any admin sent a command that way (very common in supergroups where admins
+# default to posting anonymously). These two helpers centralize the safe
+# check so no handler has to touch message.from_user.id without a guard.
+def is_admin_msg(message: Message) -> bool:
+  """
+  Admin check that never crashes on Anonymous Admin / linked-channel posts.
+  Telegram only lets a chat's own admins send as "the group itself" or via
+  a linked channel signature — a regular member can never trigger this —
+  so inside our own Support Group we trust an Anonymous Admin post as an
+  authorized admin action (this is what lets an anonymous admin's /del
+  still work). Everywhere else we have no user id to verify against
+  DB["ADMIN_IDS"], so we safely return False instead of crashing.
+  """
+  if message.from_user:
+    return is_admin(message.from_user.id)
+  return bool(message.sender_chat) and str(message.chat.id) == str(SUPPORT_GROUP_ID)
+
+
+def is_owner_msg(message: Message) -> bool:
+  """Owner check that's crash-safe against Anonymous Admin / linked-channel posts."""
+  return bool(message.from_user) and str(message.from_user.id) == str(OWNER_ID)
+
+
 # --- HELPER: ROBUST MEMBERSHIP CHECKS FOR PYROGRAM ---
 async def check_membership_pyro(uid: int, client: Client):
   if not MANDATORY_CHANNEL_ID:
@@ -104,7 +132,7 @@ async def set_role_based_commands(user_id: int, client: Client):
 
 # --- COMMANDS ---
 async def cmd_add_admin(client: Client, message: Message):
-  if message.from_user.id != OWNER_ID:
+  if not is_owner_msg(message):
     return
   args = get_args(message)
   if not args:
@@ -124,9 +152,9 @@ async def cmd_add_admin(client: Client, message: Message):
 
 
 async def cmd_userbotphone(client: Client, message: Message):
+  if not is_owner_msg(message):
+      return
   uid = message.from_user.id
-  if uid != OWNER_ID:
-    return
 
   if not API_ID or API_ID == 0:
     return await message.reply_text(
@@ -163,9 +191,9 @@ async def cmd_userbotphone(client: Client, message: Message):
 
 
 async def cmd_userbototp(client: Client, message: Message):
+  if not is_owner_msg(message):
+      return
   uid = message.from_user.id
-  if uid != OWNER_ID:
-    return
 
   otp = message.text.split(" ", 1)[-1].replace(" ", "").replace("-", "").strip()
   user_store = getattr(client, "user_data_store", {})
@@ -211,9 +239,9 @@ async def cmd_userbototp(client: Client, message: Message):
 
 
 async def cmd_userbotpass(client: Client, message: Message):
+  if not is_owner_msg(message):
+      return
   uid = message.from_user.id
-  if uid != OWNER_ID:
-    return
 
   password = message.text.split(" ", 1)[-1].strip()
   user_store = getattr(client, "user_data_store", {})
@@ -252,7 +280,7 @@ async def cmd_userbotpass(client: Client, message: Message):
 
 
 async def cmd_del_msg(client: Client, message: Message):
-  if not is_admin(message.from_user.id) or not message.reply_to_message:
+  if not is_admin_msg(message) or not message.reply_to_message:
     return
 
   key = (message.chat.id, message.reply_to_message.id)
@@ -278,7 +306,7 @@ async def cmd_del_msg(client: Client, message: Message):
 
 
 async def cmd_emptybatch(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   args = get_args(message)
   if not args:
@@ -357,7 +385,7 @@ async def cmd_emptybatch(client: Client, message: Message):
 
 
 async def cmd_del_admin(client: Client, message: Message):
-  if message.from_user.id != OWNER_ID:
+  if not is_owner_msg(message):
     return
   args = get_args(message)
   if not args:
@@ -375,7 +403,7 @@ async def cmd_del_admin(client: Client, message: Message):
 
 
 async def cmd_sync(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   msg = await message.reply_text("🔄 Background sync started manually.")
   asyncio.create_task(background_sync(client))
@@ -383,7 +411,7 @@ async def cmd_sync(client: Client, message: Message):
 
 
 async def cmd_joinall(client: Client, message: Message):
-  if message.from_user.id != OWNER_ID:
+  if not is_owner_msg(message):
     return
   session_string = DB.get("USERBOT_SESSION")
   if not session_string or not API_ID:
@@ -432,7 +460,7 @@ async def cmd_joinall(client: Client, message: Message):
 
 
 async def cmd_lockpaid(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   DB["PAID_LOCKED"] = not DB.get("PAID_LOCKED", False)
   await save_data_async()
@@ -469,7 +497,7 @@ async def cmd_start(client: Client, message: Message):
 
 
 async def cmd_backup(client: Client, message: Message):
-  if message.from_user.id != OWNER_ID:
+  if not is_owner_msg(message):
     return
   save_data_sync()
   if os.path.exists(DATA_FILE):
@@ -477,7 +505,7 @@ async def cmd_backup(client: Client, message: Message):
 
 
 async def cmd_all_users(client: Client, message: Message):
-  if message.from_user.id != OWNER_ID:
+  if not is_owner_msg(message):
     return
   report = (
       f"ALL USERS DUMP - {datetime.now()}\n"
@@ -492,7 +520,7 @@ async def cmd_all_users(client: Client, message: Message):
 
 
 async def cmd_ban(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   args = get_args(message)
   if not args:
@@ -509,8 +537,7 @@ async def cmd_ban(client: Client, message: Message):
 
 
 async def cmd_unban(client: Client, message: Message):
-  uid = message.from_user.id
-  if not is_admin(uid):
+  if not is_admin_msg(message):
     return
 
   args = get_args(message)
@@ -575,7 +602,7 @@ async def cmd_unban(client: Client, message: Message):
 
 
 async def cmd_reset_user(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   args = get_args(message)
   if not args:
@@ -594,7 +621,7 @@ async def cmd_reset_user(client: Client, message: Message):
 
 
 async def cmd_find_user(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   args = get_args(message)
   if not args:
@@ -611,7 +638,7 @@ async def cmd_find_user(client: Client, message: Message):
 
 
 async def cmd_addcat(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   args = get_args(message)
   if not args:
@@ -625,7 +652,7 @@ async def cmd_addcat(client: Client, message: Message):
 
 
 async def cmd_setcategory(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   raw_text = message.text or message.caption or ""
   ids = re.findall(r"-?\d+", raw_text)
@@ -649,7 +676,7 @@ async def cmd_setcategory(client: Client, message: Message):
 
 
 async def cmd_delcat(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   kb = [
       [InlineKeyboardButton(f"🗑 Delete: {c}", callback_data=f"delcat_{i}")]
@@ -665,7 +692,7 @@ async def cmd_delcat(client: Client, message: Message):
 
 
 async def cmd_batch_stats(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   msg = await message.reply_text("⏳ Calculating...")
   text = "📊 **BATCH STATS**\n\n"
@@ -679,7 +706,7 @@ async def cmd_batch_stats(client: Client, message: Message):
 
 
 async def cmd_set_welcome(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   args = get_args(message)
   if len(args) < 2:
@@ -690,7 +717,7 @@ async def cmd_set_welcome(client: Client, message: Message):
 
 
 async def cmd_set_testbot(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   args = get_args(message)
   if not args:
@@ -701,7 +728,7 @@ async def cmd_set_testbot(client: Client, message: Message):
 
 
 async def cmd_extend_demo(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   args = get_args(message)
   if len(args) < 3:
@@ -723,7 +750,7 @@ async def cmd_extend_demo(client: Client, message: Message):
 
 
 async def cmd_kick_user(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   args = get_args(message)
   if len(args) < 2:
@@ -743,13 +770,15 @@ async def cmd_kick_user(client: Client, message: Message):
 
 
 async def cmd_myinfo(client: Client, message: Message):
+  if not message.from_user:
+    return
   uid = message.from_user.id
   txt = f"👤 **MY INFO**\n🆔 ID: `{uid}`\n"
   await message.reply_text(txt, parse_mode=ParseMode.MARKDOWN)
 
 
 async def cmd_approve_demo(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   args = get_args(message)
   link = None
@@ -802,7 +831,7 @@ async def cmd_approve_demo(client: Client, message: Message):
 
 
 async def cmd_approve_perm(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   link = None
   args = get_args(message)
@@ -832,7 +861,7 @@ async def cmd_approve_perm(client: Client, message: Message):
 
 
 async def cmd_delbatch(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   args = get_args(message)
   if len(args) < 2:
@@ -852,7 +881,10 @@ async def cmd_delbatch(client: Client, message: Message):
 
 
 async def cmd_addbatch_start(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  # This wizard tracks state per-user in ADMIN_WIZARD, so (unlike a simple
+  # one-shot admin action) it needs a real, identifiable sender — an
+  # Anonymous Admin post has no personal user id to key the wizard on.
+  if not message.from_user or not is_admin(message.from_user.id):
     return
   ADMIN_WIZARD[message.from_user.id] = {"step": "ask_cat"}
   kb = []
@@ -872,17 +904,23 @@ async def cmd_addbatch_start(client: Client, message: Message):
 
 
 async def cmd_broadcast_start(client: Client, message: Message):
+  # Stateful (keyed by user id in BROADCAST_STATE) — needs a real sender.
+  if not message.from_user:
+    return
   BROADCAST_STATE[message.from_user.id] = {"type": "broadcast", "step": "wait_msg"}
   await message.reply_text("📢 Send message to broadcast.")
 
 
 async def cmd_post_start(client: Client, message: Message):
+  # Stateful (keyed by user id in BROADCAST_STATE) — needs a real sender.
+  if not message.from_user:
+    return
   BROADCAST_STATE[message.from_user.id] = {"type": "post", "step": "wait_msg"}
   await message.reply_text("📝 Send message to post.")
 
 
 async def cmd_user_details(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   args = get_args(message)
   try:
@@ -925,7 +963,7 @@ async def cmd_user_details(client: Client, message: Message):
 
 
 async def cmd_batches(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   r = (
       "ALL BATCHES\n"
@@ -946,13 +984,15 @@ async def cmd_batches(client: Client, message: Message):
 
 
 async def cmd_stats(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   t = f"📊 **Statistics**\n💾 Storage: {'MongoDB ☁️' if MONGO_URL else 'Local 📁'}\n🔒 Lockdown: {'🔴 ON' if not DB.get('NEW_USERS_ALLOWED', True) else '🟢 OFF'}\n🔓 Free Locked: {'🔴 YES' if DB.get('FREE_LOCKED', False) else '🟢 NO'}\n🔐 Paid Locked: {'🔴 YES' if DB.get('PAID_LOCKED', False) else '🟢 NO'}\n🤖 Test Bot Locked: {'🔴 YES' if DB.get('TEST_BOT_LOCKED', False) else '🟢 NO'}\n\n👥 Users: {len(DB['USER_DATA'])}\n🆓 Free: {len(DB['FREE_CHANNELS'])}\n💎 Paid: {len(DB['PAID_CHANNELS'])}\n🚫 Blocked: {len(DB['BLOCKED_USERS'])}"
   await message.reply_text(t, parse_mode=ParseMode.MARKDOWN)
 
 
 async def cmd_cancel(client: Client, message: Message):
+  if not message.from_user:
+    return
   uid = message.from_user.id
   if uid in BROADCAST_STATE:
     del BROADCAST_STATE[uid]
@@ -962,7 +1002,7 @@ async def cmd_cancel(client: Client, message: Message):
 
 
 async def cmd_lockdown(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   DB["NEW_USERS_ALLOWED"] = not DB.get("NEW_USERS_ALLOWED", True)
   await save_data_async()
@@ -976,7 +1016,7 @@ async def cmd_lockdown(client: Client, message: Message):
 
 
 async def cmd_lockfree(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   DB["FREE_LOCKED"] = not DB.get("FREE_LOCKED", False)
   await save_data_async()
@@ -989,7 +1029,7 @@ async def cmd_lockfree(client: Client, message: Message):
 
 
 async def cmd_locktestbot(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   DB["TEST_BOT_LOCKED"] = not DB.get("TEST_BOT_LOCKED", False)
   await save_data_async()
@@ -1002,7 +1042,7 @@ async def cmd_locktestbot(client: Client, message: Message):
 
 
 async def cmd_clear(client: Client, message: Message):
-  if message.from_user.id != OWNER_ID:
+  if not is_owner_msg(message):
     return
   session_string = DB.get("USERBOT_SESSION")
   if not session_string or not API_ID:
@@ -1078,7 +1118,7 @@ async def cmd_clear(client: Client, message: Message):
 
 
 async def cmd_maintenance(client: Client, message: Message):
-  if not is_admin(message.from_user.id):
+  if not is_admin_msg(message):
     return
   DB["MAINTENANCE_MODE"] = not DB.get("MAINTENANCE_MODE", False)
   await save_data_async()
@@ -2276,17 +2316,73 @@ async def handle_delete(client: Client, messages):
         pass
 
 # =====================================================================
+# ❤️ 2-WAY REACTION SYNC ENGINE
+# =====================================================================
+# Mirrors a reaction added/changed/removed on either side of a support
+# ticket (User's DM <-> Admin's Forum Topic message) onto the paired
+# message, using the exact same MESSAGE_MAP pairing that already drives
+# handle_edit / handle_delete above. Registered in bot.py via
+# @app.on_message_reaction().
+async def handle_reaction(client: Client, update):
+    try:
+        chat = getattr(update, "chat", None)
+        msg_id = getattr(update, "message_id", None)
+        if not chat or not msg_id:
+            return
+
+        key = (chat.id, msg_id)
+        if key not in MESSAGE_MAP:
+            return
+        target_chat, target_msg = MESSAGE_MAP[key]
+
+        # `new_reaction` is the list of reactions now on the message (empty
+        # list means the reaction was removed). We only mirror the first
+        # one — Telegram allows multiple reactions per message on some
+        # tiers, but a 1:1 mirror keeps this predictable and simple.
+        new_reactions = getattr(update, "new_reaction", None) or []
+        emoji = None
+        if new_reactions:
+            emoji = getattr(new_reactions[0], "emoji", None)
+            if not emoji:
+                # Custom (Telegram Premium) emoji reactions can't be mirrored
+                # with a plain emoji string — skip rather than send garbage.
+                return
+
+        # Passing emoji=None clears the bot's reaction on the target
+        # message, which is exactly what should happen when the reaction
+        # is removed on the source side.
+        await client.send_reaction(target_chat, target_msg, emoji=emoji)
+    except Exception as e:
+        logger.error(f"⚠️ Reaction sync failed: {e}")
+
+# =====================================================================
 # 💬 REGULAR MESSAGES & SUPPORT TICKETS ENGINE (BULLETPROOF 2-WAY)
 # =====================================================================
 async def main_message_handler(client: Client, message: Message, is_retry=False):
     user, chat = message.from_user, message.chat
-    if not user or check_spam(user.id): 
+
+    # 🔥 FIX (Bug A root cause): the old code did `if not user: return` right
+    # here, unconditionally, for the ENTIRE handler. message.from_user is
+    # None whenever a message is sent by an Anonymous Admin or on behalf of
+    # a linked channel — which is exactly how a lot of admins post inside
+    # internal Support/Admin groups. That single early-return was silently
+    # eating every Admin ➔ User reply typed anonymously in the Support
+    # Group topic, before the routing logic below ever got a chance to run.
+    # Spam-throttling and the wizard/broadcast intercepts only make sense
+    # for a real, identifiable DM sender, so they're now scoped to that
+    # case instead of gating the whole function.
+    if user:
+        if check_spam(user.id):
+            return
+        if user.id not in DB.get("BLOCKED_USERS", []):
+            if await wizard_message(client, message):
+                return
+            if await handle_broadcast_flow(client, message):
+                return
+    elif chat.type == ChatType.PRIVATE:
+        # A private DM with no from_user should never happen on Telegram,
+        # but bail out defensively rather than proceed with user is None.
         return
-    if user.id not in DB.get("BLOCKED_USERS", []):
-        if await wizard_message(client, message): 
-            return
-        if await handle_broadcast_flow(client, message): 
-            return
 
     # -------------------------------------------------------------
     # 1. USER ➔ ADMIN (DM se Support Group Topic Me Forward)
@@ -2354,40 +2450,66 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
         global _BOT_SELF_ID
         if _BOT_SELF_ID is None:
             _BOT_SELF_ID = (await client.get_me()).id
-        if message.from_user and message.from_user.id == _BOT_SELF_ID:
+        # NOTE: `user` can legitimately be None here (Anonymous Admin /
+        # linked-channel post) — that's fine, we only need it to skip the
+        # bot's own echoed messages, never to identify who's replying.
+        if user and user.id == _BOT_SELF_ID:
             return
 
-        topic_id = getattr(message, "message_thread_id", None)
-        if not topic_id:
-            topic_id = getattr(message, "reply_to_top_message_id", None)
+        # --- Reliably resolve which support ticket topic this belongs to ---
+        # message_thread_id is the field Pyrogram sets for any message
+        # living inside a forum topic — this is populated the same way
+        # whether the sender is a normal admin or an Anonymous Admin, so
+        # it alone is enough; reply_to_top_message_id is an older/secondary
+        # signal for the same thing, kept as a fallback for older Pyrogram
+        # builds. If neither is present but this message is itself a reply,
+        # fall back to the replied-to message's own thread id, or (for a
+        # reply directly to the topic's original "NEW USER TICKET" service
+        # message) that message's id, which *is* the topic id.
+        topic_id = (
+            getattr(message, "message_thread_id", None)
+            or getattr(message, "reply_to_top_message_id", None)
+        )
         if not topic_id and message.reply_to_message:
-            topic_id = getattr(message.reply_to_message, "message_thread_id", None)
-            if not topic_id:
-                topic_id = message.reply_to_message.id
-        
+            topic_id = (
+                getattr(message.reply_to_message, "message_thread_id", None)
+                or message.reply_to_message.id
+            )
+
         target_uid = None
         if topic_id:
             for u, t in DB.get("USER_TOPICS", {}).items():
-                if str(t) == str(topic_id) or (message.reply_to_message and str(t) == str(message.reply_to_message.id)):
+                if str(t) == str(topic_id):
                     target_uid = int(u)
                     break
-        
-        if target_uid:
-            reply_id = None
-            if message.reply_to_message:
-                reply_key = (int(SUPPORT_GROUP_ID), message.reply_to_message.id)
-                if reply_key in MESSAGE_MAP:
-                    _, reply_id = MESSAGE_MAP[reply_key]
+
+        # Fallback: if the topic lookup came up empty but this is a direct
+        # reply to a message we already know is paired (via MESSAGE_MAP),
+        # trust that pairing instead of giving up.
+        if not target_uid and message.reply_to_message:
+            reply_key = (int(SUPPORT_GROUP_ID), message.reply_to_message.id)
+            if reply_key in MESSAGE_MAP:
+                mapped_chat_id, _ = MESSAGE_MAP[reply_key]
+                target_uid = int(mapped_chat_id)
+
+        if not target_uid:
+            return  # Not a recognized ticket topic/thread — ignore quietly.
+
+        reply_id = None
+        if message.reply_to_message:
+            reply_key = (int(SUPPORT_GROUP_ID), message.reply_to_message.id)
+            if reply_key in MESSAGE_MAP:
+                _, reply_id = MESSAGE_MAP[reply_key]
+        try:
             try:
-                try:
-                    sent = await message.copy(target_uid, reply_to_message_id=reply_id)
-                except Exception:
-                    sent = await message.copy(target_uid) # Fallback
-                    
-                MESSAGE_MAP[(int(SUPPORT_GROUP_ID), message.id)] = (target_uid, sent.id)
-                MESSAGE_MAP[(target_uid, sent.id)] = (int(SUPPORT_GROUP_ID), message.id)
-            except Exception as e:
-                await message.reply_text(f"⚠️ **User ko deliver nahi hua!** Error: `{e}`")
+                sent = await message.copy(target_uid, reply_to_message_id=reply_id)
+            except Exception:
+                sent = await message.copy(target_uid)  # Fallback without reply-quote
+
+            MESSAGE_MAP[(int(SUPPORT_GROUP_ID), message.id)] = (target_uid, sent.id)
+            MESSAGE_MAP[(target_uid, sent.id)] = (int(SUPPORT_GROUP_ID), message.id)
+        except Exception as e:
+            await message.reply_text(f"⚠️ **User ko deliver nahi hua!** Error: `{e}`")
 
 async def on_chat_member_update(client: Client, update: ChatMemberUpdated):
   user = update.new_chat_member.user
