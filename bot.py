@@ -51,6 +51,20 @@ async def _run_pyrogram_engine():
     from pyrogram.types import Message, CallbackQuery
     from pyrogram.errors import FloodWait
 
+    # 🔥 Reaction sync (best-effort): Pyrogram 2.0.106 has NO
+    # @app.on_message_reaction() decorator — that convenience wrapper only
+    # exists in newer forks/betas. We hook the raw MTProto update instead
+    # (see the on_raw_update handler registered further down). Imported
+    # defensively: if this frozen build's bundled TL schema doesn't have
+    # the raw type either, reaction sync just disables itself below
+    # instead of crashing the whole engine.
+    try:
+        from pyrogram.raw.types import UpdateBotMessageReaction
+        REACTION_RAW_TYPE_AVAILABLE = True
+    except ImportError:
+        UpdateBotMessageReaction = None
+        REACTION_RAW_TYPE_AVAILABLE = False
+
     async def _start_with_floodwait_guard(client):
         """
         Repeatedly attempts client.start(), automatically sleeping through
@@ -178,9 +192,22 @@ async def _run_pyrogram_engine():
         if hasattr(H, "handle_delete"):
             await H.handle_delete(client, messages)
 
-    @app.on_message_reaction()
-    async def _on_reaction(client: Client, update):
-        await H.handle_reaction(client, update)
+    # =====================================================================
+    # 4b. LIVE REACTION SYNCING (RAW UPDATES — no on_message_reaction in
+    # Pyrogram 2.0.106, so we hook the raw MTProto update directly)
+    # =====================================================================
+    if REACTION_RAW_TYPE_AVAILABLE:
+        @app.on_raw_update()
+        async def _on_raw_update(client: Client, update, users, chats):
+            if isinstance(update, UpdateBotMessageReaction) and hasattr(H, "handle_reaction"):
+                try:
+                    await H.handle_reaction(client, update)
+                except Exception:
+                    print("⚠️ Reaction sync error:", flush=True)
+                    traceback.print_exc()
+        print("🟢 Reaction sync ENABLED (raw updates).", flush=True)
+    else:
+        print("⚠️ Reaction sync DISABLED — this Pyrogram build's raw schema has no UpdateBotMessageReaction. Everything else (2-way text routing, edits, deletes) is unaffected.", flush=True)
 
     # =====================================================================
     # 5. REGULAR MESSAGES & SUPPORT TICKETS (🔥 YAHAN SOLVE HUA AAPKA BUG 🔥)
