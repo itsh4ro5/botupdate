@@ -1,6 +1,6 @@
 import os, json, asyncio, logging, time
 from pyrogram.enums import ChatMemberStatus, ParseMode
-from pyrogram.errors import RPCError
+from pyrogram.errors import RPCError, PeerIdInvalid, ChannelInvalid, ChannelPrivate
 
 # --- LOGGING SETUP ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -237,64 +237,96 @@ async def schedule_delete(client, message, delay=1200):
         asyncio.create_task(_delayed_delete(client, message.chat.id, message.id, delay))
 
 # =====================================================================
-# 🔥 THE BULLETPROOF FORUM TOPIC ENGINE (CLEAN MTPROTO API)
+# 🧠 NATIVE MTPROTO PEER CACHE WARM-UP (NO HTTP HACKS)
+# =====================================================================
+async def refresh_peer_cache(client, chat_id):
+    """
+    Forces Pyrogram to (re)learn a chat's access_hash purely over the
+    existing MTProto socket — no HTTP Bot API calls involved.
+    client.get_chat() internally resolves the peer and updates Pyrogram's
+    local peer storage (SQLite session) as a side effect.
+    """
+    if not chat_id:
+        return False
+    try:
+        await client.get_chat(int(chat_id))
+        logger.info(f"✅ Peer cache refreshed natively for {chat_id}!")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Native peer refresh failed for {chat_id}: {e}")
+        return False
+
+# =====================================================================
+# FORUM TOPIC ENGINE (NATIVE PYROGRAM 2.x API, WITH RAW-API FALLBACK)
 # =====================================================================
 async def get_or_create_topic(user, client, is_retry=False):
-    if not SUPPORT_GROUP_ID: 
+    if not SUPPORT_GROUP_ID:
         return None
-    
-    # 1. Check if user already has a cached topic
-    if user.id in DB.get("USER_TOPICS", {}): 
+    if user.id in DB.get("USER_TOPICS", {}):
         return DB["USER_TOPICS"][user.id]
-        
+
     if user.id in TOPIC_CREATION_LOCK:
-        await asyncio.sleep(1) 
-        if user.id in DB.get("USER_TOPICS", {}): 
-            return DB["USER_TOPICS"][user.id]
-            
+        # Another task is already creating this user's topic — wait for it
+        for _ in range(10):
+            await asyncio.sleep(0.5)
+            if user.id in DB.get("USER_TOPICS", {}):
+                return DB["USER_TOPICS"][user.id]
+        return None
+
     TOPIC_CREATION_LOCK.add(user.id)
     try:
-        from pyrogram.raw.functions.channels import CreateForumTopic
-        
-        # 🔥 THE MASTER FIX: Use direct Pyrogram Peer resolution via MTProto
-        try:
-            peer = await client.resolve_peer(int(SUPPORT_GROUP_ID))
-        except Exception as resolve_err:
-            # If Pyrogram says PeerIdInvalid, forcefully fetch the Chat Object first!
-            logger.warning(f"Peer Invalid. Force-fetching chat {SUPPORT_GROUP_ID}...")
-            await client.get_chat(int(SUPPORT_GROUP_ID))
-            peer = await client.resolve_peer(int(SUPPORT_GROUP_ID))
-            
-        r = await client.invoke(
-            CreateForumTopic(
-                channel=peer,
-                title=f"{user.first_name[:20]} ({user.id})"
-            )
-        )
-        
+        title = f"{(user.first_name or 'User')[:20]} ({user.id})"
         topic_id = None
-        for update in r.updates:
-            if hasattr(update, "message") and hasattr(update.message, "id"):
-                topic_id = update.message.id
-                break
-                
+
+        # --- Preferred path: native Pyrogram 2.0.106 forum-topic method ---
+        try:
+            topic = await client.create_forum_topic(chat_id=int(SUPPORT_GROUP_ID), title=title)
+            topic_id = getattr(topic, "id", None) or getattr(topic, "message_thread_id", None)
+        except AttributeError:
+            # Older Pyrogram build without create_forum_topic() — Raw API fallback
+            from pyrogram.raw.functions.channels import CreateForumTopic
+            peer = await client.resolve_peer(int(SUPPORT_GROUP_ID))
+            r = await client.invoke(
+                CreateForumTopic(channel=peer, title=title, random_id=client.rnd_id())
+            )
+            for update in r.updates:
+                if hasattr(update, "message") and hasattr(update.message, "id"):
+                    topic_id = update.message.id
+                    break
+
         if not topic_id:
-            raise Exception("Topic ID fetch fail ho gaya.")
+            raise Exception("Topic ID could not be resolved from Telegram's response.")
 
         DB.setdefault("USER_TOPICS", {})[user.id] = topic_id
         await save_data_async()
-        
+
         group_id_str = str(SUPPORT_GROUP_ID).replace("-100", "")
-        text = f"👤 **NEW USER TICKET**\n📛 {user.first_name}\n🆔 `{user.id}`\n📜 [Click to Check History](https://t.me/c/{group_id_str}?q={user.id})"
-        await client.send_message(int(SUPPORT_GROUP_ID), text, reply_to_message_id=topic_id, parse_mode=ParseMode.MARKDOWN)
-        
+        text = (
+            f"👤 **NEW USER TICKET**\n📛 {user.first_name}\n🆔 `{user.id}`\n"
+            f"📜 [Click to Check History](https://t.me/c/{group_id_str}?q={user.id})"
+        )
+        try:
+            await client.send_message(
+                int(SUPPORT_GROUP_ID), text, message_thread_id=topic_id, parse_mode=ParseMode.MARKDOWN
+            )
+        except TypeError:
+            await client.send_message(
+                int(SUPPORT_GROUP_ID), text, reply_to_message_id=topic_id, parse_mode=ParseMode.MARKDOWN
+            )
         return topic_id
-        
-    except Exception as e: 
+
+    except (PeerIdInvalid, ChannelInvalid, ChannelPrivate) as e:
+        if not is_retry:
+            logger.warning(f"Peer cache miss for Support Group ({e}). Refreshing natively via get_chat()...")
+            TOPIC_CREATION_LOCK.discard(user.id)
+            await refresh_peer_cache(client, SUPPORT_GROUP_ID)
+            return await get_or_create_topic(user, client, is_retry=True)
+        logger.error(f"Topic Creation Error (peer still invalid after native refresh): {e}")
+        raise
+    except Exception as e:
         logger.error(f"Topic Creation Error: {e}")
         if user.id in DB.get("USER_TOPICS", {}):
             del DB["USER_TOPICS"][user.id]
         raise e
-        
-    finally: 
+    finally:
         TOPIC_CREATION_LOCK.discard(user.id)
