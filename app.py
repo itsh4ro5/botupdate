@@ -36,23 +36,29 @@ async def get_user_avatar(user_id):
         return "Bot not ready", 503
 
     try:
-        # 🔥 FIX: Pyrogram me config.bot_app hi Client hota hai (.bot lagane ki zaroorat nahi)
-        bot = getattr(config.bot_app, 'bot', config.bot_app)
-        photos = await bot.get_user_profile_photos(user_id, limit=1)
-        
-        if photos.total_count > 0:
-            photo = photos.photos[0][-1]
-            file = await bot.get_file(photo.file_id)
-            
-            buf = io.BytesIO()
-            await file.download_to_memory(buf)
-            img_bytes = buf.getvalue()
-            
-            AVATAR_CACHE[user_id] = {"bytes": img_bytes, "time": now}
-            return await send_file(io.BytesIO(img_bytes), mimetype='image/jpeg')
+        # 🔥 FIX: config.bot_app IS the Pyrogram Client itself — there is no
+        # '.bot' attribute on it. The earlier AttributeError actually came
+        # from calling python-telegram-bot-style methods (get_user_profile_photos /
+        # get_file / download_to_memory) on a Pyrogram Client, which doesn't
+        # have them. Pyrogram's native equivalents are get_chat_photos()
+        # (an async generator) and download_media(..., in_memory=True).
+        bot = config.bot_app
+
+        photo = None
+        async for p in bot.get_chat_photos(user_id, limit=1):
+            photo = p
+            break
+
+        if photo:
+            file_obj = await bot.download_media(photo.file_id, in_memory=True)
+            img_bytes = file_obj.getvalue() if hasattr(file_obj, "getvalue") else file_obj
+
+            if img_bytes:
+                AVATAR_CACHE[user_id] = {"bytes": img_bytes, "time": now}
+                return await send_file(io.BytesIO(img_bytes), mimetype='image/jpeg')
     except Exception:
         pass
-        
+
     return "No avatar", 404
 
 @app.route('/api/user/<int:user_id>')
@@ -79,8 +85,8 @@ async def get_user_data(user_id):
     joined_list = []
     
     if hasattr(config, 'bot_app') and config.bot_app:
-        # 🔥 FIX: Solved AttributeError: 'Client' object has no attribute 'bot'
-        bot = getattr(config.bot_app, 'bot', config.bot_app)
+        # config.bot_app IS the Pyrogram Client itself (no '.bot' attribute).
+        bot = config.bot_app
         async def check_membership(bid):
             try:
                 m = await bot.get_chat_member(int(bid), user_id)
