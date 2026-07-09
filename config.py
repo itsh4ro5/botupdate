@@ -229,16 +229,12 @@ async def _delayed_delete(client, chat_id, msg_id, delay):
     await asyncio.sleep(delay)
     try:
         await client.delete_messages(chat_id=int(chat_id), message_ids=int(msg_id))
-    except Exception: pass
+    except Exception: 
+        pass
 
 async def schedule_delete(client, message, delay=1200):
     if message: 
         asyncio.create_task(_delayed_delete(client, message.chat.id, message.id, delay))
-
-# =====================================================================
-# 🧠 THE GENIUS HACK: HTTP PEER DISCOVERY (ANTI-HANG VERSION)
-# =====================================================================
-import httpx
 
 # =====================================================================
 # 🧠 THE GENIUS HACK: HTTP PEER DISCOVERY (STANDARD LIBRARY VERSION)
@@ -248,7 +244,8 @@ import json
 
 async def force_peer_discovery(chat_id):
     """HACK: Sends an invisible message via HTTP API to force Telegram to push the Chat ID cache to Pyrogram!"""
-    if not TELEGRAM_BOT_TOKEN: return
+    if not TELEGRAM_BOT_TOKEN: 
+        return
     try:
         logger.info(f"🔄 Firing HTTP Ping to wake up Peer Cache for {chat_id}...")
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -269,30 +266,19 @@ async def force_peer_discovery(chat_id):
             logger.info("✅ Peer Cache forcefully absorbed!")
     except Exception as e:
         logger.error(f"❌ HTTP Ping Exception: {repr(e)}")
-                
-            msg_id = data['result']['message_id']
-            del_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/deleteMessage"
-            await http_client.post(
-                del_url, 
-                json={"chat_id": chat_id, "message_id": msg_id},
-                timeout=10.0
-            )
-            
-        # Pyrogram ko memory update karne ke liye 2 second ka time do
-        await asyncio.sleep(2)
-        logger.info("✅ Peer Cache forcefully absorbed!")
-    except Exception as e:
-        logger.error(f"❌ HTTP Ping Exception: {e}")
 
 # =====================================================================
 # RAW API FORUM TOPIC ENGINE
 # =====================================================================
 async def get_or_create_topic(user, client, is_retry=False):
-    if not SUPPORT_GROUP_ID: return None
-    if user.id in DB.get("USER_TOPICS", {}): return DB["USER_TOPICS"][user.id]
+    if not SUPPORT_GROUP_ID: 
+        return None
+    if user.id in DB.get("USER_TOPICS", {}): 
+        return DB["USER_TOPICS"][user.id]
     if user.id in TOPIC_CREATION_LOCK:
         await asyncio.sleep(1) 
-        if user.id in DB.get("USER_TOPICS", {}): return DB["USER_TOPICS"][user.id]
+        if user.id in DB.get("USER_TOPICS", {}): 
+            return DB["USER_TOPICS"][user.id]
     TOPIC_CREATION_LOCK.add(user.id)
     try:
         from pyrogram.raw.functions.channels import CreateForumTopic
