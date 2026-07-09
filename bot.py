@@ -49,6 +49,31 @@ async def _run_pyrogram_engine():
 
     from pyrogram import Client, filters
     from pyrogram.types import Message, CallbackQuery
+    from pyrogram.errors import FloodWait
+
+    async def _start_with_floodwait_guard(client):
+        """
+        Repeatedly attempts client.start(), automatically sleeping through
+        any FloodWait Telegram throws — there is no way around a FloodWait,
+        the only valid move is to wait it out. FloodWait retries are NOT
+        counted against the outer reconnect-attempt budget, since it isn't
+        a connection failure. Any other exception is re-raised so the outer
+        loop in _run_pyrogram_engine can handle it as a normal socket error.
+        """
+        import config
+        while True:
+            try:
+                await client.start()
+                return
+            except FloodWait as e:
+                wait_time = int(getattr(e, "value", getattr(e, "x", 30)))
+                config.FLOOD_WAIT_UNTIL = time.time() + wait_time
+                resume_at = time.strftime('%H:%M:%S', time.localtime(config.FLOOD_WAIT_UNTIL))
+                print(f"🐢 FloodWait from Telegram! Sleeping {wait_time}s (resuming ~{resume_at})...", flush=True)
+                await asyncio.sleep(wait_time + 2)
+                config.FLOOD_WAIT_UNTIL = 0
+                print("🟢 FloodWait cooldown complete — retrying connection...", flush=True)
+                continue
 
     API_ID = getattr(config, "API_ID", 0)
     API_HASH = getattr(config, "API_HASH", "")
@@ -167,7 +192,7 @@ async def _run_pyrogram_engine():
     for attempt in range(1, 6):
         try:
             print(f"🟡 BOT: Connecting via Pyrogram MTProto Sockets (Attempt {attempt}/5)...", flush=True)
-            await app.start()
+            await _start_with_floodwait_guard(app)
             me = await app.get_me()
             print(f"✅ BOT LIVE! Authorized successfully as @{me.username} (ID: {me.id})!", flush=True)
             
@@ -201,6 +226,18 @@ async def _run_pyrogram_engine():
                 print(f"⚠️ Dialog sync warning: {diag_err}", flush=True)
                 
             break
+        except FloodWait as e:
+            # Belt-and-suspenders: covers FloodWait raised anywhere else in
+            # this try block (e.g. get_me(), get_dialogs(), get_chat()),
+            # not just from client.start() itself.
+            import config
+            wait_time = int(getattr(e, "value", getattr(e, "x", 30)))
+            config.FLOOD_WAIT_UNTIL = time.time() + wait_time
+            print(f"🐢 FloodWait caught during startup sequence! Sleeping {wait_time}s...", flush=True)
+            await asyncio.sleep(wait_time + 2)
+            config.FLOOD_WAIT_UNTIL = 0
+            # Doesn't count against the 5-attempt budget — retry immediately.
+            continue
         except Exception as e:
             print(f"⚠️ Socket Connect Error: {type(e).__name__}: {e}", flush=True)
             if attempt == 5:
