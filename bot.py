@@ -178,6 +178,10 @@ async def _run_pyrogram_engine():
         if hasattr(H, "handle_delete"):
             await H.handle_delete(client, messages)
 
+    @app.on_message_reaction()
+    async def _on_reaction(client: Client, update):
+        await H.handle_reaction(client, update)
+
     # =====================================================================
     # 5. REGULAR MESSAGES & SUPPORT TICKETS (🔥 YAHAN SOLVE HUA AAPKA BUG 🔥)
     # Ye handler normal text/photo/video ko Support Group me forward karega
