@@ -6,6 +6,39 @@ from pyrogram.errors import RPCError, PeerIdInvalid, ChannelInvalid, ChannelPriv
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# =====================================================================
+# 🩹 ROOT-CAUSE PATCH: pyrogram 2.0.106 (the last release on PyPI —
+# upstream is effectively unmaintained) hard-codes channel/chat ID
+# bounds from ~2021 in pyrogram/utils.py:
+#     MIN_CHANNEL_ID = -1002147483647
+#     MIN_CHAT_ID    = -2147483647
+# Telegram has since extended how negative new channel/supergroup IDs
+# can get. A freshly-created group like your Support Group (e.g.
+# -1003810420561) falls BELOW that hard-coded floor. Pyrogram's own
+# utils.get_peer_type() rejects any ID outside these bounds and raises
+# "Peer id invalid" *before a single byte goes over the MTProto socket*
+# — no amount of peer-cache warm-up, get_chat() retries, or reconnects
+# can work around a purely local, client-side range check. Widening the
+# bound is the community-standard fix for this exact symptom
+# (see pyrogram/pyrogram#1430, still unmerged upstream as of this build).
+# This must run before any Client resolves a peer, so it lives at the
+# very top of config.py, which every other module imports first.
+# =====================================================================
+try:
+    import pyrogram.utils as _pyro_utils
+    _NEW_MIN_CHANNEL_ID = -1007852516352
+    _NEW_MIN_CHAT_ID = -999999999999
+    if getattr(_pyro_utils, "MIN_CHANNEL_ID", 0) > _NEW_MIN_CHANNEL_ID:
+        _pyro_utils.MIN_CHANNEL_ID = _NEW_MIN_CHANNEL_ID
+    if getattr(_pyro_utils, "MIN_CHAT_ID", 0) > _NEW_MIN_CHAT_ID:
+        _pyro_utils.MIN_CHAT_ID = _NEW_MIN_CHAT_ID
+    logger.info(
+        f"✅ Patched pyrogram ID bounds (MIN_CHANNEL_ID={_pyro_utils.MIN_CHANNEL_ID}, "
+        f"MIN_CHAT_ID={_pyro_utils.MIN_CHAT_ID})."
+    )
+except Exception as _patch_err:
+    logger.warning(f"⚠️ Could not patch pyrogram ID bounds: {_patch_err}")
+
 # --- CONFIGURATION & DEFAULTS ---
 DEFAULTS = {"TOKEN": "", "OWNER": 0, "SUPPORT": 0, "MAIN_CH": 0, "LOG_CH": 0}
 
