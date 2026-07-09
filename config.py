@@ -237,53 +237,34 @@ async def schedule_delete(client, message, delay=1200):
         asyncio.create_task(_delayed_delete(client, message.chat.id, message.id, delay))
 
 # =====================================================================
-# 🧠 THE GENIUS HACK: HTTP PEER DISCOVERY (STANDARD LIBRARY VERSION)
-# =====================================================================
-import urllib.request
-import json
-
-async def force_peer_discovery(chat_id):
-    """HACK: Sends an invisible message via HTTP API to force Telegram to push the Chat ID cache to Pyrogram!"""
-    if not TELEGRAM_BOT_TOKEN: 
-        return
-    try:
-        logger.info(f"🔄 Firing HTTP Ping to wake up Peer Cache for {chat_id}...")
-        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        data = json.dumps({"chat_id": chat_id, "text": "🔄 System Sync...", "disable_notification": True}).encode('utf-8')
-        req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
-        
-        def make_req():
-            res = urllib.request.urlopen(req, timeout=10)
-            return json.loads(res.read().decode('utf-8'))
-            
-        resp = await asyncio.to_thread(make_req)
-        if resp and resp.get("ok"):
-            msg_id = resp['result']['message_id']
-            del_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/deleteMessage"
-            del_data = json.dumps({"chat_id": chat_id, "message_id": msg_id}).encode('utf-8')
-            del_req = urllib.request.Request(del_url, data=del_data, headers={'Content-Type': 'application/json'})
-            await asyncio.to_thread(urllib.request.urlopen, del_req, timeout=10)
-            logger.info("✅ Peer Cache forcefully absorbed!")
-    except Exception as e:
-        logger.error(f"❌ HTTP Ping Exception: {repr(e)}")
-
-# =====================================================================
-# RAW API FORUM TOPIC ENGINE
+# 🔥 THE BULLETPROOF FORUM TOPIC ENGINE (CLEAN MTPROTO API)
 # =====================================================================
 async def get_or_create_topic(user, client, is_retry=False):
     if not SUPPORT_GROUP_ID: 
         return None
+    
+    # 1. Check if user already has a cached topic
     if user.id in DB.get("USER_TOPICS", {}): 
         return DB["USER_TOPICS"][user.id]
+        
     if user.id in TOPIC_CREATION_LOCK:
         await asyncio.sleep(1) 
         if user.id in DB.get("USER_TOPICS", {}): 
             return DB["USER_TOPICS"][user.id]
+            
     TOPIC_CREATION_LOCK.add(user.id)
     try:
         from pyrogram.raw.functions.channels import CreateForumTopic
         
-        peer = await client.resolve_peer(int(SUPPORT_GROUP_ID))
+        # 🔥 THE MASTER FIX: Use direct Pyrogram Peer resolution via MTProto
+        try:
+            peer = await client.resolve_peer(int(SUPPORT_GROUP_ID))
+        except Exception as resolve_err:
+            # If Pyrogram says PeerIdInvalid, forcefully fetch the Chat Object first!
+            logger.warning(f"Peer Invalid. Force-fetching chat {SUPPORT_GROUP_ID}...")
+            await client.get_chat(int(SUPPORT_GROUP_ID))
+            peer = await client.resolve_peer(int(SUPPORT_GROUP_ID))
+            
         r = await client.invoke(
             CreateForumTopic(
                 channel=peer,
@@ -306,18 +287,14 @@ async def get_or_create_topic(user, client, is_retry=False):
         group_id_str = str(SUPPORT_GROUP_ID).replace("-100", "")
         text = f"👤 **NEW USER TICKET**\n📛 {user.first_name}\n🆔 `{user.id}`\n📜 [Click to Check History](https://t.me/c/{group_id_str}?q={user.id})"
         await client.send_message(int(SUPPORT_GROUP_ID), text, reply_to_message_id=topic_id, parse_mode=ParseMode.MARKDOWN)
+        
         return topic_id
+        
     except Exception as e: 
-        err_str = str(e).lower()
-        if "peer" in err_str and "invalid" in err_str and not is_retry:
-            logger.warning("Peer ID missing in Topic Engine. Triggering HTTP Hack...")
-            await force_peer_discovery(SUPPORT_GROUP_ID)
-            TOPIC_CREATION_LOCK.discard(user.id)
-            return await get_or_create_topic(user, client, is_retry=True)
-            
         logger.error(f"Topic Creation Error: {e}")
         if user.id in DB.get("USER_TOPICS", {}):
             del DB["USER_TOPICS"][user.id]
         raise e
+        
     finally: 
         TOPIC_CREATION_LOCK.discard(user.id)
