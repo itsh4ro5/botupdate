@@ -2323,23 +2323,83 @@ async def handle_delete(client: Client, messages):
 # message, using the exact same MESSAGE_MAP pairing that already drives
 # handle_edit / handle_delete above.
 #
-# IMPORTANT: bot.py registers this via @app.on_raw_update() and passes the
-# RAW MTProto `UpdateBotMessageReaction` object straight through — NOT
-# Pyrogram's high-level `MessageReactionUpdated` (that convenience type
-# doesn't exist in 2.0.106). That means this function must read the raw
-# schema's field names:
-#   update.peer           -> raw Peer (PeerUser/PeerChat/PeerChannel), NOT a Chat
-#   update.msg_id          -> int (NOT .message_id)
-#   update.new_reactions   -> list[Reaction] (NOT .new_reaction, singular)
-#   update.old_reactions   -> list[Reaction], previous state
-#   Reaction.emoticon      -> the actual emoji string on ReactionEmoji
-#                              (there is no `.emoji` attribute on the raw type)
-# ReactionCustomEmoji (Telegram Premium custom emoji) has no `.emoticon` —
-# we can't mirror those as a plain emoji, so we skip them explicitly rather
-# than silently no-op on a bad getattr.
+# bot.py's @app.on_raw_update() hands this function TWO different raw
+# MTProto shapes depending on where the reaction happened, and they do
+# NOT share a field layout:
+#
+#   UpdateBotMessageReaction (fires for DM reactions — bots get full
+#   per-user attribution here):
+#     update.peer            -> raw Peer (PeerUser/PeerChat/PeerChannel)
+#     update.msg_id           -> int
+#     update.new_reactions    -> List[Reaction], the reactor's current
+#                                reactions. Empty = they removed it.
+#     update.old_reactions    -> List[Reaction], previous state
+#
+#   UpdateMessageReactions (fires for group/channel reactions — e.g. an
+#   Admin reacting inside the Support Group; this is an aggregate
+#   count snapshot, NOT a per-user event):
+#     update.peer             -> raw Peer
+#     update.msg_id            -> int
+#     update.reactions         -> MessageReactions
+#     update.reactions.results -> List[ReactionCount], each with
+#                                 `.reaction` (a Reaction) and `.count`.
+#                                 Empty = all reactions were cleared.
+#
+# In both cases the actual emoji string lives on a `Reaction` object as
+# `.emoticon` (only for the plain-emoji variant, ReactionEmoji — custom
+# Premium emoji reactions use `.document_id` instead and can't be
+# mirrored as a plain string, so those are skipped rather than sent as
+# garbage).
+_REACTION_SKIP = object()  # sentinel: "saw a reaction, but can't mirror it"
+
+
+def _extract_reaction_emoji(update):
+    """
+    Returns:
+      - a plain emoji string to send,
+      - None if the reaction was cleared (mirror by clearing too), or
+      - _REACTION_SKIP if this update can't be safely mirrored
+        (unsupported reaction type, or an update shape we don't handle).
+    """
+    def _emoji_from_reaction(reaction):
+        if reaction is None:
+            return _REACTION_SKIP
+        emoticon = getattr(reaction, "emoticon", None)
+        if emoticon is not None:
+            return emoticon
+        # ReactionCustomEmoji (Premium custom emoji) / ReactionPaid have no
+        # plain emoji string — can't mirror these safely.
+        return _REACTION_SKIP
+
+    cls_name = type(update).__name__
+
+    if cls_name == "UpdateBotMessageReaction":
+        new_reactions = list(getattr(update, "new_reactions", None) or [])
+        if not new_reactions:
+            return None  # reaction removed
+        return _emoji_from_reaction(new_reactions[0])
+
+    if cls_name == "UpdateMessageReactions":
+        reactions_obj = getattr(update, "reactions", None)
+        results = list(getattr(reactions_obj, "results", None) or [])
+        if not results:
+            return None  # all reactions cleared
+
+        # ReactionCount carries an optional `chosen_order` flag indicating
+        # when it was added — higher means more recent. Sort so the most
+        # recently added reaction wins the mirror (falls back to "last in
+        # list" if chosen_order isn't present on this layer).
+        results.sort(key=lambda rc: getattr(rc, "chosen_order", None) or 0)
+        top = results[-1]
+        return _emoji_from_reaction(getattr(top, "reaction", None))
+
+    return _REACTION_SKIP  # unrecognized update shape
+
+
 async def handle_reaction(client: Client, update):
     try:
-        logger.info(f"🔔 Reaction raw update received: {update!r}")
+        cls_name = type(update).__name__
+        logger.info(f"🔔 Reaction raw update received: {cls_name}")
 
         peer = getattr(update, "peer", None)
         msg_id = getattr(update, "msg_id", None)
@@ -2353,7 +2413,7 @@ async def handle_reaction(client: Client, update):
             logger.error(f"⚠️ Reaction sync: get_peer_id failed for peer={peer}: {e}")
             return
 
-        logger.info(f"🔔 Reaction received: chat_id={chat_id}, msg_id={msg_id}")
+        logger.info(f"🔔 Reaction received: type={cls_name}, chat_id={chat_id}, msg_id={msg_id}")
 
         key = (chat_id, msg_id)
         if key not in MESSAGE_MAP:
@@ -2363,23 +2423,10 @@ async def handle_reaction(client: Client, update):
         target_chat, target_msg = MESSAGE_MAP[key]
         logger.info(f"🔗 Mapped to target: chat={target_chat}, msg={target_msg}")
 
-        # new_reactions holds the reaction list currently on the message.
-        # An empty list means the user/admin removed their reaction.
-        new_reactions = list(getattr(update, "new_reactions", None) or [])
-
-        emoji = None
-        if new_reactions:
-            first = new_reactions[0]
-            # ReactionEmoji has `.emoticon` (the plain emoji string).
-            # ReactionCustomEmoji has `.document_id` instead — can't be
-            # mirrored as a plain emoji, so skip rather than send garbage.
-            emoji = getattr(first, "emoticon", None)
-            if emoji is None:
-                logger.info(
-                    f"⏭️ Reaction sync: skipping unsupported reaction type "
-                    f"{type(first).__name__} (likely a custom/premium emoji)."
-                )
-                return
+        emoji = _extract_reaction_emoji(update)
+        if emoji is _REACTION_SKIP:
+            logger.info(f"⏭️ Reaction sync: skipping unsupported/unrecognized reaction on {cls_name}.")
+            return
 
         if emoji:
             logger.info(f"📤 Sending reaction '{emoji}' to chat={target_chat}, msg={target_msg}")
@@ -2388,7 +2435,7 @@ async def handle_reaction(client: Client, update):
 
         # Passing emoji=None clears the bot's reaction on the target
         # message, which is exactly what should happen when the reaction
-        # is removed on the source side.
+        # is removed/cleared on the source side.
         await client.send_reaction(target_chat, target_msg, emoji=emoji)
         logger.info(f"✅ Reaction sync complete for {key} -> ({target_chat}, {target_msg})")
 
