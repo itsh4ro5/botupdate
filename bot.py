@@ -197,33 +197,32 @@ async def _run_pyrogram_engine():
             print(f"✅ BOT LIVE! Authorized successfully as @{me.username} (ID: {me.id})!", flush=True)
             
             # 🔥 NATIVE MTPROTO PEER CACHE WARM-UP (no HTTP hacks)
-            # Iterating dialogs makes Pyrogram learn every chat/channel's
-            # access_hash straight over the MTProto socket, exactly like a
-            # real Telegram client does after logging in. This is what
-            # actually fixes PeerIdInvalid on cold starts — a fresh SQLite
-            # session simply hasn't "seen" the chat yet.
-            print("🔄 Warming up peer cache via native MTProto dialogs...", flush=True)
+            # NOTE: get_dialogs() is a USER-ACCOUNT-ONLY method — Telegram
+            # rejects it for bots with BOT_METHOD_INVALID (bots have no
+            # "dialog list" concept), so it's deliberately not used here.
+            # get_chat() on the numeric ID is the correct bot-compatible
+            # primitive: since this bot is already a member/admin of the
+            # Support Group, Telegram resolves it correctly via
+            # channels.GetChannels even with no prior local peer knowledge
+            # — the only thing that was ever blocking this was pyrogram's
+            # own MIN_CHANNEL_ID bound rejecting the ID locally before the
+            # request could even be sent (see the patch in config.py).
+            print("🔄 Warming up Support Group peer cache via native get_chat()...", flush=True)
             try:
                 import config
                 supp_id = getattr(config, "SUPPORT_GROUP_ID", 0)
-
-                dialog_count = 0
-                async for _ in app.get_dialogs():
-                    dialog_count += 1
-                print(f"🔄 Cached {dialog_count} dialogs from MTProto.", flush=True)
-
                 if supp_id:
-                    for attempt in range(1, 4):
+                    for peer_attempt in range(1, 4):
                         try:
                             await app.get_chat(int(supp_id))
                             print("✅ Support Group peer cached successfully!", flush=True)
                             break
                         except Exception as peer_err:
-                            print(f"⚠️ Support Group peer cache attempt {attempt}/3 failed: {peer_err}", flush=True)
-                            if attempt < 3:
+                            print(f"⚠️ Support Group peer cache attempt {peer_attempt}/3 failed: {peer_err}", flush=True)
+                            if peer_attempt < 3:
                                 await asyncio.sleep(2)
             except Exception as diag_err:
-                print(f"⚠️ Dialog sync warning: {diag_err}", flush=True)
+                print(f"⚠️ Peer warm-up warning: {diag_err}", flush=True)
                 
             break
         except FloodWait as e:
