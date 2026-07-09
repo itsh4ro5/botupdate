@@ -2396,51 +2396,60 @@ def _extract_reaction_emoji(update):
     return _REACTION_SKIP  # unrecognized update shape
 
 
+# =====================================================================
+# ❤️ 2-WAY REACTION SYNC ENGINE (RAW MTPROTO UPDATE)
+# =====================================================================
 async def handle_reaction(client: Client, update):
     try:
-        cls_name = type(update).__name__
-        logger.info(f"🔔 Reaction raw update received: {cls_name}")
-
         peer = getattr(update, "peer", None)
         msg_id = getattr(update, "msg_id", None)
-        if peer is None or msg_id is None:
-            logger.error(f"⚠️ Reaction sync: update missing peer/msg_id -> peer={peer}, msg_id={msg_id}")
+        if not peer or not msg_id: 
             return
-
+            
         try:
             chat_id = pyrogram.utils.get_peer_id(peer)
-        except Exception as e:
-            logger.error(f"⚠️ Reaction sync: get_peer_id failed for peer={peer}: {e}")
+        except Exception:
             return
 
-        logger.info(f"🔔 Reaction received: type={cls_name}, chat_id={chat_id}, msg_id={msg_id}")
-
-        key = (chat_id, msg_id)
-        if key not in MESSAGE_MAP:
-            logger.info(f"ℹ️ Reaction sync: {key} not in MESSAGE_MAP, ignoring (not a tracked ticket message).")
-            return
-
-        target_chat, target_msg = MESSAGE_MAP[key]
-        logger.info(f"🔗 Mapped to target: chat={target_chat}, msg={target_msg}")
-
-        emoji = _extract_reaction_emoji(update)
-        if emoji is _REACTION_SKIP:
-            logger.info(f"⏭️ Reaction sync: skipping unsupported/unrecognized reaction on {cls_name}.")
-            return
-
-        if emoji:
-            logger.info(f"📤 Sending reaction '{emoji}' to chat={target_chat}, msg={target_msg}")
+        # Lookup paired message
+        target_chat, target_msg = None, None
+        if (chat_id, msg_id) in MESSAGE_MAP:
+            target_chat, target_msg = MESSAGE_MAP[(chat_id, msg_id)]
         else:
-            logger.info(f"📤 Clearing reaction on chat={target_chat}, msg={target_msg}")
+            for (u_c, u_m), (a_c, a_m) in MESSAGE_MAP.items():
+                if a_c == chat_id and a_m == msg_id:
+                    target_chat, target_msg = u_c, u_m
+                    break
+                    
+        if not target_chat or not target_msg: 
+            return
 
-        # Passing emoji=None clears the bot's reaction on the target
-        # message, which is exactly what should happen when the reaction
-        # is removed/cleared on the source side.
-        await client.send_reaction(target_chat, target_msg, emoji=emoji)
-        logger.info(f"✅ Reaction sync complete for {key} -> ({target_chat}, {target_msg})")
+        emoji_str = None
+        cls_name = type(update).__name__
+        
+        # Condition A: User Reacts in DM
+        if cls_name == "UpdateBotMessageReaction":
+            # API changes me kabhi 'reactions' hota hai, kabhi 'new_reactions'
+            reactions = getattr(update, "reactions", None)
+            if reactions is None:
+                reactions = getattr(update, "new_reactions", [])
+            if reactions:
+                emoji_str = getattr(reactions[0], "emoticon", None)
+                
+        # Condition B: Admin Reacts in Support Group
+        elif cls_name == "UpdateMessageReactions":
+            react_obj = getattr(update, "reactions", None)
+            if react_obj:
+                results = getattr(react_obj, "results", [])
+                if results:
+                    r = getattr(results[-1], "reaction", None)
+                    emoji_str = getattr(r, "emoticon", None)
 
+        # Mirror Reaction
+        await client.send_reaction(target_chat, target_msg, emoji=emoji_str)
+        
     except Exception as e:
-        logger.error(f"⚠️ Reaction sync failed: {e}", exc_info=True)
+        pass
 
 # =====================================================================
 # 💬 REGULAR MESSAGES & SUPPORT TICKETS ENGINE (BULLETPROOF 2-WAY)
