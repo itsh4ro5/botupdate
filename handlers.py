@@ -2316,131 +2316,44 @@ async def handle_delete(client: Client, messages):
         pass
 
 # =====================================================================
-# ❤️ 2-WAY REACTION SYNC ENGINE (RAW MTPROTO UPDATE)
+# ❤️ 2-WAY REACTION SYNC ENGINE
 # =====================================================================
 # Mirrors a reaction added/changed/removed on either side of a support
 # ticket (User's DM <-> Admin's Forum Topic message) onto the paired
 # message, using the exact same MESSAGE_MAP pairing that already drives
-# handle_edit / handle_delete above.
-#
-# bot.py's @app.on_raw_update() hands this function TWO different raw
-# MTProto shapes depending on where the reaction happened, and they do
-# NOT share a field layout:
-#
-#   UpdateBotMessageReaction (fires for DM reactions — bots get full
-#   per-user attribution here):
-#     update.peer            -> raw Peer (PeerUser/PeerChat/PeerChannel)
-#     update.msg_id           -> int
-#     update.new_reactions    -> List[Reaction], the reactor's current
-#                                reactions. Empty = they removed it.
-#     update.old_reactions    -> List[Reaction], previous state
-#
-#   UpdateMessageReactions (fires for group/channel reactions — e.g. an
-#   Admin reacting inside the Support Group; this is an aggregate
-#   count snapshot, NOT a per-user event):
-#     update.peer             -> raw Peer
-#     update.msg_id            -> int
-#     update.reactions         -> MessageReactions
-#     update.reactions.results -> List[ReactionCount], each with
-#                                 `.reaction` (a Reaction) and `.count`.
-#                                 Empty = all reactions were cleared.
-#
-# In both cases the actual emoji string lives on a `Reaction` object as
-# `.emoticon` (only for the plain-emoji variant, ReactionEmoji — custom
-# Premium emoji reactions use `.document_id` instead and can't be
-# mirrored as a plain string, so those are skipped rather than sent as
-# garbage).
-_REACTION_SKIP = object()  # sentinel: "saw a reaction, but can't mirror it"
-
-
-def _extract_reaction_emoji(update):
-    """
-    Returns:
-      - a plain emoji string to send,
-      - None if the reaction was cleared (mirror by clearing too), or
-      - _REACTION_SKIP if this update can't be safely mirrored
-        (unsupported reaction type, or an update shape we don't handle).
-    """
-    def _emoji_from_reaction(reaction):
-        if reaction is None:
-            return _REACTION_SKIP
-        emoticon = getattr(reaction, "emoticon", None)
-        if emoticon is not None:
-            return emoticon
-        # ReactionCustomEmoji (Premium custom emoji) / ReactionPaid have no
-        # plain emoji string — can't mirror these safely.
-        return _REACTION_SKIP
-
-    cls_name = type(update).__name__
-
-    if cls_name == "UpdateBotMessageReaction":
-        new_reactions = list(getattr(update, "new_reactions", None) or [])
-        if not new_reactions:
-            return None  # reaction removed
-        return _emoji_from_reaction(new_reactions[0])
-
-    if cls_name == "UpdateMessageReactions":
-        reactions_obj = getattr(update, "reactions", None)
-        results = list(getattr(reactions_obj, "results", None) or [])
-        if not results:
-            return None  # all reactions cleared
-
-        # ReactionCount carries an optional `chosen_order` flag indicating
-        # when it was added — higher means more recent. Sort so the most
-        # recently added reaction wins the mirror (falls back to "last in
-        # list" if chosen_order isn't present on this layer).
-        results.sort(key=lambda rc: getattr(rc, "chosen_order", None) or 0)
-        top = results[-1]
-        return _emoji_from_reaction(getattr(top, "reaction", None))
-
-    return _REACTION_SKIP  # unrecognized update shape
-
-
+# handle_edit / handle_delete above. Registered in bot.py via
+# @app.on_message_reaction().
 async def handle_reaction(client: Client, update):
     try:
-        cls_name = type(update).__name__
-        logger.info(f"🔔 Reaction raw update received: {cls_name}")
-
-        peer = getattr(update, "peer", None)
-        msg_id = getattr(update, "msg_id", None)
-        if peer is None or msg_id is None:
-            logger.error(f"⚠️ Reaction sync: update missing peer/msg_id -> peer={peer}, msg_id={msg_id}")
+        chat = getattr(update, "chat", None)
+        msg_id = getattr(update, "message_id", None)
+        if not chat or not msg_id:
             return
 
-        try:
-            chat_id = pyrogram.utils.get_peer_id(peer)
-        except Exception as e:
-            logger.error(f"⚠️ Reaction sync: get_peer_id failed for peer={peer}: {e}")
-            return
-
-        logger.info(f"🔔 Reaction received: type={cls_name}, chat_id={chat_id}, msg_id={msg_id}")
-
-        key = (chat_id, msg_id)
+        key = (chat.id, msg_id)
         if key not in MESSAGE_MAP:
-            logger.info(f"ℹ️ Reaction sync: {key} not in MESSAGE_MAP, ignoring (not a tracked ticket message).")
             return
-
         target_chat, target_msg = MESSAGE_MAP[key]
-        logger.info(f"🔗 Mapped to target: chat={target_chat}, msg={target_msg}")
 
-        emoji = _extract_reaction_emoji(update)
-        if emoji is _REACTION_SKIP:
-            logger.info(f"⏭️ Reaction sync: skipping unsupported/unrecognized reaction on {cls_name}.")
-            return
-
-        if emoji:
-            logger.info(f"📤 Sending reaction '{emoji}' to chat={target_chat}, msg={target_msg}")
-        else:
-            logger.info(f"📤 Clearing reaction on chat={target_chat}, msg={target_msg}")
+        # `new_reaction` is the list of reactions now on the message (empty
+        # list means the reaction was removed). We only mirror the first
+        # one — Telegram allows multiple reactions per message on some
+        # tiers, but a 1:1 mirror keeps this predictable and simple.
+        new_reactions = getattr(update, "new_reaction", None) or []
+        emoji = None
+        if new_reactions:
+            emoji = getattr(new_reactions[0], "emoji", None)
+            if not emoji:
+                # Custom (Telegram Premium) emoji reactions can't be mirrored
+                # with a plain emoji string — skip rather than send garbage.
+                return
 
         # Passing emoji=None clears the bot's reaction on the target
         # message, which is exactly what should happen when the reaction
-        # is removed/cleared on the source side.
+        # is removed on the source side.
         await client.send_reaction(target_chat, target_msg, emoji=emoji)
-        logger.info(f"✅ Reaction sync complete for {key} -> ({target_chat}, {target_msg})")
-
     except Exception as e:
-        logger.error(f"⚠️ Reaction sync failed: {e}", exc_info=True)
+        logger.error(f"⚠️ Reaction sync failed: {e}")
 
 # =====================================================================
 # 💬 REGULAR MESSAGES & SUPPORT TICKETS ENGINE (BULLETPROOF 2-WAY)
