@@ -2297,7 +2297,7 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
         try:
             topic_id = await get_or_create_topic(user, client)
             if not topic_id:
-                return await message.reply_text("⚠️ **Support Ticket Error:** Admin ne Support Group me Forum Topics enable nahi kiya hai ya bot ko permission nahi hai.")
+                return await message.reply_text("⚠️ **Support Ticket Error:** Admin ne Support Group me Forum Topics enable nahi kiya hai.")
             
             reply_id = None
             if message.reply_to_message:
@@ -2311,27 +2311,25 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
             MESSAGE_MAP[(int(SUPPORT_GROUP_ID), sent.id)] = (chat.id, message.id)
         except Exception as e:
             err_str = str(e).lower()
-            logger.error(f"❌ Ticket Forward Error: {e}")
             
-           # 🔥 AUTO-HEALING: Agar purana topic delete ho gaya ya peer cache empty hai
-            if not is_retry:
-                logger.info(f"🔄 Auto-healing: Deleting old topic cache for user {user.id} and syncing peers...")
+            # 🔥 AUTO-HEALING: Agar Pyrogram Memory bhool gaya (PeerIdInvalid)
+            if "peer" in err_str and "invalid" in err_str and not is_retry:
+                try:
+                    await message.reply_text("⏳ Connection sync in progress... please wait 5 seconds.")
+                    import config
+                    await config.force_peer_discovery(SUPPORT_GROUP_ID)
+                    return await main_message_handler(client, message, is_retry=True)
+                except: pass
+                
+            # 🔥 AUTO-HEALING: Agar purana topic delete ho gaya ho
+            elif ("reply" in err_str or "deleted" in err_str or "topic" in err_str) and not is_retry:
                 if user.id in DB.get("USER_TOPICS", {}):
                     del DB["USER_TOPICS"][user.id]
                     await save_data_async()
-                try:
-                    # FIX: Bot cannot use get_dialogs. We directly fetch and cache the chat!
-                    await client.get_chat(int(SUPPORT_GROUP_ID))
-                except Exception:
-                    pass
-                # Naye topic ke sath auto-retry karo!
-                return await main_message_handler(client, message, is_retry=True)
-                
-            await message.reply_text(
-                "⚠️ **Message deliver nahi ho paya!**\n\n"
-                f"**Exact Error:** `{e}`\n"
-                "👉 **Solution:** Check karein ki Support Group me **Topics (Forum)** enabled hai aur Bot group ka **Admin (with Manage Topics)** hai."
-            )
+                    return await main_message_handler(client, message, is_retry=True)
+                    
+            if not is_retry:
+                await message.reply_text("⚠️ **Message deliver nahi ho paya!**\nAdmin ka Support Group ID theek se configured nahi hai.")
 
     # -------------------------------------------------------------
     # 2. ADMIN ➔ USER (Support Group Topic se DM Me Reply)
