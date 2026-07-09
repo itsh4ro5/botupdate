@@ -2313,15 +2313,15 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
             err_str = str(e).lower()
             logger.error(f"❌ Ticket Forward Error: {e}")
             
-            # 🔥 AUTO-HEALING: Agar purana topic delete ho gaya ya peer cache empty hai
+           # 🔥 AUTO-HEALING: Agar purana topic delete ho gaya ya peer cache empty hai
             if not is_retry:
                 logger.info(f"🔄 Auto-healing: Deleting old topic cache for user {user.id} and syncing peers...")
                 if user.id in DB.get("USER_TOPICS", {}):
                     del DB["USER_TOPICS"][user.id]
                     await save_data_async()
                 try:
-                    async for _ in client.get_dialogs(limit=50): 
-                        pass
+                    # FIX: Bot cannot use get_dialogs. We directly fetch and cache the chat!
+                    await client.get_chat(int(SUPPORT_GROUP_ID))
                 except Exception:
                     pass
                 # Naye topic ke sath auto-retry karo!
