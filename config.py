@@ -54,6 +54,19 @@ SPAM_CACHE = {}
 data_lock = asyncio.Lock()
 mongo_client = mongo_collection = None
 
+# --- GLOBAL FLOODWAIT STATE ---
+# UNIX timestamp until which Telegram has FloodWait-limited this bot.
+# 0 means no active FloodWait. Set by bot.py whenever a FloodWait is
+# caught, read by app.py to warn the dashboard/front-end.
+FLOOD_WAIT_UNTIL = 0
+
+def get_flood_wait_status():
+    """Returns (is_active: bool, seconds_remaining: int) for the current FloodWait cooldown."""
+    remaining = FLOOD_WAIT_UNTIL - time.time()
+    if remaining > 0:
+        return True, int(remaining) + 1
+    return False, 0
+
 # --- MONGODB SETUP (WITH 5-SECOND TIMEOUT SAFETY) ---
 if MONGO_URL:
     try:
