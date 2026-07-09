@@ -174,10 +174,11 @@ async def _run_pyrogram_engine():
             print(f"✅ BOT LIVE! Authorized successfully as @{me.username} (ID: {me.id})!", flush=True)
             
             # 🔥 AUTOMATIC PEER CACHE SYNC
-            print("🔄 Syncing dialogs & peers from Telegram cache...", flush=True)
+            print("🔄 Syncing Support Group from Telegram cache...", flush=True)
             try:
-                async for _ in app.get_dialogs(limit=100):
-                    pass
+                # FIX: get_dialogs() hara diya gaya hai, sirf Target Chat fetch karenge!
+                if SUPPORT_GROUP_ID:
+                    await app.get_chat(int(SUPPORT_GROUP_ID))
                 print("✅ Peer cache synced successfully!", flush=True)
             except Exception as diag_err:
                 print(f"⚠️ Dialog sync warning: {diag_err}", flush=True)
