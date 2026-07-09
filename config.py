@@ -240,24 +240,35 @@ async def schedule_delete(client, message, delay=1200):
 # =====================================================================
 import httpx
 
+# =====================================================================
+# 🧠 THE GENIUS HACK: HTTP PEER DISCOVERY (STANDARD LIBRARY VERSION)
+# =====================================================================
+import urllib.request
+import json
+
 async def force_peer_discovery(chat_id):
     """HACK: Sends an invisible message via HTTP API to force Telegram to push the Chat ID cache to Pyrogram!"""
     if not TELEGRAM_BOT_TOKEN: return
     try:
         logger.info(f"🔄 Firing HTTP Ping to wake up Peer Cache for {chat_id}...")
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        data = json.dumps({"chat_id": chat_id, "text": "🔄 System Sync...", "disable_notification": True}).encode('utf-8')
+        req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
         
-        # httpx use kar rahe hain taaki cloud par connection hang na ho (10 sec timeout)
-        async with httpx.AsyncClient() as http_client:
-            res = await http_client.post(
-                url, 
-                json={"chat_id": chat_id, "text": "🔄 System Sync...", "disable_notification": True},
-                timeout=10.0
-            )
-            data = res.json()
-            if not data.get("ok"):
-                logger.error(f"❌ HTTP Ping Failed: {data}")
-                return
+        def make_req():
+            res = urllib.request.urlopen(req, timeout=10)
+            return json.loads(res.read().decode('utf-8'))
+            
+        resp = await asyncio.to_thread(make_req)
+        if resp and resp.get("ok"):
+            msg_id = resp['result']['message_id']
+            del_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/deleteMessage"
+            del_data = json.dumps({"chat_id": chat_id, "message_id": msg_id}).encode('utf-8')
+            del_req = urllib.request.Request(del_url, data=del_data, headers={'Content-Type': 'application/json'})
+            await asyncio.to_thread(urllib.request.urlopen, del_req, timeout=10)
+            logger.info("✅ Peer Cache forcefully absorbed!")
+    except Exception as e:
+        logger.error(f"❌ HTTP Ping Exception: {repr(e)}")
                 
             msg_id = data['result']['message_id']
             del_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/deleteMessage"
