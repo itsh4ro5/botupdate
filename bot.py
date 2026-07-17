@@ -174,11 +174,33 @@ async def _run_pyrogram_engine():
         if hasattr(H, "track_chats"):
             await H.track_chats(client, update)
 
-   # Sabse pehle join/leave/service message pakadne ka strict rule
-    @app.on_message((filters.service | filters.new_chat_members | filters.left_chat_member), group=-99)
+  from pyrogram.errors import StopPropagation
+
+    # group=-100 lagane se ye bot ka sabse pehla action ban jayega
+    @app.on_message(filters.all, group=-100)
     async def _on_service_msg(client: Client, message: Message):
-        if hasattr(H, "delete_service_messages"):
-            await H.delete_service_messages(client, message)
+        is_service = False
+        
+        # 1. Normal service messages (Purane type ke)
+        if getattr(message, "service", None) or getattr(message, "new_chat_members", None) or getattr(message, "left_chat_member", None):
+            is_service = True
+            
+        # 2. Naye Telegram Updates (Jinko Pyrogram nahi samajhta, wo empty aate hain)
+        else:
+            has_content = any([
+                message.text, message.media, message.caption, 
+                message.location, message.contact, message.poll, 
+                message.sticker, message.game, message.dice
+            ])
+            # Agar message mein koi text/media nahi hai, matlab wo system message hai
+            if not has_content:
+                is_service = True
+
+        if is_service:
+            if hasattr(H, "delete_service_messages"):
+                await H.delete_service_messages(client, message)
+            # Aage ke handlers ko is message ko process karne se rok do
+            raise StopPropagation
 
     # =====================================================================
     # 4. LIVE MESSAGE SYNCING (Edit, Delete)
