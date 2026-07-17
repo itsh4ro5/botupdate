@@ -2017,10 +2017,13 @@ async def general_callback(client: Client, q: CallbackQuery):
             name=f"Free-{uid}",
             expire_date=datetime.now() + timedelta(seconds=60),
         )
+        # Button generate karna
+        kb = [[InlineKeyboardButton("  Join Batch", url=l.invite_link)]]
+        
         sent_msg = await client.send_message(
             uid,
-            f"🔗 <b>Link:</b>\n\n<b>{bname}</b>\n\n{l.invite_link}\n\nℹ️"
-            " <i>Request auto-approved.</i>\n⏳ <i>(Expires in 1 min)</i>",
+            f"  <b>Link Generated!</b>\n\n<b>{bname}</b>\n\n  <i>Request auto-approved.</i>\n  <i>(Expires in 1 min)</i>",
+            reply_markup=InlineKeyboardMarkup(kb),
             parse_mode=ParseMode.HTML,
         )
         await schedule_delete(client, sent_msg, delay=60)
@@ -2078,11 +2081,13 @@ async def general_callback(client: Client, q: CallbackQuery):
             )
           except Exception:
             pass
+        # Button generate karna
+        kb = [[InlineKeyboardButton("  Request Access", url=l.invite_link)]]
+        
         user_msg_obj = await client.send_message(
             uid,
-            f"✅ <b>Access Link Generated!</b>\n\n<b>{bname}</b>\n\n🔗"
-            f" {l.invite_link}\n\nℹ️ <b>Sent to Admin.</b> Wait for"
-            " approval.\n⏳ <i>(Expires in 1 min)</i>",
+            f"  <b>Access Link Generated!</b>\n\n<b>{bname}</b>\n\n  <b>Sent to Admin.</b> Wait for approval.\n  <i>(Expires in 1 min)</i>",
+            reply_markup=InlineKeyboardMarkup(kb),
             parse_mode=ParseMode.HTML,
         )
         await schedule_delete(client, user_msg_obj, delay=60)
