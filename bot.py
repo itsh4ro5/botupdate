@@ -3,7 +3,7 @@ import time
 import asyncio
 import traceback
 import importlib
-from pyrogram.errors import StopPropagation
+from pyrogram import StopPropagation
 
 print("🟢 BOOT[1/5]: Pyrogram MTProto Engine Starting...", flush=True)
 
