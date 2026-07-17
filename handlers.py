@@ -2061,7 +2061,7 @@ async def general_callback(client: Client, q: CallbackQuery):
             cid,
             creates_join_request=True,
             name=f"Req-{uid}",
-            expire_date=int(time.time()) + 60,
+            expire_date=datetime.now() + timedelta(seconds=60),
         )
         DB["LINK_MAP"][l.invite_link] = {"u": uid, "b": cid}
         await save_data_async()
