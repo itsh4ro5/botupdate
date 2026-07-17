@@ -3,225 +3,113 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Explore Store Hub</title>
+    <title>Explore Hub</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        :root {
-            --bg-dark: #090d16;
-            --card-bg: rgba(22, 30, 49, 0.75);
-            --neon-blue: #0ea5e9;
-            --neon-purple: #a855f7;
-            --neon-green: #10b981;
-            --text-main: #f8fafc;
-            --text-muted: #64748b;
-        }
-
-        body {
-            font-family: 'Segoe UI', Roboto, sans-serif;
-            background: radial-gradient(circle at top right, #1e1b4b, var(--bg-dark));
-            color: var(--text-main);
-            margin: 0;
-            padding: 15px;
-            min-height: 100vh;
-        }
-
-        .header-area {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-
-        .header-area h2 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
-
-        /* 👇 ACCORDION MATRIX UI FOR CATEGORIES 👇 */
-        .accordion-item {
-            background: var(--card-bg);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 16px;
-            margin-bottom: 12px;
-            overflow: hidden;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .accordion-header {
-            padding: 16px;
-            font-size: 15px;
-            font-weight: 700;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: rgba(255, 255, 255, 0.01);
-            user-select: none;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        .accordion-header:active { background: rgba(255, 255, 255, 0.04); }
-
-        .accordion-icon {
-            font-size: 14px;
-            color: var(--text-muted);
-            transition: transform 0.3s ease;
-        }
-
+        :root { --bg-main: #f0f4f8; --bg-card: #ffffff; --text-main: #0f172a; --text-muted: #64748b; --border-color: #e2e8f0; --neon-blue: #0284c7; --neon-purple: #7e22ce; --neon-green: #16a34a; --nav-bg: rgba(255, 255, 255, 0.9); --shadow-card: 0 4px 12px rgba(0,0,0,0.05); }
+        [data-theme="dark"] { --bg-main: #090d16; --bg-card: rgba(22, 30, 49, 0.75); --text-main: #f8fafc; --text-muted: #94a3b8; --border-color: rgba(255, 255, 255, 0.08); --neon-blue: #0ea5e9; --neon-purple: #a855f7; --neon-green: #10b981; --nav-bg: rgba(15, 22, 42, 0.85); --shadow-card: 0 12px 40px 0 rgba(0, 0, 0, 0.5); }
+        body { font-family: 'Segoe UI', Roboto, sans-serif; background: var(--bg-main); color: var(--text-main); margin: 0; padding: 15px 15px 90px 15px; transition: 0.3s ease; }
+        .header-area { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .header-area h2 { margin: 0; font-size: 20px; font-weight: 700; }
+        .theme-btn { background: rgba(128,128,128,0.1); border: 1px solid var(--border-color); color: var(--text-main); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
+        
+        .search-container { position: relative; margin-bottom: 20px; }
+        .search-container i { position: absolute; left: 14px; top: 15px; color: var(--text-muted); }
+        .search-bar { width: 100%; padding: 14px 14px 14px 40px; border-radius: 14px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-main); font-size: 15px; outline: none; box-sizing: border-box; box-shadow: var(--shadow-card); }
+        
+        .accordion-item { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; margin-bottom: 12px; overflow: hidden; box-shadow: var(--shadow-card); }
+        .accordion-header { padding: 16px; font-size: 15px; font-weight: 700; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: rgba(128, 128, 128, 0.05); user-select: none; }
+        .accordion-icon { font-size: 14px; color: var(--text-muted); transition: transform 0.3s; }
         .accordion-item.open .accordion-icon { transform: rotate(180deg); color: var(--neon-blue); }
-
-        .accordion-content {
-            display: none;
-            padding: 16px;
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-            background: rgba(9, 13, 22, 0.4);
-        }
-
-        /* 👇 FREE AND PAID HUB SECTIONS 👇 */
-        .section-divider {
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            color: var(--text-muted);
-            margin: 15px 0 8px 0;
-            letter-spacing: 0.8px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .section-divider:first-child { margin-top: 0; }
-
-        .sub-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px;
-            background: rgba(255, 255, 255, 0.02);
-            margin-bottom: 8px;
-            border-radius: 12px;
-            border-left: 3.5px solid var(--neon-blue);
-            cursor: pointer;
-        }
+        .accordion-content { display: none; padding: 16px; border-top: 1px solid var(--border-color); }
+        
+        .section-divider { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin: 15px 0 8px 0; display: flex; align-items: center; gap: 6px; }
+        .sub-row { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(128, 128, 128, 0.04); margin-bottom: 8px; border-radius: 12px; border-left: 3.5px solid var(--neon-blue); cursor: pointer; transition: 0.2s; }
         .sub-row.paid-border { border-left-color: var(--neon-purple); }
-
-        .sub-row b { font-size: 13.5px; color: #fff; max-width: 70%; word-wrap: break-word; overflow-wrap: break-word; word-break: break-all; }
-
-        .badge { padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+        .sub-row b { font-size: 13.5px; word-break: break-word; }
+        .badge { padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; }
         .bg-blue { background: rgba(14, 165, 233, 0.15); color: var(--neon-blue); }
         .bg-purple { background: rgba(168, 85, 247, 0.15); color: var(--neon-purple); }
-        
         .empty-text { font-size: 12px; color: var(--text-muted); font-style: italic; padding: 4px 0; }
+        .bottom-nav { position: fixed; bottom: 16px; left: 16px; right: 16px; height: 64px; background: var(--nav-bg); backdrop-filter: blur(30px); border: 1px solid var(--border-color); border-radius: 20px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2); z-index: 9999; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; color: var(--text-muted); cursor: pointer; font-size: 10px; font-weight: 600; text-decoration: none;}
+        .nav-item.active { color: var(--neon-blue); }
     </style>
 </head>
-<body>
-
+<body data-theme="dark">
     <div class="header-area">
-        <h2>🌐 Explore Educational Hub</h2>
+        <h2><i class="fa-solid fa-compass"></i> Explore Hub</h2>
+        <button class="theme-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon" id="theme-icon"></i></button>
     </div>
 
-    <div id="categories-accordion-wrapper">
-        <p style="color: var(--text-muted); font-size: 13px; text-align: center;">Mapping course categories...</p>
+    <div class="search-container">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="courseSearch" class="search-bar" onkeyup="liveSearch()" placeholder="Search for batches...">
+    </div>
+
+    <div id="categories-accordion-wrapper"><p style="text-align:center;color:var(--text-muted);">Mapping categories...</p></div>
+
+    <div class="bottom-nav">
+        <a href="/" class="nav-item"><i class="fa-solid fa-house" style="font-size:18px; margin-bottom:4px;"></i><span>Home</span></a>
+        <a href="/explore" class="nav-item active"><i class="fa-solid fa-compass" style="font-size:18px; margin-bottom:4px;"></i><span>Explore</span></a>
+        <a href="/admin_panel" class="nav-item" id="btn-nav-admin" style="display:none;"><i class="fa-solid fa-shield-halved" style="font-size:18px; margin-bottom:4px;"></i><span>Admin</span></a>
+        <a href="/owner_panel" class="nav-item" id="btn-nav-owner" style="display:none;"><i class="fa-solid fa-crown" style="font-size:18px; margin-bottom:4px;"></i><span>Owner</span></a>
     </div>
 
     <script>
-        let tg = window.Telegram.WebApp;
-        tg.expand();
-        
-        // Telegram Native Back Button handler implementation 
-        tg.BackButton.show();
-        tg.BackButton.onClick(() => { window.location.href = '/'; });
-
+        let tg = window.Telegram.WebApp; tg.expand();
         let uid = tg.initDataUnsafe?.user?.id || 9999999;
-
+        window.onload = () => {
+            let saved = localStorage.getItem('edtech_theme') || 'dark';
+            document.body.setAttribute('data-theme', saved);
+            document.getElementById("theme-icon").className = saved === 'dark' ? "fa-solid fa-moon" : "fa-solid fa-sun";
+        }
+        function toggleTheme() {
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            let theme = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            document.body.setAttribute('data-theme', theme);
+            localStorage.setItem('edtech_theme', theme);
+            document.getElementById("theme-icon").className = theme === 'dark' ? "fa-solid fa-moon" : "fa-solid fa-sun";
+        }
         function openBatch(chatId) {
-            if (!chatId) return;
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
             tg.openTelegramLink("https://t.me/c/" + String(chatId).replace("-100", "") + "/1");
         }
-
-        // Toggle Accordion Panels Action
-        function toggleAccordion(headerElement) {
-            let item = headerElement.parentElement;
-            let content = item.querySelector('.accordion-content');
-            let isOpen = item.classList.contains('open');
-
-            // Close all other elements first to look clean
-            document.querySelectorAll('.accordion-item').forEach(i => {
-                i.classList.remove('open');
-                i.querySelector('.accordion-content').style.display = 'none';
-            });
-
-            if (!isOpen) {
-                item.classList.add('open');
-                content.style.display = 'block';
-            }
+        function toggleAccordion(hdr) {
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            let item = hdr.parentElement, content = item.querySelector('.accordion-content'), isOpen = item.classList.contains('open');
+            document.querySelectorAll('.accordion-item').forEach(i => { i.classList.remove('open'); i.querySelector('.accordion-content').style.display = 'none'; });
+            if (!isOpen) { item.classList.add('open'); content.style.display = 'block'; }
         }
-
-        // Fetch complete structured layout map
-        fetch('/api/explore/' + uid)
-            .then(res => res.json())
-            .then(data => {
-                let accordionHtml = "";
-
-                data.categories.forEach(cat => {
-                    let catData = data.explore_data[cat] || { "free": [], "paid": [] };
-                    
-                    // Skip printing empty categories to keep UI clean
-                    if (catData.free.length === 0 && catData.paid.length === 0) return;
-
-                    accordionHtml += `
-                        <div class="accordion-item">
-                            <div class="accordion-header" onclick="toggleAccordion(this)">
-                                <span>📁 ${cat}</span>
-                                <span class="accordion-icon">▼</span>
-                            </div>
-                            <div class="accordion-content">
-                                <div class="section-divider">📂 Free Section</div>
-                                <div class="section-box">
-                    `;
-
-                    if (catData.free.length > 0) {
-                        catData.free.forEach(b => {
-                            accordionHtml += `
-                                <div class="sub-row" onclick="openBatch('${b.id}')">
-                                    <b>${b.name}</b>
-                                    <span class="badge bg-blue">${b.status}</span>
-                                </div>
-                            `;
-                        });
-                    } else {
-                        accordionHtml += `<p class="empty-text">No free batches listed in this segment.</p>`;
-                    }
-
-                    accordionHtml += `
-                                </div>
-                                <div class="section-divider">🔐 Paid Section</div>
-                                <div class="section-box">
-                    `;
-
-                    if (catData.paid.length > 0) {
-                        catData.paid.forEach(b => {
-                            accordionHtml += `
-                                <div class="sub-row paid-border" onclick="openBatch('${b.id}')">
-                                    <b>${b.name}</b>
-                                    <span class="badge bg-purple">${b.status}</span>
-                                </div>
-                            `;
-                        });
-                    } else {
-                        accordionHtml += `<p class="empty-text">No premium channels listed in this segment.</p>`;
-                    }
-
-                    accordionHtml += `
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                });
-
-                document.getElementById("categories-accordion-wrapper").innerHTML = accordionHtml || `<p style="color: var(--text-muted); font-size:13px; text-align:center;">No courses active in system registry.</p>`;
-            })
-            .catch(() => {
-                document.getElementById("categories-accordion-wrapper").innerHTML = `<p style="color: var(--neon-red); font-size:13px; text-align:center;">❌ Failed to load explore server layer.</p>`;
+        function liveSearch() {
+            let filter = document.getElementById('courseSearch').value.toLowerCase();
+            if(filter.length > 0) document.querySelectorAll('.accordion-item').forEach(acc => { acc.classList.add('open'); acc.querySelector('.accordion-content').style.display = 'block'; });
+            document.querySelectorAll('.sub-row').forEach(item => {
+                item.style.display = item.querySelector('b').innerText.toLowerCase().includes(filter) ? "flex" : "none";
             });
+        }
+        
+        // Setup Auth Navigation
+        fetch('/api/user/' + uid).then(r=>r.json()).then(d=>{
+            if (d.is_admin || d.is_owner) document.getElementById("btn-nav-admin").style.display = "flex";
+            if (d.is_owner) document.getElementById("btn-nav-owner").style.display = "flex";
+        });
+
+        // Setup Explore Content
+        fetch('/api/explore/' + uid).then(res => res.json()).then(data => {
+            let html = "";
+            data.categories.forEach(cat => {
+                let catData = data.explore_data[cat] || { "free": [], "paid": [] };
+                if (catData.free.length === 0 && catData.paid.length === 0) return;
+                html += `<div class="accordion-item"><div class="accordion-header" onclick="toggleAccordion(this)"><span><i class="fa-solid fa-folder-open" style="color:var(--neon-blue);margin-right:8px;"></i>${cat}</span><span class="accordion-icon"><i class="fa-solid fa-chevron-down"></i></span></div><div class="accordion-content"><div class="section-divider">Free Section</div>`;
+                if(catData.free.length>0) html += catData.free.map(b=>`<div class="sub-row" onclick="openBatch('${b.id}')"><b>${b.name}</b><span class="badge bg-blue">${b.status}</span></div>`).join(""); else html += `<p class="empty-text">No free batches.</p>`;
+                html += `<div class="section-divider">Paid Section</div>`;
+                if(catData.paid.length>0) html += catData.paid.map(b=>`<div class="sub-row paid-border" onclick="openBatch('${b.id}')"><b>${b.name}</b><span class="badge bg-purple">${b.status}</span></div>`).join(""); else html += `<p class="empty-text">No premium batches.</p>`;
+                html += `</div></div>`;
+            });
+            document.getElementById("categories-accordion-wrapper").innerHTML = html || `<p style="text-align:center;color:var(--text-muted);">No active courses.</p>`;
+        });
     </script>
 </body>
 </html>
