@@ -174,9 +174,8 @@ async def _run_pyrogram_engine():
         if hasattr(H, "track_chats"):
             await H.track_chats(client, update)
 
-   # filters.service har tarah ke system messages ko pakad lega
-    # group=-1 lagane se ye baaki saare commands se pehle execute hoga
-    @app.on_message(filters.service, group=-1)
+   # Sabse pehle join/leave/service message pakadne ka strict rule
+    @app.on_message((filters.service | filters.new_chat_members | filters.left_chat_member), group=-99)
     async def _on_service_msg(client: Client, message: Message):
         if hasattr(H, "delete_service_messages"):
             await H.delete_service_messages(client, message)
