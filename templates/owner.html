@@ -7,33 +7,88 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        :root { --bg-main: #f0f4f8; --bg-card: #ffffff; --text-main: #0f172a; --text-muted: #64748b; --border-color: #e2e8f0; --neon-blue: #0284c7; --neon-purple: #7e22ce; --nav-bg: rgba(255, 255, 255, 0.9); --shadow-card: 0 4px 12px rgba(0,0,0,0.05); --modal-bg: rgba(255,255,255,0.95); }
-        [data-theme="dark"] { --bg-main: #090d16; --bg-card: rgba(22, 30, 49, 0.75); --text-main: #f8fafc; --text-muted: #94a3b8; --border-color: rgba(255, 255, 255, 0.08); --neon-blue: #0ea5e9; --neon-purple: #a855f7; --nav-bg: rgba(15, 22, 42, 0.85); --shadow-card: 0 12px 40px 0 rgba(0, 0, 0, 0.5); --modal-bg: rgba(15, 22, 42, 0.95); }
-        body { font-family: 'Segoe UI', Roboto, sans-serif; background: var(--bg-main); color: var(--text-main); margin: 0; padding: 15px 15px 90px 15px; transition: 0.3s ease; }
-        .glass-card { background: var(--bg-card); backdrop-filter: blur(20px); border: 1px solid var(--border-color); border-radius: 20px; padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow-card); }
+        :root { 
+            --bg-main: #f0f4f8; --bg-card: #ffffff; --text-main: #0f172a; --text-muted: #64748b; 
+            --border-color: #e2e8f0; --neon-blue: #0284c7; --neon-purple: #7e22ce; 
+            --nav-bg: rgba(255, 255, 255, 0.9); --shadow-card: 0 4px 12px rgba(0,0,0,0.05); 
+            --modal-bg: rgba(255,255,255,0.95); 
+        }
+        [data-theme="dark"] { 
+            --bg-main: #090d16; --bg-card: rgba(22, 30, 49, 0.75); --text-main: #f8fafc; 
+            --text-muted: #94a3b8; --border-color: rgba(255, 255, 255, 0.08); 
+            --neon-blue: #0ea5e9; --neon-purple: #a855f7; 
+            --nav-bg: rgba(15, 22, 42, 0.85); --shadow-card: 0 12px 40px 0 rgba(0, 0, 0, 0.5); 
+            --modal-bg: rgba(15, 22, 42, 0.95); 
+        }
+        body { 
+            font-family: 'Segoe UI', Roboto, sans-serif; background: var(--bg-main); 
+            color: var(--text-main); margin: 0; padding: 15px 15px 90px 15px; transition: 0.3s ease; 
+        }
+        
+        .glass-card { 
+            background: var(--bg-card); backdrop-filter: blur(20px); border: 1px solid var(--border-color); 
+            border-radius: 20px; padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow-card); 
+        }
         .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
         .header-top h2 { margin: 0; font-size: 20px; font-weight: 700; color:var(--text-main);}
-        .theme-btn { background: rgba(128,128,128,0.1); border: 1px solid var(--border-color); color: var(--text-main); width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
+        .theme-btn { 
+            background: rgba(128,128,128,0.1); border: 1px solid var(--border-color); color: var(--text-main); 
+            width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; 
+            justify-content: center; cursor: pointer; transition: 0.2s; 
+        }
         
-        .search-container { position: relative; margin-bottom: 15px; }
-        .search-container i { position: absolute; left: 14px; top: 15px; color: var(--text-muted); }
-        .search-bar { width: 100%; padding: 14px 14px 14px 40px; border-radius: 14px; border: 1px solid var(--border-color); background: rgba(128,128,128,0.05); color: var(--text-main); font-size: 14px; outline: none; box-sizing: border-box; }
+        .search-container { position: relative; margin-bottom: 15px; display: flex; gap: 8px;}
+        .search-container i.fa-magnifying-glass { position: absolute; left: 14px; top: 14px; color: var(--text-muted); }
+        .search-bar { 
+            flex: 1; padding: 12px 12px 12px 40px; border-radius: 14px; border: 1px solid var(--border-color); 
+            background: rgba(128,128,128,0.05); color: var(--text-main); font-size: 14px; outline: none; 
+            box-sizing: border-box; 
+        }
+        .search-btn {
+            background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple));
+            color: white; border: none; border-radius: 12px; padding: 0 16px; font-weight: 600; cursor: pointer;
+        }
         
-        .user-card { display: flex; align-items: center; padding: 12px; border: 1px solid var(--border-color); border-radius: 14px; background: var(--bg-card); margin-bottom: 10px; cursor: pointer; transition: 0.2s; }
+        .user-card { 
+            display: flex; align-items: center; padding: 12px; border: 1px solid var(--border-color); 
+            border-radius: 14px; background: var(--bg-card); margin-bottom: 10px; cursor: pointer; transition: 0.2s; 
+        }
         .user-card:active { transform: scale(0.98); }
-        .user-card img { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; border: 1px solid var(--neon-blue); }
-        .user-card-info { flex: 1; margin-left: 12px; }
-        .user-card-info b { display: block; font-size: 14px; color: var(--text-main); }
-        .user-card-info small { color: var(--text-muted); font-size: 11px; }
+        .default-avatar { 
+            width: 45px; height: 45px; border-radius: 50%; background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple)); 
+            color: white; display: flex; align-items: center; justify-content: center; font-size: 20px; 
+            font-weight: bold; flex-shrink: 0; text-transform: uppercase;
+        }
+        .user-card-info { flex: 1; margin-left: 12px; overflow: hidden;}
+        .user-card-info b { display: flex; align-items: center; gap:6px; font-size: 14px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+        .user-card-info small { color: var(--text-muted); font-size: 11px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
 
-        #profileModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); z-index: 10000; align-items: flex-end; justify-content: center; }
-        .modal-content { background: var(--modal-bg); width: 100%; max-height: 85vh; border-radius: 24px 24px 0 0; padding: 25px; box-sizing: border-box; overflow-y: auto; color: var(--text-main); animation: slideUp 0.3s ease-out; border-top: 1px solid var(--border-color); }
+        #profileModal { 
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); 
+            backdrop-filter: blur(5px); z-index: 10000; align-items: flex-end; justify-content: center; 
+        }
+        .modal-content { 
+            background: var(--modal-bg); width: 100%; max-height: 85vh; border-radius: 24px 24px 0 0; 
+            padding: 25px; box-sizing: border-box; overflow-y: auto; color: var(--text-main); 
+            animation: slideUp 0.3s ease-out; border-top: 1px solid var(--border-color); 
+        }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         .modal-close { position: absolute; right: 20px; top: 20px; font-size: 24px; color: var(--text-muted); cursor: pointer; }
+        
+        .modal-avatar-container { position: relative; width: 85px; height: 85px; margin: 0 auto 10px; }
+        .modal-avatar-container img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 3px solid var(--neon-purple); display: none; }
+        .modal-avatar-fallback { width: 100%; height: 100%; border-radius: 50%; background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple)); color: white; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: bold; border: 3px solid var(--neon-purple); }
+        
         .streak-badge { background: linear-gradient(135deg, #f59e0b, #ea580c); color: white; padding: 4px 10px; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-flex; align-items: center; gap: 5px;}
+        .role-badge { padding: 4px 10px; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; margin-left: 5px;}
+        .role-owner { background: rgba(168, 85, 247, 0.2); color: #a855f7; border: 1px solid #a855f7; }
+        .role-admin { background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; }
+
         .item-row { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(128,128,128,0.05); margin-bottom: 8px; border-radius: 12px; border-left: 4px solid var(--neon-blue); }
+        .item-row.paid-border { border-left-color: var(--neon-purple); }
         .badge { padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 700;}
         .bg-blue { background: rgba(14, 165, 233, 0.15); color: var(--neon-blue); }
+        .bg-purple { background: rgba(168, 85, 247, 0.15); color: var(--neon-purple); }
         .bg-green { background: rgba(16, 185, 129, 0.15); color: #10b981; }
         .bg-red { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
 
@@ -49,10 +104,11 @@
     </div>
 
     <div class="glass-card">
-        <h3 style="font-size:15px; margin:0 0 14px 0;"><i class="fa-solid fa-users-gear"></i> User Management</h3>
+        <h3 style="font-size:15px; margin:0 0 14px 0;"><i class="fa-solid fa-users-gear"></i> User & Admin Directory</h3>
         <div class="search-container">
             <i class="fa-solid fa-magnifying-glass"></i>
-            <input type="text" class="search-bar" id="userSearchBox" onkeyup="liveUserSearch()" placeholder="Search by Name, Username or ID...">
+            <input type="text" class="search-bar" id="userSearchBox" onkeyup="handleSearch(event)" placeholder="Search by Name, Username or ID...">
+            <button class="search-btn" onclick="liveUserSearch()">Find</button>
         </div>
         <div id="owner-users-list">
             <p style="color: var(--text-muted); font-size: 13px; text-align: center;">Authenticating & Loading Database...</p>
@@ -63,18 +119,28 @@
     <div id="profileModal">
         <div class="modal-content">
             <i class="fa-solid fa-xmark modal-close" onclick="closeModal()"></i>
+            
             <div style="text-align: center; margin-bottom: 20px;">
-                <img id="mod-avatar" src="" style="width:80px; height:80px; border-radius:50%; object-fit:cover; border:3px solid var(--neon-purple); margin-bottom:10px;">
-                <h2 id="mod-name" style="margin:0; font-size:20px;">Name</h2>
+                <div class="modal-avatar-container">
+                    <img id="mod-avatar" src="" alt="Avatar">
+                    <div class="modal-avatar-fallback" id="mod-avatar-fallback">U</div>
+                </div>
+                
+                <h2 id="mod-name" style="margin:0; font-size:20px; display: flex; align-items: center; justify-content: center; gap:8px;">Name <span id="mod-role" class="role-badge" style="display:none;"></span></h2>
                 <p id="mod-meta" style="margin:5px 0; color:var(--text-muted); font-size:13px;">@username | ID: 12345</p>
-                <div class="streak-badge"><i class="fa-solid fa-fire"></i> <span id="mod-streak">0</span></div>
+                
+                <div class="streak-badge" style="margin-top:5px;"><i class="fa-solid fa-fire"></i> <span id="mod-streak">0</span> Days</div>
             </div>
             
-            <h3 style="font-size: 14px; border-bottom:1px solid var(--border-color); padding-bottom:5px; margin-bottom:10px;">Subscribed Batches</h3>
-            <div id="mod-batches" style="margin-bottom: 20px;"></div>
+            <!-- Sections for Paid, Free, and Demos -->
+            <h3 style="font-size: 14px; border-bottom:1px solid var(--border-color); padding-bottom:5px; margin-bottom:10px; color:var(--neon-purple);"><i class="fa-solid fa-star"></i> Premium Subscriptions</h3>
+            <div id="mod-paid-batches" style="margin-bottom: 20px;"></div>
 
-            <h3 style="font-size: 14px; border-bottom:1px solid var(--border-color); padding-bottom:5px; margin-bottom:10px;">Active Demos</h3>
-            <div id="mod-demos"></div>
+            <h3 style="font-size: 14px; border-bottom:1px solid var(--border-color); padding-bottom:5px; margin-bottom:10px; color:var(--neon-blue);"><i class="fa-solid fa-folder-open"></i> Free Communities</h3>
+            <div id="mod-free-batches" style="margin-bottom: 20px;"></div>
+
+            <h3 style="font-size: 14px; border-bottom:1px solid var(--border-color); padding-bottom:5px; margin-bottom:10px; color:#10b981;"><i class="fa-solid fa-clock"></i> Active Demos</h3>
+            <div id="mod-demos" style="margin-bottom: 20px;"></div>
         </div>
     </div>
 
@@ -96,6 +162,7 @@
             document.getElementById("theme-icon").className = saved === 'dark' ? "fa-solid fa-moon" : "fa-solid fa-sun";
             loadOwnerData();
         }
+
         function toggleTheme() {
             if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
             let theme = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
@@ -110,6 +177,8 @@
                 return res.json();
             }).then(data => {
                 globalUsersData = data.users;
+                // Pehle Owner aur Admin ko upar dikhane ke liye sort karna
+                globalUsersData.sort((a, b) => b.is_owner - a.is_owner || b.is_admin - a.is_admin);
                 renderOwnerUsers(globalUsersData);
             }).catch(err => {
                 document.body.innerHTML = "<h2 style='text-align:center; margin-top:50px; color:var(--neon-red);'>Access Denied. Owner Only.</h2>";
@@ -117,36 +186,125 @@
         }
 
         function renderOwnerUsers(usersArr) {
-            let html = usersArr.map((u, index) => `
+            let html = usersArr.map((u, index) => {
+                let initial = (u.name && u.name !== "Unknown") ? u.name.charAt(0).toUpperCase() : "U";
+                
+                // Chota badge user list mein
+                let roleIcon = "";
+                if (u.is_owner) roleIcon = `<i class="fa-solid fa-crown" style="color:#a855f7; font-size:12px;"></i>`;
+                else if (u.is_admin) roleIcon = `<i class="fa-solid fa-shield-halved" style="color:#10b981; font-size:12px;"></i>`;
+                
+                return `
                 <div class="user-card" onclick="openProfileModal(${index})">
-                    <img src="/api/user/avatar/${u.id}" onerror="this.src='https://placehold.co/100x100/38bdf8/ffffff?text=${u.name.charAt(0)}'">
+                    <div class="default-avatar">${initial}</div>
                     <div class="user-card-info">
-                        <b>${u.name}</b>
+                        <b>${u.name} ${roleIcon}</b>
                         <small>@${u.username !== 'N/A' ? u.username : 'NoUsername'} | ID: ${u.id}</small>
                     </div>
                     <i class="fa-solid fa-chevron-right" style="color:var(--text-muted); font-size:12px;"></i>
-                </div>`).join("");
-            document.getElementById("owner-users-list").innerHTML = html || "<p style='text-align:center;color:var(--text-muted);'>No users found.</p>";
+                </div>`;
+            }).join("");
+            
+            document.getElementById("owner-users-list").innerHTML = html || "<p style='text-align:center;color:var(--text-muted); margin-top:20px;'>No users found.</p>";
+        }
+
+        function handleSearch(e) {
+            // Agar user Enter dabata hai toh search trigger karo
+            if(e.key === 'Enter') liveUserSearch();
+            else liveUserSearch(); // Live typing par bhi search
         }
 
         function liveUserSearch() {
-            let filter = document.getElementById('userSearchBox').value.toLowerCase();
-            if(filter.length === 0) { renderOwnerUsers(globalUsersData); return; }
-            let filtered = globalUsersData.filter(u => u.name.toLowerCase().includes(filter) || u.username.toLowerCase().includes(filter) || String(u.id).includes(filter));
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            let filter = document.getElementById('userSearchBox').value.toLowerCase().trim();
+            
+            if(filter.length === 0) { 
+                renderOwnerUsers(globalUsersData); 
+                return; 
+            }
+            
+            let filtered = globalUsersData.filter(u => 
+                String(u.name).toLowerCase().includes(filter) || 
+                String(u.username).toLowerCase().includes(filter) || 
+                String(u.id).includes(filter)
+            );
             renderOwnerUsers(filtered);
         }
 
         function openProfileModal(index) {
-            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-            let u = globalUsersData[index];
-            document.getElementById('mod-name').innerText = u.name;
-            document.getElementById('mod-meta').innerText = `@${u.username !== 'N/A' ? u.username : 'Unknown'} | ID: ${u.id}`;
-            document.getElementById('mod-avatar').src = `/api/user/avatar/${u.id}`;
-            document.getElementById('mod-streak').innerText = u.streak;
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
             
-            document.getElementById('mod-batches').innerHTML = u.joined.length > 0 ? u.joined.map(b => `<div class="item-row"><b style="font-size:13px;color:var(--text-main);">${b.name}</b><span class="badge bg-blue">Joined</span></div>`).join("") : "<p style='color:var(--text-muted);font-size:12px;'>No permanent batches.</p>";
-            document.getElementById('mod-demos').innerHTML = u.demos.length > 0 ? u.demos.map(d => `<div class="item-row"><b style="font-size:13px;color:var(--text-main);">${d.name}</b><span class="badge ${d.is_expired ? 'bg-red' : 'bg-green'}">${d.is_expired ? 'Expired' : d.time_left + 'h left'}</span></div>`).join("") : "<p style='color:var(--text-muted);font-size:12px;'>No active demos.</p>";
+            let displayList = document.getElementById('userSearchBox').value.trim() === "" ? globalUsersData : getFilteredUsers();
+            let u = displayList[index] || globalUsersData[index];
+            
+            document.getElementById('mod-name').innerHTML = `${u.name} <span id="mod-role" class="role-badge" style="display:none;"></span>`;
+            document.getElementById('mod-meta').innerText = `@${u.username !== 'N/A' ? u.username : 'Unknown'} | ID: ${u.id}`;
+            document.getElementById('mod-streak').innerText = (u.streak || 0);
+            
+            // Server par load kam karne ke liye - Pehle Default Placeholder dikhao, phir actual photo background me load karo
+            let avatarImg = document.getElementById('mod-avatar');
+            let avatarFallback = document.getElementById('mod-avatar-fallback');
+            
+            avatarImg.style.display = 'none'; // Pehle real photo chupa lo
+            avatarFallback.style.display = 'flex'; // Placeholder dikhao
+            avatarFallback.innerText = (u.name && u.name !== "Unknown") ? u.name.charAt(0).toUpperCase() : "U";
+            
+            // Background image fetching
+            let freshImg = new Image();
+            freshImg.onload = function() {
+                avatarImg.src = this.src;
+                avatarImg.style.display = 'block';
+                avatarFallback.style.display = 'none';
+            };
+            freshImg.onerror = function() {
+                // Agar DP fetch na ho toh fallback hi rehne do
+            };
+            freshImg.src = `/api/user/avatar/${u.id}`; // API call
+            
+            // Role Badge Set Karna
+            let roleBadge = document.getElementById('mod-role');
+            if(u.is_owner) { 
+                roleBadge.style.display = 'inline-flex'; 
+                roleBadge.className = 'role-badge role-owner';
+                roleBadge.innerHTML = '<i class="fa-solid fa-crown"></i> <span>System Owner</span>'; 
+            }
+            else if(u.is_admin) { 
+                roleBadge.style.display = 'inline-flex'; 
+                roleBadge.className = 'role-badge role-admin';
+                roleBadge.innerHTML = '<i class="fa-solid fa-shield-halved"></i> <span>Admin</span>'; 
+            }
+            else { 
+                roleBadge.style.display = 'none'; 
+            }
+            
+            // User (Ya Admin/Owner) ke Joined Batches Display Karna
+            
+            // 1. Paid Batches
+            document.getElementById('mod-paid-batches').innerHTML = (u.paid_joined && u.paid_joined.length > 0) 
+                ? u.paid_joined.map(b => `<div class="item-row paid-border"><b style="font-size:13px;color:var(--text-main);">${b.name}</b><span class="badge bg-purple">Paid</span></div>`).join("") 
+                : "<p style='color:var(--text-muted);font-size:12px; margin-top:-5px;'>No premium batches.</p>";
+            
+            // 2. Free Batches
+            document.getElementById('mod-free-batches').innerHTML = (u.free_joined && u.free_joined.length > 0) 
+                ? u.free_joined.map(b => `<div class="item-row"><b style="font-size:13px;color:var(--text-main);">${b.name}</b><span class="badge bg-blue">Free</span></div>`).join("") 
+                : "<p style='color:var(--text-muted);font-size:12px; margin-top:-5px;'>No free batches.</p>";
+            
+            // 3. Active Demos
+            document.getElementById('mod-demos').innerHTML = (u.demos && u.demos.length > 0) 
+                ? u.demos.map(d => `<div class="item-row" style="border-left-color:${d.is_expired?'#ef4444':'#10b981'};"><b style="font-size:13px;color:var(--text-main);">${d.name}</b><span class="badge ${d.is_expired ? 'bg-red' : 'bg-green'}">${d.is_expired ? 'Expired' : d.time_left + 'h left'}</span></div>`).join("") 
+                : "<p style='color:var(--text-muted);font-size:12px; margin-top:-5px;'>No active demos.</p>";
+            
+            // Modal Open Karo
             document.getElementById('profileModal').style.display = 'flex';
+        }
+        
+        function getFilteredUsers() {
+            let filter = document.getElementById('userSearchBox').value.toLowerCase().trim();
+            return globalUsersData.filter(u => 
+                String(u.name).toLowerCase().includes(filter) || 
+                String(u.username).toLowerCase().includes(filter) || 
+                String(u.id).includes(filter)
+            );
         }
 
         function closeModal() {
