@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Admin Terminal</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root { --bg-main: #f0f4f8; --bg-card: #ffffff; --text-main: #0f172a; --text-muted: #64748b; --border-color: #e2e8f0; --neon-blue: #0284c7; --neon-red: #dc2626; --nav-bg: rgba(255, 255, 255, 0.9); --shadow-card: 0 4px 12px rgba(0,0,0,0.05); }
+        [data-theme="dark"] { --bg-main: #090d16; --bg-card: rgba(22, 30, 49, 0.75); --text-main: #f8fafc; --text-muted: #94a3b8; --border-color: rgba(255, 255, 255, 0.08); --neon-blue: #0ea5e9; --neon-red: #ef4444; --nav-bg: rgba(15, 22, 42, 0.85); --shadow-card: 0 12px 40px 0 rgba(0, 0, 0, 0.5); }
+        body { font-family: 'Segoe UI', Roboto, sans-serif; background: var(--bg-main); color: var(--text-main); margin: 0; padding: 15px 15px 90px 15px; transition: 0.3s ease; }
+        .glass-card { background: var(--bg-card); backdrop-filter: blur(20px); border: 1px solid var(--border-color); border-radius: 20px; padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow-card); }
+        h3 { font-size: 15px; margin: 0 0 14px 0; color: var(--text-main); }
+        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .header-top h2 { margin: 0; font-size: 20px; font-weight: 700; }
+        .theme-btn { background: rgba(128,128,128,0.1); border: 1px solid var(--border-color); color: var(--text-main); width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; text-align: center; }
+        .stat-box { background: rgba(128, 128, 128, 0.05); border: 1px solid var(--border-color); border-radius: 14px; padding: 12px; }
+        .stat-box .count { font-size: 22px; font-weight: 800; display: block; }
+        .stat-box .label { font-size: 10px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+        .item-row { display: flex; justify-content: space-between; align-items: center; padding: 14px; background: rgba(128, 128, 128, 0.04); margin-bottom: 10px; border-radius: 14px; border-left: 4px solid var(--border-color); cursor: default; }
+        .badge { padding: 5px 9px; border-radius: 7px; font-size: 11px; font-weight: 700; }
+        .bg-red { background: rgba(239, 68, 68, 0.15); color: var(--neon-red); }
+        .bg-green { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+        .bottom-nav { position: fixed; bottom: 16px; left: 16px; right: 16px; height: 64px; background: var(--nav-bg); backdrop-filter: blur(30px); border: 1px solid var(--border-color); border-radius: 20px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2); z-index: 9999; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; color: var(--text-muted); cursor: pointer; font-size: 10px; font-weight: 600; text-decoration: none;}
+        .nav-item.active { color: var(--neon-blue); }
+    </style>
+</head>
+<body data-theme="dark">
+    <div class="header-top">
+        <h2><i class="fa-solid fa-shield-halved" style="color:var(--neon-blue);"></i> Admin Control</h2>
+        <button class="theme-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon" id="theme-icon"></i></button>
+    </div>
+
+    <div class="glass-card stats-grid">
+        <div class="stat-box"><span class="count" style="color:var(--neon-blue);" id="stat-total-users">0</span><span class="label">Total Users</span></div>
+        <div class="stat-box"><span class="count" style="color:var(--neon-red);" id="cnt-blocked-users">0</span><span class="label">Blocked</span></div>
+    </div>
+
+    <div class="glass-card">
+        <h3><i class="fa-solid fa-server"></i> Security Engine</h3>
+        <div class="item-row">
+            <div><b style="color:var(--text-main);font-size:14px;">Maintenance Mode</b><br><span style="font-size:11px;color:var(--text-muted);">Restricts bot requests</span></div>
+            <span class="badge" id="flag-maintenance">OFF</span>
+        </div>
+        <div class="item-row">
+            <div><b style="color:var(--text-main);font-size:14px;">System Lockdown</b><br><span style="font-size:11px;color:var(--text-muted);">Blocks registrations</span></div>
+            <span class="badge" id="flag-lockdown">OFF</span>
+        </div>
+    </div>
+
+    <div class="bottom-nav">
+        <a href="/" class="nav-item"><i class="fa-solid fa-house" style="font-size:18px; margin-bottom:4px;"></i><span>Home</span></a>
+        <a href="/explore" class="nav-item"><i class="fa-solid fa-compass" style="font-size:18px; margin-bottom:4px;"></i><span>Explore</span></a>
+        <a href="/admin_panel" class="nav-item active"><i class="fa-solid fa-shield-halved" style="font-size:18px; margin-bottom:4px;"></i><span>Admin</span></a>
+        <a href="/owner_panel" class="nav-item" id="btn-nav-owner" style="display:none;"><i class="fa-solid fa-crown" style="font-size:18px; margin-bottom:4px;"></i><span>Owner</span></a>
+    </div>
+
+    <script>
+        let tg = window.Telegram.WebApp; tg.expand();
+        let uid = tg.initDataUnsafe?.user?.id || 9999999;
+        window.onload = () => {
+            let saved = localStorage.getItem('edtech_theme') || 'dark';
+            document.body.setAttribute('data-theme', saved);
+            document.getElementById("theme-icon").className = saved === 'dark' ? "fa-solid fa-moon" : "fa-solid fa-sun";
+        }
+        function toggleTheme() {
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            let theme = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            document.body.setAttribute('data-theme', theme);
+            localStorage.setItem('edtech_theme', theme);
+            document.getElementById("theme-icon").className = theme === 'dark' ? "fa-solid fa-moon" : "fa-solid fa-sun";
+        }
+        
+        fetch('/api/user/' + uid).then(res => {
+            if(res.status === 403) document.body.innerHTML = "<h2 style='text-align:center; margin-top:50px;'>Access Denied</h2>";
+            return res.json();
+        }).then(data => {
+            if (!data.is_admin && !data.is_owner) {
+                document.body.innerHTML = "<h2 style='text-align:center; margin-top:50px; color:var(--neon-red);'>Forbidden</h2>";
+                return;
+            }
+            if (data.is_owner) document.getElementById("btn-nav-owner").style.display = "flex";
+
+            if(data.system_stats) {
+                document.getElementById("stat-total-users").innerText = data.system_stats.total_users;
+                document.getElementById("cnt-blocked-users").innerText = data.system_stats.blocked_users;
+                let maint = document.getElementById("flag-maintenance");
+                maint.innerText = data.system_stats.maintenance_mode ? "ACTIVE" : "STABLE";
+                maint.className = data.system_stats.maintenance_mode ? "badge bg-red" : "badge bg-green";
+                let lock = document.getElementById("flag-lockdown");
+                lock.innerText = data.system_stats.lockdown_mode ? "LOCKED" : "OPEN";
+                lock.className = data.system_stats.lockdown_mode ? "badge bg-red" : "badge bg-green";
+            }
+        });
+    </script>
+</body>
+</html>
