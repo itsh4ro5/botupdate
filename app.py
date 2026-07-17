@@ -63,14 +63,17 @@ async def get_user_avatar(user_id):
 
 @app.route('/api/user/<int:user_id>')
 async def get_user_data(user_id):
-    user_data = DB["USER_DATA"].get(str(user_id)) or DB["USER_DATA"].get(user_id) or {}
+    # Safely fetch user data and identify the correct key format (str or int)
+    user_key = str(user_id) if str(user_id) in DB["USER_DATA"] else (user_id if user_id in DB["USER_DATA"] else None)
+    user_data = DB["USER_DATA"].get(user_key) if user_key else {}
+    
     is_user_owner = (str(user_id) == str(OWNER_ID)) or (user_id == OWNER_ID)
     is_user_admin = is_admin(user_id)
     flood_active, flood_seconds = config.get_flood_wait_status()
     
-    # --- DAILY STREAK LOGIC ---
+    # --- DAILY STREAK LOGIC (BUG FIXED) ---
     current_streak = user_data.get("current_streak", 0)
-    if user_data:
+    if user_key and user_data:
         today_str = datetime.datetime.now().strftime('%Y-%m-%d')
         last_active = user_data.get('last_active_date', '')
         if last_active != today_str:
@@ -81,8 +84,9 @@ async def get_user_data(user_id):
                 else: current_streak = 1
             else: current_streak = 1
             
-            DB["USER_DATA"][str(user_id)]['last_active_date'] = today_str
-            DB["USER_DATA"][str(user_id)]['current_streak'] = current_streak
+            # Use the verified user_key to prevent KeyError
+            DB["USER_DATA"][user_key]['last_active_date'] = today_str
+            DB["USER_DATA"][user_key]['current_streak'] = current_streak
             asyncio.create_task(config.save_data_async())
             
     response = {
@@ -116,8 +120,8 @@ async def get_user_data(user_id):
         tasks = [check_membership(bid) for bid in all_chats_dict.keys()]
         results = await asyncio.gather(*tasks)
         joined_list = [r for r in results if r is not None]
-        if str(user_id) in DB["USER_DATA"]:
-            DB["USER_DATA"][str(user_id)]["joined_batches"] = joined_list
+        if user_key:
+            DB["USER_DATA"][user_key]["joined_batches"] = joined_list
             asyncio.create_task(config.save_data_async())
 
     demo_keys = list(user_data.get("demos", {}).keys()) if user_data else []
@@ -184,7 +188,9 @@ async def api_owner_users(req_user_id):
 
 @app.route('/api/explore/<int:user_id>')
 async def api_explore_data(user_id):
-    user_data = DB["USER_DATA"].get(str(user_id)) or DB["USER_DATA"].get(user_id) or {}
+    user_key = str(user_id) if str(user_id) in DB["USER_DATA"] else (user_id if user_id in DB["USER_DATA"] else None)
+    user_data = DB["USER_DATA"].get(user_key) if user_key else {}
+    
     joined_list = user_data.get("joined_batches", [])
     demo_keys = list(user_data.get("demos", {}).keys())
     now = time.time()
