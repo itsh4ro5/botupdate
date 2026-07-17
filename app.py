@@ -220,6 +220,46 @@ async def api_owner_users(req_user_id):
         })
     return jsonify({"users": users_list})
 
+@app.route('/api/owner/action', methods=['POST'])
+async def api_owner_action():
+    from quart import request
+    data = await request.json
+    req_user_id = data.get('req_user_id')
+    action = data.get('action')
+    target_uid = int(data.get('target_uid'))
+
+    if str(req_user_id) != str(OWNER_ID) and req_user_id != OWNER_ID:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    bot = getattr(config, 'bot_app', None)
+    if not bot:
+        return jsonify({"error": "Bot not ready"}), 503
+
+    if action == "ban":
+        if target_uid not in DB.get("BLOCKED_USERS", []):
+            DB.setdefault("BLOCKED_USERS", []).append(target_uid)
+        asyncio.create_task(config.save_data_async())
+        try:
+            await config.execute_universal_kick(target_uid, bot, permanent_ban=True)
+        except Exception:
+            pass
+        return jsonify({"success": True})
+
+    elif action == "kick":
+        batch_id = int(data.get('batch_id'))
+        try:
+            await bot.ban_chat_member(batch_id, target_uid)
+            await bot.unban_chat_member(batch_id, target_uid)
+            if target_uid in DB.get("USER_DATA", {}) and "demos" in DB["USER_DATA"][target_uid]:
+                if str(batch_id) in DB["USER_DATA"][target_uid]["demos"]:
+                    del DB["USER_DATA"][target_uid]["demos"][str(batch_id)]
+            asyncio.create_task(config.save_data_async())
+            return jsonify({"success": True})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    return jsonify({"error": "Invalid Action"}), 400
+
 @app.route('/api/explore/<int:user_id>')
 async def api_explore_data(user_id):
     user_key = str(user_id) if str(user_id) in DB["USER_DATA"] else (user_id if user_id in DB["USER_DATA"] else None)
