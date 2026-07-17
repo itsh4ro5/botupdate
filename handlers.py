@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 import io
 import os
 import re
@@ -40,8 +40,12 @@ _BOT_SELF_ID = None
 
 # --- HELPER: COMMAND ARGUMENTS EXTRACTOR ---
 def get_args(message: Message):
+  # Normal /command arguments ke liye
   if message.command and len(message.command) > 1:
     return message.command[1:]
+  # Wizard text input arguments ke liye
+  elif message.text and not message.text.startswith('/'):
+    return message.text.split()
   return []
 
 
@@ -136,19 +140,36 @@ async def cmd_add_admin(client: Client, message: Message):
     return
   args = get_args(message)
   if not args:
-    return
+    return await message.reply_text("  Usage: /addadmin <user_id>")
+    
   try:
     new_admin = int(args[0])
     if new_admin not in DB["ADMIN_IDS"]:
       DB["ADMIN_IDS"].append(new_admin)
       await save_data_async()
-      await message.reply_text(
-          f"✅ User `{new_admin}` is now Admin.", parse_mode=ParseMode.MARKDOWN
-      )
+      await message.reply_text(f"  User `{new_admin}` is now Admin.", parse_mode=ParseMode.MARKDOWN)
     else:
-      await message.reply_text("⚠️ Already Admin.")
-  except Exception:
-    pass
+      await message.reply_text("  User is already an Admin.")
+  except Exception as e:
+    await message.reply_text(f"  Error adding admin: {e}")
+
+async def cmd_del_admin(client: Client, message: Message):
+  if not is_owner_msg(message):
+    return
+  args = get_args(message)
+  if not args:
+    return await message.reply_text("  Usage: /deladmin <user_id>")
+    
+  try:
+    target = int(args[0])
+    if target in DB["ADMIN_IDS"]:
+      DB["ADMIN_IDS"].remove(target)
+      await save_data_async()
+      await message.reply_text(f"  User `{target}` removed from Admins.", parse_mode=ParseMode.MARKDOWN)
+    else:
+      await message.reply_text("  User is not an Admin.")
+  except Exception as e:
+    await message.reply_text(f"  Error removing admin: {e}")
 
 
 async def cmd_userbotphone(client: Client, message: Message):
@@ -516,7 +537,8 @@ async def cmd_all_users(client: Client, message: Message):
     report += f"{uid} | {data.get('name')} | @{data.get('username')}\n"
   f = io.BytesIO(report.encode("utf-8"))
   f.name = "all_users.txt"
-  await message.reply_document(document=f, caption="✅ All Users List")
+  f.seek(0) # <--- YEH LINE ADD KAREIN
+  await message.reply_document(document=f, caption="  All Users List")
 
 
 async def cmd_ban(client: Client, message: Message):
@@ -754,19 +776,18 @@ async def cmd_kick_user(client: Client, message: Message):
     return
   args = get_args(message)
   if len(args) < 2:
-    return
+    return await message.reply_text("  Usage: /kick <user_id> <batch_id>")
+    
   uid, bid = int(args[0]), int(args[1])
   try:
     await client.ban_chat_member(bid, uid)
     await client.unban_chat_member(bid, uid)
-    if uid in DB["USER_DATA"] and str(bid) in DB["USER_DATA"].get(uid, {}).get(
-        "demos", {}
-    ):
+    if uid in DB["USER_DATA"] and str(bid) in DB["USER_DATA"].get(uid, {}).get("demos", {}):
       del DB["USER_DATA"][uid]["demos"][str(bid)]
       await save_data_async()
-    await message.reply_text("✅ Kicked.")
-  except Exception:
-    pass
+    await message.reply_text("  Kicked successfully.")
+  except Exception as e:
+    await message.reply_text(f"  Kick failed: {e}")
 
 
 async def cmd_myinfo(client: Client, message: Message):
@@ -835,29 +856,38 @@ async def cmd_approve_perm(client: Client, message: Message):
     return
   link = None
   args = get_args(message)
+  
   if message.reply_to_message:
     replied = message.reply_to_message
     msg_text = replied.text or replied.caption or ""
     m = re.search(r"(https?://t\.me/(?:\+|joinchat/)[a-zA-Z0-9_\-]+)", msg_text)
     if m:
       link = m.group(1)
-
+      
   if not link and args:
     link = args[0]
+    
   if not link:
-    return
-
-  ld = DB["LINK_MAP"].get(link)
+    return await message.reply_text("  Error: Link nahi mila. Kripya link provide karein.")
+    
+  ld = DB.get("LINK_MAP", {}).get(link)
+  if not ld:
+    return await message.reply_text("  Error: Ye link database me registered nahi hai.")
+    
   target_uid = ld.get("u") if isinstance(ld, dict) else None
   batch_id = ld.get("b") if isinstance(ld, dict) else ld
+  
+  if not target_uid or not batch_id:
+    return await message.reply_text("  Error: Invalid data in database for this link.")
+    
   try:
     await client.approve_chat_join_request(batch_id, target_uid)
     if str(batch_id) in DB["USER_DATA"].get(target_uid, {}).get("demos", {}):
       del DB["USER_DATA"][target_uid]["demos"][str(batch_id)]
     await save_data_async()
-    await message.reply_text("✅ **APPROVED (PERM)**", parse_mode=ParseMode.MARKDOWN)
-  except Exception:
-    pass
+    await message.reply_text("  **APPROVED (PERM)**", parse_mode=ParseMode.MARKDOWN)
+  except Exception as e:
+    await message.reply_text(f"  Approval failed: {e}")
 
 
 async def cmd_delbatch(client: Client, message: Message):
@@ -959,7 +989,8 @@ async def cmd_user_details(client: Client, message: Message):
     )
   f = io.BytesIO(r.encode("utf-8"))
   f.name = f"scan_{target_id}.txt"
-  await message.reply_document(document=f, caption="🔍 Deep Scan")
+  f.seek(0) # <--- YEH LINE ADD KAREIN
+  await message.reply_document(document=f, caption="  Deep Scan")
 
 
 async def cmd_batches(client: Client, message: Message):
@@ -980,6 +1011,7 @@ async def cmd_batches(client: Client, message: Message):
   )
   f = io.BytesIO(r.encode("utf-8"))
   f.name = "batches.txt"
+  f.seek(0)
   await message.reply_document(document=f)
 
 
@@ -1302,6 +1334,10 @@ async def broadcast_callback(client: Client, q: CallbackQuery):
 async def general_callback(client: Client, q: CallbackQuery):
   uid = q.from_user.id
   data = q.data
+  
+  # FIX: Button click par message ka owner real admin ko banayein, bot ko nahi.
+  if q.message:
+      q.message.from_user = q.from_user
 
   if uid in DB["BLOCKED_USERS"]:
     return await q.answer("🚫 You are blocked by the admin.", show_alert=True)
@@ -1979,7 +2015,7 @@ async def general_callback(client: Client, q: CallbackQuery):
             cid,
             creates_join_request=True,
             name=f"Free-{uid}",
-            expire_date=int(time.time()) + 60,
+            expire_date=datetime.now() + timedelta(seconds=60),
         )
         sent_msg = await client.send_message(
             uid,
