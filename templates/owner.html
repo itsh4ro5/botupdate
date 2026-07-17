@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Owner Terminal</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root { --bg-main: #f0f4f8; --bg-card: #ffffff; --text-main: #0f172a; --text-muted: #64748b; --border-color: #e2e8f0; --neon-blue: #0284c7; --neon-purple: #7e22ce; --nav-bg: rgba(255, 255, 255, 0.9); --shadow-card: 0 4px 12px rgba(0,0,0,0.05); --modal-bg: rgba(255,255,255,0.95); }
+        [data-theme="dark"] { --bg-main: #090d16; --bg-card: rgba(22, 30, 49, 0.75); --text-main: #f8fafc; --text-muted: #94a3b8; --border-color: rgba(255, 255, 255, 0.08); --neon-blue: #0ea5e9; --neon-purple: #a855f7; --nav-bg: rgba(15, 22, 42, 0.85); --shadow-card: 0 12px 40px 0 rgba(0, 0, 0, 0.5); --modal-bg: rgba(15, 22, 42, 0.95); }
+        body { font-family: 'Segoe UI', Roboto, sans-serif; background: var(--bg-main); color: var(--text-main); margin: 0; padding: 15px 15px 90px 15px; transition: 0.3s ease; }
+        .glass-card { background: var(--bg-card); backdrop-filter: blur(20px); border: 1px solid var(--border-color); border-radius: 20px; padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow-card); }
+        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .header-top h2 { margin: 0; font-size: 20px; font-weight: 700; color:var(--text-main);}
+        .theme-btn { background: rgba(128,128,128,0.1); border: 1px solid var(--border-color); color: var(--text-main); width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
+        
+        .search-container { position: relative; margin-bottom: 15px; }
+        .search-container i { position: absolute; left: 14px; top: 15px; color: var(--text-muted); }
+        .search-bar { width: 100%; padding: 14px 14px 14px 40px; border-radius: 14px; border: 1px solid var(--border-color); background: rgba(128,128,128,0.05); color: var(--text-main); font-size: 14px; outline: none; box-sizing: border-box; }
+        
+        .user-card { display: flex; align-items: center; padding: 12px; border: 1px solid var(--border-color); border-radius: 14px; background: var(--bg-card); margin-bottom: 10px; cursor: pointer; transition: 0.2s; }
+        .user-card:active { transform: scale(0.98); }
+        .user-card img { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; border: 1px solid var(--neon-blue); }
+        .user-card-info { flex: 1; margin-left: 12px; }
+        .user-card-info b { display: block; font-size: 14px; color: var(--text-main); }
+        .user-card-info small { color: var(--text-muted); font-size: 11px; }
+
+        #profileModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); z-index: 10000; align-items: flex-end; justify-content: center; }
+        .modal-content { background: var(--modal-bg); width: 100%; max-height: 85vh; border-radius: 24px 24px 0 0; padding: 25px; box-sizing: border-box; overflow-y: auto; color: var(--text-main); animation: slideUp 0.3s ease-out; border-top: 1px solid var(--border-color); }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .modal-close { position: absolute; right: 20px; top: 20px; font-size: 24px; color: var(--text-muted); cursor: pointer; }
+        .streak-badge { background: linear-gradient(135deg, #f59e0b, #ea580c); color: white; padding: 4px 10px; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-flex; align-items: center; gap: 5px;}
+        .item-row { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(128,128,128,0.05); margin-bottom: 8px; border-radius: 12px; border-left: 4px solid var(--neon-blue); }
+        .badge { padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 700;}
+        .bg-blue { background: rgba(14, 165, 233, 0.15); color: var(--neon-blue); }
+        .bg-green { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+        .bg-red { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+        .bottom-nav { position: fixed; bottom: 16px; left: 16px; right: 16px; height: 64px; background: var(--nav-bg); backdrop-filter: blur(30px); border: 1px solid var(--border-color); border-radius: 20px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2); z-index: 9999; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; color: var(--text-muted); cursor: pointer; font-size: 10px; font-weight: 600; text-decoration: none;}
+        .nav-item.active { color: var(--neon-blue); }
+    </style>
+</head>
+<body data-theme="dark">
+    <div class="header-top">
+        <h2><i class="fa-solid fa-crown" style="color:var(--neon-purple);"></i> Owner Core</h2>
+        <button class="theme-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon" id="theme-icon"></i></button>
+    </div>
+
+    <div class="glass-card">
+        <h3 style="font-size:15px; margin:0 0 14px 0;"><i class="fa-solid fa-users-gear"></i> User Management</h3>
+        <div class="search-container">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" class="search-bar" id="userSearchBox" onkeyup="liveUserSearch()" placeholder="Search by Name, Username or ID...">
+        </div>
+        <div id="owner-users-list">
+            <p style="color: var(--text-muted); font-size: 13px; text-align: center;">Authenticating & Loading Database...</p>
+        </div>
+    </div>
+
+    <!-- Instagram Style Profile Modal -->
+    <div id="profileModal">
+        <div class="modal-content">
+            <i class="fa-solid fa-xmark modal-close" onclick="closeModal()"></i>
+            <div style="text-align: center; margin-bottom: 20px;">
+                <img id="mod-avatar" src="" style="width:80px; height:80px; border-radius:50%; object-fit:cover; border:3px solid var(--neon-purple); margin-bottom:10px;">
+                <h2 id="mod-name" style="margin:0; font-size:20px;">Name</h2>
+                <p id="mod-meta" style="margin:5px 0; color:var(--text-muted); font-size:13px;">@username | ID: 12345</p>
+                <div class="streak-badge"><i class="fa-solid fa-fire"></i> <span id="mod-streak">0</span></div>
+            </div>
+            
+            <h3 style="font-size: 14px; border-bottom:1px solid var(--border-color); padding-bottom:5px; margin-bottom:10px;">Subscribed Batches</h3>
+            <div id="mod-batches" style="margin-bottom: 20px;"></div>
+
+            <h3 style="font-size: 14px; border-bottom:1px solid var(--border-color); padding-bottom:5px; margin-bottom:10px;">Active Demos</h3>
+            <div id="mod-demos"></div>
+        </div>
+    </div>
+
+    <div class="bottom-nav">
+        <a href="/" class="nav-item"><i class="fa-solid fa-house" style="font-size:18px; margin-bottom:4px;"></i><span>Home</span></a>
+        <a href="/explore" class="nav-item"><i class="fa-solid fa-compass" style="font-size:18px; margin-bottom:4px;"></i><span>Explore</span></a>
+        <a href="/admin_panel" class="nav-item"><i class="fa-solid fa-shield-halved" style="font-size:18px; margin-bottom:4px;"></i><span>Admin</span></a>
+        <a href="/owner_panel" class="nav-item active"><i class="fa-solid fa-crown" style="font-size:18px; margin-bottom:4px;"></i><span>Owner</span></a>
+    </div>
+
+    <script>
+        let tg = window.Telegram.WebApp; tg.expand();
+        let uid = tg.initDataUnsafe?.user?.id || 9999999;
+        let globalUsersData = [];
+
+        window.onload = () => {
+            let saved = localStorage.getItem('edtech_theme') || 'dark';
+            document.body.setAttribute('data-theme', saved);
+            document.getElementById("theme-icon").className = saved === 'dark' ? "fa-solid fa-moon" : "fa-solid fa-sun";
+            loadOwnerData();
+        }
+        function toggleTheme() {
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            let theme = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            document.body.setAttribute('data-theme', theme);
+            localStorage.setItem('edtech_theme', theme);
+            document.getElementById("theme-icon").className = theme === 'dark' ? "fa-solid fa-moon" : "fa-solid fa-sun";
+        }
+
+        function loadOwnerData() {
+            fetch('/api/owner/users/' + uid).then(res => {
+                if(!res.ok) throw new Error("Unauthorized");
+                return res.json();
+            }).then(data => {
+                globalUsersData = data.users;
+                renderOwnerUsers(globalUsersData);
+            }).catch(err => {
+                document.body.innerHTML = "<h2 style='text-align:center; margin-top:50px; color:var(--neon-red);'>Access Denied. Owner Only.</h2>";
+            });
+        }
+
+        function renderOwnerUsers(usersArr) {
+            let html = usersArr.map((u, index) => `
+                <div class="user-card" onclick="openProfileModal(${index})">
+                    <img src="/api/user/avatar/${u.id}" onerror="this.src='https://placehold.co/100x100/38bdf8/ffffff?text=${u.name.charAt(0)}'">
+                    <div class="user-card-info">
+                        <b>${u.name}</b>
+                        <small>@${u.username !== 'N/A' ? u.username : 'NoUsername'} | ID: ${u.id}</small>
+                    </div>
+                    <i class="fa-solid fa-chevron-right" style="color:var(--text-muted); font-size:12px;"></i>
+                </div>`).join("");
+            document.getElementById("owner-users-list").innerHTML = html || "<p style='text-align:center;color:var(--text-muted);'>No users found.</p>";
+        }
+
+        function liveUserSearch() {
+            let filter = document.getElementById('userSearchBox').value.toLowerCase();
+            if(filter.length === 0) { renderOwnerUsers(globalUsersData); return; }
+            let filtered = globalUsersData.filter(u => u.name.toLowerCase().includes(filter) || u.username.toLowerCase().includes(filter) || String(u.id).includes(filter));
+            renderOwnerUsers(filtered);
+        }
+
+        function openProfileModal(index) {
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            let u = globalUsersData[index];
+            document.getElementById('mod-name').innerText = u.name;
+            document.getElementById('mod-meta').innerText = `@${u.username !== 'N/A' ? u.username : 'Unknown'} | ID: ${u.id}`;
+            document.getElementById('mod-avatar').src = `/api/user/avatar/${u.id}`;
+            document.getElementById('mod-streak').innerText = u.streak;
+            
+            document.getElementById('mod-batches').innerHTML = u.joined.length > 0 ? u.joined.map(b => `<div class="item-row"><b style="font-size:13px;color:var(--text-main);">${b.name}</b><span class="badge bg-blue">Joined</span></div>`).join("") : "<p style='color:var(--text-muted);font-size:12px;'>No permanent batches.</p>";
+            document.getElementById('mod-demos').innerHTML = u.demos.length > 0 ? u.demos.map(d => `<div class="item-row"><b style="font-size:13px;color:var(--text-main);">${d.name}</b><span class="badge ${d.is_expired ? 'bg-red' : 'bg-green'}">${d.is_expired ? 'Expired' : d.time_left + 'h left'}</span></div>`).join("") : "<p style='color:var(--text-muted);font-size:12px;'>No active demos.</p>";
+            document.getElementById('profileModal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            document.getElementById('profileModal').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
