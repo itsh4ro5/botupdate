@@ -3,6 +3,7 @@ import time
 import asyncio
 import traceback
 import importlib
+from pyrogram.errors import StopPropagation
 
 print("🟢 BOOT[1/5]: Pyrogram MTProto Engine Starting...", flush=True)
 
@@ -173,8 +174,6 @@ async def _run_pyrogram_engine():
         await H.on_chat_member_update(client, update)
         if hasattr(H, "track_chats"):
             await H.track_chats(client, update)
-
-  from pyrogram.errors import StopPropagation
 
     # group=-100 lagane se ye bot ka sabse pehla action ban jayega
     @app.on_message(filters.all, group=-100)
