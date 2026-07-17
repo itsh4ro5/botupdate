@@ -167,22 +167,49 @@ async def api_owner_users(req_user_id):
         return jsonify({"error": "Unauthorized. Owner Access Only."}), 403
 
     all_chats_dict = DB.get("ALL_CHATS", {})
+    free_chats = DB.get("FREE_CHANNELS", {})
+    paid_chats = DB.get("PAID_CHANNELS", {})
     users_list = []
     now = time.time()
 
     for uid, data in DB.get("USER_DATA", {}).items():
-        joined_names = [{"id": bid, "name": all_chats_dict.get(int(bid), f"Batch {bid}")} for bid in data.get("joined_batches", [])]
+        joined_batches = data.get("joined_batches", [])
+        free_joined = []
+        paid_joined = []
+
+        for bid in joined_batches:
+            bid_str = str(bid)
+            bid_int = int(bid) if bid_str.lstrip('-').isdigit() else bid
+            
+            # Category wise filter
+            if bid_str in free_chats or bid_int in free_chats:
+                name = free_chats.get(bid_str) or free_chats.get(bid_int) or all_chats_dict.get(bid_int, f"Batch {bid}")
+                free_joined.append({"id": bid, "name": name})
+            elif bid_str in paid_chats or bid_int in paid_chats:
+                name = paid_chats.get(bid_str) or paid_chats.get(bid_int) or all_chats_dict.get(bid_int, f"Batch {bid}")
+                paid_joined.append({"id": bid, "name": name})
+            else:
+                name = all_chats_dict.get(bid_int, f"Batch {bid}")
+                paid_joined.append({"id": bid, "name": name}) # Default
+
         demos_list = []
         for bid, d_data in data.get("demos", {}).items():
             exp = d_data["expiry"] if isinstance(d_data, dict) else float(d_data)
             demos_list.append({
-                "id": bid, "name": all_chats_dict.get(int(bid), f"Batch {bid}"),
+                "id": bid, "name": all_chats_dict.get(int(bid) if str(bid).lstrip('-').isdigit() else bid, f"Batch {bid}"),
                 "is_expired": now > exp, "time_left": max(0, int(exp - now)) // 3600
             })
 
         users_list.append({
-            "id": uid, "name": data.get("name", "Unknown"), "username": data.get("username", "N/A"),
-            "streak": data.get("current_streak", 0), "joined": joined_names, "demos": demos_list
+            "id": uid, 
+            "name": data.get("name", "Unknown"), 
+            "username": data.get("username", "N/A"),
+            "streak": data.get("current_streak", 0), 
+            "free_joined": free_joined,
+            "paid_joined": paid_joined,
+            "demos": demos_list,
+            "is_admin": is_admin(uid),
+            "is_owner": str(uid) == str(OWNER_ID)
         })
     return jsonify({"users": users_list})
 
