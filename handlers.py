@@ -2054,12 +2054,15 @@ async def general_callback(client: Client, q: CallbackQuery):
     elif data.startswith("req_access_"):
       cid = int(data.split("_")[2])
       if not await check_membership_pyro(uid, client):
-        return await q.answer("❌ Join Main First!", show_alert=True)
+        return await q.answer("  Join Main First!", show_alert=True)
       if await is_already_in_channel_pyro(client, cid, uid):
-        return await q.answer("⚠️ Already joined!", show_alert=True)
-      await q.answer("🔄 Generating Link...")
+        return await q.answer("  Already joined!", show_alert=True)
+      await q.answer("  Generating Link...")
+      
       try:
         bname = DB["ALL_CHATS"].get(cid, f"Batch {cid}")
+        
+        # 1. FIXED TIMESTAMP ERROR HERE
         l = await client.create_chat_invite_link(
             cid,
             creates_join_request=True,
@@ -2068,41 +2071,40 @@ async def general_callback(client: Client, q: CallbackQuery):
         )
         DB["LINK_MAP"][l.invite_link] = {"u": uid, "b": cid}
         await save_data_async()
+        
+        # YE LINE MISSING THI (topic_id define karna)
+        topic_id = await get_or_create_topic(q.from_user, client)
+        
+        # 2. FIXED ADMIN NOTIFICATION HERE
         if topic_id:
+          notification_text = (
+              f"🔔 <b>NEW REQUEST</b>\n"
+              f"👤 User: {q.from_user.mention}\n"
+              f"📂 Batch: <b>{bname}</b>\n"
+              f"🔗 Link: {l.invite_link}\n\n"
+              f"👇 <b>Action:</b>\n"
+              f"/demo {l.invite_link}\n"
+              f"/per {l.invite_link}"
+          )
           try:
-            # HTML format sahi kiya ( ** ki jagah <b> lagaya)
-            notification_text = (
-                f"🔔 <b>NEW REQUEST</b>\n"
-                f"👤 User: {q.from_user.mention}\n"
-                f"📂 Batch: <b>{bname}</b>\n"
-                f"🔗 Link: {l.invite_link}\n\n"
-                f"👇 <b>Action:</b>\n"
-                f"/demo {l.invite_link}\n"
-                f"/per {l.invite_link}"
+            await client.send_message(
+                int(SUPPORT_GROUP_ID),
+                notification_text,
+                message_thread_id=topic_id,
+                parse_mode=ParseMode.HTML,
             )
-            try:
-                # Primary method (ID ko int() me convert karke)
-                await client.send_message(
-                    int(SUPPORT_GROUP_ID),
-                    notification_text,
-                    message_thread_id=topic_id,
-                    parse_mode=ParseMode.HTML,
-                )
-            except TypeError:
-                # Fallback agar message_thread_id error de
-                await client.send_message(
-                    int(SUPPORT_GROUP_ID),
-                    notification_text,
-                    reply_to_message_id=topic_id,
-                    parse_mode=ParseMode.HTML,
-                )
+          except TypeError:
+            await client.send_message(
+                int(SUPPORT_GROUP_ID),
+                notification_text,
+                reply_to_message_id=topic_id,
+                parse_mode=ParseMode.HTML,
+            )
           except Exception as e:
-            # Agar koi aur issue aaye toh console me error print hoga (silent fail nahi hoga)
             print(f"Admin notification failed: {e}")
 
-        # Button generate karna
+        # 3. FIXED LINK HIDDEN IN BUTTON FOR USER HERE
         kb = [[InlineKeyboardButton("  Request Access", url=l.invite_link)]]
-        
         user_msg_obj = await client.send_message(
             uid,
             f"  <b>Access Link Generated!</b>\n\n<b>{bname}</b>\n\n  <b>Sent to Admin.</b> Wait for approval.\n  <i>(Expires in 1 min)</i>",
@@ -2110,8 +2112,9 @@ async def general_callback(client: Client, q: CallbackQuery):
             parse_mode=ParseMode.HTML,
         )
         await schedule_delete(client, user_msg_obj, delay=60)
+        
       except Exception as e:
-        await client.send_message(uid, f"❌ Error: {e}")
+        await client.send_message(uid, f"  Error: {e}")
 
   except Exception as e:
     logger.error(f"Callback Error: {e}")
