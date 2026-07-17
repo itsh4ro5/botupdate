@@ -2376,10 +2376,11 @@ async def start_from_cb(client: Client, q: CallbackQuery):
 
 async def delete_service_messages(client: Client, message: Message):
   try:
-    await message.delete()
+    # Direct client API delete method (Sabse strong)
+    await client.delete_messages(chat_id=message.chat.id, message_ids=message.id)
   except Exception as e:
-    # Ab silent fail nahi hoga, terminal me error batayega
-    print(f"Service message delete fail hua: {e}. Kripya check karein ki Bot ke paas group me 'Delete Messages' ki permission hai ya nahi.")
+    # Agar ab fail hua, toh terminal/logs mein exact error dikhayega
+    print(f"Service message delete fail hua: {type(e).__name__} - {e}")
 
 
 # =====================================================================
