@@ -5,6 +5,7 @@ import datetime
 from quart import Quart, jsonify, render_template, send_file
 import config
 from config import DB, OWNER_ID, is_admin
+from pyrogram.enums import ChatMemberStatus # ADDED: Pyrogram ke naye status system ke liye
 
 app = Quart(__name__)
 AVATAR_CACHE = {}
@@ -71,7 +72,7 @@ async def get_user_data(user_id):
     is_user_admin = is_admin(user_id)
     flood_active, flood_seconds = config.get_flood_wait_status()
     
-    # --- DAILY STREAK LOGIC (BUG FIXED) ---
+    # --- DAILY STREAK LOGIC ---
     current_streak = user_data.get("current_streak", 0)
     if user_key and user_data:
         today_str = datetime.datetime.now().strftime('%Y-%m-%d')
@@ -84,7 +85,6 @@ async def get_user_data(user_id):
                 else: current_streak = 1
             else: current_streak = 1
             
-            # Use the verified user_key to prevent KeyError
             DB["USER_DATA"][user_key]['last_active_date'] = today_str
             DB["USER_DATA"][user_key]['current_streak'] = current_streak
             asyncio.create_task(config.save_data_async())
@@ -109,21 +109,28 @@ async def get_user_data(user_id):
     now = time.time()
     joined_list = []
     
+    # FIX APPLIED: Using Native Pyrogram ChatMemberStatus Enum
     if hasattr(config, 'bot_app') and config.bot_app:
         bot = config.bot_app
         async def check_membership(bid):
             try:
                 m = await bot.get_chat_member(int(bid), user_id)
-                if m.status in ['member', 'administrator', 'creator', 'restricted']: return int(bid)
+                # Correct Enum check that works for both Admins and Members
+                if m.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER, ChatMemberStatus.RESTRICTED]: 
+                    return int(bid)
             except Exception: pass
             return None
+            
         tasks = [check_membership(bid) for bid in all_chats_dict.keys()]
         results = await asyncio.gather(*tasks)
         joined_list = [r for r in results if r is not None]
+        
+        # Save to DB so that Owner Panel can read it too
         if user_key:
             DB["USER_DATA"][user_key]["joined_batches"] = joined_list
             asyncio.create_task(config.save_data_async())
 
+    # Process Demos
     demo_keys = list(user_data.get("demos", {}).keys()) if user_data else []
     if "demos" in user_data:
         for bid, d_data in user_data["demos"].items():
