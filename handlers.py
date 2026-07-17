@@ -2068,19 +2068,38 @@ async def general_callback(client: Client, q: CallbackQuery):
         )
         DB["LINK_MAP"][l.invite_link] = {"u": uid, "b": cid}
         await save_data_async()
-        topic_id = await get_or_create_topic(q.from_user, client)
         if topic_id:
           try:
-            await client.send_message(
-                SUPPORT_GROUP_ID,
-                f"🔔 **NEW REQUEST**\n👤 User: {q.from_user.mention}\n📂 Batch:"
-                f" <b>{bname}</b>\n🔗 Link: {l.invite_link}\n\n👇"
-                f" **Action:**\n/demo {l.invite_link}\n/per {l.invite_link}",
-                message_thread_id=topic_id,
-                parse_mode=ParseMode.HTML,
+            # HTML format sahi kiya ( ** ki jagah <b> lagaya)
+            notification_text = (
+                f"🔔 <b>NEW REQUEST</b>\n"
+                f"👤 User: {q.from_user.mention}\n"
+                f"📂 Batch: <b>{bname}</b>\n"
+                f"🔗 Link: {l.invite_link}\n\n"
+                f"👇 <b>Action:</b>\n"
+                f"/demo {l.invite_link}\n"
+                f"/per {l.invite_link}"
             )
-          except Exception:
-            pass
+            try:
+                # Primary method (ID ko int() me convert karke)
+                await client.send_message(
+                    int(SUPPORT_GROUP_ID),
+                    notification_text,
+                    message_thread_id=topic_id,
+                    parse_mode=ParseMode.HTML,
+                )
+            except TypeError:
+                # Fallback agar message_thread_id error de
+                await client.send_message(
+                    int(SUPPORT_GROUP_ID),
+                    notification_text,
+                    reply_to_message_id=topic_id,
+                    parse_mode=ParseMode.HTML,
+                )
+          except Exception as e:
+            # Agar koi aur issue aaye toh console me error print hoga (silent fail nahi hoga)
+            print(f"Admin notification failed: {e}")
+
         # Button generate karna
         kb = [[InlineKeyboardButton("  Request Access", url=l.invite_link)]]
         
