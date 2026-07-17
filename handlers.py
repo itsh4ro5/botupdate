@@ -804,7 +804,7 @@ async def cmd_approve_demo(client: Client, message: Message):
   args = get_args(message)
   link = None
   hours = 3.0
-
+  
   if message.reply_to_message:
     replied = message.reply_to_message
     msg_text = replied.text or replied.caption or ""
@@ -816,7 +816,7 @@ async def cmd_approve_demo(client: Client, message: Message):
         hours = float(args[0].lower().replace("h", ""))
       except:
         pass
-
+        
   if not link and args:
     for arg in args:
       if "t.me" in arg:
@@ -826,16 +826,20 @@ async def cmd_approve_demo(client: Client, message: Message):
           hours = float(arg.lower().replace("h", ""))
         except:
           pass
-
+          
   if not link:
-    return await message.reply_text("❌ Link nahi mila.")
-
-  ld = DB["LINK_MAP"].get(link)
+    return await message.reply_text("  Error: Link nahi mila.")
+    
+  ld = DB.get("LINK_MAP", {}).get(link)
+  if not ld:
+    return await message.reply_text("  Error: Ye link database me registered nahi hai.")
+    
   target_uid = ld.get("u") if isinstance(ld, dict) else None
   batch_id = ld.get("b") if isinstance(ld, dict) else ld
+  
   if not target_uid or not batch_id:
-    return await message.reply_text("❌ Ye link database me registered nahi hai.")
-
+    return await message.reply_text("  Error: Invalid data in database for this link.")
+    
   try:
     await client.approve_chat_join_request(batch_id, target_uid)
     expiry_time = time.time() + (hours * 3600)
@@ -843,13 +847,29 @@ async def cmd_approve_demo(client: Client, message: Message):
         str(batch_id)
     ] = {"expiry": expiry_time, "warned": False}
     await save_data_async()
+    
+    # Admin ko confirmation
     await message.reply_text(
-        f"✅ **APPROVED (DEMO)**\n⏳ Time Given: `{hours} Hours`",
+        f"  **APPROVED (DEMO)**\n  Time Given: `{hours} Hours`",
         parse_mode=ParseMode.MARKDOWN,
     )
+    
+    # --- NAYA CODE: USER KO AUTO-MESSAGE BHEJNA ---
+    try:
+      bname = DB["ALL_CHATS"].get(int(batch_id), f"Batch {batch_id}")
+      user_msg = (
+          f"🎉 **Congratulations!**\n\n"
+          f"Aapki request **{bname}** ke liye approve ho gayi hai.\n\n"
+          f"⏱ **Access Type:** Demo Trial\n"
+          f"⏳ **Duration:** `{hours} Hours`\n\n"
+          f"Kripya diye gaye samay me batch access kar lein."
+      )
+      await client.send_message(target_uid, user_msg, parse_mode=ParseMode.MARKDOWN)
+    except Exception as e:
+      print(f"User demo notification failed: {e}")
+      
   except Exception as e:
-    await message.reply_text(f"❌ Approval failed: {e}")
-
+    await message.reply_text(f"  Approval failed: {e}")
 
 async def cmd_approve_perm(client: Client, message: Message):
   if not is_admin_msg(message):
@@ -885,7 +905,23 @@ async def cmd_approve_perm(client: Client, message: Message):
     if str(batch_id) in DB["USER_DATA"].get(target_uid, {}).get("demos", {}):
       del DB["USER_DATA"][target_uid]["demos"][str(batch_id)]
     await save_data_async()
+    
+    # Admin ko confirmation
     await message.reply_text("  **APPROVED (PERM)**", parse_mode=ParseMode.MARKDOWN)
+    
+    # --- NAYA CODE: USER KO AUTO-MESSAGE BHEJNA ---
+    try:
+      bname = DB["ALL_CHATS"].get(int(batch_id), f"Batch {batch_id}")
+      user_msg = (
+          f"🎉 **Congratulations!**\n\n"
+          f"Aapki request **{bname}** ke liye approve ho gayi hai.\n\n"
+          f"🌟 **Access Type:** Lifetime Premium Access\n\n"
+          f"Welcome to the premium community! Ab aap jab chahein apne batches section se isey access kar sakte hain."
+      )
+      await client.send_message(target_uid, user_msg, parse_mode=ParseMode.MARKDOWN)
+    except Exception as e:
+      print(f"User perm notification failed: {e}")
+      
   except Exception as e:
     await message.reply_text(f"  Approval failed: {e}")
 
