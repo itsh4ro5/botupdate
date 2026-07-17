@@ -2613,25 +2613,34 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
             await message.reply_text(f"⚠️ **User ko deliver nahi hua!** Error: `{e}`")
 
 async def on_chat_member_update(client: Client, update: ChatMemberUpdated):
+  # SAFE CHECK: Agar new_chat_member None hai, toh wahi se return kar do
+  if not update.new_chat_member:
+    return
+    
   user = update.new_chat_member.user
   status = update.new_chat_member.status
+  
   if str(update.chat.id).replace("-100", "") == str(
       MANDATORY_CHANNEL_ID
   ).replace("-100", "") and status in [
       ChatMemberStatus.LEFT,
       ChatMemberStatus.BANNED,
   ]:
-    await execute_universal_kick(user.id, client)
-
+    if user:
+      await execute_universal_kick(user.id, client)
 
 async def track_chats(client: Client, update: ChatMemberUpdated):
   chat = update.chat
+  
+  # SAFE CHECK: Prevent NoneType crash
+  if not update.new_chat_member:
+    return
+    
   status = update.new_chat_member.status
   if (
       chat.type == ChatType.PRIVATE and status == ChatMemberStatus.BANNED
   ):
     await execute_universal_kick(chat.id, client)
-
 
 async def background_sync(client: Client):
   global SPAM_CACHE, _SYNC_IN_PROGRESS
