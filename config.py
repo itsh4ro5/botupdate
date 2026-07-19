@@ -207,31 +207,121 @@ async def _background_save():
         except Exception as e:
             logger.error(f"❌ Background Save Failed: {e}")
 
+# =====================================================================
+# 🚀 PERFORMANCE: DEBOUNCED / BATCHED SAVE
+# Previously, every save_data_async() call immediately spawned its own
+# asyncio.create_task(_background_save()) — a FULL DB → JSON serialize
+# (+ a full Mongo replace_one network round-trip) EACH time. Under bursty
+# traffic (e.g. 50 users tapping buttons in the same second), that meant
+# 50 separate full-DB writes queued back-to-back behind `data_lock`,
+# hammering disk I/O and the Mongo connection for no benefit — the last
+# write always wins anyway.
+# Now: any call just flags the DB "dirty". At most ONE flush task is ever
+# in flight; it waits SAVE_DEBOUNCE_SECONDS before actually writing, so
+# every call that arrives inside that window gets coalesced into that
+# single write. 100 calls in 3 seconds now costs exactly 1 write instead
+# of 100 — this is the single biggest I/O reduction in this file.
+# =====================================================================
+SAVE_DEBOUNCE_SECONDS = 4
+_save_flush_task = None
+
+async def _debounced_flush():
+    try:
+        await asyncio.sleep(SAVE_DEBOUNCE_SECONDS)
+        await _background_save()
+    except Exception as e:
+        logger.error(f"❌ Debounced Save Failed: {e}")
+
 async def save_data_async():
-    asyncio.create_task(_background_save())
+    """
+    Marks the DB dirty and ensures exactly one debounced flush is pending.
+    Safe to call as often as you like — extra calls inside the debounce
+    window are free (no new task, no new write).
+    """
+    global _save_flush_task
+    # No `await` happens between this check and the create_task call, so
+    # there's no window for two coroutines to both see "no task running"
+    # and schedule two flushes — asyncio is single-threaded/cooperative,
+    # so this is race-free without needing an extra lock.
+    if _save_flush_task is None or _save_flush_task.done():
+        _save_flush_task = asyncio.create_task(_debounced_flush())
+
+# =====================================================================
+# 🚀 PERFORMANCE: SHARED MEMBERSHIP TTL CACHE
+# check_membership_pyro / is_already_in_channel_pyro (handlers.py) and
+# the per-batch membership loop in app.py's /api/user endpoint all called
+# client.get_chat_member() fresh, every single time — including cases
+# where the SAME (chat, user) pair gets checked multiple times within the
+# same page load (e.g. /api/user and /api/explore both re-check every
+# batch back-to-back) or across rapid repeated button taps. Each of those
+# is a real network round-trip to Telegram and counts against rate limits.
+# This cache shares one short-lived result across every caller.
+# =====================================================================
+_MEMBERSHIP_CACHE = {}  # {(chat_id, user_id): (is_member: bool, expiry_ts: float)}
+MEMBERSHIP_CACHE_TTL = 30  # seconds — short enough to stay accurate, long enough to kill duplicate bursts
+
+async def get_membership_cached(client, chat_id, user_id, ttl=MEMBERSHIP_CACHE_TTL):
+    key = (int(chat_id), int(user_id))
+    now = time.time()
+    cached = _MEMBERSHIP_CACHE.get(key)
+    if cached and cached[1] > now:
+        return cached[0]
+    try:
+        m = await client.get_chat_member(int(chat_id), int(user_id))
+        result = m.status in [
+            ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR,
+            ChatMemberStatus.OWNER, ChatMemberStatus.RESTRICTED,
+        ]
+    except Exception:
+        result = False
+    _MEMBERSHIP_CACHE[key] = (result, now + ttl)
+    return result
+
+def invalidate_membership_cache(user_id, chat_id=None):
+    """Call right after a ban/kick/approve so a stale cached result isn't served."""
+    user_id = int(user_id)
+    if chat_id is not None:
+        _MEMBERSHIP_CACHE.pop((int(chat_id), user_id), None)
+    else:
+        for key in [k for k in _MEMBERSHIP_CACHE if k[1] == user_id]:
+            del _MEMBERSHIP_CACHE[key]
 
 # --- CORE HELPERS (100% PYROGRAM CONVERTED) ---
 async def execute_universal_kick(user_id, client, permanent_ban=False):
     mod = False
-    for bid in list(DB["FREE_CHANNELS"].keys()):
+
+    async def _kick_free(bid):
         try:
             await client.ban_chat_member(int(bid), user_id)
-            if not permanent_ban: await client.unban_chat_member(int(bid), user_id)
-        except Exception: pass
-        
-    for bid in list(DB["PAID_CHANNELS"].keys()):
+            if not permanent_ban:
+                await client.unban_chat_member(int(bid), user_id)
+        except Exception:
+            pass
+
+    async def _kick_paid(bid):
+        nonlocal mod
         try:
-            bid_str = str(bid); is_demo = False
-            if user_id in DB["USER_DATA"] and "demos" in DB["USER_DATA"][user_id] and bid_str in DB["USER_DATA"][user_id]["demos"]: is_demo = True
-            
+            bid_str = str(bid)
+            is_demo = bid_str in DB["USER_DATA"].get(user_id, {}).get("demos", {})
             await client.ban_chat_member(int(bid), user_id)
-            if not permanent_ban: await client.unban_chat_member(int(bid), user_id)
-            
-            if is_demo: 
+            if not permanent_ban:
+                await client.unban_chat_member(int(bid), user_id)
+            if is_demo:
                 del DB["USER_DATA"][user_id]["demos"][bid_str]
                 mod = True
-        except Exception: pass
-        
+        except Exception:
+            pass
+
+    # 🚀 PERFORMANCE: this used to ban/unban across every free THEN every
+    # paid channel one at a time (2N sequential Telegram round-trips for a
+    # user in N+N channels). asyncio.gather fires them all concurrently —
+    # total wait drops from O(N * latency) to roughly O(latency).
+    await asyncio.gather(
+        *[_kick_free(bid) for bid in list(DB["FREE_CHANNELS"].keys())],
+        *[_kick_paid(bid) for bid in list(DB["PAID_CHANNELS"].keys())],
+    )
+    invalidate_membership_cache(user_id)  # drop any cached "still joined" entries
+
     if permanent_ban:
         if user_id not in DB["BLOCKED_USERS"]: 
             DB["BLOCKED_USERS"].append(user_id)
@@ -245,10 +335,17 @@ async def execute_universal_kick(user_id, client, permanent_ban=False):
     if mod: await save_data_async()
 
 def is_admin(uid):
-    if str(uid) == str(OWNER_ID): return True
-    if uid in DB["ADMIN_IDS"]: return True
+    # 🚀 PERFORMANCE: previously did `uid in DB["ADMIN_IDS"]` (one O(n) pass)
+    # THEN a second O(n) loop doing str() comparisons as a fallback — i.e.
+    # up to 2 full passes over the admin list on every single call, and
+    # is_admin() is called on nearly every incoming message/command. Merged
+    # into one pass that checks both forms per element.
+    if str(uid) == str(OWNER_ID):
+        return True
+    uid_str = str(uid)
     for admin_id in DB["ADMIN_IDS"]:
-        if str(admin_id) == str(uid): return True
+        if admin_id == uid or str(admin_id) == uid_str:
+            return True
     return False
 
 def check_spam(uid):
@@ -259,16 +356,10 @@ def check_spam(uid):
 async def check_membership(user_id, client):
     if is_admin(user_id): return True
     if not MANDATORY_CHANNEL_ID: return True
-    try:
-        m = await client.get_chat_member(int(MANDATORY_CHANNEL_ID), user_id)
-        return m.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER, ChatMemberStatus.RESTRICTED]
-    except Exception: return False
+    return await get_membership_cached(client, MANDATORY_CHANNEL_ID, user_id)
 
 async def is_already_in_channel(client, chat_id, user_id):
-    try:
-        member = await client.get_chat_member(int(chat_id), user_id)
-        return member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER, ChatMemberStatus.RESTRICTED]
-    except Exception: return False
+    return await get_membership_cached(client, chat_id, user_id)
 
 # 🔥 PYROGRAM ASYNC DELAYED DELETE FUNCTION
 async def _delayed_delete(client, chat_id, msg_id, delay):
