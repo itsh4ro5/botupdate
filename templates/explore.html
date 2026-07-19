@@ -7,8 +7,8 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        :root { --bg-main: #f0f4f8; --bg-card: #ffffff; --text-main: #0f172a; --text-muted: #64748b; --border-color: #e2e8f0; --neon-blue: #0284c7; --neon-purple: #7e22ce; --neon-green: #16a34a; --nav-bg: rgba(255, 255, 255, 0.9); --shadow-card: 0 4px 12px rgba(0,0,0,0.05); }
-        [data-theme="dark"] { --bg-main: #090d16; --bg-card: rgba(22, 30, 49, 0.75); --text-main: #f8fafc; --text-muted: #94a3b8; --border-color: rgba(255, 255, 255, 0.08); --neon-blue: #0ea5e9; --neon-purple: #a855f7; --neon-green: #10b981; --nav-bg: rgba(15, 22, 42, 0.85); --shadow-card: 0 12px 40px 0 rgba(0, 0, 0, 0.5); }
+        :root { --bg-main: #f0f4f8; --bg-card: #ffffff; --text-main: #0f172a; --text-muted: #64748b; --border-color: #e2e8f0; --neon-blue: #0284c7; --neon-purple: #7e22ce; --neon-green: #16a34a; --neon-red: #dc2626; --nav-bg: rgba(255, 255, 255, 0.9); --shadow-card: 0 4px 12px rgba(0,0,0,0.05); }
+        [data-theme="dark"] { --bg-main: #090d16; --bg-card: rgba(22, 30, 49, 0.75); --text-main: #f8fafc; --text-muted: #94a3b8; --border-color: rgba(255, 255, 255, 0.08); --neon-blue: #0ea5e9; --neon-purple: #a855f7; --neon-green: #10b981; --neon-red: #ef4444; --nav-bg: rgba(15, 22, 42, 0.85); --shadow-card: 0 12px 40px 0 rgba(0, 0, 0, 0.5); }
         body { font-family: 'Segoe UI', Roboto, sans-serif; background: var(--bg-main); color: var(--text-main); margin: 0; padding: 15px 15px 90px 15px; transition: 0.3s ease; }
         .header-area { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .header-area h2 { margin: 0; font-size: 20px; font-weight: 700; }
@@ -35,6 +35,17 @@
         .bottom-nav { position: fixed; bottom: 16px; left: 16px; right: 16px; height: 64px; background: var(--nav-bg); backdrop-filter: blur(30px); border: 1px solid var(--border-color); border-radius: 20px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2); z-index: 9999; }
         .nav-item { display: flex; flex-direction: column; align-items: center; color: var(--text-muted); cursor: pointer; font-size: 10px; font-weight: 600; text-decoration: none;}
         .nav-item.active { color: var(--neon-blue); }
+
+        /* --- PAID LOCK MODAL --- */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 99999; align-items: center; justify-content: center; padding: 24px; }
+        .modal-overlay.show { display: flex; }
+        .modal-box { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 20px; padding: 28px 22px 22px; max-width: 320px; width: 100%; text-align: center; box-shadow: var(--shadow-card); animation: modalPop 0.22s ease; }
+        @keyframes modalPop { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .modal-icon { width: 56px; height: 56px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); color: var(--neon-red); display: flex; align-items: center; justify-content: center; font-size: 22px; margin: 0 auto 16px; }
+        .modal-box h3 { margin: 0 0 10px 0; font-size: 17px; color: var(--text-main); }
+        .modal-box p { margin: 0 0 20px 0; font-size: 13px; color: var(--text-muted); line-height: 1.55; }
+        .modal-btn { background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple)); color: #fff; border: none; padding: 13px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; width: 100%; cursor: pointer; }
+        .modal-btn:active { transform: scale(0.98); }
     </style>
 </head>
 <body data-theme="dark">
@@ -57,9 +68,20 @@
         <a href="/owner_panel" class="nav-item" id="btn-nav-owner" style="display:none;"><i class="fa-solid fa-crown" style="font-size:18px; margin-bottom:4px;"></i><span>Owner</span></a>
     </div>
 
+    <!-- PAID LOCK MODAL: shown instead of opening a link when PAID_LOCKED is true and the user has no existing access -->
+    <div class="modal-overlay" id="lockedModal">
+        <div class="modal-box">
+            <div class="modal-icon"><i class="fa-solid fa-lock"></i></div>
+            <h3>Batch Locked</h3>
+            <p>Sorry, but at this moment the paid batch is locked. When it will unlock I will inform you.</p>
+            <button class="modal-btn" onclick="closeLockedModal()">Okay, Got it</button>
+        </div>
+    </div>
+
     <script>
         let tg = window.Telegram.WebApp; tg.expand();
         let uid = tg.initDataUnsafe?.user?.id || 9999999;
+        let PAID_LOCKED = false; // synced from /api/explore/<uid> on load
         window.onload = () => {
             let saved = localStorage.getItem('edtech_theme') || 'dark';
             document.body.setAttribute('data-theme', saved);
@@ -75,6 +97,23 @@
         function openBatch(chatId) {
             if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
             tg.openTelegramLink("https://t.me/c/" + String(chatId).replace("-100", "") + "/1");
+        }
+        function showLockedModal() {
+            if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
+            document.getElementById('lockedModal').classList.add('show');
+        }
+        function closeLockedModal() {
+            document.getElementById('lockedModal').classList.remove('show');
+        }
+        // Paid-batch click gatekeeper: if the user has no existing access
+        // (not already joined / no active demo) AND admin has PAID_LOCKED
+        // on, show the lock modal instead of opening the invite/bot link.
+        function openPaidBatch(chatId, status) {
+            let hasAccess = (status === "Lifetime Access ⭐" || status === "Demo Run ⏳");
+            if (!hasAccess && PAID_LOCKED) {
+                return showLockedModal();
+            }
+            openBatch(chatId);
         }
         function toggleAccordion(hdr) {
             if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
@@ -98,6 +137,7 @@
 
         // Setup Explore Content
         fetch('/api/explore/' + uid).then(res => res.json()).then(data => {
+            PAID_LOCKED = data.paid_locked || false; // sync lock state from backend
             let html = "";
             data.categories.forEach(cat => {
                 let catData = data.explore_data[cat] || { "free": [], "paid": [] };
@@ -105,7 +145,7 @@
                 html += `<div class="accordion-item"><div class="accordion-header" onclick="toggleAccordion(this)"><span><i class="fa-solid fa-folder-open" style="color:var(--neon-blue);margin-right:8px;"></i>${cat}</span><span class="accordion-icon"><i class="fa-solid fa-chevron-down"></i></span></div><div class="accordion-content"><div class="section-divider">Free Section</div>`;
                 if(catData.free.length>0) html += catData.free.map(b=>`<div class="sub-row" onclick="openBatch('${b.id}')"><b>${b.name}</b><span class="badge bg-blue">${b.status}</span></div>`).join(""); else html += `<p class="empty-text">No free batches.</p>`;
                 html += `<div class="section-divider">Paid Section</div>`;
-                if(catData.paid.length>0) html += catData.paid.map(b=>`<div class="sub-row paid-border" onclick="openBatch('${b.id}')"><b>${b.name}</b><span class="badge bg-purple">${b.status}</span></div>`).join(""); else html += `<p class="empty-text">No premium batches.</p>`;
+                if(catData.paid.length>0) html += catData.paid.map(b=>`<div class="sub-row paid-border" onclick="openPaidBatch('${b.id}', '${b.status}')"><b>${b.name}</b><span class="badge bg-purple">${b.status}</span></div>`).join(""); else html += `<p class="empty-text">No premium batches.</p>`;
                 html += `</div></div>`;
             });
             document.getElementById("categories-accordion-wrapper").innerHTML = html || `<p style="text-align:center;color:var(--text-muted);">No active courses.</p>`;
