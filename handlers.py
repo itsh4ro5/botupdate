@@ -122,35 +122,16 @@ def is_owner_msg(message: Message) -> bool:
 
 # --- HELPER: ROBUST MEMBERSHIP CHECKS FOR PYROGRAM ---
 async def check_membership_pyro(uid: int, client: Client):
+  # 🚀 PERFORMANCE: now backed by config.get_membership_cached() — a 30s
+  # TTL cache shared across every caller in the app (bot callbacks AND the
+  # web dashboard), instead of a fresh get_chat_member() every single time.
   if not MANDATORY_CHANNEL_ID:
     return True
-  try:
-    m = await client.get_chat_member(int(MANDATORY_CHANNEL_ID), uid)
-    if m.status in [
-        ChatMemberStatus.MEMBER,
-        ChatMemberStatus.ADMINISTRATOR,
-        ChatMemberStatus.OWNER,
-        ChatMemberStatus.RESTRICTED,
-    ]:
-      return True
-  except Exception:
-    pass
-  return False
+  return await get_membership_cached(client, MANDATORY_CHANNEL_ID, uid)
 
 
 async def is_already_in_channel_pyro(client: Client, cid: int, uid: int):
-  try:
-    m = await client.get_chat_member(int(cid), uid)
-    if m.status in [
-        ChatMemberStatus.MEMBER,
-        ChatMemberStatus.ADMINISTRATOR,
-        ChatMemberStatus.OWNER,
-        ChatMemberStatus.RESTRICTED,
-    ]:
-      return True
-  except Exception:
-    pass
-  return False
+  return await get_membership_cached(client, cid, uid)
 
 
 # --- MENU SETTERS ---
@@ -760,12 +741,23 @@ async def cmd_batch_stats(client: Client, message: Message):
   if not is_admin_msg(message):
     return
   msg = await message.reply_text("⏳ Calculating...")
-  text = "📊 **BATCH STATS**\n\n"
-  for cid, name in {**DB["FREE_CHANNELS"], **DB["PAID_CHANNELS"]}.items():
+  batches = {**DB["FREE_CHANNELS"], **DB["PAID_CHANNELS"]}
+
+  # 🚀 PERFORMANCE: previously awaited get_chat_members_count() one batch
+  # at a time — N sequential Telegram round-trips for N channels. Firing
+  # them concurrently via asyncio.gather turns total wait time from
+  # O(N * latency) into roughly O(latency), regardless of how many
+  # batches the bot manages.
+  async def _count(cid):
     try:
-      count = await client.get_chat_members_count(int(cid))
+      return await client.get_chat_members_count(int(cid))
     except Exception:
-      count = "N/A"
+      return "N/A"
+
+  counts = await asyncio.gather(*[_count(cid) for cid in batches.keys()])
+
+  text = "📊 **BATCH STATS**\n\n"
+  for (cid, name), count in zip(batches.items(), counts):
     text += f"📂 **{name}** | ID: `{cid}` | Members: `{count}`\n"
   await msg.edit_text(text, parse_mode=ParseMode.MARKDOWN)
 
@@ -885,6 +877,7 @@ async def cmd_approve_demo(client: Client, message: Message):
     
   try:
     await client.approve_chat_join_request(batch_id, target_uid)
+    invalidate_membership_cache(target_uid, batch_id)  # don't serve a stale "not joined" cache hit
     expiry_time = time.time() + (hours * 3600)
     DB["USER_DATA"].setdefault(target_uid, {}).setdefault("demos", {})[
         str(batch_id)
@@ -946,6 +939,7 @@ async def cmd_approve_perm(client: Client, message: Message):
     
   try:
     await client.approve_chat_join_request(batch_id, target_uid)
+    invalidate_membership_cache(target_uid, batch_id)  # don't serve a stale "not joined" cache hit
     if str(batch_id) in DB["USER_DATA"].get(target_uid, {}).get("demos", {}):
       del DB["USER_DATA"][target_uid]["demos"][str(batch_id)]
     clear_active_request(target_uid, batch_id)  # free up the Rule-B slot early
@@ -2779,6 +2773,7 @@ async def handle_join_request(client: Client, req: ChatJoinRequest):
     if await check_membership_pyro(user.id, client):
       try:
         await client.approve_chat_join_request(chat.id, user.id)
+        invalidate_membership_cache(user.id, chat.id)  # don't serve a stale "not joined" cache hit
         welcome_str = DB["CUSTOM_WELCOMES"].get(
             chat.id, f"✅ **Approved!**\nWelcome to {chat.title}"
         )
@@ -2820,6 +2815,7 @@ async def check_demos(client: Client):
         try:
           await client.ban_chat_member(int(bid), int(uid))
           await client.unban_chat_member(int(bid), int(uid))
+          invalidate_membership_cache(uid, bid)  # drop stale "still joined" cache entry
         except Exception:
           pass
         if bid in data["demos"]:
