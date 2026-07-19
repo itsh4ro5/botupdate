@@ -4,11 +4,17 @@ import asyncio
 import datetime
 from quart import Quart, jsonify, render_template, send_file
 import config
-from config import DB, OWNER_ID, is_admin
+from config import DB, OWNER_ID, is_admin, get_membership_cached
 from pyrogram.enums import ChatMemberStatus # ADDED: Pyrogram ke naye status system ke liye
 
 app = Quart(__name__)
 AVATAR_CACHE = {}
+# 🔥 FIX (memory leak): entries were added on every avatar fetch and NEVER
+# removed — only ever overwritten if the same user re-requested within the
+# TTL. A growing user base means this dict grows forever, holding raw JPEG
+# bytes for every user who ever opened the dashboard. Capped with simple
+# oldest-first eviction below.
+AVATAR_CACHE_MAX_ENTRIES = 500
 
 @app.route('/health')
 async def health():
@@ -56,6 +62,11 @@ async def get_user_avatar(user_id):
             file_obj = await bot.download_media(photo.file_id, in_memory=True)
             img_bytes = file_obj.getvalue() if hasattr(file_obj, "getvalue") else file_obj
             if img_bytes:
+                # 🔥 FIX: bound memory by evicting the oldest entry once the
+                # cache hits its cap, instead of growing without limit.
+                if len(AVATAR_CACHE) >= AVATAR_CACHE_MAX_ENTRIES:
+                    oldest_uid = min(AVATAR_CACHE, key=lambda k: AVATAR_CACHE[k]["time"])
+                    del AVATAR_CACHE[oldest_uid]
                 AVATAR_CACHE[user_id] = {"bytes": img_bytes, "time": now}
                 return await send_file(io.BytesIO(img_bytes), mimetype='image/jpeg')
     except Exception:
@@ -112,15 +123,15 @@ async def get_user_data(user_id):
     # FIX APPLIED: Using Native Pyrogram ChatMemberStatus Enum
     if hasattr(config, 'bot_app') and config.bot_app:
         bot = config.bot_app
+        # 🚀 PERFORMANCE: now backed by config.get_membership_cached() — a
+        # 30s TTL cache. Every page load used to re-check EVERY batch fresh
+        # against Telegram, and /api/explore does the same batches again
+        # moments later; the cache collapses all of that into one Telegram
+        # call per (chat, user) pair every 30s instead of one per request.
         async def check_membership(bid):
-            try:
-                m = await bot.get_chat_member(int(bid), user_id)
-                # Correct Enum check that works for both Admins and Members
-                if m.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER, ChatMemberStatus.RESTRICTED]: 
-                    return int(bid)
-            except Exception: pass
-            return None
-            
+            is_member = await get_membership_cached(bot, bid, user_id)
+            return int(bid) if is_member else None
+
         tasks = [check_membership(bid) for bid in all_chats_dict.keys()]
         results = await asyncio.gather(*tasks)
         joined_list = [r for r in results if r is not None]
