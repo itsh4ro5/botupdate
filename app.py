@@ -289,4 +289,4 @@ async def api_explore_data(user_id):
             if now > exp: status = "Expired ❌"
         explore_data[cat]["paid"].append({"id": bid, "name": name, "status": status})
 
-    return jsonify({"categories": DB.get("CATEGORIES", []), "explore_data": explore_data})
+    return jsonify({"categories": DB.get("CATEGORIES", []), "explore_data": explore_data, "paid_locked": DB.get("PAID_LOCKED", False)})
