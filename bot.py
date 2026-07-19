@@ -176,12 +176,19 @@ async def _run_pyrogram_engine():
             await H.track_chats(client, update)
 
     # group=-100 lagane se ye bot ka sabse pehla action ban jayega
-    @app.on_message(filters.all, group=-100)
+    @app.on_message(
+        filters.new_chat_members | filters.left_chat_member | filters.all,
+        group=-100,
+    )
     async def _on_service_msg(client: Client, message: Message):
         is_service = False
-        
-        # 1. Normal service messages (Purane type ke)
-        if getattr(message, "service", None) or getattr(message, "new_chat_members", None) or getattr(message, "left_chat_member", None):
+
+        # 1. Explicit join/leave filters (covers "joined", "left", and
+        #    "joined via invite link" service messages instantly)
+        if message.new_chat_members or message.left_chat_member:
+            is_service = True
+        # 2. Any other classic service messages (pinned, title change, etc.)
+        elif getattr(message, "service", None):
             is_service = True
             
         # 2. Naye Telegram Updates (Jinko Pyrogram nahi samajhta, wo empty aate hain)
