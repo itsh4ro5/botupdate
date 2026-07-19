@@ -1946,9 +1946,9 @@ async def general_callback(client: Client, q: CallbackQuery):
       cat_idx, b_type, page = int(parts[1]), parts[2], int(parts[3])
       cat_name = DB.get("CATEGORIES", DEFAULT_CATEGORIES)[cat_idx]
       if b_type == "free" and DB.get("FREE_LOCKED", False):
-        return await q.answer("🔒 Free Batches Locked.", show_alert=True)
+        return await q.answer("  Free Batches Locked.", show_alert=True)
       if b_type == "paid" and DB.get("PAID_LOCKED", False):
-        return await q.answer("🔒 Paid Batches Locked.", show_alert=True)
+        return await q.answer("Sorry, but at this moment the paid batch is locked. When it will unlock I will inform you.", show_alert=True)
       source_dict = (
           DB["FREE_CHANNELS"] if b_type == "free" else DB["PAID_CHANNELS"]
       )
@@ -2068,6 +2068,8 @@ async def general_callback(client: Client, q: CallbackQuery):
         await q.answer(f"Bot Error: {e}", show_alert=True)
 
     elif data.startswith("view_p_"):
+      if DB.get("PAID_LOCKED", False):
+        return await q.answer("Sorry, but at this moment the paid batch is locked. When it will unlock I will inform you.", show_alert=True)
       cid = int(data.split("_")[2])
       await q.answer()
       kb = [
@@ -2088,6 +2090,8 @@ async def general_callback(client: Client, q: CallbackQuery):
         pass
 
     elif data.startswith("req_access_"):
+      if DB.get("PAID_LOCKED", False):
+        return await q.answer("Sorry, but at this moment the paid batch is locked. When it will unlock I will inform you.", show_alert=True)
       cid = int(data.split("_")[2])
       if not await check_membership_pyro(uid, client):
         return await q.answer("  Join Main First!", show_alert=True)
