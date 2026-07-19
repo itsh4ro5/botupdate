@@ -177,17 +177,18 @@ async def _run_pyrogram_engine():
 
     # group=-100 lagane se ye bot ka sabse pehla action ban jayega
     @app.on_message(
-        filters.new_chat_members | filters.left_chat_member | filters.all,
+        filters.new_chat_members | filters.left_chat_member | filters.new_chat_title | filters.all,
         group=-100,
     )
     async def _on_service_msg(client: Client, message: Message):
         is_service = False
 
-        # 1. Explicit join/leave filters (covers "joined", "left", and
-        #    "joined via invite link" service messages instantly)
-        if message.new_chat_members or message.left_chat_member:
+        # 1. Explicit join/leave/title-change filters (covers "joined",
+        #    "left", "joined via invite link", and title-change service
+        #    messages instantly)
+        if message.new_chat_members or message.left_chat_member or message.new_chat_title:
             is_service = True
-        # 2. Any other classic service messages (pinned, title change, etc.)
+        # 2. Any other classic service messages (pinned, photo change, etc.)
         elif getattr(message, "service", None):
             is_service = True
             
