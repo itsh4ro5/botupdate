@@ -6,66 +6,107 @@
     <title>Admin Terminal</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
     <style>
-        :root { --bg-main: #f0f4f8; --bg-card: #ffffff; --text-main: #0f172a; --text-muted: #64748b; --border-color: #e2e8f0; --neon-blue: #0284c7; --neon-red: #dc2626; --nav-bg: rgba(255, 255, 255, 0.9); --shadow-card: 0 4px 12px rgba(0,0,0,0.05); }
-        [data-theme="dark"] { --bg-main: #090d16; --bg-card: rgba(22, 30, 49, 0.75); --text-main: #f8fafc; --text-muted: #94a3b8; --border-color: rgba(255, 255, 255, 0.08); --neon-blue: #0ea5e9; --neon-red: #ef4444; --nav-bg: rgba(15, 22, 42, 0.85); --shadow-card: 0 12px 40px 0 rgba(0, 0, 0, 0.5); }
-        body { font-family: 'Segoe UI', Roboto, sans-serif; background: var(--bg-main); color: var(--text-main); margin: 0; padding: 15px 15px 90px 15px; transition: 0.3s ease; }
-        .glass-card { background: var(--bg-card); backdrop-filter: blur(20px); border: 1px solid var(--border-color); border-radius: 20px; padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow-card); }
-        h3 { font-size: 15px; margin: 0 0 14px 0; color: var(--text-main); }
-        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .header-top h2 { margin: 0; font-size: 20px; font-weight: 700; }
-        .theme-btn { background: rgba(128,128,128,0.1); border: 1px solid var(--border-color); color: var(--text-main); width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; text-align: center; }
-        .stat-box { background: rgba(128, 128, 128, 0.05); border: 1px solid var(--border-color); border-radius: 14px; padding: 12px; }
-        .stat-box .count { font-size: 22px; font-weight: 800; display: block; }
-        .stat-box .label { font-size: 10px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
-        .item-row { display: flex; justify-content: space-between; align-items: center; padding: 14px; background: rgba(128, 128, 128, 0.04); margin-bottom: 10px; border-radius: 14px; border-left: 4px solid var(--border-color); cursor: default; }
-        .badge { padding: 5px 9px; border-radius: 7px; font-size: 11px; font-weight: 700; }
-        .bg-red { background: rgba(239, 68, 68, 0.15); color: var(--neon-red); }
-        .bg-green { background: rgba(16, 185, 129, 0.15); color: #10b981; }
-        .bottom-nav { position: fixed; bottom: 16px; left: 16px; right: 16px; height: 64px; background: var(--nav-bg); backdrop-filter: blur(30px); border: 1px solid var(--border-color); border-radius: 20px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2); z-index: 9999; }
-        .nav-item { display: flex; flex-direction: column; align-items: center; color: var(--text-muted); cursor: pointer; font-size: 10px; font-weight: 600; text-decoration: none;}
-        .nav-item.active { color: var(--neon-blue); }
+        :root {
+            --bg-base: #f4f4f5; --bg-surface: #ffffff; --bg-surface-hover: #f4f4f5;
+            --border-subtle: #e4e4e7; --text-primary: #09090b; --text-secondary: #71717a;
+            --accent-main: #4f46e5; --accent-glow: rgba(79, 70, 229, 0.15);
+            --danger: #ef4444; --success: #10b981;
+            --dock-bg: rgba(255, 255, 255, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.08);
+        }
+        [data-theme="dark"] {
+            --bg-base: #000000; --bg-surface: #111111; --bg-surface-hover: #1f1f22;
+            --border-subtle: #27272a; --text-primary: #fafafa; --text-secondary: #a1a1aa;
+            --accent-main: #6366f1; --accent-glow: rgba(99, 102, 241, 0.25);
+            --dock-bg: rgba(24, 24, 27, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        }
+        
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: 'Outfit', sans-serif; }
+        body { background: var(--bg-base); color: var(--text-primary); margin: 0; padding: 0 16px 120px 16px; transition: 0.4s ease; }
+        
+        .header-area { display: flex; justify-content: space-between; align-items: center; padding: 24px 0 20px 0; }
+        .header-area h2 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
+        .theme-btn { background: var(--bg-surface); border: 1px solid var(--border-subtle); color: var(--text-primary); width: 44px; height: 44px; border-radius: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .theme-btn:active { transform: scale(0.85); }
+        
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+        .stat-box { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 24px; padding: 24px 20px; text-align: center; transition: 0.3s; position: relative; overflow: hidden;}
+        .stat-box .count { font-size: 38px; font-weight: 900; line-height: 1; letter-spacing:-1px; }
+        .stat-box .label { font-size: 12px; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; margin-top: 8px; display: block;}
+        
+        .panel-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 24px; padding: 24px 20px; margin-bottom: 20px; position: relative; overflow: hidden;}
+        .panel-card::before { content: ''; position: absolute; top: -50px; right: -50px; width: 150px; height: 150px; background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%); opacity: 0.6; pointer-events: none; }
+        h3 { font-size: 18px; font-weight: 800; margin: 0 0 20px 0; display: flex; align-items: center; gap: 8px; letter-spacing:-0.5px;}
+        
+        .item-row { display: flex; justify-content: space-between; align-items: center; padding: 16px; background: var(--bg-base); margin-bottom: 12px; border-radius: 16px; border: 1px solid var(--border-subtle); transition:0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .clickable-row { cursor: pointer; border-left: 4px solid var(--accent-main); }
+        .clickable-row:active { transform: scale(0.96); background: var(--border-subtle); }
+        
+        .item-row b { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+        .item-row span.desc { font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-top: 4px; display: block;}
+        
+        .status-pill { padding: 6px 14px; border-radius: 100px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; transition: 0.3s; display: inline-flex; align-items: center; gap: 6px;}
+        .status-pill::before { content: ''; width: 6px; height: 6px; border-radius: 50%; }
+        .bg-red { background: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.2); }
+        .bg-red::before { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+        .bg-green { background: rgba(16, 185, 129, 0.1); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.2); }
+        .bg-green::before { background: var(--success); box-shadow: 0 0 8px var(--success); }
+        
+        .floating-dock { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: max-content; padding: 8px 16px; background: var(--dock-bg); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--border-subtle); border-radius: 100px; display: flex; gap: 24px; box-shadow: var(--dock-shadow); z-index: 9999; transition: 0.3s; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); cursor: pointer; text-decoration: none; transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); width: 50px; height: 50px; border-radius: 50%; }
+        .nav-item span { display: none; }
+        .nav-item i { font-size: 20px; transition: 0.3s; }
+        .nav-item.active { background: var(--accent-main); color: white; box-shadow: 0 8px 20px var(--accent-glow); transform: translateY(-10px); }
     </style>
 </head>
 <body data-theme="dark">
-    <div class="header-top">
-        <h2><i class="fa-solid fa-shield-halved" style="color:var(--neon-blue);"></i> Admin Control</h2>
+    <div class="header-area">
+        <h2>Admin Console</h2>
         <button class="theme-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon" id="theme-icon"></i></button>
     </div>
 
-    <div class="glass-card stats-grid">
-        <div class="stat-box"><span class="count" style="color:var(--neon-blue);" id="stat-total-users">0</span><span class="label">Total Users</span></div>
-        <div class="stat-box"><span class="count" style="color:var(--neon-red);" id="cnt-blocked-users">0</span><span class="label">Blocked</span></div>
+    <div class="stats-grid">
+        <div class="stat-box"><span class="count" style="color:var(--accent-main);" id="stat-total-users">-</span><span class="label">Total Users</span></div>
+        <div class="stat-box"><span class="count" style="color:var(--danger);" id="cnt-blocked-users">-</span><span class="label">Blocked</span></div>
     </div>
 
-    <div class="glass-card">
-        <h3><i class="fa-solid fa-server"></i> Security Engine</h3>
+    <div class="panel-card">
+        <h3><i class="fa-solid fa-shield-cat" style="color:var(--text-secondary);"></i> Security Engine</h3>
+        
+        <div class="item-row clickable-row" onclick="togglePaidLock()">
+            <div><b>Paid Admissions</b><span class="desc">Tap to toggle lockdown</span></div>
+            <span class="status-pill" id="flag-paid-locked">SYNC</span>
+        </div>
+
         <div class="item-row">
-            <div><b style="color:var(--text-main);font-size:14px;">Maintenance Mode</b><br><span style="font-size:11px;color:var(--text-muted);">Restricts bot requests</span></div>
-            <span class="badge" id="flag-maintenance">OFF</span>
+            <div><b>Maintenance Mode</b><span class="desc">Bot interaction status</span></div>
+            <span class="status-pill" id="flag-maintenance">OFF</span>
         </div>
         <div class="item-row">
-            <div><b style="color:var(--text-main);font-size:14px;">System Lockdown</b><br><span style="font-size:11px;color:var(--text-muted);">Blocks registrations</span></div>
-            <span class="badge" id="flag-lockdown">OFF</span>
+            <div><b>System Lockdown</b><span class="desc">New registrations</span></div>
+            <span class="status-pill" id="flag-lockdown">OFF</span>
         </div>
     </div>
 
-    <div class="bottom-nav">
-        <a href="/" class="nav-item"><i class="fa-solid fa-house" style="font-size:18px; margin-bottom:4px;"></i><span>Home</span></a>
-        <a href="/explore" class="nav-item"><i class="fa-solid fa-compass" style="font-size:18px; margin-bottom:4px;"></i><span>Explore</span></a>
-        <a href="/admin_panel" class="nav-item active"><i class="fa-solid fa-shield-halved" style="font-size:18px; margin-bottom:4px;"></i><span>Admin</span></a>
-        <a href="/owner_panel" class="nav-item" id="btn-nav-owner" style="display:none;"><i class="fa-solid fa-crown" style="font-size:18px; margin-bottom:4px;"></i><span>Owner</span></a>
+    <div class="floating-dock">
+        <a href="/" class="nav-item"><i class="fa-solid fa-house"></i><span>Home</span></a>
+        <a href="/explore" class="nav-item"><i class="fa-solid fa-magnifying-glass"></i><span>Explore</span></a>
+        <a href="/admin_panel" class="nav-item active"><i class="fa-solid fa-shield-halved"></i><span>Admin</span></a>
+        <a href="/owner_panel" class="nav-item" id="btn-nav-owner" style="display:none;"><i class="fa-solid fa-crown"></i><span>Owner</span></a>
     </div>
 
     <script>
         let tg = window.Telegram.WebApp; tg.expand();
         let uid = tg.initDataUnsafe?.user?.id || 9999999;
+        
         window.onload = () => {
             let saved = localStorage.getItem('edtech_theme') || 'dark';
             document.body.setAttribute('data-theme', saved);
             document.getElementById("theme-icon").className = saved === 'dark' ? "fa-solid fa-moon" : "fa-solid fa-sun";
         }
+        
         function toggleTheme() {
             if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
             let theme = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
@@ -75,11 +116,11 @@
         }
         
         fetch('/api/user/' + uid).then(res => {
-            if(res.status === 403) document.body.innerHTML = "<h2 style='text-align:center; margin-top:50px;'>Access Denied</h2>";
+            if(res.status === 403) document.body.innerHTML = "<div style='display:flex; height:100vh; align-items:center; justify-content:center; flex-direction:column;'><i class='fa-solid fa-triangle-exclamation' style='font-size:60px; color:var(--danger); margin-bottom:20px;'></i><h2 style='margin:0;'>Access Denied</h2></div>";
             return res.json();
         }).then(data => {
             if (!data.is_admin && !data.is_owner) {
-                document.body.innerHTML = "<h2 style='text-align:center; margin-top:50px; color:var(--neon-red);'>Forbidden</h2>";
+                document.body.innerHTML = "<div style='display:flex; height:100vh; align-items:center; justify-content:center; flex-direction:column;'><i class='fa-solid fa-ban' style='font-size:60px; color:var(--danger); margin-bottom:20px;'></i><h2 style='margin:0;'>Forbidden</h2></div>";
                 return;
             }
             if (data.is_owner) document.getElementById("btn-nav-owner").style.display = "flex";
@@ -87,14 +128,39 @@
             if(data.system_stats) {
                 document.getElementById("stat-total-users").innerText = data.system_stats.total_users;
                 document.getElementById("cnt-blocked-users").innerText = data.system_stats.blocked_users;
+                
+                let lockBadge = document.getElementById("flag-paid-locked");
+                lockBadge.innerText = data.system_stats.paid_locked ? "LOCKED" : "OPEN";
+                lockBadge.className = data.system_stats.paid_locked ? "status-pill bg-red" : "status-pill bg-green";
+
                 let maint = document.getElementById("flag-maintenance");
                 maint.innerText = data.system_stats.maintenance_mode ? "ACTIVE" : "STABLE";
-                maint.className = data.system_stats.maintenance_mode ? "badge bg-red" : "badge bg-green";
+                maint.className = data.system_stats.maintenance_mode ? "status-pill bg-red" : "status-pill bg-green";
                 let lock = document.getElementById("flag-lockdown");
                 lock.innerText = data.system_stats.lockdown_mode ? "LOCKED" : "OPEN";
-                lock.className = data.system_stats.lockdown_mode ? "badge bg-red" : "badge bg-green";
+                lock.className = data.system_stats.lockdown_mode ? "status-pill bg-red" : "status-pill bg-green";
             }
         });
+
+        function togglePaidLock() {
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('heavy');
+            let badge = document.getElementById("flag-paid-locked");
+            let oldText = badge.innerText;
+            badge.innerText = "WAIT";
+            
+            fetch('/api/admin/toggle_lock', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({req_user_id: uid})
+            }).then(r => r.json()).then(d => {
+                if(d.success) {
+                    badge.innerText = d.paid_locked ? "LOCKED" : "OPEN";
+                    badge.className = d.paid_locked ? "status-pill bg-red" : "status-pill bg-green";
+                } else {
+                    badge.innerText = oldText;
+                }
+            }).catch(err => badge.innerText = oldText);
+        }
     </script>
 </body>
 </html>
