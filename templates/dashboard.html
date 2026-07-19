@@ -6,80 +6,133 @@
     <title>My Dashboard</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
     <style>
         :root {
-            --bg-main: #f0f4f8; --bg-card: #ffffff; --text-main: #0f172a; --text-muted: #64748b; --border-color: #e2e8f0;
-            --neon-blue: #0284c7; --neon-purple: #7e22ce; --neon-green: #16a34a; --neon-red: #dc2626;
-            --nav-bg: rgba(255, 255, 255, 0.9); --shadow-card: 0 4px 12px rgba(0,0,0,0.05);
+            /* Light Theme - Clean SaaS Look */
+            --bg-base: #f4f4f5; --bg-surface: #ffffff; --bg-surface-hover: #f4f4f5;
+            --border-subtle: #e4e4e7; --text-primary: #09090b; --text-secondary: #71717a;
+            --accent-main: #4f46e5; --accent-glow: rgba(79, 70, 229, 0.15);
+            --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+            --dock-bg: rgba(255, 255, 255, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.08);
         }
         [data-theme="dark"] {
-            --bg-main: #090d16; --bg-card: rgba(22, 30, 49, 0.75); --text-main: #f8fafc; --text-muted: #94a3b8; --border-color: rgba(255, 255, 255, 0.08);
-            --neon-blue: #0ea5e9; --neon-purple: #a855f7; --neon-green: #10b981; --neon-red: #ef4444;
-            --nav-bg: rgba(15, 22, 42, 0.85); --shadow-card: 0 12px 40px 0 rgba(0, 0, 0, 0.5);
+            /* Dark Theme - OLED Cyberpunk/Bento Look */
+            --bg-base: #000000; --bg-surface: #111111; --bg-surface-hover: #1f1f22;
+            --border-subtle: #27272a; --text-primary: #fafafa; --text-secondary: #a1a1aa;
+            --accent-main: #6366f1; --accent-glow: rgba(99, 102, 241, 0.25);
+            --dock-bg: rgba(24, 24, 27, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.5);
         }
-        body { font-family: 'Segoe UI', Roboto, sans-serif; background: var(--bg-main); color: var(--text-main); margin: 0; padding: 15px 15px 90px 15px; transition: 0.3s ease; }
-        .glass-card { background: var(--bg-card); backdrop-filter: blur(20px); border: 1px solid var(--border-color); border-radius: 20px; padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow-card); }
-        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .profile-container { display: flex; align-items: center; gap: 15px; }
-        .avatar { width: 58px; height: 58px; border-radius: 50%; background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple)); display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; color: white; border: 2px solid var(--border-color); overflow: hidden;}
+        
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: 'Outfit', sans-serif; }
+        body { background: var(--bg-base); color: var(--text-primary); margin: 0; padding: 0 16px 120px 16px; transition: background-color 0.4s ease; }
+        
+        .top-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 24px 0 16px 0; }
+        .greeting-area h1 { font-size: 28px; font-weight: 800; margin: 0; line-height: 1.1; letter-spacing: -0.5px; }
+        .greeting-area p { margin: 4px 0 0 0; color: var(--text-secondary); font-size: 14px; font-weight: 500; }
+        
+        .avatar-wrap { position: relative; }
+        .avatar { width: 56px; height: 56px; border-radius: 20px; background: var(--accent-main); display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800; color: white; overflow: hidden; box-shadow: 0 10px 25px var(--accent-glow); transform: rotate(-3deg); transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .avatar:active { transform: scale(0.9) rotate(0deg); }
         .avatar img { width: 100%; height: 100%; object-fit: cover; display: none; }
-        .user-meta h2 { margin: 0; font-size: 19px; font-weight: 700; }
-        .user-meta p { margin: 3px 0 0 0; color: var(--text-muted); font-size: 12px; }
-        .theme-btn { background: rgba(128,128,128,0.1); border: 1px solid var(--border-color); color: var(--text-main); width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
-        .streak-badge { background: linear-gradient(135deg, #f59e0b, #ea580c); color: white; padding: 6px 12px; border-radius: 12px; font-weight: bold; font-size: 13px; display: inline-flex; align-items: center; gap: 5px; box-shadow: 0 4px 10px rgba(234, 88, 12, 0.3); margin-top:8px; }
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
-        .stat-box { background: rgba(128, 128, 128, 0.05); border: 1px solid var(--border-color); border-radius: 14px; padding: 12px; text-align: center; }
-        .stat-box .count { font-size: 22px; font-weight: 800; display: block; color: var(--neon-blue); }
-        .stat-box .label { font-size: 10px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
-        .item-row { display: flex; justify-content: space-between; align-items: center; padding: 14px; background: rgba(128, 128, 128, 0.04); margin-bottom: 10px; border-radius: 14px; border-left: 4px solid var(--neon-blue); cursor: pointer; transition: 0.2s; }
-        .item-row:active { transform: scale(0.98); }
-        .item-row.paid-type { border-left-color: var(--neon-purple); }
-        .item-row.demo-item { border-left-color: var(--neon-green); }
-        .item-row b { font-size: 14px; display: block; word-break: break-word; }
-        .item-row small { font-size: 11px; color: var(--text-muted); display: block; margin-top: 3px; }
-        .badge { padding: 5px 9px; border-radius: 7px; font-size: 11px; font-weight: 700; flex-shrink: 0; }
-        .bg-blue { background: rgba(14, 165, 233, 0.15); color: var(--neon-blue); }
-        .bg-purple { background: rgba(168, 85, 247, 0.15); color: var(--neon-purple); }
-        .bg-green { background: rgba(16, 185, 129, 0.15); color: var(--neon-green); }
-        h3 { font-size: 15px; margin: 0 0 14px 0; color: var(--text-main); }
-        .bottom-nav { position: fixed; bottom: 16px; left: 16px; right: 16px; height: 64px; background: var(--nav-bg); backdrop-filter: blur(30px); border: 1px solid var(--border-color); border-radius: 20px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2); z-index: 9999; }
-        .nav-item { display: flex; flex-direction: column; align-items: center; color: var(--text-muted); cursor: pointer; font-size: 10px; font-weight: 600; text-decoration: none;}
-        .nav-item.active { color: var(--neon-blue); }
+        
+        .theme-btn { position: absolute; bottom: -6px; right: -6px; background: var(--bg-surface); border: 1px solid var(--border-subtle); color: var(--text-primary); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); transition: 0.2s; z-index: 2; }
+        .theme-btn:active { transform: scale(0.8); }
+
+        .bento-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; margin-bottom: 24px; }
+        .bento-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 24px; padding: 20px; position: relative; overflow: hidden; transition: 0.3s; }
+        .bento-card::before { content: ''; position: absolute; top: -50px; right: -50px; width: 150px; height: 150px; background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%); opacity: 0.6; pointer-events: none; }
+        
+        .bento-card.primary { grid-column: span 1; display: flex; flex-direction: column; justify-content: space-between;}
+        .bento-card.secondary { grid-column: span 1; display: flex; flex-direction: column; justify-content: space-between; }
+        .bento-card.full-width { grid-column: 1 / -1; }
+        
+        .stat-value { font-size: 36px; font-weight: 900; line-height: 1; margin-bottom: 8px; color: var(--text-primary); letter-spacing: -1px; }
+        .stat-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+        
+        .streak-pill { background: linear-gradient(to right, var(--warning), #ea580c); color: white; padding: 6px 12px; border-radius: 100px; font-weight: 700; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3); margin-top: 12px; width: max-content;}
+
+        .section-title { font-size: 18px; font-weight: 800; margin: 0 0 16px 0; color: var(--text-primary); display: flex; align-items: center; gap: 8px; letter-spacing: -0.3px; }
+        
+        .item-row { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 20px; padding: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1); position: relative; overflow: hidden;}
+        .item-row::after { content: '\f105'; font-family: 'Font Awesome 6 Free'; font-weight: 900; color: var(--text-secondary); opacity: 0.3; position: absolute; right: 20px; font-size: 14px; transition: 0.2s; transform: translateX(10px); }
+        .item-row:active { transform: scale(0.97); background: var(--bg-surface-hover); }
+        .item-row:active::after { opacity: 1; transform: translateX(0); color: var(--accent-main); }
+        
+        .item-row.paid-type { border-left: 4px solid #a855f7; }
+        .item-row.demo-item { border-left: 4px solid var(--success); }
+        
+        .item-row b { font-size: 15px; font-weight: 700; color: var(--text-primary); display: block; word-break: break-word; padding-right: 20px;}
+        .item-row small { font-size: 12px; color: var(--text-secondary); font-weight: 500; display: block; margin-top: 4px; }
+        
+        .badge { padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 800; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.5px; z-index: 1;}
+        .bg-blue { background: rgba(99, 102, 241, 0.15); color: var(--accent-main); }
+        .bg-purple { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+        .bg-green { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+        
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        .skeleton { background: linear-gradient(90deg, var(--bg-surface) 25%, var(--border-subtle) 50%, var(--bg-surface) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; color: transparent !important; border-color: transparent !important; }
+        .skeleton * { visibility: hidden; }
+        .skeleton-row { height: 74px; border-radius: 20px; margin-bottom: 12px; }
+
+        .floating-dock { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: max-content; padding: 8px 16px; background: var(--dock-bg); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--border-subtle); border-radius: 100px; display: flex; gap: 24px; box-shadow: var(--dock-shadow); z-index: 9999; transition: 0.3s; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); cursor: pointer; text-decoration: none; transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); width: 50px; height: 50px; border-radius: 50%; }
+        .nav-item span { display: none; } /* Hide text for a cleaner icon-only dock */
+        .nav-item i { font-size: 20px; transition: 0.3s; }
+        .nav-item.active { background: var(--accent-main); color: white; box-shadow: 0 8px 20px var(--accent-glow); transform: translateY(-10px); }
     </style>
 </head>
 <body data-theme="dark">
-    <div class="header-top">
-        <div class="profile-container">
-            <div class="avatar" id="avatar-box"><img id="user-avatar" src=""><span id="avatar-letters">U</span></div>
-            <div class="user-meta">
-                <h2 id="profile-name">Client</h2>
-                <p id="profile-id">ID: Fetching...</p>
-                <div class="streak-badge" id="streak-box" style="display:none;"><i class="fa-solid fa-fire"></i> <span id="streak-count">0</span> Day Streak</div>
+    
+    <div class="top-header">
+        <div class="greeting-area">
+            <h1 id="profile-name">Client</h1>
+            <p id="profile-id">ID: Fetching...</p>
+        </div>
+        <div class="avatar-wrap">
+            <div class="avatar" id="avatar-box">
+                <img id="user-avatar" src="">
+                <span id="avatar-letters">U</span>
+            </div>
+            <button class="theme-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon" id="theme-icon"></i></button>
+        </div>
+    </div>
+
+    <div class="bento-grid">
+        <div class="bento-card primary">
+            <div>
+                <div class="stat-value skeleton" id="cnt-my">0</div>
+                <div class="stat-label">Subscribed Batches</div>
+            </div>
+            <div class="streak-pill" id="streak-box" style="display:none;"><i class="fa-solid fa-fire"></i> <span id="streak-count">0</span> Day Streak</div>
+        </div>
+        <div class="bento-card secondary">
+            <div>
+                <div class="stat-value skeleton" style="color:var(--success);" id="cnt-demo">0</div>
+                <div class="stat-label">Active Trials</div>
             </div>
         </div>
-        <button class="theme-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon" id="theme-icon"></i></button>
     </div>
 
-    <div class="stats-grid">
-        <div class="stat-box"><span class="count" id="cnt-my">0</span><span class="label">Subscribed</span></div>
-        <div class="stat-box"><span class="count" style="color:var(--neon-green);" id="cnt-demo">0</span><span class="label">Active Trials</span></div>
-    </div>
-
-    <div class="glass-card" id="demo-card-sec" style="display: none;">
-        <h3><i class="fa-solid fa-clock"></i> Active Trial Accounts</h3>
+    <div class="bento-card full-width" id="demo-card-sec" style="display: none; margin-bottom:24px; padding: 24px;">
+        <h3 class="section-title"><i class="fa-solid fa-bolt" style="color:var(--warning);"></i> Active Trials</h3>
         <div id="demo-list"></div>
     </div>
 
-    <div class="glass-card">
-        <h3><i class="fa-solid fa-book-open"></i> My Subscribed Batches</h3>
-        <div id="user-batches-list"><p style="color: var(--text-muted); font-size: 13px;">Loading communities...</p></div>
+    <div>
+        <h3 class="section-title"><i class="fa-solid fa-layer-group" style="color:var(--accent-main);"></i> My Communities</h3>
+        <div id="user-batches-list">
+            <div class="skeleton skeleton-row"></div>
+            <div class="skeleton skeleton-row"></div>
+        </div>
     </div>
 
-    <div class="bottom-nav">
-        <a href="/" class="nav-item active"><i class="fa-solid fa-house" style="font-size:18px; margin-bottom:4px;"></i><span>Home</span></a>
-        <a href="/explore" class="nav-item"><i class="fa-solid fa-compass" style="font-size:18px; margin-bottom:4px;"></i><span>Explore</span></a>
-        <a href="/admin_panel" class="nav-item" id="btn-nav-admin" style="display:none;"><i class="fa-solid fa-shield-halved" style="font-size:18px; margin-bottom:4px;"></i><span>Admin</span></a>
-        <a href="/owner_panel" class="nav-item" id="btn-nav-owner" style="display:none;"><i class="fa-solid fa-crown" style="font-size:18px; margin-bottom:4px;"></i><span>Owner</span></a>
+    <div class="floating-dock">
+        <a href="/" class="nav-item active"><i class="fa-solid fa-house"></i><span>Home</span></a>
+        <a href="/explore" class="nav-item"><i class="fa-solid fa-magnifying-glass"></i><span>Explore</span></a>
+        <a href="/admin_panel" class="nav-item" id="btn-nav-admin" style="display:none;"><i class="fa-solid fa-shield-halved"></i><span>Admin</span></a>
+        <a href="/owner_panel" class="nav-item" id="btn-nav-owner" style="display:none;"><i class="fa-solid fa-crown"></i><span>Owner</span></a>
     </div>
 
     <script>
@@ -92,6 +145,7 @@
             document.body.setAttribute('data-theme', saved);
             document.getElementById("theme-icon").className = saved === 'dark' ? "fa-solid fa-moon" : "fa-solid fa-sun";
         }
+        
         function toggleTheme() {
             if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
             let body = document.body;
@@ -102,7 +156,7 @@
         }
 
         document.getElementById("profile-name").innerText = uName;
-        document.getElementById("profile-id").innerText = "ID: " + uid;
+        document.getElementById("profile-id").innerText = "UID: " + uid;
         let img = document.getElementById("user-avatar"), letters = document.getElementById("avatar-letters");
         img.src = '/api/user/avatar/' + uid;
         img.onload = () => { img.style.display = "block"; letters.style.display = "none"; };
@@ -121,18 +175,24 @@
                 document.getElementById("streak-box").style.display = "inline-flex";
                 document.getElementById("streak-count").innerText = data.user_info.streak;
             }
+            
+            document.getElementById("cnt-my").classList.remove("skeleton");
+            document.getElementById("cnt-demo").classList.remove("skeleton");
 
             if (data.demos && data.demos.length > 0) {
                 document.getElementById("demo-card-sec").style.display = "block";
                 document.getElementById("cnt-demo").innerText = data.demos.filter(d => !d.is_expired).length;
                 document.getElementById("demo-list").innerHTML = data.demos.map(d => 
-                    `<div class="item-row ${d.is_expired?'':'demo-item'}" onclick="openBatch('${d.id}')"><div><b>${d.name}</b><br><small>Ends: ${d.expiry_date}</small></div><span class="badge bg-green">${d.time_left_hours}h</span></div>`
+                    `<div class="item-row ${d.is_expired?'':'demo-item'}" onclick="openBatch('${d.id}')"><div><b>${d.name}</b><small>Ends: ${d.expiry_date}</small></div><span class="badge bg-green">${d.time_left_hours}h</span></div>`
                 ).join("");
+            } else {
+                document.getElementById("cnt-demo").innerText = "0";
             }
+            
             document.getElementById("cnt-my").innerText = data.my_batches.length;
             document.getElementById("user-batches-list").innerHTML = data.my_batches.length > 0 ? data.my_batches.map(b => 
-                `<div class="item-row ${b.type==='Premium Core'?'paid-type':''}" onclick="openBatch('${b.id}')"><div><b>${b.name}</b><br><small>${b.category}</small></div><span class="badge ${b.type==='Premium Core'?'bg-purple':'bg-blue'}">${b.status}</span></div>`
-            ).join("") : `<p style="color:var(--text-muted);font-size:13px;">No active batches.</p>`;
+                `<div class="item-row ${b.type==='Premium Core'?'paid-type':''}" onclick="openBatch('${b.id}')"><div><b>${b.name}</b><small>${b.category}</small></div><span class="badge ${b.type==='Premium Core'?'bg-purple':'bg-blue'}">${b.status}</span></div>`
+            ).join("") : `<div class="bento-card" style="text-align:center; padding: 30px;"><i class="fa-solid fa-ghost" style="font-size:30px; color:var(--text-secondary); margin-bottom:10px;"></i><p style="color:var(--text-secondary); font-size:14px; margin:0;">No active communities yet.</p></div>`;
         });
     </script>
 </body>
