@@ -2098,7 +2098,7 @@ async def general_callback(client: Client, q: CallbackQuery):
       cooldown_left = get_cooldown_remaining(uid)
       if cooldown_left > 0:
         return await q.answer(
-            f"⏳ Please wait {cooldown_left} minute(s) before requesting another link.",
+            "⏳ Please wait 15 minutes before requesting another link.",
             show_alert=True,
         )
       # --- ANTI-SPAM Rule B: one active link per batch ---
@@ -2169,7 +2169,7 @@ async def general_callback(client: Client, q: CallbackQuery):
       cooldown_left = get_cooldown_remaining(uid)
       if cooldown_left > 0:
         return await q.answer(
-            f"⏳ Please wait {cooldown_left} minute(s) before requesting another link.",
+            "⏳ Please wait 15 minutes before requesting another link.",
             show_alert=True,
         )
       # --- ANTI-SPAM Rule B: one active link per batch ---
