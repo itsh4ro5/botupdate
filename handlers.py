@@ -37,6 +37,49 @@ from pyrogram.types import (
 _SYNC_IN_PROGRESS = False
 _BOT_SELF_ID = None
 
+# --- ANTI-SPAM CONFIG: Link generation cooldown & per-batch lock ---
+GLOBAL_LINK_COOLDOWN = 15 * 60   # Rule A: 15 minutes between ANY link generation
+ACTIVE_LINK_TTL = 60             # Rule B: matches the 60s invite-link expiry
+
+
+def get_cooldown_remaining(uid: int) -> int:
+  """Rule A: returns remaining whole minutes of the global cooldown (0 = clear)."""
+  entry = DB.get("PENDING_REQUESTS", {}).get(str(uid))
+  if not entry:
+    return 0
+  elapsed = time.time() - entry.get("last_link_ts", 0)
+  remaining = GLOBAL_LINK_COOLDOWN - elapsed
+  if remaining <= 0:
+    return 0
+  return max(1, int(remaining // 60) + (1 if remaining % 60 else 0))
+
+
+def has_active_request(uid: int, cid: int) -> bool:
+  """Rule B: True if this user still has a live pending link for this exact batch."""
+  entry = DB.get("PENDING_REQUESTS", {}).get(str(uid))
+  if not entry:
+    return False
+  exp = entry.get("active_batches", {}).get(str(cid))
+  return bool(exp and time.time() < exp)
+
+
+def register_link_request(uid: int, cid: int):
+  """Call this the moment a link is successfully generated (free or paid)."""
+  now = time.time()
+  entry = DB["PENDING_REQUESTS"].setdefault(
+      str(uid), {"last_link_ts": 0, "active_batches": {}}
+  )
+  entry["last_link_ts"] = now
+  entry["active_batches"][str(cid)] = now + ACTIVE_LINK_TTL
+  asyncio.create_task(save_data_async())
+
+
+def clear_active_request(uid, cid):
+  """Call this when an admin approves/rejects a request early, freeing the slot."""
+  entry = DB.get("PENDING_REQUESTS", {}).get(str(uid))
+  if entry and str(cid) in entry.get("active_batches", {}):
+    del entry["active_batches"][str(cid)]
+
 
 # --- HELPER: COMMAND ARGUMENTS EXTRACTOR ---
 def get_args(message: Message):
@@ -846,6 +889,7 @@ async def cmd_approve_demo(client: Client, message: Message):
     DB["USER_DATA"].setdefault(target_uid, {}).setdefault("demos", {})[
         str(batch_id)
     ] = {"expiry": expiry_time, "warned": False}
+    clear_active_request(target_uid, batch_id)  # free up the Rule-B slot early
     await save_data_async()
     
     # Admin ko confirmation
@@ -904,6 +948,7 @@ async def cmd_approve_perm(client: Client, message: Message):
     await client.approve_chat_join_request(batch_id, target_uid)
     if str(batch_id) in DB["USER_DATA"].get(target_uid, {}).get("demos", {}):
       del DB["USER_DATA"][target_uid]["demos"][str(batch_id)]
+    clear_active_request(target_uid, batch_id)  # free up the Rule-B slot early
     await save_data_async()
     
     # Admin ko confirmation
@@ -1939,16 +1984,19 @@ async def general_callback(client: Client, q: CallbackQuery):
       )
 
     elif data.startswith("listcat_"):
+      parts = data.split("_")
+      cat_idx, b_type, page = int(parts[1]), parts[2], int(parts[3])
+      # 🔥 FIX: lock check happens BEFORE any q.answer() — otherwise the
+      # first unconditional q.answer() below eats Telegram's one-shot
+      # answer budget and this alert silently never shows.
+      if b_type == "free" and DB.get("FREE_LOCKED", False):
+        return await q.answer("Sorry, but at this moment the free batch is locked. When it will unlock I will inform you.", show_alert=True)
+      if b_type == "paid" and DB.get("PAID_LOCKED", False):
+        return await q.answer("Sorry, but at this moment the paid batch is locked. When it will unlock I will inform you.", show_alert=True)
       await q.answer()
       if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
         return await show_tnc_menu_cb(client, q)
-      parts = data.split("_")
-      cat_idx, b_type, page = int(parts[1]), parts[2], int(parts[3])
       cat_name = DB.get("CATEGORIES", DEFAULT_CATEGORIES)[cat_idx]
-      if b_type == "free" and DB.get("FREE_LOCKED", False):
-        return await q.answer("  Free Batches Locked.", show_alert=True)
-      if b_type == "paid" and DB.get("PAID_LOCKED", False):
-        return await q.answer("Sorry, but at this moment the paid batch is locked. When it will unlock I will inform you.", show_alert=True)
       source_dict = (
           DB["FREE_CHANNELS"] if b_type == "free" else DB["PAID_CHANNELS"]
       )
@@ -2045,6 +2093,21 @@ async def general_callback(client: Client, q: CallbackQuery):
       cid = int(data.split("_")[2])
       if await is_already_in_channel_pyro(client, cid, uid):
         return await q.answer("⚠️ Already Joined!", show_alert=True)
+
+      # --- ANTI-SPAM Rule A: global 15-min cooldown ---
+      cooldown_left = get_cooldown_remaining(uid)
+      if cooldown_left > 0:
+        return await q.answer(
+            f"⏳ Please wait {cooldown_left} minute(s) before requesting another link.",
+            show_alert=True,
+        )
+      # --- ANTI-SPAM Rule B: one active link per batch ---
+      if has_active_request(uid, cid):
+        return await q.answer(
+            "⚠️ You already have an active request/link for this batch!",
+            show_alert=True,
+        )
+
       try:
         bname = DB["ALL_CHATS"].get(cid, f"Batch {cid}")
         l = await client.create_chat_invite_link(
@@ -2053,6 +2116,7 @@ async def general_callback(client: Client, q: CallbackQuery):
             name=f"Free-{uid}",
             expire_date=datetime.now() + timedelta(seconds=60),
         )
+        register_link_request(uid, cid)  # stamp cooldown + mark batch active
         # Button generate karna
         kb = [[InlineKeyboardButton("  Join Batch", url=l.invite_link)]]
         
@@ -2068,9 +2132,11 @@ async def general_callback(client: Client, q: CallbackQuery):
         await q.answer(f"Bot Error: {e}", show_alert=True)
 
     elif data.startswith("view_p_"):
+      cid = int(data.split("_")[2])
+      # 🔥 FIX: check the lock BEFORE q.answer() — view_p_ previously had
+      # no lock check at all, so a locked paid batch would still open.
       if DB.get("PAID_LOCKED", False):
         return await q.answer("Sorry, but at this moment the paid batch is locked. When it will unlock I will inform you.", show_alert=True)
-      cid = int(data.split("_")[2])
       await q.answer()
       kb = [
           [
@@ -2090,13 +2156,29 @@ async def general_callback(client: Client, q: CallbackQuery):
         pass
 
     elif data.startswith("req_access_"):
+      cid = int(data.split("_")[2])
+      # 🔥 FIX: lock check FIRST, before any q.answer() call.
       if DB.get("PAID_LOCKED", False):
         return await q.answer("Sorry, but at this moment the paid batch is locked. When it will unlock I will inform you.", show_alert=True)
-      cid = int(data.split("_")[2])
       if not await check_membership_pyro(uid, client):
         return await q.answer("  Join Main First!", show_alert=True)
       if await is_already_in_channel_pyro(client, cid, uid):
         return await q.answer("  Already joined!", show_alert=True)
+
+      # --- ANTI-SPAM Rule A: global 15-min cooldown across ANY link type ---
+      cooldown_left = get_cooldown_remaining(uid)
+      if cooldown_left > 0:
+        return await q.answer(
+            f"⏳ Please wait {cooldown_left} minute(s) before requesting another link.",
+            show_alert=True,
+        )
+      # --- ANTI-SPAM Rule B: one active link per batch ---
+      if has_active_request(uid, cid):
+        return await q.answer(
+            "⚠️ You already have an active request/link for this batch!",
+            show_alert=True,
+        )
+
       await q.answer("  Generating Link...")
       
       try:
@@ -2110,6 +2192,7 @@ async def general_callback(client: Client, q: CallbackQuery):
             expire_date=datetime.now() + timedelta(seconds=60),
         )
         DB["LINK_MAP"][l.invite_link] = {"u": uid, "b": cid}
+        register_link_request(uid, cid)  # stamp cooldown + mark batch active
         await save_data_async()
         
         # YE LINE MISSING THI (topic_id define karna)
@@ -2757,6 +2840,26 @@ async def check_demos(client: Client):
 
     if len(surviving) != len(DB.get("SCHEDULED_DELETES", [])):
       DB["SCHEDULED_DELETES"] = surviving
+      mod = True
+
+  # --- ANTI-SPAM GARBAGE COLLECTOR ---
+  # Runs every 60s alongside demo-expiry checks. Purges:
+  #   1. Expired per-batch "active link" locks (Rule B, >60s old)
+  #   2. Whole user entries once BOTH the active locks are empty AND the
+  #      global 15-min cooldown (Rule A) has also elapsed, so PENDING_REQUESTS
+  #      never grows unbounded.
+  if DB.get("PENDING_REQUESTS"):
+    stale_users = []
+    for uid_key, entry in DB["PENDING_REQUESTS"].items():
+      active = entry.get("active_batches", {})
+      expired_batches = [bid for bid, exp in active.items() if now > exp]
+      for bid in expired_batches:
+        del active[bid]
+        mod = True
+      if not active and now - entry.get("last_link_ts", 0) > GLOBAL_LINK_COOLDOWN:
+        stale_users.append(uid_key)
+    for uid_key in stale_users:
+      del DB["PENDING_REQUESTS"][uid_key]
       mod = True
 
   if mod:
