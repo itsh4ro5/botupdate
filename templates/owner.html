@@ -6,223 +6,176 @@
     <title>Owner Terminal</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
     <style>
         :root { 
-            --bg-main: #f0f4f8; --bg-card: #ffffff; --text-main: #0f172a; --text-muted: #64748b; 
-            --border-color: #e2e8f0; --neon-blue: #0284c7; --neon-purple: #7e22ce; --neon-red: #dc2626;
-            --nav-bg: rgba(255, 255, 255, 0.9); --shadow-card: 0 4px 12px rgba(0,0,0,0.05); 
-            --modal-bg: rgba(255,255,255,0.98); 
+            --bg-base: #f4f4f5; --bg-surface: #ffffff; --bg-surface-hover: #f4f4f5;
+            --border-subtle: #e4e4e7; --text-primary: #09090b; --text-secondary: #71717a;
+            --accent-main: #4f46e5; --accent-glow: rgba(79, 70, 229, 0.15);
+            --danger: #ef4444; --success: #10b981; --warning: #f59e0b;
+            --dock-bg: rgba(255, 255, 255, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.08); 
+            --sheet-bg: #ffffff;
         }
         [data-theme="dark"] { 
-            --bg-main: #090d16; --bg-card: rgba(22, 30, 49, 0.75); --text-main: #f8fafc; 
-            --text-muted: #94a3b8; --border-color: rgba(255, 255, 255, 0.08); 
-            --neon-blue: #0ea5e9; --neon-purple: #a855f7; --neon-red: #ef4444;
-            --nav-bg: rgba(15, 22, 42, 0.85); --shadow-card: 0 12px 40px 0 rgba(0, 0, 0, 0.5); 
-            --modal-bg: #090d16; 
-        }
-        body { 
-            font-family: 'Segoe UI', Roboto, sans-serif; background: var(--bg-main); 
-            color: var(--text-main); margin: 0; padding: 15px 15px 90px 15px; transition: 0.3s ease; 
-            overflow-x: hidden;
+            --bg-base: #000000; --bg-surface: #111111; --bg-surface-hover: #1f1f22;
+            --border-subtle: #27272a; --text-primary: #fafafa; --text-secondary: #a1a1aa;
+            --accent-main: #6366f1; --accent-glow: rgba(99, 102, 241, 0.25);
+            --dock-bg: rgba(24, 24, 27, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.5); 
+            --sheet-bg: #111111;
         }
         
-        .glass-card { 
-            background: var(--bg-card); backdrop-filter: blur(20px); border: 1px solid var(--border-color); 
-            border-radius: 20px; padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow-card); 
-        }
-        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .header-top h2 { margin: 0; font-size: 20px; font-weight: 700; color:var(--text-main);}
-        .theme-btn { 
-            background: rgba(128,128,128,0.1); border: 1px solid var(--border-color); color: var(--text-main); 
-            width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; 
-            justify-content: center; cursor: pointer; transition: 0.2s; 
-        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: 'Outfit', sans-serif; }
+        body { background: var(--bg-base); color: var(--text-primary); margin: 0; padding: 0 16px 120px 16px; transition: 0.4s ease; overflow-x: hidden; }
         
-        .search-container { position: relative; margin-bottom: 15px; display: flex; gap: 8px;}
-        .search-container i.fa-magnifying-glass { position: absolute; left: 14px; top: 14px; color: var(--text-muted); }
-        .search-bar { 
-            flex: 1; padding: 12px 12px 12px 40px; border-radius: 14px; border: 1px solid var(--border-color); 
-            background: rgba(128,128,128,0.05); color: var(--text-main); font-size: 14px; outline: none; 
-            box-sizing: border-box; 
-        }
-        .search-btn {
-            background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple));
-            color: white; border: none; border-radius: 12px; padding: 0 16px; font-weight: 600; cursor: pointer;
-        }
+        .header-area { display: flex; justify-content: space-between; align-items: center; padding: 24px 0 20px 0; }
+        .header-area h2 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
+        .theme-btn { background: var(--bg-surface); border: 1px solid var(--border-subtle); color: var(--text-primary); width: 44px; height: 44px; border-radius: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .theme-btn:active { transform: scale(0.85); }
         
-        .user-card { 
-            display: flex; align-items: center; padding: 12px; border: 1px solid var(--border-color); 
-            border-radius: 14px; background: var(--bg-card); margin-bottom: 10px; cursor: pointer; transition: 0.2s; 
-        }
-        .user-card:active { transform: scale(0.98); }
-        .default-avatar { 
-            width: 45px; height: 45px; border-radius: 50%; background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple)); 
-            color: white; display: flex; align-items: center; justify-content: center; font-size: 20px; 
-            font-weight: bold; flex-shrink: 0; text-transform: uppercase;
-        }
-        .user-card-info { flex: 1; margin-left: 12px; overflow: hidden;}
-        .user-card-info b { display: flex; align-items: center; gap:6px; font-size: 14px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
-        .user-card-info small { color: var(--text-muted); font-size: 11px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+        .search-container { position: relative; margin-bottom: 24px; display: flex; gap: 12px;}
+        .search-container i.fa-magnifying-glass { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 16px;}
+        .search-bar { flex: 1; padding: 18px 18px 18px 46px; border-radius: 20px; border: 1px solid var(--border-subtle); background: var(--bg-surface); color: var(--text-primary); font-size: 15px; font-weight: 500; outline: none; box-sizing: border-box; transition: 0.3s; }
+        .search-bar:focus { border-color: #a855f7; box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.2); }
+        
+        .user-card { display: flex; align-items: center; padding: 16px; border: 1px solid var(--border-subtle); border-radius: 20px; background: var(--bg-surface); margin-bottom: 12px; cursor: pointer; transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .user-card:active { transform: scale(0.96); background: var(--bg-surface-hover); }
+        .default-avatar { width: 52px; height: 52px; border-radius: 18px; background: var(--accent-main); color: white; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800; flex-shrink: 0;}
+        .user-card-info { flex: 1; margin-left: 16px; overflow: hidden;}
+        .user-card-info b { display: flex; align-items: center; gap:8px; font-size: 16px; font-weight:700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+        .user-card-info small { color: var(--text-secondary); font-size: 13px; font-weight:500; display: block; margin-top:2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
 
-        /* INSTAGRAM STYLE FULL SCREEN SLIDER */
-        #profileView { 
-            position: fixed; top: 0; left: 0; width: 100%; height: 100vh; 
-            background: var(--bg-main); z-index: 10000; overflow-y: auto; overflow-x: hidden;
-            transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-            padding-bottom: 40px; box-sizing: border-box;
-        }
-        #profileView.active { transform: translateX(0); }
+        #profileOverlay { display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); z-index: 9999; opacity: 0; transition: opacity 0.4s; }
+        #profileView { position: fixed; bottom: 0; left: 0; width: 100%; height: 90vh; background: var(--sheet-bg); z-index: 10000; overflow-y: auto; overflow-x: hidden; transform: translateY(100%); transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); border-radius: 32px 32px 0 0; padding-bottom: 40px; box-sizing: border-box; box-shadow: 0 -20px 60px rgba(0,0,0,0.5);}
+        #profileView.active { transform: translateY(0); }
         
-        .profile-header {
-            display: flex; align-items: center; padding: 15px; position: sticky; top: 0;
-            background: var(--nav-bg); backdrop-filter: blur(15px); border-bottom: 1px solid var(--border-color); z-index: 10;
-        }
-        .profile-header i { font-size: 20px; color: var(--text-main); cursor: pointer; padding: 5px 15px 5px 5px; }
-        .profile-header h3 { margin: 0; flex: 1; text-align: center; font-size: 18px; padding-right: 35px; color: var(--text-main);}
+        .profile-header { display: flex; align-items: center; padding: 24px 24px 16px 24px; position: sticky; top: 0; background: var(--sheet-bg); z-index: 10; justify-content: center;}
+        .drag-handle { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 40px; height: 5px; background: var(--border-subtle); border-radius: 10px; }
+        .close-btn { position: absolute; right: 24px; background: var(--border-subtle); border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; color: var(--text-primary); cursor: pointer;}
         
-        .profile-body { padding: 20px 15px; }
+        .profile-body { padding: 10px 24px 24px 24px; }
         
-        .modal-avatar-container { position: relative; width: 85px; height: 85px; margin: 0 auto 10px; }
-        .modal-avatar-container img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 3px solid var(--neon-purple); display: none; }
-        .modal-avatar-fallback { width: 100%; height: 100%; border-radius: 50%; background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple)); color: white; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: bold; border: 3px solid var(--neon-purple); }
+        .modal-avatar-container { position: relative; width: 100px; height: 100px; margin: 0 auto 16px; }
+        .modal-avatar-container img { width: 100%; height: 100%; border-radius: 32px; object-fit: cover; border: 4px solid var(--sheet-bg); box-shadow: 0 10px 30px var(--accent-glow); display: none; }
+        .modal-avatar-fallback { width: 100%; height: 100%; border-radius: 32px; background: var(--accent-main); color: white; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 900; box-shadow: 0 10px 30px var(--accent-glow);}
         
-        .streak-badge { background: linear-gradient(135deg, #f59e0b, #ea580c); color: white; padding: 4px 10px; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-flex; align-items: center; gap: 5px;}
-        .role-badge { padding: 4px 10px; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; margin-left: 5px;}
-        .role-owner { background: rgba(168, 85, 247, 0.2); color: #a855f7; border: 1px solid #a855f7; }
-        .role-admin { background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; }
+        .role-badge { padding: 6px 12px; border-radius: 100px; font-weight: 800; font-size: 11px; text-transform:uppercase; letter-spacing:1px; display: inline-flex; align-items: center; gap: 5px;}
+        .role-owner { background: rgba(168, 85, 247, 0.15); color: #a855f7; border: 1px solid rgba(168, 85, 247, 0.3); }
+        .role-admin { background: rgba(16, 185, 129, 0.15); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3); }
 
-        .item-row { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: var(--bg-card); margin-bottom: 8px; border-radius: 12px; border: 1px solid var(--border-color); border-left: 4px solid var(--neon-blue); box-shadow: var(--shadow-card);}
-        .item-row.paid-border { border-left-color: var(--neon-purple); }
-        .item-row.demo-border { border-left-color: var(--neon-green); }
-        .item-row.expired-border { border-left-color: var(--neon-red); opacity: 0.6; }
+        .item-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: var(--bg-base); margin-bottom: 12px; border-radius: 16px; border: 1px solid var(--border-subtle); border-left: 4px solid var(--accent-main); }
+        .item-row.paid-border { border-left-color: #a855f7; }
+        .item-row.demo-border { border-left-color: var(--success); }
         
-        .badge { padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; flex-shrink: 0;}
-        .bg-blue { background: rgba(14, 165, 233, 0.15); color: var(--neon-blue); }
-        .bg-purple { background: rgba(168, 85, 247, 0.15); color: var(--neon-purple); }
-        .bg-green { background: rgba(16, 185, 129, 0.15); color: #10b981; }
-        .bg-red { background: rgba(239, 68, 68, 0.15); color: var(--neon-red); }
+        .badge { padding: 5px 10px; border-radius: 8px; font-size: 10.5px; font-weight: 800; text-transform:uppercase; letter-spacing: 0.5px; flex-shrink: 0;}
+        .bg-blue { background: rgba(99, 102, 241, 0.15); color: var(--accent-main); }
+        .bg-purple { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+        .bg-green { background: rgba(16, 185, 129, 0.15); color: var(--success); }
 
-        .kick-btn { 
-            background: rgba(239, 68, 68, 0.1); color: var(--neon-red); border: 1px solid rgba(239, 68, 68, 0.3); 
-            border-radius: 8px; width: 32px; height: 32px; display: flex; align-items: center; 
-            justify-content: center; cursor: pointer; margin-left: 10px; transition: 0.2s; flex-shrink: 0;
-        }
-        .kick-btn:active { transform: scale(0.9); background: rgba(239, 68, 68, 0.2); }
+        .kick-btn { background: var(--bg-surface); color: var(--danger); border: 1px solid var(--border-subtle); border-radius: 12px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; margin-left: 12px; transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.05);}
+        .kick-btn:active { transform: scale(0.85); background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3);}
 
-        .ban-btn-container { padding: 25px 0; border-top: 1px solid var(--border-color); margin-top: 20px;}
-        .btn-ban-full {
-            width: 100%; background: linear-gradient(135deg, #ef4444, #b91c1c); color: white;
-            border: none; padding: 14px; border-radius: 14px; font-size: 15px; font-weight: bold;
-            cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px;
-            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3); transition: 0.2s;
-        }
-        .btn-ban-full:active { transform: scale(0.98); }
-
-        #confirmModal { 
-            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); 
-            backdrop-filter: blur(8px); z-index: 100000; align-items: center; justify-content: center; padding: 20px;
-        }
-        .confirm-box { 
-            background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 20px; 
-            padding: 25px; text-align: center; width: 100%; max-width: 320px; 
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5); animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
-        }
-        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-        .confirm-icon { font-size: 40px; color: var(--neon-red); margin-bottom: 15px; }
-        .confirm-box h3 { margin: 0 0 10px 0; color: var(--text-main); font-size: 18px; }
-        .confirm-box p { color: var(--text-muted); font-size: 13px; margin: 0 0 20px 0; line-height: 1.5; }
-        .confirm-actions { display: flex; gap: 10px; }
-        .confirm-actions button { flex: 1; padding: 12px; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; font-size: 14px; transition: 0.2s;}
-        .btn-cancel { background: rgba(128,128,128,0.15); color: var(--text-main); }
-        .btn-confirm { background: var(--neon-red); color: white; }
+        .btn-ban-full { width: 100%; background: var(--danger); color: white; border: none; padding: 18px; border-radius: 20px; font-size: 16px; font-weight: 800; letter-spacing: 0.5px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 10px; box-shadow: 0 10px 30px rgba(239, 68, 68, 0.3); transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); margin-top: 30px;}
+        .btn-ban-full:active { transform: scale(0.96); }
+        
+        #confirmModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(10px); z-index: 100000; align-items: center; justify-content: center; padding: 20px; }
+        .confirm-box { background: var(--sheet-bg); border: 1px solid var(--border-subtle); border-radius: 32px; padding: 32px 24px; text-align: center; width: 100%; max-width: 360px; box-shadow: 0 24px 60px rgba(0,0,0,0.5); animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes popIn { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        
+        .confirm-actions { display: flex; gap: 12px; margin-top: 24px;}
+        .confirm-actions button { flex: 1; padding: 16px; border-radius: 16px; border: none; font-weight: 800; cursor: pointer; font-size: 15px; transition: 0.2s;}
+        .btn-cancel { background: var(--border-subtle); color: var(--text-primary); }
+        .btn-confirm { background: var(--danger); color: white; }
         .confirm-actions button:active { transform: scale(0.95); }
 
-        .bottom-nav { position: fixed; bottom: 16px; left: 16px; right: 16px; height: 64px; background: var(--nav-bg); backdrop-filter: blur(30px); border: 1px solid var(--border-color); border-radius: 20px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2); z-index: 9999; }
-        .nav-item { display: flex; flex-direction: column; align-items: center; color: var(--text-muted); cursor: pointer; font-size: 10px; font-weight: 600; text-decoration: none;}
-        .nav-item.active { color: var(--neon-blue); }
+        .floating-dock { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: max-content; padding: 8px 16px; background: var(--dock-bg); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--border-subtle); border-radius: 100px; display: flex; gap: 24px; box-shadow: var(--dock-shadow); z-index: 9999; transition: 0.3s; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); cursor: pointer; text-decoration: none; transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); width: 50px; height: 50px; border-radius: 50%; }
+        .nav-item span { display: none; }
+        .nav-item i { font-size: 20px; transition: 0.3s; }
+        .nav-item.active { background: var(--accent-main); color: white; box-shadow: 0 8px 20px var(--accent-glow); transform: translateY(-10px); }
+        
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        .skeleton { background: linear-gradient(90deg, var(--bg-surface) 25%, var(--border-subtle) 50%, var(--bg-surface) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; height: 80px; border-radius: 20px; margin-bottom: 12px; border: none; }
     </style>
 </head>
 <body data-theme="dark">
-    <div class="header-top">
-        <h2><i class="fa-solid fa-crown" style="color:var(--neon-purple);"></i> Owner Core</h2>
+    <div class="header-area">
+        <h2>Owner Core</h2>
         <button class="theme-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon" id="theme-icon"></i></button>
     </div>
 
-    <div class="glass-card">
-        <h3 style="font-size:15px; margin:0 0 14px 0; color:var(--text-main);"><i class="fa-solid fa-users-gear"></i> User & Admin Directory</h3>
+    <div style="margin-bottom: 24px;">
         <div class="search-container">
             <i class="fa-solid fa-magnifying-glass"></i>
-            <input type="text" class="search-bar" id="userSearchBox" onkeyup="handleSearch(event)" placeholder="Search Name, ID...">
-            <button class="search-btn" onclick="liveUserSearch()">Find</button>
+            <input type="text" class="search-bar" id="userSearchBox" onkeyup="handleSearch(event)" placeholder="Search database...">
         </div>
         <div id="owner-users-list">
-            <p style="color: var(--text-muted); font-size: 13px; text-align: center;">Authenticating & Loading Database...</p>
+            <div class="skeleton"></div>
+            <div class="skeleton"></div>
         </div>
     </div>
 
+    <div id="profileOverlay" onclick="closeProfile()"></div>
     <div id="profileView">
         <div class="profile-header">
-            <i class="fa-solid fa-arrow-left" onclick="closeProfile()"></i>
-            <h3>User Profile</h3>
+            <div class="drag-handle"></div>
+            <h3 style="font-size: 18px; font-weight: 800; margin: 0; display: none;">User Details</h3>
+            <div class="close-btn" onclick="closeProfile()"><i class="fa-solid fa-xmark"></i></div>
         </div>
         
         <div class="profile-body">
-            <div style="text-align: center; margin-bottom: 20px;">
+            <div style="text-align: center; margin-bottom: 30px;">
                 <div class="modal-avatar-container">
-                    <img id="mod-avatar" src="" alt="Avatar">
+                    <img id="mod-avatar" src="">
                     <div class="modal-avatar-fallback" id="mod-avatar-fallback">U</div>
                 </div>
-                
-                <h2 id="mod-name" style="margin:0; font-size:20px; display: flex; align-items: center; justify-content: center; gap:8px; color:var(--text-main);">Name <span id="mod-role" class="role-badge" style="display:none;"></span></h2>
-                <p id="mod-meta" style="margin:5px 0; color:var(--text-muted); font-size:13px;">@username | ID: 12345</p>
-                
-                <div class="streak-badge" style="margin-top:5px;"><i class="fa-solid fa-fire"></i> <span id="mod-streak">0</span> Days</div>
+                <h2 id="mod-name" style="margin:0 0 8px 0; font-size:24px; font-weight:900; display: flex; align-items: center; justify-content: center; gap:8px;">Name <span id="mod-role" class="role-badge" style="display:none;"></span></h2>
+                <p id="mod-meta" style="margin:0; color:var(--text-secondary); font-size:14px; font-weight:500;">@username | ID: 12345</p>
+                <div style="margin-top: 16px; display: inline-block; background: var(--bg-base); padding: 8px 16px; border-radius: 100px; font-weight: 800; font-size: 12px; color: var(--warning);"><i class="fa-solid fa-fire"></i> <span id="mod-streak">0</span> Days</div>
             </div>
             
-            <h3 style="font-size: 14px; border-bottom:1px solid var(--border-color); padding-bottom:5px; margin-bottom:10px; color:var(--neon-purple);"><i class="fa-solid fa-star"></i> Premium Subscriptions</h3>
-            <div id="mod-paid-batches" style="margin-bottom: 20px;"></div>
+            <h3 style="font-size: 13px; font-weight:800; text-transform: uppercase; letter-spacing: 1px; color:var(--text-secondary); margin-bottom:12px;">Premium Subscriptions</h3>
+            <div id="mod-paid-batches" style="margin-bottom: 24px;"></div>
 
-            <h3 style="font-size: 14px; border-bottom:1px solid var(--border-color); padding-bottom:5px; margin-bottom:10px; color:var(--neon-blue);"><i class="fa-solid fa-folder-open"></i> Free Communities</h3>
-            <div id="mod-free-batches" style="margin-bottom: 20px;"></div>
+            <h3 style="font-size: 13px; font-weight:800; text-transform: uppercase; letter-spacing: 1px; color:var(--text-secondary); margin-bottom:12px;">Free Communities</h3>
+            <div id="mod-free-batches" style="margin-bottom: 24px;"></div>
 
-            <h3 style="font-size: 14px; border-bottom:1px solid var(--border-color); padding-bottom:5px; margin-bottom:10px; color:#10b981;"><i class="fa-solid fa-clock"></i> Active Demos</h3>
-            <div id="mod-demos" style="margin-bottom: 10px;"></div>
+            <h3 style="font-size: 13px; font-weight:800; text-transform: uppercase; letter-spacing: 1px; color:var(--text-secondary); margin-bottom:12px;">Active Demos</h3>
+            <div id="mod-demos" style="margin-bottom: 24px;"></div>
 
             <div class="ban-btn-container">
-                <button class="btn-ban-full" onclick="promptBanUser()"><i class="fa-solid fa-user-shield"></i> BAN USER PERMANENTLY</button>
+                <button class="btn-ban-full" onclick="promptBanUser()"><i class="fa-solid fa-skull"></i> TERMINATE ACCOUNT</button>
             </div>
         </div>
     </div>
 
     <div id="confirmModal">
         <div class="confirm-box">
-            <i class="fa-solid fa-triangle-exclamation confirm-icon"></i>
-            <h3 id="confirmTitle">Confirm Action</h3>
-            <p id="confirmDesc">Are you sure you want to proceed?</p>
+            <i class="fa-solid fa-triangle-exclamation" style="font-size: 48px; color: var(--danger); margin-bottom: 16px;"></i>
+            <h3 id="confirmTitle" style="margin: 0 0 12px 0; font-size: 22px; font-weight: 900;">Confirm Action</h3>
+            <p id="confirmDesc" style="color: var(--text-secondary); font-size: 15px; font-weight: 500; margin: 0; line-height: 1.5;">Are you sure?</p>
             <div class="confirm-actions">
                 <button class="btn-cancel" onclick="closeConfirm()">Cancel</button>
-                <button class="btn-confirm" id="btn-execute-action" onclick="executeAction()">Yes, Do it</button>
+                <button class="btn-confirm" id="btn-execute-action" onclick="executeAction()">Confirm</button>
             </div>
         </div>
     </div>
 
-    <div class="bottom-nav">
-        <a href="/" class="nav-item"><i class="fa-solid fa-house" style="font-size:18px; margin-bottom:4px;"></i><span>Home</span></a>
-        <a href="/explore" class="nav-item"><i class="fa-solid fa-compass" style="font-size:18px; margin-bottom:4px;"></i><span>Explore</span></a>
-        <a href="/admin_panel" class="nav-item"><i class="fa-solid fa-shield-halved" style="font-size:18px; margin-bottom:4px;"></i><span>Admin</span></a>
-        <a href="/owner_panel" class="nav-item active"><i class="fa-solid fa-crown" style="font-size:18px; margin-bottom:4px;"></i><span>Owner</span></a>
+    <div class="floating-dock">
+        <a href="/" class="nav-item"><i class="fa-solid fa-house"></i><span></span></a>
+        <a href="/explore" class="nav-item"><i class="fa-solid fa-magnifying-glass"></i><span></span></a>
+        <a href="/admin_panel" class="nav-item"><i class="fa-solid fa-shield-halved"></i><span></span></a>
+        <a href="/owner_panel" class="nav-item active"><i class="fa-solid fa-crown"></i><span></span></a>
     </div>
 
     <script>
         let tg = window.Telegram.WebApp; tg.expand();
-        
-        // Use native Telegram back button specifically for modals if available
         if(tg.BackButton) { tg.BackButton.onClick(closeProfile); }
 
         let uid = tg.initDataUnsafe?.user?.id || 9999999;
         let globalUsersData = [];
         let currentTargetUid = null;
-        let pendingAction = null; // Store {action, target_uid, batch_id}
+        let pendingAction = null; 
 
         window.onload = () => {
             let saved = localStorage.getItem('edtech_theme') || 'dark';
@@ -245,40 +198,35 @@
                 return res.json();
             }).then(data => {
                 globalUsersData = data.users;
-                // Sort Owners and Admins to the top
                 globalUsersData.sort((a, b) => b.is_owner - a.is_owner || b.is_admin - a.is_admin);
                 renderOwnerUsers(globalUsersData);
             }).catch(err => {
-                document.body.innerHTML = "<h2 style='text-align:center; margin-top:50px; color:var(--neon-red);'>Access Denied. Owner Only.</h2>";
+                document.body.innerHTML = "<div style='display:flex; height:100vh; align-items:center; justify-content:center; flex-direction:column;'><i class='fa-solid fa-lock' style='font-size:60px; color:var(--danger); margin-bottom:20px;'></i><h2 style='margin:0;'>Owner Only</h2></div>";
             });
         }
 
         function renderOwnerUsers(usersArr) {
             let html = usersArr.map((u, index) => {
                 let initial = (u.name && u.name !== "Unknown") ? u.name.charAt(0).toUpperCase() : "U";
-                
                 let roleIcon = "";
                 if (u.is_owner) roleIcon = `<i class="fa-solid fa-crown" style="color:#a855f7; font-size:12px;"></i>`;
-                else if (u.is_admin) roleIcon = `<i class="fa-solid fa-shield-halved" style="color:#10b981; font-size:12px;"></i>`;
+                else if (u.is_admin) roleIcon = `<i class="fa-solid fa-shield-halved" style="color:var(--success); font-size:12px;"></i>`;
                 
                 return `
                 <div class="user-card" onclick="openProfile(${index})">
                     <div class="default-avatar">${initial}</div>
                     <div class="user-card-info">
                         <b>${u.name} ${roleIcon}</b>
-                        <small>@${u.username !== 'N/A' ? u.username : 'NoUsername'} | ID: ${u.id}</small>
+                        <small>@${u.username !== 'N/A' ? u.username : 'Unknown'} | ID: ${u.id}</small>
                     </div>
-                    <i class="fa-solid fa-chevron-right" style="color:var(--text-muted); font-size:12px;"></i>
+                    <i class="fa-solid fa-chevron-right" style="color:var(--text-secondary); font-size:14px; margin-right:4px;"></i>
                 </div>`;
             }).join("");
             
-            document.getElementById("owner-users-list").innerHTML = html || "<p style='text-align:center;color:var(--text-muted); margin-top:20px;'>No users found.</p>";
+            document.getElementById("owner-users-list").innerHTML = html || "<div style='text-align:center; padding: 40px 0;'><i class='fa-solid fa-users-slash' style='font-size: 40px; color: var(--border-subtle); margin-bottom: 12px;'></i><p style='color:var(--text-secondary); font-weight:500;'>No users found in database.</p></div>";
         }
 
-        function handleSearch(e) {
-            if(e.key === 'Enter') liveUserSearch();
-            else liveUserSearch(); 
-        }
+        function handleSearch(e) { liveUserSearch(); }
 
         function liveUserSearch() {
             let filter = document.getElementById('userSearchBox').value.toLowerCase().trim();
@@ -297,7 +245,7 @@
             let displayList = document.getElementById('userSearchBox').value.trim() === "" ? globalUsersData : getFilteredUsers();
             let u = displayList[index] || globalUsersData[index];
             
-            currentTargetUid = u.id; // Store globally for API actions
+            currentTargetUid = u.id;
             
             document.getElementById('mod-name').innerHTML = `${u.name} <span id="mod-role" class="role-badge" style="display:none;"></span>`;
             document.getElementById('mod-meta').innerText = `@${u.username !== 'N/A' ? u.username : 'Unknown'} | ID: ${u.id}`;
@@ -310,7 +258,6 @@
             avatarFallback.style.display = 'flex'; 
             avatarFallback.innerText = (u.name && u.name !== "Unknown") ? u.name.charAt(0).toUpperCase() : "U";
             
-            // Background image fetch
             let freshImg = new Image();
             freshImg.onload = function() {
                 avatarImg.src = this.src;
@@ -319,50 +266,50 @@
             };
             freshImg.src = `/api/user/avatar/${u.id}`; 
             
-            // Role Badge
             let roleBadge = document.getElementById('mod-role');
             if(u.is_owner) { 
                 roleBadge.style.display = 'inline-flex'; roleBadge.className = 'role-badge role-owner';
-                roleBadge.innerHTML = '<i class="fa-solid fa-crown"></i> <span>System Owner</span>'; 
+                roleBadge.innerHTML = 'Owner'; 
             } else if(u.is_admin) { 
                 roleBadge.style.display = 'inline-flex'; roleBadge.className = 'role-badge role-admin';
-                roleBadge.innerHTML = '<i class="fa-solid fa-shield-halved"></i> <span>Admin</span>'; 
+                roleBadge.innerHTML = 'Admin'; 
             } else { 
                 roleBadge.style.display = 'none'; 
             }
             
-            // Render Paid Batches with Kick Button
             document.getElementById('mod-paid-batches').innerHTML = (u.paid_joined && u.paid_joined.length > 0) 
                 ? u.paid_joined.map(b => `
                     <div class="item-row paid-border">
-                        <div style="flex:1;overflow:hidden;"><b style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${b.name}</b></div>
+                        <div style="flex:1;overflow:hidden;"><b style="font-size:14px; font-weight:700; color:var(--text-primary); white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">${b.name}</b></div>
                         <span class="badge bg-purple">Paid</span>
-                        <button class="kick-btn" onclick="promptKickUser(${b.id}, '${b.name.replace(/'/g, "\\'")}')" title="Kick from batch"><i class="fa-solid fa-xmark"></i></button>
+                        <button class="kick-btn" onclick="promptKickUser(${b.id}, '${b.name.replace(/'/g, "\\'")}')"><i class="fa-solid fa-xmark"></i></button>
                     </div>`).join("") 
-                : "<p style='color:var(--text-muted);font-size:12px; margin-top:-5px;'>No premium batches.</p>";
+                : "<p style='color:var(--text-secondary); font-size:13px; font-weight:500; font-style:italic;'>No premium access.</p>";
             
-            // Render Free Batches with Kick Button
             document.getElementById('mod-free-batches').innerHTML = (u.free_joined && u.free_joined.length > 0) 
                 ? u.free_joined.map(b => `
                     <div class="item-row">
-                        <div style="flex:1;overflow:hidden;"><b style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${b.name}</b></div>
+                        <div style="flex:1;overflow:hidden;"><b style="font-size:14px; font-weight:700; color:var(--text-primary); white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">${b.name}</b></div>
                         <span class="badge bg-blue">Free</span>
-                        <button class="kick-btn" onclick="promptKickUser(${b.id}, '${b.name.replace(/'/g, "\\'")}')" title="Kick from batch"><i class="fa-solid fa-xmark"></i></button>
+                        <button class="kick-btn" onclick="promptKickUser(${b.id}, '${b.name.replace(/'/g, "\\'")}')"><i class="fa-solid fa-xmark"></i></button>
                     </div>`).join("") 
-                : "<p style='color:var(--text-muted);font-size:12px; margin-top:-5px;'>No free batches.</p>";
+                : "<p style='color:var(--text-secondary); font-size:13px; font-weight:500; font-style:italic;'>No free access.</p>";
             
-            // Render Demos with Kick Button
             document.getElementById('mod-demos').innerHTML = (u.demos && u.demos.length > 0) 
                 ? u.demos.map(d => `
                     <div class="item-row ${d.is_expired ? 'expired-border' : 'demo-border'}">
-                        <div style="flex:1;overflow:hidden;"><b style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${d.name}</b></div>
+                        <div style="flex:1;overflow:hidden;"><b style="font-size:14px; font-weight:700; color:var(--text-primary); white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">${d.name}</b></div>
                         <span class="badge ${d.is_expired ? 'bg-red' : 'bg-green'}">${d.is_expired ? 'Expired' : d.time_left + 'h left'}</span>
-                        <button class="kick-btn" onclick="promptKickUser(${d.id}, '${d.name.replace(/'/g, "\\'")}')" title="Remove demo"><i class="fa-solid fa-xmark"></i></button>
+                        <button class="kick-btn" onclick="promptKickUser(${d.id}, '${d.name.replace(/'/g, "\\'")}')"><i class="fa-solid fa-xmark"></i></button>
                     </div>`).join("") 
-                : "<p style='color:var(--text-muted);font-size:12px; margin-top:-5px;'>No active demos.</p>";
+                : "<p style='color:var(--text-secondary); font-size:13px; font-weight:500; font-style:italic;'>No trial access.</p>";
             
-            // Slide in the full screen profile
-            document.getElementById('profileView').classList.add('active');
+            document.getElementById('profileOverlay').style.display = 'block';
+            setTimeout(() => {
+                document.getElementById('profileOverlay').style.opacity = '1';
+                document.getElementById('profileView').classList.add('active');
+            }, 10);
+            
             if(tg.BackButton) { tg.BackButton.show(); }
         }
         
@@ -377,6 +324,10 @@
         function closeProfile() {
             if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
             document.getElementById('profileView').classList.remove('active');
+            document.getElementById('profileOverlay').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('profileOverlay').style.display = 'none';
+            }, 400);
             if(tg.BackButton) { tg.BackButton.hide(); }
         }
 
@@ -385,9 +336,8 @@
             if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
             
             pendingAction = { action: 'ban', target_uid: currentTargetUid };
-            document.getElementById('confirmTitle').innerText = "Ban User";
-            document.getElementById('confirmTitle').style.color = "var(--neon-red)";
-            document.getElementById('confirmDesc').innerText = `Are you sure you want to permanently BAN user ${currentTargetUid}? This removes them from ALL batches.`;
+            document.getElementById('confirmTitle').innerText = "Terminate User";
+            document.getElementById('confirmDesc').innerText = `Are you sure you want to permanently BAN user ${currentTargetUid}?`;
             document.getElementById('confirmModal').style.display = 'flex';
         }
 
@@ -396,9 +346,8 @@
             if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
             
             pendingAction = { action: 'kick', target_uid: currentTargetUid, batch_id: batchId };
-            document.getElementById('confirmTitle').innerText = "Remove from Batch";
-            document.getElementById('confirmTitle').style.color = "var(--text-main)";
-            document.getElementById('confirmDesc').innerHTML = `Are you sure you want to kick this user from:<br><b style="color:var(--text-main);">${batchName}</b>?`;
+            document.getElementById('confirmTitle').innerText = "Revoke Access";
+            document.getElementById('confirmDesc').innerHTML = `Are you sure you want to remove this user from:<br><b style="color:var(--text-primary);">${batchName}</b>?`;
             document.getElementById('confirmModal').style.display = 'flex';
         }
 
@@ -414,7 +363,7 @@
             
             let btn = document.getElementById('btn-execute-action');
             let oldText = btn.innerText;
-            btn.innerText = "Processing...";
+            btn.innerText = "Working...";
             btn.disabled = true;
 
             try {
@@ -430,12 +379,12 @@
                 if (res.ok) {
                     closeConfirm();
                     closeProfile(); 
-                    loadOwnerData(); // Reload DB after change
+                    loadOwnerData();
                 } else {
-                    document.getElementById('confirmDesc').innerText = "❌ Action failed. Not authorized or server error.";
+                    document.getElementById('confirmDesc').innerText = "Action failed. Server error.";
                 }
             } catch (err) {
-                document.getElementById('confirmDesc').innerText = "❌ Network error. Please try again.";
+                document.getElementById('confirmDesc').innerText = "Network error. Try again.";
             } finally {
                 btn.innerText = oldText;
                 btn.disabled = false;
