@@ -215,7 +215,12 @@
             btnElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing Engine...';
             btnElement.disabled = true;
             
-            let payload = { test_summary: testData, series_details: tbCache.series, section: tbCache.section, subsection: tbCache.subsection };
+            let payload = { 
+                test_summary: testData, 
+                series_details: tbCache.series, 
+                section: tbCache.section, 
+                subsection: tbCache.subsection 
+            };
             
             try {
                 let res = await fetch(`/api/tb/extract/${testId}`, {
@@ -227,23 +232,25 @@
                 if(!res.ok) {
                     let err = await res.json();
                     alert("Error: " + err.error);
+                    
+                    btnElement.innerHTML = originalText;
+                    btnElement.disabled = false;
                     return;
                 }
                 
                 let htmlContent = await res.text();
-                // Directly open the beautifully rendered HTML in a new Telegram Mini App view or browser tab
-                let blob = new Blob([htmlContent], {type: 'text/html'});
-                let url = URL.createObjectURL(blob);
                 
-                if (tg.openLink) {
-                    tg.openLink(url); // For Telegram Mobile App
-                } else {
-                    window.open(url, '_blank'); // For Web/Desktop
-                }
+                // --- FIX FOR TELEGRAM MINI APP ---
+                // Telegram me naya tab ('blob:' URL) block ho jata hai. 
+                // Isliye hum current document ko hi naye Test UI se replace kar denge.
+                document.open();
+                document.write(htmlContent);
+                document.close();
                 
             } catch(e) {
-                alert("Network error while generating test.");
-            } finally {
+                // Error message ko specific kar diya taaki aage debugging aasan ho
+                alert("Frontend Error: " + e.message);
+                
                 btnElement.innerHTML = originalText;
                 btnElement.disabled = false;
             }
