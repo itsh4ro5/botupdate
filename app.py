@@ -271,6 +271,11 @@ async def api_owner_action():
 
     return jsonify({"error": "Invalid Action"}), 400
 
+@app.route('/quiz')
+async def quiz_page():
+    try: return await render_template('test_generator.html')
+    except Exception as e: return f"Error: {e}", 200
+
 @app.route('/api/explore/<int:user_id>')
 async def api_explore_data(user_id):
     user_key = str(user_id) if str(user_id) in DB["USER_DATA"] else (user_id if user_id in DB["USER_DATA"] else None)
