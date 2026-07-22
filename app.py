@@ -1,11 +1,14 @@
 import time
 import io
 import asyncio
+import httpx
 import datetime
 from quart import Quart, jsonify, render_template, send_file
 import config
 from config import DB, OWNER_ID, is_admin, get_membership_cached
 from pyrogram.enums import ChatMemberStatus # ADDED: Pyrogram ke naye status system ke liye
+
+TESTBOOK_API_URL = "https://TUMHARA-NAYA-API-SPACE.hf.space"
 
 app = Quart(__name__)
 AVATAR_CACHE = {}
@@ -275,6 +278,56 @@ async def api_owner_action():
 async def quiz_page():
     try: return await render_template('test_generator.html')
     except Exception as e: return f"Error: {e}", 200
+
+@app.route('/api/tb/search')
+async def tb_search_proxy():
+    query = request.args.get('q')
+    async with httpx.AsyncClient(timeout=30) as client:
+        res = await client.get(f"{TESTBOOK_API_URL}/api/search?q={query}")
+        return jsonify(res.json().get('results', []))
+
+@app.route('/api/tb/series/<slug>')
+async def tb_series_proxy(slug):
+    async with httpx.AsyncClient(timeout=30) as client:
+        res = await client.get(f"{TESTBOOK_API_URL}/api/series/{slug}")
+        return jsonify(res.json().get('details', {}))
+
+@app.route('/api/tb/tests/<series_id>/<section_id>/<sub_id>')
+async def tb_tests_proxy(series_id, section_id, sub_id):
+    async with httpx.AsyncClient(timeout=30) as client:
+        res = await client.get(f"{TESTBOOK_API_URL}/api/tests?series_id={series_id}&section_id={section_id}&sub_id={sub_id}")
+        return jsonify(res.json().get('tests', []))
+
+@app.route('/api/tb/extract/<test_id>', methods=['POST'])
+async def tb_extract_proxy(test_id):
+    from quart import request
+    data = await request.json
+    
+    # 1. API se JSON Questions nikalna
+    async with httpx.AsyncClient(timeout=60) as client:
+        res = await client.get(f"{TESTBOOK_API_URL}/api/extract/{test_id}")
+        q_data = res.json().get('quiz_data', {})
+
+    if 'error' in q_data:
+        return jsonify({"error": q_data['error']}), 400
+
+    # 2. HTML Generator import karke UI render karna
+    from html_generator import generate_html
+
+    details = {
+        "Test Series": data.get('series_details', {}).get('name', 'N/A'),
+        "Section": data.get('section', {}).get('name', 'N/A'),
+        "Subsection": data.get('subsection', {}).get('name', 'N/A'),
+        "Test Name": data.get('test_summary', {}).get('title', 'N/A'),
+        "Questions": str(data.get('test_summary', {}).get('questionCount', '?')),
+        "Duration": f"{data.get('test_summary', {}).get('duration', 'N/A')} minutes",
+        "Total Marks": str(data.get('test_summary', {}).get('totalMark', 'N/A')),
+        "Correct": "+1",     # Default value 
+        "Incorrect": "-0.25" # Default value
+    }
+
+    html_content = generate_html(q_data, details)
+    return html_content, 200, {'Content-Type': 'text/html'}
 
 @app.route('/api/explore/<int:user_id>')
 async def api_explore_data(user_id):
