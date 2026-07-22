@@ -295,11 +295,9 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
 
     // --- MODALS & NAVIGATION ---
     window.goBackToDashboard = function() {
-        if(window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.close();
-        } else {
-            window.close();
-        }
+        // Page ko reload karne se Mini App close nahi hoga, 
+        // balki wapas tumhara main Dashboard (Test select karne wala page) khul jayega.
+        window.location.reload();
     };
 
     window.openLanguageModal = function() { window.getEl('language-modal').classList.add('active'); };
