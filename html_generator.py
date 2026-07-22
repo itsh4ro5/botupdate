@@ -3,7 +3,7 @@ import re
 import base64
 
 # --- HTML Template (Online & Offline Base) ---
-HTML_TEMPLATE = """
+HTML_TEMPLATE = r"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
