@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Quiz Generator</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- MathJax for rendering LaTeX (Maths Equations) -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+        :root {
+            --bg-base: #f4f4f5; --bg-surface: #ffffff; --bg-surface-hover: #f4f4f5;
+            --border-subtle: #e4e4e7; --text-primary: #09090b; --text-secondary: #71717a;
+            --accent-main: #4f46e5; --accent-glow: rgba(79, 70, 229, 0.15);
+            --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+            --dock-bg: rgba(255, 255, 255, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.08);
+        }
+        [data-theme="dark"] {
+            --bg-base: #000000; --bg-surface: #111111; --bg-surface-hover: #1f1f22;
+            --border-subtle: #27272a; --text-primary: #fafafa; --text-secondary: #a1a1aa;
+            --accent-main: #6366f1; --accent-glow: rgba(99, 102, 241, 0.25);
+            --dock-bg: rgba(24, 24, 27, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: 'Outfit', sans-serif; }
+        body { background: var(--bg-base); color: var(--text-primary); margin: 0; padding: 0 16px 120px 16px; transition: background-color 0.4s ease; }
+
+        .header-area { display: flex; justify-content: space-between; align-items: center; padding: 24px 0 20px 0; }
+        .header-area h2 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
+        
+        .theme-btn { background: var(--bg-surface); border: 1px solid var(--border-subtle); color: var(--text-primary); width: 44px; height: 44px; border-radius: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .theme-btn:active { transform: scale(0.85); }
+
+        .bento-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 24px; padding: 20px; position: relative; overflow: hidden; transition: 0.3s; margin-bottom: 24px; }
+        
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 14px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; }
+        
+        /* Styled matching the search-bar from your explore page */
+        .custom-input { width: 100%; padding: 16px; border-radius: 16px; border: 1px solid var(--border-subtle); background: var(--bg-base); color: var(--text-primary); font-size: 15px; font-weight: 500; outline: none; transition: 0.3s; }
+        .custom-input:focus { border-color: var(--accent-main); box-shadow: 0 0 0 4px var(--accent-glow); }
+        input[type="file"]::file-selector-button { background: var(--accent-main); color: white; border: none; padding: 8px 16px; border-radius: 10px; font-weight: 700; cursor: pointer; margin-right: 12px; transition: 0.2s; }
+
+        .btn-primary-full { width: 100%; background: var(--accent-main); color: white; border: none; padding: 18px; border-radius: 20px; font-size: 16px; font-weight: 800; letter-spacing: 0.5px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 10px; box-shadow: 0 10px 30px var(--accent-glow); transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); margin-top: 10px; }
+        .btn-primary-full:active { transform: scale(0.96); }
+        .btn-primary-full:disabled { opacity: 0.7; cursor: not-allowed; }
+
+        /* Questions UI */
+        .q-meta { display: flex; justify-content: space-between; margin-bottom: 15px; }
+        .badge { padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+        .bg-blue { background: rgba(99, 102, 241, 0.15); color: var(--accent-main); }
+        .bg-purple { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+        
+        .question-text { font-size: 16px; font-weight: 700; margin-bottom: 16px; line-height: 1.5; }
+        
+        .option-row { background: var(--bg-base); border: 1px solid var(--border-subtle); border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; display: flex; align-items: flex-start; cursor: pointer; transition: 0.2s; font-weight: 500; font-size: 15px;}
+        .option-row:hover { border-color: var(--accent-main); background: var(--accent-glow); }
+        
+        .solution-btn { background: transparent; color: var(--accent-main); border: 1px solid var(--accent-main); padding: 10px 16px; border-radius: 12px; font-weight: 700; width: 100%; margin-top: 12px; cursor: pointer; transition: 0.2s; }
+        .solution-btn:active { transform: scale(0.96); background: var(--accent-glow); }
+
+        .solution-box { display: none; margin-top: 16px; padding: 16px; background: rgba(16, 185, 129, 0.1); border-left: 4px solid var(--success); border-radius: 12px; font-size: 14px; font-weight: 500; line-height: 1.6; }
+        .solution-box strong { color: var(--success); }
+
+        /* Loading Skeleton */
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        .skeleton { background: linear-gradient(90deg, var(--bg-surface) 25%, var(--border-subtle) 50%, var(--bg-surface) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 24px; height: 150px; margin-bottom: 20px; display: none; }
+
+        /* Floating Dock */
+        .floating-dock { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: max-content; padding: 8px 16px; background: var(--dock-bg); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--border-subtle); border-radius: 100px; display: flex; gap: 24px; box-shadow: var(--dock-shadow); z-index: 9999; transition: 0.3s; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); cursor: pointer; text-decoration: none; transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); width: 50px; height: 50px; border-radius: 50%; }
+        .nav-item span { display: none; }
+        .nav-item i { font-size: 20px; transition: 0.3s; }
+        .nav-item.active { background: var(--accent-main); color: white; box-shadow: 0 8px 20px var(--accent-glow); transform: translateY(-10px); }
+    </style>
+</head>
+<body data-theme="dark">
+
+    <div class="header-area">
+        <h2>AI Quiz Bot</h2>
+        <button class="theme-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon" id="theme-icon"></i></button>
+    </div>
+
+    <!-- Upload Card -->
+    <div class="bento-card">
+        <form id="quizForm">
+            <div class="form-group">
+                <label><i class="fa-solid fa-file-pdf"></i> Upload Study Material (PDF)</label>
+                <input type="file" id="pdfFile" class="custom-input" accept="application/pdf" required>
+            </div>
+            <div class="form-group">
+                <label><i class="fa-solid fa-list-ol"></i> Number of Questions</label>
+                <input type="number" id="numQuestions" class="custom-input" value="5" min="1" max="20" required>
+            </div>
+            <button type="submit" class="btn-primary-full" id="submitBtn">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Magic Quiz
+            </button>
+        </form>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loadingIndicator" class="skeleton"></div>
+    <div id="loadingText" style="display: none; text-align: center; color: var(--accent-main); font-weight: 700; margin-bottom: 20px;">
+        <i class="fa-solid fa-spinner fa-spin"></i> AI is reading PDF & preparing questions (1-2 mins)...
+    </div>
+
+    <!-- Quiz Output Container -->
+    <div id="quizContainer"></div>
+
+    <!-- Floating Dock -->
+    <div class="floating-dock">
+        <a href="/" class="nav-item"><i class="fa-solid fa-house"></i></a>
+        <a href="/explore" class="nav-item"><i class="fa-solid fa-magnifying-glass"></i></a>
+        <a href="/quiz" class="nav-item active"><i class="fa-solid fa-brain"></i></a>
+        <a href="/admin_panel" class="nav-item" id="btn-nav-admin" style="display:none;"><i class="fa-solid fa-shield-halved"></i></a>
+        <a href="/owner_panel" class="nav-item" id="btn-nav-owner" style="display:none;"><i class="fa-solid fa-crown"></i></a>
+    </div>
+
+    <script>
+        // 👇👇 YAHAN APNE SPACE 2 KA URL DAALIYE 👇👇
+        const API_URL = "https://AAPKA-SPACE-2-KA-LINK.hf.space/generate-quiz";
+
+        let tg = window.Telegram.WebApp; 
+        tg.expand();
+        let uid = tg.initDataUnsafe?.user?.id || 9999999;
+
+        // Fetch User Data for Navigation Dock (Admin/Owner Check)
+        fetch('/api/user/' + uid).then(res => res.json()).then(data => {
+            if (data.is_admin || data.is_owner) document.getElementById("btn-nav-admin").style.display = "flex";
+            if (data.is_owner) document.getElementById("btn-nav-owner").style.display = "flex";
+        }).catch(e => console.log("User fetch error", e));
+
+        // Theme Setup
+        window.onload = () => {
+            let saved = localStorage.getItem('edtech_theme') || 'dark';
+            document.body.setAttribute('data-theme', saved);
+            document.getElementById("theme-icon").className = saved === 'dark' ? "fa-solid fa-moon" : "fa-solid fa-sun";
+        }
+
+        function toggleTheme() {
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            let theme = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            document.body.setAttribute('data-theme', theme);
+            localStorage.setItem('edtech_theme', theme);
+            document.getElementById("theme-icon").className = theme === 'dark' ? "fa-solid fa-moon" : "fa-solid fa-sun";
+        }
+
+        // Handle Form Submission
+        document.getElementById('quizForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+            
+            const file = document.getElementById('pdfFile').files[0];
+            const num = document.getElementById('numQuestions').value;
+            const btn = document.getElementById('submitBtn');
+            const loadingSkeleton = document.getElementById('loadingIndicator');
+            const loadingText = document.getElementById('loadingText');
+            const container = document.getElementById('quizContainer');
+
+            if (!file) return alert("Please select a PDF!");
+
+            // UI Updates - Start Loading
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Generating...`;
+            container.innerHTML = "";
+            loadingSkeleton.style.display = "block";
+            loadingText.style.display = "block";
+
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("num_questions", num);
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: "POST",
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || "Something went wrong on the server.");
+                }
+
+                const data = await response.json();
+                renderQuiz(data);
+
+            } catch (error) {
+                alert("Error: " + error.message);
+            } finally {
+                // UI Updates - Stop Loading
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> Generate Magic Quiz`;
+                loadingSkeleton.style.display = "none";
+                loadingText.style.display = "none";
+            }
+        });
+
+        // Render Questions HTML
+        function renderQuiz(data) {
+            if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+            const container = document.getElementById('quizContainer');
+            
+            let html = `<h3 style="margin-bottom:20px; font-weight:800;"><i class="fa-solid fa-file-signature" style="color:var(--accent-main);"></i> ${data.quiz_title}</h3>`;
+
+            data.questions.forEach((q, index) => {
+                let optionsHtml = '';
+                q.options.forEach((opt, i) => {
+                    const labels = ['A', 'B', 'C', 'D'];
+                    optionsHtml += `<div class="option-row"><strong>${labels[i]}.&nbsp;</strong> ${opt}</div>`;
+                });
+
+                html += `
+                    <div class="bento-card">
+                        <div class="q-meta">
+                            <span class="badge bg-blue">Q${index + 1} | ${q.question_type}</span>
+                            <span class="badge bg-purple">Level: ${q.difficulty}</span>
+                        </div>
+                        <div class="question-text">${q.question}</div>
+                        <div class="options-container">
+                            ${optionsHtml}
+                        </div>
+                        <button class="solution-btn" onclick="toggleSolution(${index})">
+                            <i class="fa-solid fa-lightbulb"></i> View Solution
+                        </button>
+                        <div class="solution-box" id="sol-${index}">
+                            <strong>✅ Correct Answer:</strong> ${q.correct_answer} <br><br>
+                            <strong>💡 Explanation:</strong><br>
+                            ${q.detailed_explanation}
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+
+            // Trigger MathJax to render LaTeX equations beautifully
+            if (window.MathJax) {
+                MathJax.typesetPromise([container]).catch(function (err) {
+                    console.error('MathJax error: ', err.message);
+                });
+            }
+        }
+
+        // Toggle Solution Box
+        function toggleSolution(index) {
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            const solBox = document.getElementById(`sol-${index}`);
+            if (solBox.style.display === "block") {
+                solBox.style.display = "none";
+            } else {
+                solBox.style.display = "block";
+            }
+        }
+    </script>
+</body>
+</html>
