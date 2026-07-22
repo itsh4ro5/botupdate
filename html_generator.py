@@ -2,7 +2,7 @@ import json
 import re
 import base64
 
-# --- HTML Template (Redesigned to match your Dashboard Theme) ---
+# --- HTML Template (Redesigned & Fixed) ---
 HTML_TEMPLATE = r"""
 <!DOCTYPE html>
 <html lang="en">
@@ -12,91 +12,82 @@ HTML_TEMPLATE = r"""
 <title>H4R Test Engine</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-<!-- 1. ADDED OUTFIT FONT TO MATCH YOUR DESIGN -->
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-<!-- 2. MATHJAX CONFIGURATION FOR PROPER FORMULA RENDERING -->
+<!-- MATHJAX CONFIGURATION FOR TESTBOOK LATEX -->
 <script>
     window.MathJax = {
         tex: {
-            inlineMath: [['$', '$'], ['\\(', '\\)']],
-            displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            inlineMath: [['$', '$'], ['\\(', '\\)'], ['[tex]', '[/tex]']],
+            displayMath: [['$$', '$$'], ['\\[', '\\]']],
+            processEscapes: true,
+            packages: {'[+]': ['base', 'ams', 'noerrors', 'noundefined']}
         },
-        startup: {
-            typeset: false // Hum isko manually trigger karenge jab question load hoga
-        }
+        startup: { typeset: false }
     };
 </script>
 <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
 <style>
-/* 3. UPDATED CSS VARIABLES TO MATCH YOUR EXPLORE/DASHBOARD PAGE */
 :root {
-    --bg-base: #f4f4f5; 
-    --bg-surface: #ffffff; 
-    --bg-surface-hover: #f4f4f5;
-    --border-subtle: #e4e4e7; 
-    --text-primary: #09090b; 
-    --text-secondary: #71717a;
-    --accent-main: #4f46e5; 
-    --accent-glow: rgba(79, 70, 229, 0.15);
-    --success: #10b981; 
-    --warning: #f59e0b; 
-    --danger: #ef4444;
+    --bg-base: #f4f4f5; --bg-surface: #ffffff; --bg-surface-hover: #f4f4f5;
+    --border-subtle: #e4e4e7; --text-primary: #09090b; --text-secondary: #71717a;
+    --accent-main: #4f46e5; --accent-glow: rgba(79, 70, 229, 0.15);
+    --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
 }
-
 .dark-mode {
-    --bg-base: #000000; 
-    --bg-surface: #111111; 
-    --bg-surface-hover: #1f1f22;
-    --border-subtle: #27272a; 
-    --text-primary: #fafafa; 
-    --text-secondary: #a1a1aa;
-    --accent-main: #6366f1; 
-    --accent-glow: rgba(99, 102, 241, 0.25);
+    --bg-base: #000000; --bg-surface: #111111; --bg-surface-hover: #1f1f22;
+    --border-subtle: #27272a; --text-primary: #fafafa; --text-secondary: #a1a1aa;
+    --accent-main: #6366f1; --accent-glow: rgba(99, 102, 241, 0.25);
 }
 
 * { box-sizing: border-box; font-family: 'Outfit', sans-serif; -webkit-tap-highlight-color: transparent; }
 body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; transition: background-color 0.4s ease; }
 
-/* BENTO CARD DESIGN */
 .bento-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 24px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.02); transition: 0.3s; }
 .bento-header { position: sticky; top: 0; z-index: 20; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); padding: 16px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 20px rgba(0,0,0,0.02); }
 
-/* SCROLLBAR */
 .question-content-area { overflow-x: auto; width: 100%; }
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 4px; }
 
-/* OPTIONS UI */
-.option-row { background: var(--bg-base); border: 1px solid var(--border-subtle); border-radius: 16px; padding: 14px 16px; margin-bottom: 12px; display: flex; align-items: flex-start; cursor: pointer; transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1); font-weight: 500; font-size: 15px; }
+.option-row { background: var(--bg-base); border: 1px solid var(--border-subtle); border-radius: 16px; padding: 14px 16px; margin-bottom: 12px; display: flex; align-items: flex-start; cursor: pointer; transition: 0.2s; font-weight: 500; font-size: 15px; }
 .option-row.selected { border-color: var(--accent-main); background: var(--accent-glow); }
 .option-radio { -webkit-appearance: none; appearance: none; border: 2px solid var(--text-secondary); border-radius: 50%; width: 20px; height: 20px; min-width: 20px; cursor: pointer; transition: 0.2s; position: relative; margin-top: 2px; }
 .option-row.selected .option-radio { border-color: var(--accent-main); background-color: var(--accent-main); }
 .option-row.selected .option-radio::after { content: ''; display: block; width: 8px; height: 8px; background: white; border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
 
-/* BUTTONS */
-.btn-primary { background: var(--accent-main); color: white; border: none; padding: 10px 16px; border-radius: 16px; font-weight: 700; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 15px var(--accent-glow); display: inline-flex; align-items: center; gap: 8px; }
+.btn-primary { background: var(--accent-main); color: white; border: none; padding: 10px 16px; border-radius: 16px; font-weight: 700; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .btn-primary:active { transform: scale(0.95); }
-.btn-danger { background: var(--danger); color: white; border: none; padding: 10px 16px; border-radius: 16px; font-weight: 700; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.2); }
-.btn-danger:active { transform: scale(0.95); }
-.btn-outline { background: transparent; border: 1px solid var(--border-subtle); color: var(--text-primary); padding: 10px 16px; border-radius: 16px; font-weight: 700; cursor: pointer; transition: 0.2s; }
-.btn-outline:active { transform: scale(0.95); background: var(--bg-surface-hover); }
+.btn-danger { background: var(--danger); color: white; border: none; padding: 10px 16px; border-radius: 16px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+.btn-outline { background: transparent; border: 1px solid var(--border-subtle); color: var(--text-primary); padding: 10px 16px; border-radius: 16px; font-weight: 700; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 
-/* GRID NAV BUTTONS */
 .question-nav-btn { width: 40px; height: 40px; border-radius: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; border: 1px solid var(--border-subtle); background: var(--bg-base); color: var(--text-primary); }
-.question-nav-btn:active { transform: scale(0.9); }
 .status-answered { background: var(--success); color: white; border-color: var(--success); }
 .status-marked { background: #a855f7; color: white; border-color: #a855f7; }
 .status-current { border: 2px solid var(--accent-main); }
 
-/* 4. MODAL FIX (Fixed the transparent overlap issue) */
+/* REVIEW PALETTE */
+.review-palette { display: flex; gap: 8px; overflow-x: auto; padding: 12px 4px; margin-bottom: 16px; scrollbar-width: none; }
+.review-palette::-webkit-scrollbar { display: none; }
+.pal-btn { min-width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; cursor: pointer; transition: 0.2s; border: 2px solid transparent; flex-shrink: 0; }
+.pal-correct { background: rgba(16, 185, 129, 0.15); color: var(--success); border-color: var(--success); }
+.pal-incorrect { background: rgba(239, 68, 68, 0.15); color: var(--danger); border-color: var(--danger); }
+.pal-unanswered { background: var(--border-subtle); color: var(--text-secondary); }
+.pal-marked { background: rgba(168, 85, 247, 0.15); color: #a855f7; border-color: #a855f7; }
+.pal-active { box-shadow: 0 0 0 3px var(--text-primary); transform: scale(1.1); }
+
+/* DARK MODE SOLUTION FIX */
+.solution-box { background: rgba(16, 185, 129, 0.1) !important; border-left: 4px solid var(--success) !important; padding: 16px !important; margin-top: 16px !important; border-radius: 12px !important; }
+.solution-box, .solution-box * { color: var(--text-primary) !important; background-color: transparent !important; }
+
+/* MODAL SCROLL FIX */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); z-index: 10000; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: 0.3s; }
 .modal-overlay.active { opacity: 1; pointer-events: auto; }
-.modal-content { background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border-subtle); border-radius: 32px; padding: 32px 24px; text-align: center; width: 90%; max-width: 400px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); transform: translateY(20px); transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+.modal-content { background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border-subtle); border-radius: 32px; padding: 24px; width: 90%; max-width: 400px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.5); transform: translateY(20px); transition: 0.3s; }
 .modal-overlay.active .modal-content { transform: translateY(0); }
+#language-options-container { overflow-y: auto; flex: 1; padding-right: 4px; }
 
-/* UTILS */
 .hidden { display: none !important; }
 .badge { padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; display: inline-flex; align-items: center; gap: 4px; }
 .bg-blue { background: rgba(99, 102, 241, 0.15); color: var(--accent-main); }
@@ -130,7 +121,7 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
             <span class="badge bg-red"><i class="fas fa-times"></i> _INCORRECT_MARKS_DISPLAY_ Mark</span>
         </div>
 
-        <button onclick="window.startQuiz()" class="btn-primary" style="width: 100%; justify-content: center; padding: 16px; font-size: 16px;">
+        <button onclick="window.startQuiz()" class="btn-primary" style="width: 100%; padding: 16px; font-size: 16px;">
             <i class="fas fa-play"></i> Start Engine
         </button>
     </div>
@@ -138,7 +129,6 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
 
 <!-- QUIZ SCREEN -->
 <div id="quiz-screen" class="hidden">
-    <!-- Sticky Header -->
     <header class="bento-header">
         <div id="timer" class="badge bg-blue" style="font-size: 14px; padding: 8px 12px;"><i class="fas fa-clock"></i> <span id="time" class="notranslate">00:00</span></div>
         <div class="flex gap-2">
@@ -155,17 +145,15 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
                 <h2 class="text-lg font-bold">Question <span id="question-number" class="notranslate">1</span></h2>
                 <span class="badge bg-purple" id="q-lang-badge">EN</span>
             </div>
-            <!-- Questions and Options -->
             <div id="question-container" class="prose max-w-none mb-6 question-content-area text-[15px] font-medium"></div>
             <div id="options-container"></div>
         </div>
     </main>
 
-    <!-- Bottom Action Bar -->
     <footer style="position: fixed; bottom: 0; left: 0; right: 0; background: var(--bg-surface); padding: 12px 16px; border-top: 1px solid var(--border-subtle); display: flex; gap: 8px; z-index: 10;">
         <button onclick="window.clearResponse()" class="btn-outline" style="flex: 1;"><i class="fas fa-trash"></i></button>
         <button onclick="window.markForReview()" class="btn-outline" style="flex: 2; border-color: #a855f7; color: #a855f7;">Mark</button>
-        <button onclick="window.saveAndNext()" class="btn-primary" style="flex: 3; justify-content: center;">Save & Next</button>
+        <button onclick="window.saveAndNext()" class="btn-primary" style="flex: 3;">Save & Next</button>
     </footer>
 </div>
 
@@ -175,7 +163,7 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
         <h1 class="text-2xl font-black mb-4">Report Card</h1>
         <div class="text-5xl font-black mb-6 notranslate" style="color: var(--accent-main);"><span id="final-score">0</span><span style="font-size:20px; color:var(--text-secondary);"> / <span id="total-score">0</span></span></div>
         
-        <div class="grid grid-cols-2 gap-4 mb-8">
+        <div class="grid grid-cols-2 gap-4 mb-4">
             <div style="background: var(--bg-base); padding: 16px; border-radius: 16px; border: 1px solid var(--border-subtle);">
                 <p class="text-2xl font-black text-green-500 notranslate" id="correct-count">0</p>
                 <p class="text-[10px] font-bold text-gray-500 uppercase">Correct</p>
@@ -185,15 +173,35 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
                 <p class="text-[10px] font-bold text-gray-500 uppercase">Incorrect</p>
             </div>
         </div>
-        <button onclick="window.reviewAnswers()" class="btn-primary w-full justify-center" style="padding: 16px; font-size: 16px;"><i class="fas fa-eye"></i> Review Answers</button>
+        
+        <!-- RESTORED UNANSWERED & MARKED STATS -->
+        <div class="grid grid-cols-2 gap-4 mb-8">
+            <div style="background: var(--bg-base); padding: 16px; border-radius: 16px; border: 1px solid var(--border-subtle);">
+                <p class="text-2xl font-black notranslate" style="color: var(--text-secondary);" id="unanswered-count">0</p>
+                <p class="text-[10px] font-bold text-gray-500 uppercase">Unanswered</p>
+            </div>
+            <div style="background: var(--bg-base); padding: 16px; border-radius: 16px; border: 1px solid var(--border-subtle);">
+                <p class="text-2xl font-black notranslate" style="color: #a855f7;" id="marked-count-result">0</p>
+                <p class="text-[10px] font-bold text-gray-500 uppercase">Marked</p>
+            </div>
+        </div>
+
+        <div class="flex flex-col gap-3">
+            <button onclick="window.reviewAnswers()" class="btn-primary w-full justify-center" style="padding: 16px; font-size: 16px;"><i class="fas fa-eye"></i> Review Answers</button>
+            <button onclick="window.goBackToDashboard()" class="btn-outline w-full justify-center" style="padding: 16px; font-size: 16px;"><i class="fas fa-arrow-left"></i> Back to Dashboard</button>
+        </div>
     </div>
 </div>
 
 <!-- REVIEW SCREEN -->
 <div id="review-screen" class="hidden">
-    <header class="bento-header">
-        <div id="review-question-counter" class="font-bold text-lg"></div>
-        <button onclick="window.backToResults()" class="btn-outline">Back</button>
+    <header class="bento-header flex-col items-start gap-2">
+        <div class="w-full flex justify-between items-center">
+            <div id="review-question-counter" class="font-bold text-lg"></div>
+            <button onclick="window.backToResults()" class="btn-outline">Back</button>
+        </div>
+        <!-- ADDED NUMBER PALETTE -->
+        <div id="review-palette" class="review-palette w-full"></div>
     </header>
     
     <div class="p-4 max-w-3xl mx-auto mb-20">
@@ -201,19 +209,19 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
     </div>
     
     <footer style="position: fixed; bottom: 0; left: 0; right: 0; background: var(--bg-surface); padding: 12px 16px; border-top: 1px solid var(--border-subtle); display: flex; gap: 8px; z-index: 10;">
-        <button id="prev-review-btn" onclick="window.prevReviewQuestion()" class="btn-outline" style="flex: 1; justify-content: center;"><i class="fas fa-chevron-left"></i> Prev</button>
-        <button id="next-review-btn" onclick="window.nextReviewQuestion()" class="btn-primary" style="flex: 1; justify-content: center;">Next <i class="fas fa-chevron-right"></i></button>
+        <button id="prev-review-btn" onclick="window.prevReviewQuestion()" class="btn-outline" style="flex: 1;"><i class="fas fa-chevron-left"></i> Prev</button>
+        <button id="next-review-btn" onclick="window.nextReviewQuestion()" class="btn-primary" style="flex: 1;">Next <i class="fas fa-chevron-right"></i></button>
     </footer>
 </div>
 
-<!-- MODALS (Fixed z-index and backgrounds) -->
+<!-- MODALS -->
 <div id="question-nav-modal" class="modal-overlay" onclick="if(event.target===this) window.closeQuestionNav()">
-    <div class="modal-content" style="max-width: 500px;">
+    <div class="modal-content">
         <div class="flex justify-between items-center mb-6">
             <h2 class="text-xl font-bold">Jump to Question</h2>
             <button onclick="window.closeQuestionNav()" class="text-2xl text-gray-400 hover:text-red-500">&times;</button>
         </div>
-        <div id="question-grid" class="grid grid-cols-5 gap-3"></div>
+        <div id="question-grid" class="grid grid-cols-5 gap-3 overflow-y-auto pr-2" style="max-height: 50vh;"></div>
     </div>
 </div>
 
@@ -223,18 +231,19 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
         <h2 class="text-xl font-black mb-2">Submit Exam?</h2>
         <p class="mb-6 font-medium text-sm" style="color: var(--text-secondary);">You have <span id="unanswered-modal-count" class="font-bold" style="color: var(--text-primary);">0</span> unanswered questions.</p>
         <div class="flex gap-4">
-            <button onclick="window.closeConfirmSubmission()" class="btn-outline flex-1 justify-center">Cancel</button>
-            <button onclick="window.submitQuiz()" class="btn-danger flex-1 justify-center">Yes, Submit</button>
+            <button onclick="window.closeConfirmSubmission()" class="btn-outline flex-1">Cancel</button>
+            <button onclick="window.submitQuiz()" class="btn-danger flex-1">Submit</button>
         </div>
     </div>
 </div>
 
 <div id="language-modal" class="modal-overlay" onclick="if(event.target===this) window.closeLanguageModal()">
     <div class="modal-content">
-        <div class="flex justify-between items-center mb-6">
+        <div class="flex justify-between items-center mb-4 flex-shrink-0">
             <h2 class="text-xl font-bold">Choose Language</h2>
             <button onclick="window.closeLanguageModal()" class="text-2xl text-gray-400 hover:text-red-500">&times;</button>
         </div>
+        <!-- SCROLL FIX FOR LANGUAGE -->
         <div id="language-options-container"></div>
     </div>
 </div>
@@ -256,11 +265,19 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
     window.timer = null; window.currentLanguage = 'en';
 
     window.getEl = function(id) { return document.getElementById(id); };
+    
+    // HTML DECODER (Includes LaTeX cleanup for Testbook's weird formats)
     window.decodeHtml = function(html) {
         if (!html) return "";
         var txt = document.createElement("textarea"); txt.innerHTML = html;
-        return txt.value.replace(/src=(["'])\/\//g, 'src=$1https://').replace(/src=(["'])\/([^\/])/g, 'src=$1https://testbook.com/$2');
+        let res = txt.value.replace(/src=(["'])\/\//g, 'src=$1https://').replace(/src=(["'])\/([^\/])/g, 'src=$1https://testbook.com/$2');
+        // Testbook sometimes sends [tex] instead of \(
+        res = res.replace(/\[tex\]/g, '\\(').replace(/\[\/tex\]/g, '\\)');
+        // Fix for "\rm" command which fails in modern MathJax
+        res = res.replace(/\\rm\s/g, ''); 
+        return res;
     };
+
     window.getLocalizedContent = function(obj) {
         if (!obj) return "";
         if (obj[window.currentLanguage]) return obj[window.currentLanguage];
@@ -268,14 +285,23 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
         var keys = Object.keys(obj); return keys.length > 0 ? obj[keys[0]] : "";
     };
 
-    // --- MATHJAX RENDER TRIGGER ---
+    // --- MATHJAX RENDER TRIGGER (Fixed) ---
     window.triggerMathJax = function() {
         if (window.MathJax && MathJax.typesetPromise) {
+            MathJax.typesetClear(); // Clear previous typeset to avoid caching issues
             MathJax.typesetPromise().catch(function (err) { console.error('MathJax Error:', err.message); });
         }
     };
 
-    // --- MODALS ---
+    // --- MODALS & NAVIGATION ---
+    window.goBackToDashboard = function() {
+        if(window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.close();
+        } else {
+            window.close();
+        }
+    };
+
     window.openLanguageModal = function() { window.getEl('language-modal').classList.add('active'); };
     window.closeLanguageModal = function() { window.getEl('language-modal').classList.remove('active'); };
     window.openQuestionNav = function() { 
@@ -360,7 +386,7 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
                 );
             });
         }
-        window.triggerMathJax(); // FIX: Trigger MathJax on load!
+        window.triggerMathJax(); 
     };
 
     window.selectOption = function(i) { window.userAnswers[window.currentQuestionIndex] = i; window.loadQuestion(window.currentQuestionIndex); };
@@ -378,25 +404,36 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
         window.closeConfirmSubmission();
         clearInterval(window.timer);
         window.score = 0;
+        
+        var c=0, ic=0, u=0, m=0;
+        
         window.quizData.questions.forEach(function(q, i) {
             var ans = window.userAnswers[i];
-            if (ans !== null) { 
+            if (window.questionStatus[i] === 'marked') m++;
+            
+            if (ans === null) {
+                u++;
+            } else {
                 var opts = q.options.en || q.options[Object.keys(q.options)[0]]; 
-                if (opts && opts[ans] && opts[ans].is_correct) window.score += window.CORRECT_MARKS; 
-                else window.score -= window.INC_MARKS; 
+                if (opts && opts[ans] && opts[ans].is_correct) {
+                    window.score += window.CORRECT_MARKS;
+                    c++;
+                } else {
+                    window.score -= window.INC_MARKS;
+                    ic++;
+                }
             }
         });
+        
         window.getEl('quiz-screen').classList.add('hidden');
         window.getEl('results-screen').classList.remove('hidden');
         window.getEl('final-score').textContent = window.score.toFixed(2);
         window.getEl('total-score').textContent = (window.quizData.questions.length * window.CORRECT_MARKS).toFixed(2);
-        var c=0, i=0, u=0;
-        for(var j=0; j<window.userAnswers.length; j++) {
-            if(window.userAnswers[j]===null) u++;
-            else { var getOpts = function(q) { return q.options.en || q.options[Object.keys(q.options)[0]]; }; if(getOpts(window.quizData.questions[j])[window.userAnswers[j]].is_correct) c++; else i++; }
-        }
+        
         window.getEl('correct-count').textContent = c;
-        window.getEl('incorrect-count').textContent = i;
+        window.getEl('incorrect-count').textContent = ic;
+        window.getEl('unanswered-count').textContent = u;
+        window.getEl('marked-count-result').textContent = m;
     };
 
     window.reviewAnswers = function() { 
@@ -404,6 +441,40 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
         window.getEl('review-screen').classList.remove('hidden'); 
         window.loadReviewQuestion(0); 
     };
+
+    // PALETTE LOGIC
+    window.populateReviewPalette = function() {
+        var palette = window.getEl('review-palette');
+        palette.innerHTML = '';
+        
+        window.quizData.questions.forEach(function(q, idx) {
+            var btn = document.createElement('div');
+            btn.textContent = idx + 1;
+            
+            var ua = window.userAnswers[idx]; 
+            var opts = q.options.en || q.options[Object.keys(q.options)[0]]; 
+            var isCorrect = ua !== null && opts && opts[ua] && opts[ua].is_correct;
+            
+            var cls = 'pal-btn notranslate ';
+            if (isCorrect) cls += 'pal-correct';
+            else if (ua !== null) cls += 'pal-incorrect';
+            else if (window.questionStatus[idx] === 'marked') cls += 'pal-marked';
+            else cls += 'pal-unanswered';
+            
+            if (idx === window.currentReviewIndex) cls += ' pal-active';
+            
+            btn.className = cls;
+            btn.onclick = function() { window.loadReviewQuestion(idx); };
+            palette.appendChild(btn);
+        });
+        
+        // Auto scroll palette to active button
+        var activeBtn = palette.querySelector('.pal-active');
+        if(activeBtn) {
+            palette.scrollTo({ left: activeBtn.offsetLeft - (palette.clientWidth / 2) + 22, behavior: 'smooth' });
+        }
+    };
+
     window.loadReviewQuestion = function(index) {
         if (index < 0 || index >= window.quizData.questions.length) return;
         window.currentReviewIndex = index;
@@ -425,13 +496,16 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
                 optsHtml += `<div class="option-row ${cls}"><div class="mr-3 mt-1">${icon}</div><div class="flex-1 overflow-x-auto">${window.decodeHtml(opt.text)}</div></div>`; 
             }); 
         }
-        container.innerHTML = `<div class="bento-card"><h3 class="font-bold text-lg mb-4 border-b pb-2" style="border-color:var(--border-subtle);">Question ${index + 1}</h3><div class="prose max-w-none mb-6 overflow-x-auto font-medium text-[15px]">${window.decodeHtml(content)}</div><div>${optsHtml}</div><div class="mt-6 p-4 rounded-xl border border-green-500/50 bg-green-500/10"><h4 class="font-bold text-green-500 mb-2"><i class="fas fa-lightbulb"></i> Solution</h4><div class="prose max-w-none overflow-x-auto text-sm">${window.decodeHtml(sol)}</div></div></div>`;
+        container.innerHTML = `<div class="bento-card"><h3 class="font-bold text-lg mb-4 border-b pb-2" style="border-color:var(--border-subtle);">Question ${index + 1}</h3><div class="prose max-w-none mb-6 overflow-x-auto font-medium text-[15px]">${window.decodeHtml(content)}</div><div>${optsHtml}</div><div class="solution-box"><h4 class="font-bold text-green-500 mb-2"><i class="fas fa-lightbulb"></i> Solution</h4><div class="prose max-w-none overflow-x-auto text-sm">${window.decodeHtml(sol)}</div></div></div>`;
+        
         window.getEl('review-question-counter').textContent = 'Q ' + (index + 1) + ' / ' + window.quizData.questions.length;
         window.getEl('prev-review-btn').disabled = index === 0; 
         window.getEl('next-review-btn').disabled = index === window.quizData.questions.length - 1; 
         
-        window.triggerMathJax(); // FIX: Trigger MathJax on Review load too!
+        window.populateReviewPalette(); // Update Palette
+        window.triggerMathJax(); // Trigger MathJax
     };
+    
     window.prevReviewQuestion = function() { window.loadReviewQuestion(window.currentReviewIndex - 1); }; 
     window.nextReviewQuestion = function() { window.loadReviewQuestion(window.currentReviewIndex + 1); }; 
     window.backToResults = function() { window.getEl('review-screen').classList.add('hidden'); window.getEl('results-screen').classList.remove('hidden'); };
