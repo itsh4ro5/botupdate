@@ -6,7 +6,234 @@
     <title>Explore Hub</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Explore Hub</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-base: #f4f4f5; --bg-surface: #ffffff; --bg-surface-hover: #f4f4f5;
+            --border-subtle: #e4e4e7; --text-primary: #09090b; --text-secondary: #71717a;
+            --accent-main: #4f46e5; --accent-glow: rgba(79, 70, 229, 0.15);
+            --dock-bg: rgba(255, 255, 255, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.08);
+            --modal-bg: rgba(255,255,255,0.95);
+            --warning: #f59e0b;
+        }
+        [data-theme="dark"] {
+            --bg-base: #000000; --bg-surface: #111111; --bg-surface-hover: #1f1f22;
+            --border-subtle: #27272a; --text-primary: #fafafa; --text-secondary: #a1a1aa;
+            --accent-main: #6366f1; --accent-glow: rgba(99, 102, 241, 0.25);
+            --dock-bg: rgba(24, 24, 27, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            --modal-bg: rgba(9, 9, 11, 0.95);
+        }
+        
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: 'Outfit', sans-serif; }
+        body { background: var(--bg-base); color: var(--text-primary); margin: 0; padding: 0 16px 120px 16px; transition: background-color 0.4s ease; }
+        
+        .header-area { display: flex; justify-content: space-between; align-items: center; padding: 24px 0 20px 0; position: sticky; top: 0; background: var(--bg-base); z-index: 10; margin-bottom: 10px;}
+        .header-area h2 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing:-0.5px; }
+        
+        .theme-btn { background: var(--bg-surface); border: 1px solid var(--border-subtle); color: var(--text-primary); width: 44px; height: 44px; border-radius: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .theme-btn:active { transform: scale(0.85); }
+        
+        .search-container { position: relative; margin-bottom: 24px; }
+        .search-container i { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 16px;}
+        .search-bar { width: 100%; padding: 18px 18px 18px 46px; border-radius: 20px; border: 1px solid var(--border-subtle); background: var(--bg-surface); color: var(--text-primary); font-size: 15px; font-weight: 500; outline: none; transition: 0.3s; box-shadow: 0 4px 20px rgba(0,0,0,0.02);}
+        .search-bar:focus { border-color: var(--accent-main); box-shadow: 0 0 0 4px var(--accent-glow); }
+        
+        .accordion-item { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 24px; margin-bottom: 16px; overflow: hidden; transition: 0.3s; }
+        .accordion-header { padding: 20px; font-size: 17px; font-weight: 700; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; transition: 0.2s;}
+        .accordion-header:active { background: var(--bg-surface-hover); }
+        .accordion-icon { font-size: 14px; color: var(--text-secondary); transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); background: var(--bg-base); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;}
+        .accordion-item.open { border-color: var(--accent-main); box-shadow: 0 10px 30px var(--accent-glow);}
+        .accordion-item.open .accordion-icon { transform: rotate(180deg); color: white; background: var(--accent-main); }
+        .accordion-content { display: none; padding: 0 20px 20px 20px; }
+        
+        .section-divider { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--text-secondary); margin: 10px 0 12px 0; }
+        
+        .sub-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: var(--bg-base); margin-bottom: 10px; border-radius: 16px; border-left: 4px solid var(--accent-main); cursor: pointer; transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .sub-row:active { transform: scale(0.96); background: var(--border-subtle); }
+        .sub-row.paid-border { border-left-color: #a855f7; }
+        .sub-row b { font-size: 14.5px; font-weight: 600; word-break: break-word; color: var(--text-primary);}
+        
+        .badge { padding: 6px 12px; border-radius: 10px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;}
+        .bg-blue { background: rgba(99, 102, 241, 0.15); color: var(--accent-main); }
+        .bg-purple { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+        .empty-text { font-size: 13px; font-weight:500; color: var(--text-secondary); font-style: italic; padding: 8px 0; }
+        
+        #lockedModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(10px); z-index:100000; align-items:flex-end; justify-content:center; padding:16px; }
+        .modal-box { background:var(--modal-bg); border:1px solid var(--border-subtle); border-radius:32px 32px 24px 24px; padding:32px 24px 24px 24px; text-align:center; width:100%; max-width:400px; box-shadow:0 -10px 40px rgba(0,0,0,0.5); animation:slideUp 0.4s cubic-bezier(0.175,0.885,0.32,1.275); position: relative;}
+        .modal-box::before { content: ''; position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 40px; height: 5px; background: var(--border-subtle); border-radius: 10px; }
+        @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .modal-box i { font-size:54px; color:#ef4444; margin-bottom:20px; filter: drop-shadow(0 10px 15px rgba(239, 68, 68, 0.3));}
+        .modal-box h3 { margin:0 0 12px 0; color:var(--text-primary); font-size:22px; font-weight: 800; letter-spacing: -0.5px;}
+        .modal-box p { color:var(--text-secondary); font-size:15px; font-weight: 500; margin:0 0 24px 0; line-height:1.6; }
+        .modal-box button { width:100%; background:#ef4444; color:white; border:none; padding:18px; border-radius:20px; font-weight:800; font-size:16px; cursor:pointer; transition:0.2s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 10px 25px rgba(239, 68, 68, 0.3);}
+        .modal-box button:active { transform: scale(0.96); }
+        
+        .floating-dock { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: max-content; padding: 8px 16px; background: var(--dock-bg); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--border-subtle); border-radius: 100px; display: flex; gap: 24px; box-shadow: var(--dock-shadow); z-index: 9999; transition: 0.3s; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); cursor: pointer; text-decoration: none; transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); width: 50px; height: 50px; border-radius: 50%; }
+        .nav-item span { display: none; }
+        .nav-item i { font-size: 20px; transition: 0.3s; }
+        .nav-item.active { background: var(--accent-main); color: white; box-shadow: 0 8px 20px var(--accent-glow); transform: translateY(-10px); }
+        
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        .skeleton { background: linear-gradient(90deg, var(--bg-surface) 25%, var(--border-subtle) 50%, var(--bg-surface) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; height: 80px; border-radius: 24px; margin-bottom: 16px; border: none; }
+    </style>
+</head>
+<body data-theme="dark">
+    <div class="header-area">
+        <h2>Explore Hub</h2>
+        <button class="theme-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon" id="theme-icon"></i></button>
+    </div>
+
+    <!-- MAINTENANCE SCREEN (Hidden By Default) -->
+    <div id="maintenance-screen" style="display: none; flex-direction: column; align-items: center; justify-content: center; height: 60vh; text-align: center; padding: 20px;">
+        <i class="fa-solid fa-person-digging" style="font-size: 70px; color: var(--warning); margin-bottom: 24px;"></i>
+        <h2 style="font-size: 26px; font-weight: 900; margin: 0 0 12px 0;">Under Maintenance</h2>
+        <p style="color: var(--text-secondary); font-size: 15px; font-weight: 500; line-height: 1.6;">Explore page par naye premium batches, Video Player Stream aur features add kiye ja rahe hain. Kripya kuch din intejar kare!</p>
+    </div>
+
+    <!-- MAIN EXPLORE CONTENT -->
+    <div id="main-explore-content">
+        <div class="search-container">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="courseSearch" class="search-bar" onkeyup="liveSearch()" placeholder="Search communities, topics...">
+        </div>
+        <div id="categories-accordion-wrapper">
+            <div class="skeleton"></div>
+            <div class="skeleton"></div>
+            <div class="skeleton"></div>
+        </div>
+    </div>
+
+    <div id="lockedModal">
+        <div class="modal-box">
+            <i class="fa-solid fa-lock"></i>
+            <h3>Admissions Closed</h3>
+            <p>Sorry, but at this moment the premium batch is locked. I will inform you as soon as it opens.</p>
+            <button onclick="document.getElementById('lockedModal').style.display='none'">Understood</button>
+        </div>
+    </div>
+
+    <div class="floating-dock">
+        <a href="/" class="nav-item"><i class="fa-solid fa-house"></i><span>Home</span></a>
+        <a href="/explore" class="nav-item active"><i class="fa-solid fa-magnifying-glass"></i><span>Explore</span></a>
+        <a href="/quiz" class="nav-item"><i class="fa-solid fa-brain"></i><span>Quiz</span></a>
+        <a href="/admin_panel" class="nav-item" id="btn-nav-admin" style="display:none;"><i class="fa-solid fa-shield-halved"></i><span>Admin</span></a>
+        <a href="/owner_panel" class="nav-item" id="btn-nav-owner" style="display:none;"><i class="fa-solid fa-crown"></i><span>Owner</span></a>
+    </div>
+
+    <script>
+        let tg = window.Telegram.WebApp; tg.expand();
+        let uid = tg.initDataUnsafe?.user?.id || 9999999;
+        
+        // ==========================================
+        // SECURITY: ADD YOUR TESTER USER ID HERE
+        // ==========================================
+        const TESTER_ID = 1234567890; // Isko apne Testing User ki ID se replace karna
+
+        window.onload = () => {
+            let saved = localStorage.getItem('edtech_theme') || 'dark';
+            document.body.setAttribute('data-theme', saved);
+            document.getElementById("theme-icon").className = saved === 'dark' ? "fa-solid fa-moon" : "fa-solid fa-sun";
+        }
+
+        function toggleTheme() {
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            let theme = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            document.body.setAttribute('data-theme', theme);
+            localStorage.setItem('edtech_theme', theme);
+            document.getElementById("theme-icon").className = theme === 'dark' ? "fa-solid fa-moon" : "fa-solid fa-sun";
+        }
+        
+        function openBatch(chatId) {
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+            tg.openTelegramLink("https://t.me/c/" + String(chatId).replace("-100", "") + "/1");
+        }
+
+        function handlePaidClick(chatId, hasAccess, isLocked) {
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+            if (hasAccess) {
+                openBatch(chatId);
+            } else if (isLocked) {
+                document.getElementById('lockedModal').style.display = 'flex';
+            } else {
+                tg.openTelegramLink("https://t.me/H4R_Contact_bot"); 
+            }
+        }
+
+        function toggleAccordion(hdr) {
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            let item = hdr.parentElement, content = item.querySelector('.accordion-content'), isOpen = item.classList.contains('open');
+            document.querySelectorAll('.accordion-item').forEach(i => { i.classList.remove('open'); i.querySelector('.accordion-content').style.display = 'none'; });
+            if (!isOpen) { item.classList.add('open'); content.style.display = 'block'; }
+        }
+
+        function liveSearch() {
+            let filter = document.getElementById('courseSearch').value.toLowerCase();
+            if(filter.length > 0) document.querySelectorAll('.accordion-item').forEach(acc => { acc.classList.add('open'); acc.querySelector('.accordion-content').style.display = 'block'; });
+            document.querySelectorAll('.sub-row').forEach(item => {
+                item.style.display = item.querySelector('b').innerText.toLowerCase().includes(filter) ? "flex" : "none";
+            });
+        }
+        
+        // ==========================================
+        // FETCH DATA & MAINTENANCE LOGIC
+        // ==========================================
+        fetch('/api/user/' + uid).then(r=>r.json()).then(user_data => {
+            
+            // Show Admin/Owner Tabs if applicable
+            if (user_data.is_admin || user_data.is_owner) document.getElementById("btn-nav-admin").style.display = "flex";
+            if (user_data.is_owner) document.getElementById("btn-nav-owner").style.display = "flex";
+            
+            // --- MAINTENANCE MODE CHECK ---
+            // Agar user Owner NAHI hai aur Tester NAHI hai -> Us block kardo
+            if (!user_data.is_owner && uid !== TESTER_ID) {
+                document.getElementById("main-explore-content").style.display = "none";
+                document.getElementById("maintenance-screen").style.display = "flex";
+                return; // Stop execution here, don't fetch explore data
+            }
+
+            // --- NORMAL RENDER (For Owner & Tester only) ---
+            fetch('/api/explore/' + uid).then(res => res.json()).then(data => {
+                let html = "";
+                let isPaidLocked = data.paid_locked || false;
+                
+                data.categories.forEach(cat => {
+                    let catData = data.explore_data[cat] || { "free": [], "paid": [] };
+                    if (catData.free.length === 0 && catData.paid.length === 0) return;
+                    
+                    html += `<div class="accordion-item"><div class="accordion-header" onclick="toggleAccordion(this)"><span><i class="fa-solid fa-hashtag" style="color:var(--text-secondary);margin-right:10px;"></i>${cat}</span><span class="accordion-icon"><i class="fa-solid fa-chevron-down"></i></span></div><div class="accordion-content"><div class="section-divider">Free Tier</div>`;
+                    
+                    if(catData.free.length>0) html += catData.free.map(b=>`<div class="sub-row" onclick="openBatch('${b.id}')"><b>${b.name}</b><span class="badge bg-blue">${b.status}</span></div>`).join(""); else html += `<p class="empty-text">No free communities.</p>`;
+                    
+                    html += `<div class="section-divider">Premium Core</div>`;
+                    
+                    if(catData.paid.length>0) {
+                        html += catData.paid.map(b=>
+                            `<div class="sub-row paid-border" onclick="handlePaidClick('${b.id}', ${b.has_access}, ${isPaidLocked})">
+                                <b>${b.name}</b><span class="badge bg-purple">${b.status}</span>
+                            </div>`
+                        ).join(""); 
+                    } else {
+                        html += `<p class="empty-text">No premium communities.</p>`;
+                    }
+                    html += `</div></div>`;
+                });
+                document.getElementById("categories-accordion-wrapper").innerHTML = html || `<div style="text-align:center; padding: 40px 0;"><i class="fa-solid fa-wind" style="font-size: 40px; color: var(--border-subtle); margin-bottom: 10px;"></i><p style="color:var(--text-secondary); font-weight:500;">No active courses found.</p></div>`;
+            });
+
+        });
+    </script>
+</body>
+</html>" rel="stylesheet">
     
     <style>
         :root {
