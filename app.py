@@ -16,18 +16,27 @@ from pyrogram.enums import ChatMemberStatus
 import firebase_admin
 from firebase_admin import credentials, firestore
 
+# --- MODERN FIREBASE INITIALIZATION ---
 def init_firebase():
     cred_b64 = os.environ.get("FIREBASE_CRED_B64")
-    if cred_b64:
-        try:
-            cred_dict = json.loads(base64.b64decode(cred_b64).decode('utf-8'))
-            cred = credentials.Certificate(cred_dict)
-            if not firebase_admin._apps:
-                firebase_admin.initialize_app(cred)
-            return firestore.client()
-        except Exception as e:
-            print("Firebase Error:", e)
-    return None
+    if not cred_b64:
+        print("❌ FIREBASE ERROR: FIREBASE_CRED_B64 secret HF me nahi mila!")
+        return None
+        
+    try:
+        # Decode the base64 string
+        cred_dict = json.loads(base64.b64decode(cred_b64).decode('utf-8'))
+        project_id = cred_dict.get("project_id")
+        cred = credentials.Certificate(cred_dict)
+        
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app(cred, {'projectId': project_id})
+        
+        print(f"✅ Firebase Firestore Connected Successfully! (Project: {project_id})")
+        return firestore.client()
+    except Exception as e:
+        print(f"❌ Firebase Init Error: {e}")
+        return None
 
 db_fs = init_firebase()
 
