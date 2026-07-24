@@ -412,7 +412,7 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
             if (ans === null) {
                 u++;
             } else {
-                var opts = q.options.en || q.options[Object.keys(q.options)[0]]; 
+                var opts = q.options.en || q.options[Object.keys(q.options)[0]];
                 if (opts && opts[ans] && opts[ans].is_correct) {
                     window.score += window.CORRECT_MARKS;
                     c++;
@@ -432,6 +432,19 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
         window.getEl('incorrect-count').textContent = ic;
         window.getEl('unanswered-count').textContent = u;
         window.getEl('marked-count-result').textContent = m;
+
+        // 🔥 NAYA CODE: TESTBOOK KA DATA FIREBASE ME SAVE KARNE KE LIYE
+        try {
+            let tg = window.Telegram.WebApp;
+            let uid = tg.initDataUnsafe?.user?.id;
+            if(uid) {
+                fetch('/api/submit_tb_test', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ uid: uid })
+                });
+            }
+        } catch(e) { console.log(e); }
     };
 
     window.reviewAnswers = function() { 
