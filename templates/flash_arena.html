@@ -34,9 +34,9 @@
         .option-btn.wrong { border-color: var(--danger); background: rgba(239, 68, 68, 0.15); color: var(--danger); }
 
         .btn-primary { width: 100%; background: var(--accent-main); color: white; border: none; padding: 16px; border-radius: 16px; font-weight: 800; cursor: pointer; margin-top: 10px; font-size: 16px; }
-        .btn-share { width: 100%; background: #27A5E7; color: white; border: none; padding: 16px; border-radius: 16px; font-weight: 800; cursor: pointer; margin-top: 10px; font-size: 16px; display: none; justify-content: center; align-items: center; gap: 8px;}
+        .btn-share { width: 100%; background: #27A5E7; color: white; border: none; padding: 16px; border-radius: 16px; font-weight: 800; cursor: pointer; margin-top: 16px; font-size: 16px; display: none; justify-content: center; align-items: center; gap: 8px;}
+        .btn-share:active { transform: scale(0.96); }
 
-        /* ✨ TAP TO REVEAL BOX ✨ */
         .flashcard-box {
             background: rgba(168, 85, 247, 0.1); border: 2px dashed #a855f7; border-radius: 20px;
             padding: 24px 20px; margin-top: 24px; display: none; text-align: center; cursor: pointer; transition: 0.3s;
@@ -74,7 +74,7 @@
                     <div class="flashcard-text" id="flashcard-content"><i class="fa-solid fa-hand-pointer"></i> Tap to reveal correct answer</div>
                 </div>
 
-                <button class="btn-share" id="share-btn" style="margin-top: 16px;" onclick="challengeFriend()">
+                <button class="btn-share" id="share-btn" onclick="challengeFriend()">
                     <i class="fa-brands fa-telegram"></i> Share Quiz with Friends
                 </button>
             </div>
@@ -98,6 +98,7 @@
     <script>
         let tg = window.Telegram.WebApp; tg.expand();
         let uid = tg.initDataUnsafe?.user?.id || 9999999;
+        let uName = tg.initDataUnsafe?.user?.first_name || "Premium User";
         let selectedOption = null;
         let todayQuestionId = null;
         let correctOptionText = "";
@@ -126,6 +127,11 @@
                 let quizRes = await fetch(`/api/daily_quiz/${uid}`);
                 let quizData = await quizRes.json();
 
+                if(quizData.error) {
+                    document.getElementById('question-text').innerHTML = "No active challenge for today. Check back later!";
+                    return;
+                }
+
                 if(quizData.already_solved) {
                     document.getElementById('question-text').innerHTML = "🎉 You completed today's challenge!";
                     document.getElementById('share-btn').style.display = 'flex';
@@ -136,8 +142,6 @@
                     }
                     return;
                 }
-                
-                if(quizData.error) return;
 
                 todayQuestionId = quizData.id;
                 document.getElementById('question-text').innerText = quizData.question;
@@ -170,7 +174,7 @@
                 let res = await fetch(`/api/submit_quiz`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ uid: uid, selected_option: selectedOption })
+                    body: JSON.stringify({ uid: uid, name: uName, selected_option: selectedOption })
                 });
                 let result = await res.json();
                 
@@ -223,8 +227,9 @@
         }
 
         function challengeFriend() {
-            let text = `🔥 I just solved the Daily Flash Challenge on H4R Bot!\n\nCan you beat my score? 👇`;
-            let appLink = "https://t.me/H4R_Contact_bot/App?startapp=flash";
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            let text = `⚡ I just solved the Daily Flash Challenge on H4R Bot!\n\nCan you beat my score? Challenge yourself now! 👇`;
+            let appLink = "https://t.me/H4R_Contact_bot/App";
             tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(appLink)}&text=${encodeURIComponent(text)}`);
         }
     </script>
