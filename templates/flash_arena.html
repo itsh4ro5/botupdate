@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hybrid Test Engine</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #f4f4f5; --bg-surface: #ffffff; --border-subtle: #e4e4e7; 
+            --text-primary: #09090b; --text-secondary: #71717a; --accent-main: #4f46e5; 
+            --accent-glow: rgba(79, 70, 229, 0.15); --dock-bg: rgba(255, 255, 255, 0.85); 
+            --dock-shadow: 0 20px 40px rgba(0,0,0,0.08);
+        }
+        [data-theme="dark"] {
+            --bg-base: #000000; --bg-surface: #111111; --border-subtle: #27272a; 
+            --text-primary: #fafafa; --text-secondary: #a1a1aa; --accent-main: #6366f1; 
+            --dock-bg: rgba(24, 24, 27, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        }
+        * { box-sizing: border-box; font-family: 'Outfit', sans-serif; }
+        body { background: var(--bg-base); color: var(--text-primary); margin: 0; padding: 0 16px 120px 16px; transition: 0.3s ease; }
+        
+        .header-area { display: flex; justify-content: space-between; align-items: center; padding: 24px 0 20px 0; }
+        .header-area h2 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
+        
+        .theme-btn { background: var(--bg-surface); border: 1px solid var(--border-subtle); width: 44px; height: 44px; border-radius: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; color: var(--text-primary);}
+        .bento-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 24px; padding: 20px; margin-bottom: 24px; transition: 0.3s; }
+        
+        .custom-input { width: 100%; padding: 16px; border-radius: 16px; border: 1px solid var(--border-subtle); background: var(--bg-base); color: var(--text-primary); outline: none; margin-bottom: 16px;}
+        .btn-primary-full { width: 100%; background: var(--accent-main); color: white; border: none; padding: 16px; border-radius: 20px; font-weight: 800; cursor: pointer; transition: 0.2s; display: flex; justify-content: center; align-items: center; gap: 8px;}
+        .btn-primary-full:active { transform: scale(0.96); }
+        
+        /* Floating Dock */
+        .floating-dock { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: max-content; padding: 8px 16px; background: var(--dock-bg); backdrop-filter: blur(24px); border: 1px solid var(--border-subtle); border-radius: 100px; display: flex; gap: 24px; box-shadow: var(--dock-shadow); z-index: 9999; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); cursor: pointer; text-decoration: none; width: 50px; height: 50px; border-radius: 50%; transition: 0.3s; }
+        .nav-item.active { background: var(--accent-main); color: white; transform: translateY(-10px); }
+    </style>
+</head>
+<body data-theme="dark">
+
+    <div class="header-area">
+        <h2>Hybrid Test Engine</h2>
+        <button class="theme-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon" id="theme-icon"></i></button>
+    </div>
+
+    <!-- TESTBOOK ENGINE (No AI PDF Tab) -->
+    <div id="tab-tb">
+        <div class="bento-card">
+            <div style="display: flex; gap: 8px;">
+                <input type="text" id="tbSearchQuery" class="custom-input" placeholder="Search Testbook Series..." style="margin:0;" onkeypress="if(event.key === 'Enter') searchTB()">
+                <button onclick="searchTB()" style="background:var(--accent-main); color:white; border:none; border-radius:16px; padding:0 24px; font-weight:bold; cursor:pointer;"><i class="fa-solid fa-search"></i></button>
+            </div>
+        </div>
+        
+        <div id="tb-dynamic-area" class="bento-card" style="min-height: 200px; text-align: center; color: var(--text-secondary);">
+            <i class="fa-solid fa-database" style="font-size: 40px; opacity: 0.3; margin-top: 20px; margin-bottom: 10px;"></i>
+            <p>Search for a test series to begin extraction.</p>
+        </div>
+    </div>
+
+    <!-- NAYA DOCK -->
+    <div class="floating-dock">
+        <a href="/" class="nav-item"><i class="fa-solid fa-house"></i></a>
+        <a href="/explore" class="nav-item"><i class="fa-solid fa-magnifying-glass"></i></a>
+        <a href="/quiz" class="nav-item active"><i class="fa-solid fa-file-signature"></i></a>
+        <a href="/flash" class="nav-item"><i class="fa-solid fa-bolt"></i></a>
+        <a href="/admin_panel" class="nav-item" id="btn-nav-admin" style="display:none;"><i class="fa-solid fa-shield-halved"></i></a>
+        <a href="/owner_panel" class="nav-item" id="btn-nav-owner" style="display:none;"><i class="fa-solid fa-crown"></i></a>
+    </div>
+
+    <script>
+        let tg = window.Telegram.WebApp; tg.expand();
+        let uid = tg.initDataUnsafe?.user?.id || 9999999;
+
+        document.querySelectorAll('a.nav-item').forEach(link => {
+            link.addEventListener('click', function(e) {
+                if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+                let icon = this.querySelector('i');
+                if(icon) icon.className = 'fas fa-spinner fa-spin';
+            });
+        });
+
+        window.onload = () => {
+            let saved = localStorage.getItem('edtech_theme') || 'dark';
+            document.body.setAttribute('data-theme', saved);
+            document.getElementById("theme-icon").className = saved === 'dark' ? "fa-solid fa-moon" : "fa-solid fa-sun";
+            
+            fetch('/api/user/' + uid).then(r=>r.json()).then(data => {
+                if (data.is_admin || data.is_owner) document.getElementById("btn-nav-admin").style.display = "flex";
+                if (data.is_owner) document.getElementById("btn-nav-owner").style.display = "flex";
+            });
+        }
+
+        function toggleTheme() {
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            let theme = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            document.body.setAttribute('data-theme', theme);
+            localStorage.setItem('edtech_theme', theme);
+            document.getElementById("theme-icon").className = theme === 'dark' ? "fa-solid fa-moon" : "fa-solid fa-sun";
+        }
+
+        // ==========================================
+        // TESTBOOK LOGIC
+        // ==========================================
+        let tbCache = {};
+        
+        async function searchTB() {
+            let q = document.getElementById('tbSearchQuery').value;
+            if(!q) return;
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+            
+            let area = document.getElementById('tb-dynamic-area');
+            area.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size: 30px; color: var(--accent-main); margin-top:20px;"></i><p>Searching Database...</p>';
+            
+            try {
+                let res = await fetch('/api/tb/search?q=' + encodeURIComponent(q));
+                let data = await res.json();
+                
+                if(data.length === 0) {
+                    area.innerHTML = '<p style="padding:20px;">No results found.</p>';
+                    return;
+                }
+                
+                let html = '<h3 style="font-size:18px; margin-bottom:16px;">Select Series</h3>';
+                data.forEach(s => {
+                    html += `
+                    <div style="padding: 16px; margin-bottom: 8px; border: 1px solid var(--border-subtle); border-radius: 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="loadSeries('${s.slug}', '${s.name.replace(/'/g, "\\'")}')">
+                        <b style="font-size:14px; max-width: 80%;">${s.name}</b>
+                        <span style="font-size:11px; background:var(--accent-glow); color:var(--accent-main); padding:4px 8px; border-radius:8px; font-weight:bold;">${s.testsCount || 0} Tests</span>
+                    </div>`;
+                });
+                area.innerHTML = html;
+            } catch(e) { area.innerHTML = '<p style="color:red;">Error searching database.</p>'; }
+        }
+
+        async function loadSeries(slug, name) {
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            let area = document.getElementById('tb-dynamic-area');
+            area.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size: 30px; color: var(--accent-main); margin-top:20px;"></i><p>Loading Structure...</p>';
+            
+            try {
+                let res = await fetch('/api/tb/series/' + slug);
+                let data = await res.json();
+                tbCache.series = data;
+                
+                let html = `<button onclick="searchTB()" style="background:transparent; border:none; color:var(--accent-main); font-weight:bold; cursor:pointer; padding:0; margin-bottom:16px;"><i class="fas fa-arrow-left"></i> Back</button>
+                            <h3 style="font-size:18px; margin-bottom:16px;">${name}</h3>`;
+                
+                data.sections.forEach(sec => {
+                    html += `<div style="margin-bottom:16px;"><h4 style="font-size:14px; font-weight:800; border-bottom:1px solid var(--border-subtle); padding-bottom:8px; margin-bottom:12px;">${sec.name}</h4><div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">`;
+                    sec.subsections.forEach(sub => {
+                        html += `<div style="padding:12px; background:var(--bg-base); border:1px solid var(--border-subtle); border-radius:12px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" onclick="loadTests('${data.id}', '${sec.id}', '${sub.id}', '${sec.name.replace(/'/g, "\\'")}', '${sub.name.replace(/'/g, "\\'")}')">
+                            <i class="fas fa-folder text-indigo-400"></i> ${sub.name}
+                        </div>`;
+                    });
+                    html += `</div></div>`;
+                });
+                area.innerHTML = html;
+            } catch(e) { area.innerHTML = '<p style="color:red;">Error loading series.</p>'; }
+        }
+
+        async function loadTests(seriesId, secId, subId, secName, subName) {
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            tbCache.section = {name: secName}; tbCache.subsection = {name: subName};
+            let area = document.getElementById('tb-dynamic-area');
+            area.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size: 30px; color: var(--accent-main); margin-top:20px;"></i><p>Loading Tests...</p>';
+            
+            try {
+                let res = await fetch(`/api/tb/tests/${seriesId}/${secId}/${subId}`);
+                let tests = await res.json();
+                
+                let html = `<button onclick="loadSeries(tbCache.series.slug, tbCache.series.name)" style="background:transparent; border:none; color:var(--accent-main); font-weight:bold; cursor:pointer; padding:0; margin-bottom:16px;"><i class="fas fa-arrow-left"></i> Back</button>
+                            <h3 style="font-size:16px; margin-bottom:16px; color:var(--text-secondary);">${subName}</h3>`;
+                
+                tests.forEach((t, i) => {
+                    html += `<div style="padding: 16px; margin-bottom: 12px; border: 1px solid var(--border-subtle); border-left: 4px solid var(--accent-main); border-radius: 16px; background:var(--bg-base);">
+                        <b style="font-size:15px; display:block; margin-bottom:12px;">${t.title}</b>
+                        <div style="display:flex; gap:16px; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:16px;">
+                            <span><i class="fas fa-list-ol"></i> ${t.questionCount} Qs</span>
+                            <span><i class="fas fa-clock"></i> ${t.duration}m</span>
+                            <span><i class="fas fa-star"></i> ${t.totalMark} Marks</span>
+                        </div>
+                        <button id="extract-btn-${i}" onclick='extractTest("${t.id}", ${JSON.stringify(t).replace(/'/g, "&#39;")}, this)' class="btn-primary-full" style="padding:10px; font-size:14px;">
+                            <i class="fas fa-play"></i> Start Test
+                        </button>
+                    </div>`;
+                });
+                area.innerHTML = html;
+            } catch(e) { area.innerHTML = '<p style="color:red;">Error loading tests.</p>'; }
+        }
+
+        async function extractTest(testId, testData, btnElement) {
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('heavy');
+            let originalText = btnElement.innerHTML;
+            btnElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing Engine...';
+            btnElement.disabled = true;
+            
+            let payload = { 
+                test_summary: testData, 
+                series_details: tbCache.series, 
+                section: tbCache.section, 
+                subsection: tbCache.subsection 
+            };
+            
+            try {
+                let res = await fetch(`/api/tb/extract/${testId}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                
+                if(!res.ok) {
+                    let err = await res.json();
+                    alert("Error: " + err.error);
+                    btnElement.innerHTML = originalText;
+                    btnElement.disabled = false;
+                    return;
+                }
+                
+                let htmlContent = await res.text();
+                document.open();
+                document.write(htmlContent);
+                document.close();
+                
+            } catch(e) {
+                alert("Frontend Error: " + e.message);
+                btnElement.innerHTML = originalText;
+                btnElement.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
