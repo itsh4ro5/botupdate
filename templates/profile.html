@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>My Profile</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #f4f4f5; --bg-surface: #ffffff; --border-subtle: #e4e4e7;
+            --text-primary: #09090b; --text-secondary: #71717a; --accent-main: #4f46e5;
+            --dock-bg: rgba(255, 255, 255, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.08);
+        }
+        [data-theme="dark"] {
+            --bg-base: #000000; --bg-surface: #111111; --border-subtle: #27272a;
+            --text-primary: #fafafa; --text-secondary: #a1a1aa; --accent-main: #6366f1;
+            --dock-bg: rgba(24, 24, 27, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        }
+        * { box-sizing: border-box; font-family: 'Outfit', sans-serif; -webkit-tap-highlight-color: transparent;}
+        body { background: var(--bg-base); color: var(--text-primary); margin: 0; padding: 0 16px 120px 16px; transition: 0.4s; }
+        
+        .profile-header { display: flex; flex-direction: column; align-items: center; padding: 40px 0 20px 0; text-align: center; }
+        .avatar { width: 90px; height: 90px; border-radius: 30px; background: var(--accent-main); display: flex; align-items: center; justify-content: center; font-size: 36px; font-weight: 900; color: white; margin-bottom: 16px; border: 4px solid var(--bg-surface); box-shadow: 0 15px 35px rgba(79, 70, 229, 0.15); overflow: hidden;}
+        .avatar img { width: 100%; height: 100%; object-fit: cover; display: none; }
+        .user-name { font-size: 24px; font-weight: 900; margin: 0; letter-spacing: -0.5px;}
+        .user-id { font-size: 14px; color: var(--text-secondary); font-weight: 500; margin-top: 4px; }
+
+        .bento-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+        .bento-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 24px; padding: 20px; position: relative; overflow: hidden; }
+        .full-width { grid-column: 1 / -1; }
+        
+        .stat-val { font-size: 32px; font-weight: 900; line-height: 1; margin-bottom: 6px; color: var(--text-primary); }
+        .stat-lbl { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;}
+        
+        .badge-pill { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 100px; font-size: 13px; font-weight: 800; background: rgba(168, 85, 247, 0.15); color: #a855f7; margin: 4px; border: 1px solid rgba(168, 85, 247, 0.3);}
+
+        .floating-dock { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: max-content; padding: 8px 16px; background: var(--dock-bg); backdrop-filter: blur(24px); border: 1px solid var(--border-subtle); border-radius: 100px; display: flex; gap: 20px; z-index: 9999; box-shadow: var(--dock-shadow); transition: 0.3s;}
+        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); width: 45px; height: 45px; border-radius: 50%; cursor: pointer; text-decoration: none; transition: 0.3s; }
+        .nav-item i { font-size: 18px; transition: 0.3s; }
+        .nav-item.active { background: var(--accent-main); color: white; box-shadow: 0 8px 20px rgba(79, 70, 229, 0.15); transform: translateY(-10px); }
+    </style>
+</head>
+<body data-theme="dark">
+    
+    <div class="profile-header">
+        <div class="avatar"><img id="user-avatar" src=""><span id="avatar-letters">U</span></div>
+        <h1 class="user-name" id="p-name">Loading...</h1>
+        <p class="user-id" id="p-id">ID: ---</p>
+    </div>
+
+    <div class="bento-grid">
+        <div class="bento-card" style="border-left: 4px solid #a855f7;">
+            <div class="stat-val" style="color: #a855f7;" id="p-accuracy">0%</div>
+            <div class="stat-lbl">Hit Accuracy</div>
+        </div>
+        <div class="bento-card" style="border-left: 4px solid var(--accent-main);">
+            <div class="stat-val" id="p-tests">0</div>
+            <div class="stat-lbl">Challenges Done</div>
+        </div>
+        <div class="bento-card">
+            <div class="stat-val" id="p-streak">0</div>
+            <div class="stat-lbl"><i class="fa-solid fa-fire" style="color:#ea580c;"></i> Day Streak</div>
+        </div>
+        <div class="bento-card">
+            <div class="stat-val" id="p-points">0</div>
+            <div class="stat-lbl"><i class="fa-solid fa-star" style="color:#f59e0b;"></i> Total Points</div>
+        </div>
+        
+        <div class="bento-card full-width">
+            <div class="stat-lbl" style="margin-bottom: 12px;"><i class="fa-solid fa-award"></i> Earned Badges</div>
+            <div id="p-badges"><span style="font-size: 13px; color: var(--text-secondary);"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</span></div>
+        </div>
+    </div>
+
+    <div class="floating-dock">
+        <a href="/" class="nav-item"><i class="fa-solid fa-house"></i></a>
+        <a href="/explore" class="nav-item"><i class="fa-solid fa-magnifying-glass"></i></a>
+        <a href="/quiz" class="nav-item"><i class="fa-solid fa-file-signature"></i></a>
+        <a href="/flash" class="nav-item"><i class="fa-solid fa-bolt"></i></a>
+        <a href="/leaderboard" class="nav-item"><i class="fa-solid fa-trophy"></i></a>
+        <a href="/profile" class="nav-item active"><i class="fa-solid fa-user"></i></a>
+    </div>
+
+    <script>
+        let tg = window.Telegram.WebApp; tg.expand();
+        let uid = tg.initDataUnsafe?.user?.id || 9999999;
+        let uName = tg.initDataUnsafe?.user?.first_name || "User";
+
+        window.onload = () => {
+            document.body.setAttribute('data-theme', localStorage.getItem('edtech_theme') || 'dark');
+            document.getElementById("p-name").innerText = uName;
+            document.getElementById("p-id").innerText = "UID: " + uid;
+            
+            let img = document.getElementById("user-avatar"), letters = document.getElementById("avatar-letters");
+            img.src = '/api/user/avatar/' + uid;
+            img.onload = () => { img.style.display = "block"; letters.style.display = "none"; };
+            img.onerror = () => { letters.innerText = uName.charAt(0); letters.style.display="inline";};
+            loadProfileStats();
+        };
+
+        async function loadProfileStats() {
+            try {
+                let res = await fetch(`/api/profile_stats/${uid}`);
+                let data = await res.json();
+                document.getElementById('p-accuracy').innerText = data.accuracy + '%';
+                document.getElementById('p-tests').innerText = data.tests_given;
+                document.getElementById('p-streak').innerText = data.streak;
+                document.getElementById('p-points').innerText = data.points;
+                
+                if(data.badges && data.badges.length > 0) {
+                    document.getElementById('p-badges').innerHTML = data.badges.map(b => `<span class="badge-pill"><i class="fa-solid fa-medal"></i> ${b}</span>`).join('');
+                } else {
+                    document.getElementById('p-badges').innerHTML = `<span style="font-size: 13px; color: var(--text-secondary);">No badges yet. Start playing!</span>`;
+                }
+            } catch (e) { }
+        }
+    </script>
+</body>
+</html>
