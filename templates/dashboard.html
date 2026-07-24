@@ -39,7 +39,6 @@
         
         .theme-btn { position: absolute; bottom: -6px; right: -6px; background: var(--bg-surface); border: 1px solid var(--border-subtle); color: var(--text-primary); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); transition: 0.2s; z-index: 2; }
         .theme-btn:active { transform: scale(0.8); }
-
         .bento-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; margin-bottom: 24px; }
         .bento-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 24px; padding: 20px; position: relative; overflow: hidden; transition: 0.3s; }
         .bento-card::before { content: ''; position: absolute; top: -50px; right: -50px; width: 150px; height: 150px; background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%); opacity: 0.6; pointer-events: none; }
@@ -52,7 +51,6 @@
         .stat-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
         
         .streak-pill { background: linear-gradient(to right, var(--warning), #ea580c); color: white; padding: 6px 12px; border-radius: 100px; font-weight: 700; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3); margin-top: 12px; width: max-content;}
-
         .section-title { font-size: 18px; font-weight: 800; margin: 0 0 16px 0; color: var(--text-primary); display: flex; align-items: center; gap: 8px; letter-spacing: -0.3px; }
         
         .item-row { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 20px; padding: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1); position: relative; overflow: hidden;}
@@ -75,7 +73,7 @@
         .skeleton { background: linear-gradient(90deg, var(--bg-surface) 25%, var(--border-subtle) 50%, var(--bg-surface) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; color: transparent !important; border-color: transparent !important; }
         .skeleton * { visibility: hidden; }
         .skeleton-row { height: 74px; border-radius: 20px; margin-bottom: 12px; }
-
+        
         .floating-dock { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: max-content; padding: 8px 16px; background: var(--dock-bg); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--border-subtle); border-radius: 100px; display: flex; gap: 24px; box-shadow: var(--dock-shadow); z-index: 9999; transition: 0.3s; }
         .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); cursor: pointer; text-decoration: none; transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); width: 50px; height: 50px; border-radius: 50%; }
         .nav-item span { display: none; } /* Hide text for a cleaner icon-only dock */
@@ -98,7 +96,6 @@
             <button class="theme-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon" id="theme-icon"></i></button>
         </div>
     </div>
-
     <div class="bento-grid">
         <div class="bento-card primary">
             <div>
@@ -114,18 +111,17 @@
             </div>
         </div>
     </div>
-
     <div class="bento-card full-width" id="demo-card-sec" style="display: none; margin-bottom:24px; padding: 24px;">
         <h3 class="section-title"><i class="fa-solid fa-bolt" style="color:var(--warning);"></i> Active Trials</h3>
         <div id="demo-list"></div>
     </div>
-
-    <!-- AI Quiz Generator Card -->
-    <div class="bento-card full-width" style="margin-bottom:24px; padding: 24px; cursor: pointer; border-left: 4px solid var(--accent-main);" onclick="window.location.href='/quiz'">
-        <h3 class="section-title"><i class="fa-solid fa-brain" style="color:var(--accent-main);"></i> AI Quiz Generator</h3>
-        <p style="color:var(--text-secondary); font-size:14px; margin:0;">Upload PDF notes and instantly generate Testbook-style MCQ exams with Solutions.</p>
+    
+    <!-- Daily Flash Challenge Card -->
+    <div class="bento-card full-width" style="margin-bottom:24px; padding: 24px; cursor: pointer; border-left: 4px solid var(--warning);" onclick="window.location.href='/quiz'">
+        <h3 class="section-title"><i class="fa-solid fa-bolt" style="color:var(--warning);"></i> Daily Flash Challenge</h3>
+        <p style="color:var(--text-secondary); font-size:14px; margin:0;">Test your knowledge daily, maintain your streak, and earn reward points!</p>
         <div style="margin-top: 15px;">
-            <span class="badge bg-purple">Try it Now ✨</span>
+            <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: var(--warning);">Play Now 🔥</span>
         </div>
     </div>
 
@@ -136,19 +132,40 @@
             <div class="skeleton skeleton-row"></div>
         </div>
     </div>
-
     <div class="floating-dock">
         <a href="/" class="nav-item active"><i class="fa-solid fa-house"></i><span>Home</span></a>
         <a href="/explore" class="nav-item"><i class="fa-solid fa-magnifying-glass"></i><span>Explore</span></a>
-        <a href="/quiz" class="nav-item"><i class="fa-solid fa-brain"></i><span>Quiz</span></a>
+        <a href="/quiz" class="nav-item"><i class="fa-solid fa-bolt"></i><span>Arena</span></a>
         <a href="/admin_panel" class="nav-item" id="btn-nav-admin" style="display:none;"><i class="fa-solid fa-shield-halved"></i><span>Admin</span></a>
         <a href="/owner_panel" class="nav-item" id="btn-nav-owner" style="display:none;"><i class="fa-solid fa-crown"></i><span>Owner</span></a>
     </div>
 
     <script>
         let tg = window.Telegram.WebApp; tg.expand();
-        let uid = tg.initDataUnsafe?.user?.id || 9999999; 
+        
+        // ==========================================
+        // DEEP LINKING HANDLER (StartApp Check)
+        // ==========================================
+        let startParam = tg.initDataUnsafe?.start_param;
+        if (startParam === "flash") {
+            window.location.href = "/quiz";
+        }
+
+        let uid = tg.initDataUnsafe?.user?.id || 9999999;
         let uName = tg.initDataUnsafe?.user?.first_name || "User";
+        
+        // ==========================================
+        // PAGE TRANSITION ANIMATION (Smooth Loading)
+        // ==========================================
+        document.querySelectorAll('a.nav-item').forEach(link => {
+            link.addEventListener('click', function(e) {
+                if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+                let icon = this.querySelector('i');
+                if(icon) {
+                    icon.className = 'fas fa-spinner fa-spin';
+                }
+            });
+        });
         
         window.onload = () => {
             let saved = localStorage.getItem('edtech_theme') || 'dark';
@@ -164,23 +181,22 @@
             localStorage.setItem('edtech_theme', theme);
             document.getElementById("theme-icon").className = theme === 'dark' ? "fa-solid fa-moon" : "fa-solid fa-sun";
         }
-
+        
         document.getElementById("profile-name").innerText = uName;
         document.getElementById("profile-id").innerText = "UID: " + uid;
         let img = document.getElementById("user-avatar"), letters = document.getElementById("avatar-letters");
         img.src = '/api/user/avatar/' + uid;
         img.onload = () => { img.style.display = "block"; letters.style.display = "none"; };
         img.onerror = () => { letters.innerText = uName.charAt(0); letters.style.display="inline";};
-
+        
         function openBatch(chatId) {
             if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
             tg.openTelegramLink("https://t.me/c/" + String(chatId).replace("-100", "") + "/1");
         }
-
+        
         fetch('/api/user/' + uid).then(res => res.json()).then(data => {
             if (data.is_admin || data.is_owner) document.getElementById("btn-nav-admin").style.display = "flex";
             if (data.is_owner) document.getElementById("btn-nav-owner").style.display = "flex";
-
             if(data.user_info && data.user_info.streak > 0) {
                 document.getElementById("streak-box").style.display = "inline-flex";
                 document.getElementById("streak-count").innerText = data.user_info.streak;
@@ -188,7 +204,7 @@
             
             document.getElementById("cnt-my").classList.remove("skeleton");
             document.getElementById("cnt-demo").classList.remove("skeleton");
-
+            
             if (data.demos && data.demos.length > 0) {
                 document.getElementById("demo-card-sec").style.display = "block";
                 document.getElementById("cnt-demo").innerText = data.demos.filter(d => !d.is_expired).length;
