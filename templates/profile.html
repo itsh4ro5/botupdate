@@ -35,6 +35,9 @@
         .stat-lbl { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;}
         
         .badge-pill { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 100px; font-size: 13px; font-weight: 800; background: rgba(168, 85, 247, 0.15); color: #a855f7; margin: 4px; border: 1px solid rgba(168, 85, 247, 0.3);}
+        
+        .btn-share { width: 100%; background: #27A5E7; color: white; border: none; padding: 16px; border-radius: 16px; font-weight: 800; cursor: pointer; transition: 0.3s; font-size: 16px; display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 12px;}
+        .btn-share:active { transform: scale(0.96); }
 
         .floating-dock { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: max-content; padding: 8px 16px; background: var(--dock-bg); backdrop-filter: blur(24px); border: 1px solid var(--border-subtle); border-radius: 100px; display: flex; gap: 20px; z-index: 9999; box-shadow: var(--dock-shadow); transition: 0.3s;}
         .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); width: 45px; height: 45px; border-radius: 50%; cursor: pointer; text-decoration: none; transition: 0.3s; }
@@ -74,6 +77,10 @@
         </div>
     </div>
 
+    <button class="btn-share" onclick="shareProfile()">
+        <i class="fa-brands fa-telegram"></i> Share My Profile
+    </button>
+
     <div class="floating-dock">
         <a href="/" class="nav-item"><i class="fa-solid fa-house"></i></a>
         <a href="/explore" class="nav-item"><i class="fa-solid fa-magnifying-glass"></i></a>
@@ -100,10 +107,16 @@
             loadProfileStats();
         };
 
+        let userPoints = 0;
+        let userAccuracy = 0;
+
         async function loadProfileStats() {
             try {
                 let res = await fetch(`/api/profile_stats/${uid}`);
                 let data = await res.json();
+                userPoints = data.points;
+                userAccuracy = data.accuracy;
+                
                 document.getElementById('p-accuracy').innerText = data.accuracy + '%';
                 document.getElementById('p-tests').innerText = data.tests_given;
                 document.getElementById('p-streak').innerText = data.streak;
@@ -115,6 +128,13 @@
                     document.getElementById('p-badges').innerHTML = `<span style="font-size: 13px; color: var(--text-secondary);">No badges yet. Start playing!</span>`;
                 }
             } catch (e) { }
+        }
+
+        function shareProfile() {
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            let text = `🔥 I just hit ${userPoints} Points with ${userAccuracy}% Accuracy on H4R Bot!\n\nCan you beat my stats? Join now and let's compete! 🚀👇`;
+            let appLink = "https://t.me/H4R_Contact_bot/App";
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(appLink)}&text=${encodeURIComponent(text)}`);
         }
     </script>
 </body>
