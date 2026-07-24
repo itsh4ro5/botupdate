@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Global Leaderboard</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #f4f4f5; --bg-surface: #ffffff; --border-subtle: #e4e4e7;
+            --text-primary: #09090b; --text-secondary: #71717a; --accent-main: #4f46e5;
+            --dock-bg: rgba(255, 255, 255, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.08);
+        }
+        [data-theme="dark"] {
+            --bg-base: #000000; --bg-surface: #111111; --border-subtle: #27272a;
+            --text-primary: #fafafa; --text-secondary: #a1a1aa; --accent-main: #6366f1;
+            --dock-bg: rgba(24, 24, 27, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        }
+        * { box-sizing: border-box; font-family: 'Outfit', sans-serif; -webkit-tap-highlight-color: transparent;}
+        body { background: var(--bg-base); color: var(--text-primary); margin: 0; padding: 0 16px 120px 16px; transition: 0.4s; }
+        
+        .header-area { padding: 24px 0 20px 0; text-align: center; }
+        .header-area h2 { margin: 0; font-size: 26px; font-weight: 800; }
+        
+        .tabs { display: flex; gap: 8px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 5px; -ms-overflow-style: none; scrollbar-width: none;}
+        .tabs::-webkit-scrollbar { display: none; }
+        .tab-btn { padding: 10px 16px; border-radius: 12px; font-weight: 800; font-size: 14px; background: var(--bg-surface); border: 1px solid var(--border-subtle); color: var(--text-secondary); cursor: pointer; white-space: nowrap; transition: 0.3s;}
+        .tab-active { background: var(--accent-main); color: white; border-color: var(--accent-main); }
+        
+        .rank-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 20px; padding: 12px 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 16px; transition: 0.3s;}
+        
+        .rank-number { font-size: 20px; font-weight: 900; color: var(--text-secondary); min-width: 24px; text-align: center;}
+        .rank-1 .rank-number { color: #FFD700; text-shadow: 0 0 10px rgba(255,215,0,0.5); }
+        .rank-2 .rank-number { color: #C0C0C0; }
+        .rank-3 .rank-number { color: #CD7F32; }
+
+        .avatar { width: 48px; height: 48px; border-radius: 14px; background: var(--border-subtle); overflow: hidden; display: flex; align-items: center; justify-content: center; font-weight: 900; color: var(--text-secondary);}
+        .avatar img { width: 100%; height: 100%; object-fit: cover; }
+        
+        .rank-1 .avatar { border: 3px solid #FFD700; box-shadow: 0 0 15px rgba(255,215,0,0.4); }
+        .rank-2 .avatar { border: 3px solid #C0C0C0; box-shadow: 0 0 10px rgba(192,192,192,0.3); }
+        .rank-3 .avatar { border: 3px solid #CD7F32; box-shadow: 0 0 10px rgba(205,127,50,0.3); }
+
+        .user-info { flex: 1; overflow: hidden; }
+        .user-name { font-weight: 800; font-size: 15px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .user-uid { font-size: 11px; color: var(--text-secondary); font-weight: 600; margin-top: 2px;}
+        
+        .score-box { background: rgba(99, 102, 241, 0.1); color: var(--accent-main); padding: 6px 12px; border-radius: 10px; font-weight: 900; font-size: 14px; }
+
+        .floating-dock { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: max-content; padding: 8px 16px; background: var(--dock-bg); backdrop-filter: blur(24px); border: 1px solid var(--border-subtle); border-radius: 100px; display: flex; gap: 20px; z-index: 9999; box-shadow: var(--dock-shadow); transition: 0.3s;}
+        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); width: 45px; height: 45px; border-radius: 50%; cursor: pointer; text-decoration: none; transition: 0.3s; }
+        .nav-item i { font-size: 18px; transition: 0.3s; }
+        .nav-item.active { background: var(--accent-main); color: white; box-shadow: 0 8px 20px rgba(79, 70, 229, 0.15); transform: translateY(-10px); }
+    </style>
+</head>
+<body data-theme="dark">
+
+    <div class="header-area">
+        <h2><i class="fa-solid fa-trophy" style="color:#FFD700;"></i> Hall of Fame</h2>
+    </div>
+
+    <div class="tabs">
+        <div class="tab-btn tab-active" onclick="loadLeaderboard('points', this)">🏆 Top Points</div>
+        <div class="tab-btn" onclick="loadLeaderboard('accuracy', this)">🎯 High Accuracy</div>
+        <div class="tab-btn" onclick="loadLeaderboard('streak', this)">🔥 Max Streak</div>
+    </div>
+
+    <div id="leaderboard-container">
+        <div style="text-align: center; padding: 40px; color: var(--text-secondary);"><i class="fa-solid fa-spinner fa-spin text-2xl"></i> Loading...</div>
+    </div>
+
+    <div class="floating-dock">
+        <a href="/" class="nav-item"><i class="fa-solid fa-house"></i></a>
+        <a href="/explore" class="nav-item"><i class="fa-solid fa-magnifying-glass"></i></a>
+        <a href="/quiz" class="nav-item"><i class="fa-solid fa-file-signature"></i></a>
+        <a href="/flash" class="nav-item"><i class="fa-solid fa-bolt"></i></a>
+        <a href="/leaderboard" class="nav-item active"><i class="fa-solid fa-trophy"></i></a>
+        <a href="/profile" class="nav-item"><i class="fa-solid fa-user"></i></a>
+    </div>
+
+    <script>
+        let tg = window.Telegram.WebApp; tg.expand();
+        window.onload = () => {
+            document.body.setAttribute('data-theme', localStorage.getItem('edtech_theme') || 'dark');
+            loadLeaderboard('points', document.querySelector('.tab-active'));
+        };
+
+        async function loadLeaderboard(metric, btnElement) {
+            if(tg.HapticFeedback) tg.HapticFeedback.selectionChanged();
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('tab-active'));
+            btnElement.classList.add('tab-active');
+            
+            let container = document.getElementById('leaderboard-container');
+            container.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-secondary);"><i class="fa-solid fa-spinner fa-spin" style="font-size:30px; color:var(--accent-main); margin-bottom:10px;"></i><br>Syncing Data...</div>';
+
+            try {
+                let res = await fetch(`/api/leaderboard/${metric}`);
+                let data = await res.json();
+                
+                if(data.error) {
+                    container.innerHTML = '<p style="text-align:center; color:var(--text-secondary); padding:20px;">No ranks found.</p>';
+                    return;
+                }
+                
+                if(data.length === 0) {
+                    container.innerHTML = '<p style="text-align:center; color:var(--text-secondary); padding:20px;">Leaderboard is empty.</p>';
+                    return;
+                }
+
+                let html = '';
+                data.forEach((user, index) => {
+                    let rankClass = index === 0 ? 'rank-1' : index === 1 ? 'rank-2' : index === 2 ? 'rank-3' : '';
+                    let val = metric === 'points' ? user.points + ' XP' : metric === 'accuracy' ? user.accuracy + '%' : user.streak + ' 🔥';
+                    let initial = user.name ? user.name.charAt(0) : 'U';
+                    
+                    html += `
+                    <div class="rank-card ${rankClass}">
+                        <div class="rank-number">#${index + 1}</div>
+                        <div class="avatar">
+                            <img src="/api/user/avatar/${user.uid}" onerror="this.style.display='none'; this.parentElement.innerHTML='${initial}'">
+                        </div>
+                        <div class="user-info">
+                            <p class="user-name">${user.name}</p>
+                            <p class="user-uid">ID: ${user.uid}</p>
+                        </div>
+                        <div class="score-box">${val}</div>
+                    </div>`;
+                });
+                container.innerHTML = html;
+            } catch (e) {
+                container.innerHTML = '<p style="text-align:center; color:red;">Database Error</p>';
+            }
+        }
+    </script>
+</body>
+</html>
