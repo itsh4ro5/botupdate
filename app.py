@@ -391,6 +391,11 @@ async def tb_extract_proxy(test_id):
     html_content = generate_html(q_data, details)
     return html_content, 200, {'Content-Type': 'text/html'}
 
+@app.route('/flash')
+async def flash_page():
+    try: return await render_template('flash_arena.html')
+    except Exception as e: return f"Error: {e}", 200
+
 @app.route('/api/explore/<int:user_id>')
 async def api_explore_data(user_id):
     user_key = str(user_id) if str(user_id) in DB["USER_DATA"] else (user_id if user_id in DB["USER_DATA"] else None)
