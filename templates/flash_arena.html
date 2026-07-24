@@ -1,237 +1,686 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flash Arena</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-base: #f4f4f5; --bg-surface: #ffffff; --border-subtle: #e4e4e7;
-            --text-primary: #09090b; --text-secondary: #71717a; --accent-main: #4f46e5;
-            --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
-            --dock-bg: rgba(255, 255, 255, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.08);
-        }
-        [data-theme="dark"] {
-            --bg-base: #000000; --bg-surface: #111111; --border-subtle: #27272a;
-            --text-primary: #fafafa; --text-secondary: #a1a1aa; --accent-main: #6366f1;
-            --dock-bg: rgba(24, 24, 27, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.5);
-        }
-        * { box-sizing: border-box; font-family: 'Outfit', sans-serif; -webkit-tap-highlight-color: transparent;}
-        body { background: var(--bg-base); color: var(--text-primary); margin: 0; padding: 0 16px 120px 16px; transition: 0.4s; }
-        
-        .header-area { padding: 24px 0 20px 0; }
-        .header-area h2 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
-        
-        .bento-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 24px; padding: 20px; margin-bottom: 16px; }
-        
-        .question-text { font-size: 18px; font-weight: 700; margin-bottom: 20px; line-height: 1.4; }
-        .option-btn { width: 100%; text-align: left; background: var(--bg-base); border: 2px solid var(--border-subtle); color: var(--text-primary); padding: 16px; border-radius: 16px; margin-bottom: 12px; font-size: 15px; font-weight: 600; cursor: pointer; transition: 0.2s; }
-        .option-btn.selected { border-color: var(--accent-main); background: rgba(79, 70, 229, 0.15); }
-        .option-btn.correct { border-color: var(--success); background: rgba(16, 185, 129, 0.15); color: var(--success); }
-        .option-btn.wrong { border-color: var(--danger); background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#050509" />
+  <title>H4R — Flash Arena</title>
 
-        .btn-primary { width: 100%; background: var(--accent-main); color: white; border: none; padding: 16px; border-radius: 16px; font-weight: 800; cursor: pointer; margin-top: 10px; font-size: 16px; }
-        .btn-share { width: 100%; background: #27A5E7; color: white; border: none; padding: 16px; border-radius: 16px; font-weight: 800; cursor: pointer; margin-top: 16px; font-size: 16px; display: none; justify-content: center; align-items: center; gap: 8px;}
-        .btn-share:active { transform: scale(0.96); }
+  <!-- Telegram Web App SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-        .flashcard-box {
-            background: rgba(168, 85, 247, 0.1); border: 2px dashed #a855f7; border-radius: 20px;
-            padding: 24px 20px; margin-top: 24px; display: none; text-align: center; cursor: pointer; transition: 0.3s;
-        }
-        .flashcard-box:active { transform: scale(0.96); }
-        .flashcard-text { font-size: 16px; font-weight: 800; color: #a855f7; pointer-events: none;}
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
 
-        .floating-dock { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: max-content; padding: 8px 16px; background: var(--dock-bg); backdrop-filter: blur(24px); border: 1px solid var(--border-subtle); border-radius: 100px; display: flex; gap: 20px; z-index: 9999; box-shadow: var(--dock-shadow); transition: 0.3s;}
-        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); width: 45px; height: 45px; border-radius: 50%; cursor: pointer; text-decoration: none; transition: 0.3s; }
-        .nav-item i { font-size: 18px; transition: 0.3s; }
-        .nav-item.active { background: var(--accent-main); color: white; box-shadow: 0 8px 20px rgba(79, 70, 229, 0.15); transform: translateY(-10px); }
-    </style>
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+
+  <!-- Google Fonts: Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Outfit', 'system-ui', 'sans-serif'] },
+          colors: {
+            ink: '#050509',
+            surface: '#0d0d16',
+            indigo: { neon: '#6366f1', soft: '#818cf8' },
+            emerald: { neon: '#10b981', soft: '#34d399' },
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    :root {
+      --bg: #050509;
+      --surface: rgba(255, 255, 255, 0.04);
+      --surface-strong: rgba(255, 255, 255, 0.06);
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #f4f4f7;
+      --muted: #8b8b9e;
+      --indigo: #6366f1;
+      --emerald: #10b981;
+    }
+
+    html.light {
+      --bg: #f3f4f8;
+      --surface: rgba(10, 10, 25, 0.03);
+      --surface-strong: rgba(10, 10, 25, 0.05);
+      --border: rgba(10, 10, 25, 0.08);
+      --text: #10101c;
+      --muted: #5b5b6b;
+    }
+
+    * { -webkit-tap-highlight-color: transparent; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Outfit', system-ui, sans-serif;
+      overflow-x: hidden;
+      transition: background 0.4s ease, color 0.4s ease;
+    }
+
+    /* ambient neon glow behind content */
+    .aurora::before {
+      content: '';
+      position: fixed;
+      top: -160px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 420px;
+      height: 420px;
+      background: radial-gradient(circle at center, rgba(99, 102, 241, 0.22), transparent 65%);
+      filter: blur(30px);
+      z-index: 0;
+      pointer-events: none;
+    }
+    .aurora::after {
+      content: '';
+      position: fixed;
+      bottom: -120px;
+      right: -80px;
+      width: 340px;
+      height: 340px;
+      background: radial-gradient(circle at center, rgba(16, 185, 129, 0.16), transparent 65%);
+      filter: blur(40px);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .glass {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+
+    .card-press { transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease; }
+    .card-press:active { transform: scale(0.965); }
+
+    .text-muted { color: var(--muted); }
+
+    /* dock */
+    .dock {
+      background: rgba(13, 13, 22, 0.72);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(24px) saturate(160%);
+      -webkit-backdrop-filter: blur(24px) saturate(160%);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+    }
+    html.light .dock { background: rgba(255, 255, 255, 0.78); }
+
+    .dock-item { transition: color 0.2s ease, transform 0.2s ease; }
+    .dock-item.active { color: var(--indigo); }
+    .dock-item.active .dock-glow { opacity: 1; transform: scale(1); }
+    .dock-glow {
+      opacity: 0;
+      transform: scale(0.4);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      box-shadow: 0 0 18px 2px rgba(99, 102, 241, 0.55);
+    }
+
+    /* scroll rows */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* shimmer skeletons */
+    .skel {
+      background: linear-gradient(100deg, rgba(255,255,255,0.04) 30%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.04) 70%);
+      background-size: 200% 100%;
+      animation: shimmer 1.3s infinite linear;
+    }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    @keyframes floatUp {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .reveal { animation: floatUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+    /* ===== Segmented main tabs ===== */
+    .seg {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      padding: 4px;
+      border-radius: 9999px;
+    }
+    .seg-thumb {
+      position: absolute;
+      top: 4px;
+      bottom: 4px;
+      left: 4px;
+      width: calc(50% - 4px);
+      border-radius: 9999px;
+      background: linear-gradient(130deg, #4f46e5, #6366f1);
+      box-shadow: 0 8px 22px rgba(99, 102, 241, 0.4);
+      transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+      z-index: 0;
+    }
+    .seg[data-active="vault"] .seg-thumb { transform: translateX(100%); }
+    .seg-btn {
+      position: relative;
+      z-index: 1;
+      padding: 0.6rem 0;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--muted);
+      transition: color 0.25s ease;
+    }
+    .seg-btn.active { color: #fff; }
+
+    /* ===== Panels (smooth toggle) ===== */
+    .panel { transition: opacity 0.3s ease; }
+    .panel.hide { display: none; }
+
+    /* ===== Quiz option states ===== */
+    .opt {
+      transition: transform 0.15s ease, border-color 0.2s ease, background 0.2s ease;
+    }
+    .opt:active { transform: scale(0.98); }
+    .opt.selected {
+      border-color: var(--indigo);
+      background: rgba(99, 102, 241, 0.14);
+    }
+    .opt.correct {
+      border-color: var(--emerald);
+      background: rgba(16, 185, 129, 0.16);
+    }
+    .opt.wrong {
+      border-color: #ef4444;
+      background: rgba(239, 68, 68, 0.14);
+    }
+    .opt .tick { opacity: 0; transition: opacity 0.2s ease; }
+    .opt.correct .tick, .opt.wrong .tick { opacity: 1; }
+
+    /* ===== Flashcard reveal ===== */
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(18px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .flashcard { animation: cardIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+    .flash-accent {
+      background:
+        radial-gradient(120% 140% at 100% 0%, rgba(99,102,241,0.22), transparent 55%),
+        radial-gradient(120% 140% at 0% 100%, rgba(16,185,129,0.18), transparent 55%),
+        var(--surface);
+    }
+
+    /* submit button pop-in */
+    @keyframes popIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .pop { animation: popIn 0.3s ease both; }
+  </style>
 </head>
-<body data-theme="dark">
 
-    <div class="header-area"><h2>Flash Arena</h2></div>
+<body class="aurora min-h-screen pb-32">
+  <div class="relative z-10 mx-auto w-full max-w-md px-5 pt-6">
 
-    <div id="main-content">
-        <div style="display: flex; gap: 8px; margin-bottom: 20px;">
-            <button onclick="switchTab('today')" id="tab-today" style="flex:1; padding: 12px; border-radius: 12px; background: var(--accent-main); color: white; border: none; font-weight: bold; cursor: pointer;">Today's Arena</button>
-            <button onclick="switchTab('vault')" id="tab-vault" style="flex:1; padding: 12px; border-radius: 12px; background: var(--bg-surface); color: var(--text-secondary); border: 1px solid var(--border-subtle); font-weight: bold; cursor: pointer;">Past Vault <i class="fa-solid fa-lock-open"></i></button>
-        </div>
+    <!-- ===== Header ===== -->
+    <header class="flex items-center justify-between reveal">
+      <div>
+        <p class="text-xs text-muted">Daily brain workout</p>
+        <h1 class="-mt-0.5 flex items-center gap-2 text-xl font-bold leading-tight">
+          <i class="fa-solid fa-bolt text-emerald-soft"></i> Flash Arena
+        </h1>
+      </div>
+      <button id="themeToggle" aria-label="Toggle theme"
+        class="glass card-press flex h-10 w-10 items-center justify-center rounded-full text-base">
+        <i class="fa-solid fa-moon"></i>
+      </button>
+    </header>
 
-        <div id="view-today">
-            <div class="bento-card" id="quiz-card">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
-                    <span style="font-size: 12px; font-weight: 800; color: var(--warning); text-transform: uppercase;">🔥 Daily Challenge</span>
-                    <span style="font-size: 12px; font-weight: 800; color: var(--text-secondary);" id="date-display">Today</span>
-                </div>
-                <div class="question-text" id="question-text"><i class="fa-solid fa-spinner fa-spin"></i> Fetching...</div>
-                <div id="options-container"></div>
-                <button class="btn-primary" id="submit-btn" style="display:none;" onclick="submitAnswer()">Submit Answer</button>
-                
-                <div class="flashcard-box" id="flashcard-section" onclick="revealAnswer()">
-                    <div class="flashcard-text" id="flashcard-content"><i class="fa-solid fa-hand-pointer"></i> Tap to reveal correct answer</div>
-                </div>
-
-                <button class="btn-share" id="share-btn" onclick="challengeFriend()">
-                    <i class="fa-brands fa-telegram"></i> Share Quiz with Friends
-                </button>
-            </div>
-        </div>
-
-        <div id="view-vault" style="display: none;">
-            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; text-align:center;"><i class="fa-solid fa-circle-info"></i> Revise past concepts. Quizzes cannot be re-taken.</p>
-            <div id="vault-container"></div>
-        </div>
+    <!-- ===== Main Tabs: Today's Arena / Past Vault ===== -->
+    <div class="reveal mt-5" style="animation-delay:.05s">
+      <div id="seg" class="seg glass" data-active="today" role="tablist" aria-label="Flash Arena tabs">
+        <span class="seg-thumb" aria-hidden="true"></span>
+        <button id="tabToday" class="seg-btn active" role="tab" aria-selected="true">
+          <i class="fa-solid fa-fire mr-1"></i> Today's Arena
+        </button>
+        <button id="tabVault" class="seg-btn" role="tab" aria-selected="false">
+          <i class="fa-solid fa-layer-group mr-1"></i> Past Vault
+        </button>
+      </div>
     </div>
 
-    <div class="floating-dock">
-        <a href="/" class="nav-item"><i class="fa-solid fa-house"></i></a>
-        <a href="/explore" class="nav-item"><i class="fa-solid fa-magnifying-glass"></i></a>
-        <a href="/quiz" class="nav-item"><i class="fa-solid fa-file-signature"></i></a>
-        <a href="/flash" class="nav-item active"><i class="fa-solid fa-bolt"></i></a>
-        <a href="/leaderboard" class="nav-item"><i class="fa-solid fa-trophy"></i></a>
-        <a href="/profile" class="nav-item"><i class="fa-solid fa-user"></i></a>
+    <!-- ============================================================ -->
+    <!-- PANEL: TODAY'S ARENA                                         -->
+    <!-- ============================================================ -->
+    <section id="panelToday" class="panel mt-6" role="tabpanel" aria-label="Today's Arena">
+
+      <!-- loading -->
+      <div id="quizLoading" class="grid gap-3">
+        <div class="skel h-6 w-40 rounded-md"></div>
+        <div class="skel h-24 rounded-2xl"></div>
+        <div class="skel h-14 rounded-2xl"></div>
+        <div class="skel h-14 rounded-2xl"></div>
+        <div class="skel h-14 rounded-2xl"></div>
+      </div>
+
+      <!-- quiz card -->
+      <div id="quizCard" class="hidden">
+        <div class="mb-3 flex items-center justify-between">
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-neon/12 px-2.5 py-1 text-[11px] font-semibold text-emerald-soft">
+            <i class="fa-regular fa-calendar-check"></i> <span id="quizDate">Today</span>
+          </span>
+          <span id="quizSubject" class="text-[11px] font-medium text-muted"></span>
+        </div>
+
+        <div class="glass rounded-3xl p-5">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-indigo-soft">Question of the day</p>
+          <h2 id="quizQuestion" class="mt-2 text-base font-semibold leading-relaxed text-pretty"></h2>
+
+          <div id="optionsWrap" class="mt-4 grid gap-2.5"></div>
+        </div>
+
+        <!-- Submit (only visible after selection) -->
+        <button id="submitBtn"
+          class="mt-4 hidden w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-neon py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 card-press">
+          <i class="fa-solid fa-paper-plane"></i> Submit Answer
+        </button>
+      </div>
+
+      <!-- already attempted state -->
+      <div id="attemptedState" class="hidden">
+        <div class="glass flash-accent rounded-3xl p-6 text-center">
+          <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-neon/15 text-2xl text-emerald-soft">
+            <i class="fa-solid fa-circle-check"></i>
+          </div>
+          <p class="mt-3 font-semibold">You've cleared today's arena</p>
+          <p class="mt-1 text-sm text-muted">Come back tomorrow for a fresh question. Meanwhile, revise from the Past Vault.</p>
+          <button id="goVault" class="mt-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold card-press">
+            <i class="fa-solid fa-layer-group"></i> Open Past Vault
+          </button>
+        </div>
+      </div>
+
+      <!-- Flashcard (explanation) + Share -->
+      <div id="flashWrap" class="hidden mt-5">
+        <div class="flashcard glass flash-accent rounded-3xl p-5">
+          <div class="flex items-center gap-2">
+            <span id="resultPill" class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold"></span>
+            <span class="text-[11px] text-muted">+<span id="xpGain">10</span> XP</span>
+          </div>
+
+          <div class="mt-4 flex items-center gap-2 text-indigo-soft">
+            <i class="fa-solid fa-lightbulb"></i>
+            <p class="text-[11px] font-semibold uppercase tracking-wide">Concept Flashcard</p>
+          </div>
+          <h3 id="flashTitle" class="mt-1.5 text-base font-bold text-pretty"></h3>
+          <p id="flashBody" class="mt-2 text-sm leading-relaxed text-muted"></p>
+
+          <div id="flashCorrect" class="mt-4 flex items-start gap-2 rounded-2xl border border-emerald-neon/20 bg-emerald-neon/10 px-3 py-2.5 text-sm">
+            <i class="fa-solid fa-check mt-0.5 text-emerald-soft"></i>
+            <span><span class="text-muted">Correct answer:</span> <span id="flashAnswer" class="font-semibold"></span></span>
+          </div>
+        </div>
+
+        <button id="shareBtn"
+          class="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-indigo-neon/30 bg-indigo-neon/10 py-3.5 text-sm font-bold text-indigo-soft card-press">
+          <i class="fa-solid fa-share-nodes"></i> Share Quiz
+        </button>
+      </div>
+
+      <!-- error / empty -->
+      <div id="quizEmpty" class="hidden mt-4 flex-col items-center text-center">
+        <div class="glass flex h-16 w-16 items-center justify-center rounded-2xl text-2xl text-indigo-soft">
+          <i class="fa-regular fa-face-smile"></i>
+        </div>
+        <p class="mt-4 font-semibold">No quiz available right now</p>
+        <p class="mt-1 max-w-[240px] text-sm text-muted">Today's question hasn't dropped yet. Check back shortly.</p>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- PANEL: PAST VAULT                                            -->
+    <!-- ============================================================ -->
+    <section id="panelVault" class="panel hide mt-6" role="tabpanel" aria-label="Past Vault">
+      <div class="mb-3 flex items-center justify-between">
+        <h2 class="flex items-center gap-2 text-base font-semibold">
+          <i class="fa-solid fa-layer-group text-indigo-soft"></i> Revision Vault
+        </h2>
+        <span id="vaultCount" class="text-xs text-muted"></span>
+      </div>
+
+      <!-- loading -->
+      <div id="vaultLoading" class="grid gap-3">
+        <div class="skel h-28 rounded-2xl"></div>
+        <div class="skel h-28 rounded-2xl"></div>
+        <div class="skel h-28 rounded-2xl"></div>
+      </div>
+
+      <div id="vaultList" class="grid gap-3"></div>
+
+      <!-- empty -->
+      <div id="vaultEmpty" class="hidden mt-10 flex-col items-center text-center">
+        <div class="glass flex h-16 w-16 items-center justify-center rounded-2xl text-2xl text-indigo-soft">
+          <i class="fa-solid fa-box-open"></i>
+        </div>
+        <p class="mt-4 font-semibold">Your vault is empty</p>
+        <p class="mt-1 max-w-[240px] text-sm text-muted">Solve daily quizzes to collect flashcards for revision.</p>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===== Floating Bottom Dock ===== -->
+  <nav class="fixed bottom-4 left-1/2 z-30 -translate-x-1/2">
+    <div class="dock flex items-center gap-1 rounded-full px-2 py-2">
+      <a href="/" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted">
+        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
+        <i class="fa-solid fa-house text-[17px]"></i><span class="text-[9px] font-medium">Home</span>
+      </a>
+      <a href="/explore" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted">
+        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
+        <i class="fa-solid fa-compass text-[17px]"></i><span class="text-[9px] font-medium">Explore</span>
+      </a>
+      <a href="/quiz" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted">
+        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
+        <i class="fa-solid fa-file-pen text-[17px]"></i><span class="text-[9px] font-medium">Quiz</span>
+      </a>
+      <a href="/flash" class="dock-item active relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5">
+        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
+        <i class="fa-solid fa-bolt text-[17px]"></i><span class="text-[9px] font-medium">Flash</span>
+      </a>
+      <a href="/leaderboard" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted">
+        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
+        <i class="fa-solid fa-ranking-star text-[17px]"></i><span class="text-[9px] font-medium">Rank</span>
+      </a>
+      <a href="/profile" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted">
+        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
+        <i class="fa-solid fa-user text-[17px]"></i><span class="text-[9px] font-medium">Profile</span>
+      </a>
     </div>
+  </nav>
 
-    <script>
-        let tg = window.Telegram.WebApp; tg.expand();
-        let uid = tg.initDataUnsafe?.user?.id || 9999999;
-        let uName = tg.initDataUnsafe?.user?.first_name || "Premium User";
-        let selectedOption = null;
-        let todayQuestionId = null;
-        let correctOptionText = "";
-        let flashcardConcept = "";
+  <script>
+    /* ============================================================
+       H4R Flash Arena — Vanilla JS controller
+       APIs:
+         GET  /api/daily_quiz/{uid}
+         POST /api/submit_quiz  { uid, name, selected_option }
+         GET  /api/past_flashcards
+       ============================================================ */
+    const tg = window.Telegram ? window.Telegram.WebApp : null;
+    if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
 
-        window.onload = () => {
-            document.body.setAttribute('data-theme', localStorage.getItem('edtech_theme') || 'dark');
-            const options = { weekday: 'short', month: 'short', day: 'numeric' };
-            document.getElementById('date-display').innerText = new Date().toLocaleDateString('en-US', options);
-            loadDailyChallenge();
-        }
+    const tgUser = tg && tg.initDataUnsafe ? tg.initDataUnsafe.user : null;
+    const UID = tgUser && tgUser.id ? tgUser.id : 123456789;         // demo fallback
+    const NAME = tgUser ? [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Guest' : 'Guest';
+    const BOT_USERNAME = 'H4R_Bot'; // used for the share deep link
 
-        function switchTab(tab) {
-            if(tg.HapticFeedback) tg.HapticFeedback.selectionChanged();
-            document.getElementById('view-today').style.display = tab === 'today' ? 'block' : 'none';
-            document.getElementById('view-vault').style.display = tab === 'vault' ? 'block' : 'none';
-            document.getElementById('tab-today').style.background = tab === 'today' ? 'var(--accent-main)' : 'var(--bg-surface)';
-            document.getElementById('tab-today').style.color = tab === 'today' ? 'white' : 'var(--text-secondary)';
-            document.getElementById('tab-vault').style.background = tab === 'vault' ? 'var(--accent-main)' : 'var(--bg-surface)';
-            document.getElementById('tab-vault').style.color = tab === 'vault' ? 'white' : 'var(--text-secondary)';
-            if(tab === 'vault') loadVault();
-        }
+    const $ = (id) => document.getElementById(id);
+    const haptic = (t) => { if (tg && tg.HapticFeedback) { try { t === 'sel' ? tg.HapticFeedback.selectionChanged() : tg.HapticFeedback.impactOccurred(t); } catch (e) {} } };
 
-        async function loadDailyChallenge() {
-            try {
-                let quizRes = await fetch(`/api/daily_quiz/${uid}`);
-                let quizData = await quizRes.json();
+    let QUIZ = null;            // current daily quiz object
+    let selectedOption = null;  // selected option value
+    let submitted = false;
+    let vaultLoaded = false;
 
-                if(quizData.error) {
-                    document.getElementById('question-text').innerHTML = "No active challenge for today. Check back later!";
-                    return;
-                }
+    function escapeHtml(str) {
+      return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
 
-                if(quizData.already_solved) {
-                    document.getElementById('question-text').innerHTML = "🎉 You completed today's challenge!";
-                    document.getElementById('share-btn').style.display = 'flex';
-                    if(quizData.flashcard) {
-                        correctOptionText = "You already know this!";
-                        flashcardConcept = quizData.flashcard;
-                        document.getElementById('flashcard-section').style.display = 'block';
-                    }
-                    return;
-                }
+    /* ---------- Theme toggle (shared behaviour) ---------- */
+    (function initTheme() {
+      const saved = localStorage.getItem('h4r_theme');
+      if (saved === 'light') document.documentElement.classList.replace('dark', 'light');
+      syncThemeIcon();
+    })();
+    function syncThemeIcon() {
+      const light = document.documentElement.classList.contains('light');
+      $('themeToggle').innerHTML = light ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', light ? '#f3f4f8' : '#050509');
+    }
+    $('themeToggle').addEventListener('click', () => {
+      const root = document.documentElement;
+      root.classList.contains('dark') ? root.classList.replace('dark', 'light') : root.classList.replace('light', 'dark');
+      localStorage.setItem('h4r_theme', root.classList.contains('light') ? 'light' : 'dark');
+      syncThemeIcon();
+      haptic('light');
+    });
 
-                todayQuestionId = quizData.id;
-                document.getElementById('question-text').innerText = quizData.question;
-                
-                let optsHtml = '';
-                quizData.options.forEach((opt, index) => {
-                    optsHtml += `<button class="option-btn" onclick="selectOption(${index}, this)">${opt}</button>`;
-                });
-                document.getElementById('options-container').innerHTML = optsHtml;
+    /* ============================================================
+       Main tab toggling (smooth)
+       ============================================================ */
+    function switchTab(which) {
+      const seg = $('seg');
+      seg.setAttribute('data-active', which);
+      const isToday = which === 'today';
+      $('tabToday').classList.toggle('active', isToday);
+      $('tabVault').classList.toggle('active', !isToday);
+      $('tabToday').setAttribute('aria-selected', String(isToday));
+      $('tabVault').setAttribute('aria-selected', String(!isToday));
+      $('panelToday').classList.toggle('hide', !isToday);
+      $('panelVault').classList.toggle('hide', isToday);
+      haptic('sel');
+      if (!isToday && !vaultLoaded) loadVault();
+    }
+    $('tabToday').addEventListener('click', () => switchTab('today'));
+    $('tabVault').addEventListener('click', () => switchTab('vault'));
+    $('goVault').addEventListener('click', () => switchTab('vault'));
 
-            } catch (e) {}
-        }
+    /* ============================================================
+       TODAY'S ARENA
+       ============================================================ */
+    function normalizeOptions(q) {
+      // Accept several possible shapes from the backend.
+      let opts = q.options || q.choices || q.opts || [];
+      if (!Array.isArray(opts) && typeof opts === 'object') {
+        // { A: '...', B: '...' } -> [{key,text}]
+        return Object.keys(opts).map((k) => ({ key: k, text: opts[k] }));
+      }
+      return opts.map((o, i) => {
+        if (typeof o === 'string') return { key: String.fromCharCode(65 + i), text: o };
+        return { key: o.key || o.id || String.fromCharCode(65 + i), text: o.text || o.label || o.value || String(o) };
+      });
+    }
 
-        function selectOption(index, btnElement) {
-            if (tg.HapticFeedback) tg.HapticFeedback.selectionChanged();
-            selectedOption = index;
-            document.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
-            btnElement.classList.add('selected');
-            document.getElementById('submit-btn').style.display = 'block';
-        }
+    function renderQuiz(q) {
+      QUIZ = q;
+      $('quizLoading').classList.add('hidden');
 
-        async function submitAnswer() {
-            if (selectedOption === null) return;
-            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+      if (!q || (!q.question && !q.q)) { $('quizEmpty').classList.remove('hidden'); $('quizEmpty').classList.add('flex'); return; }
 
-            let submitBtn = document.getElementById('submit-btn');
-            submitBtn.innerText = "Checking..."; submitBtn.disabled = true;
+      // Already attempted today?
+      if (q.attempted || q.already_attempted || q.status === 'attempted') {
+        $('attemptedState').classList.remove('hidden');
+        return;
+      }
 
-            try {
-                let res = await fetch(`/api/submit_quiz`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ uid: uid, name: uName, selected_option: selectedOption })
-                });
-                let result = await res.json();
-                
-                let allBtns = document.querySelectorAll('.option-btn');
-                allBtns.forEach(btn => btn.disabled = true);
-                submitBtn.style.display = 'none';
+      $('quizCard').classList.remove('hidden');
+      $('quizQuestion').textContent = q.question || q.q || '';
+      $('quizDate').textContent = q.date || 'Today';
+      $('quizSubject').textContent = q.subject || q.category || q.topic || '';
 
-                correctOptionText = result.correct_text; 
-                flashcardConcept = result.flashcard;
-                document.getElementById('flashcard-section').style.display = 'block';
-                document.getElementById('share-btn').style.display = 'flex';
+      const options = normalizeOptions(q);
+      const wrap = $('optionsWrap');
+      wrap.innerHTML = options.map((o) => `
+        <button type="button" class="opt glass flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left"
+          data-key="${escapeHtml(o.key)}" data-text="${escapeHtml(o.text)}">
+          <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/8 text-xs font-bold">${escapeHtml(o.key)}</span>
+          <span class="flex-1 text-sm font-medium">${escapeHtml(o.text)}</span>
+          <i class="tick fa-solid fa-circle-check text-emerald-soft"></i>
+        </button>`).join('');
 
-            } catch(e) { submitBtn.innerText = "Error. Try again."; submitBtn.disabled = false; }
-        }
+      wrap.querySelectorAll('.opt').forEach((el) => {
+        el.addEventListener('click', () => {
+          if (submitted) return;
+          selectedOption = { key: el.getAttribute('data-key'), text: el.getAttribute('data-text') };
+          wrap.querySelectorAll('.opt').forEach((o) => o.classList.remove('selected'));
+          el.classList.add('selected');
+          const btn = $('submitBtn');
+          if (btn.classList.contains('hidden')) { btn.classList.remove('hidden'); btn.classList.add('flex', 'pop'); }
+          haptic('sel');
+        });
+      });
+    }
 
-        function revealAnswer() {
-            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-            let box = document.getElementById('flashcard-section');
-            box.style.background = 'rgba(16, 185, 129, 0.1)';
-            box.style.borderColor = 'var(--success)';
-            box.style.borderStyle = 'solid';
-            box.innerHTML = `<span style="color:var(--success); font-weight:800;">✅ Answer:</span><br><span style="font-weight:600; font-size:15px; color:var(--text-primary);">${correctOptionText}</span><br><br><span style="color:#a855f7; font-weight:800;">💡 Concept:</span><br><span style="font-weight:500; font-size:14px; color:var(--text-primary);">${flashcardConcept}</span>`;
-            box.onclick = null; 
-        }
+    $('submitBtn').addEventListener('click', submitAnswer);
 
-        async function loadVault() {
-            let vc = document.getElementById('vault-container');
-            vc.innerHTML = '<div style="text-align:center; padding:20px;"><i class="fa-solid fa-spinner fa-spin text-xl"></i></div>';
-            try {
-                let res = await fetch('/api/past_flashcards');
-                let data = await res.json();
-                if(data.length === 0) {
-                    vc.innerHTML = '<div class="bento-card text-center" style="color:var(--text-secondary);">No past flashcards available yet.</div>';
-                    return;
-                }
-                let html = '';
-                data.forEach(item => {
-                    html += `
-                    <div class="bento-card" style="border-left: 4px solid #a855f7;">
-                        <span style="font-size:11px; font-weight:800; color:var(--text-secondary);">DAY ${item.day}</span>
-                        <p style="font-size:15px; font-weight:700; margin: 8px 0;">${item.question}</p>
-                        <p style="font-size:14px; font-weight:600; color:var(--success); margin-bottom:12px;">✅ Ans: ${item.answer}</p>
-                        <div style="background:rgba(168,85,247,0.1); padding:12px; border-radius:12px; font-size:13px; font-weight:500; color:var(--text-primary);">
-                            <b style="color:#a855f7;">💡 Concept:</b><br> ${item.flashcard}
-                        </div>
-                    </div>`;
-                });
-                vc.innerHTML = html;
-            } catch(e) { vc.innerHTML = 'Error loading vault.'; }
-        }
+    async function submitAnswer() {
+      if (!selectedOption || submitted) return;
+      submitted = true;
+      const btn = $('submitBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting...';
+      haptic('medium');
 
-        function challengeFriend() {
-            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-            let text = `⚡ I just solved the Daily Flash Challenge on H4R Bot!\n\nCan you beat my score? Challenge yourself now! 👇`;
-            let appLink = "https://t.me/H4R_Contact_bot/App";
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(appLink)}&text=${encodeURIComponent(text)}`);
-        }
-    </script>
+      let result = null;
+      try {
+        const res = await fetch('/api/submit_quiz', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ uid: UID, name: NAME, selected_option: selectedOption.key }),
+        });
+        if (res.ok) result = await res.json();
+      } catch (e) { /* fall through to local reveal */ }
+
+      revealResult(result);
+    }
+
+    function revealResult(result) {
+      // Determine correctness + explanation from response, with graceful fallbacks.
+      result = result || {};
+      const correctKey = result.correct_option || result.correct || result.answer_key || QUIZ.correct_option || QUIZ.answer || null;
+      const correctText = result.correct_answer || result.answer_text || QUIZ.correct_answer || '';
+      const isCorrect = (result.is_correct != null)
+        ? !!result.is_correct
+        : (correctKey != null && String(correctKey) === String(selectedOption.key));
+
+      // paint the options
+      $('optionsWrap').querySelectorAll('.opt').forEach((el) => {
+        const k = el.getAttribute('data-key');
+        if (correctKey != null && String(k) === String(correctKey)) el.classList.add('correct');
+        if (String(k) === String(selectedOption.key) && !isCorrect) el.classList.add('wrong');
+        el.classList.remove('selected');
+        el.style.pointerEvents = 'none';
+      });
+
+      // hide submit, show flashcard
+      $('submitBtn').classList.add('hidden');
+      const pill = $('resultPill');
+      if (isCorrect) {
+        pill.className = 'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-emerald-neon/15 text-emerald-soft';
+        pill.innerHTML = '<i class="fa-solid fa-check"></i> Correct!';
+      } else {
+        pill.className = 'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-red-500/15 text-red-400';
+        pill.innerHTML = '<i class="fa-solid fa-xmark"></i> Not quite';
+      }
+
+      $('xpGain').textContent = result.xp || result.points_gained || (isCorrect ? 10 : 2);
+      $('flashTitle').textContent = result.flash_title || QUIZ.flash_title || QUIZ.concept || QUIZ.question || QUIZ.q || 'Key Concept';
+      $('flashBody').textContent = result.explanation || result.flashcard || QUIZ.explanation || QUIZ.flashcard || 'Review the correct answer above and lock this concept into memory.';
+
+      const ansText = correctText || (correctKey ? ('Option ' + correctKey) : '');
+      if (ansText) { $('flashAnswer').textContent = ansText; }
+      else { $('flashCorrect').classList.add('hidden'); }
+
+      $('flashWrap').classList.remove('hidden');
+      $('flashWrap').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      haptic(isCorrect ? 'medium' : 'light');
+      if (tg && tg.HapticFeedback && result) { try { tg.HapticFeedback.notificationOccurred(isCorrect ? 'success' : 'error'); } catch (e) {} }
+
+      // vault will refresh next time it's opened
+      vaultLoaded = false;
+    }
+
+    /* ---------- Share Quiz ---------- */
+    $('shareBtn').addEventListener('click', () => {
+      haptic('light');
+      const q = (QUIZ && (QUIZ.question || QUIZ.q)) ? (QUIZ.question || QUIZ.q) : 'Daily Flash Quiz';
+      const text = `🧠 H4R Flash Arena — Question of the day:\n\n${q}\n\nCan you crack it? Play daily quizzes & climb the leaderboard 👇`;
+      const shareUrl = `https://t.me/${BOT_USERNAME}?start=flash`;
+      const url = 'https://t.me/share/url?url=' + encodeURIComponent(shareUrl) + '&text=' + encodeURIComponent(text);
+      if (tg && tg.openTelegramLink) tg.openTelegramLink(url);
+      else window.open(url, '_blank');
+    });
+
+    /* ============================================================
+       PAST VAULT
+       ============================================================ */
+    function flashcardItem(f, idx) {
+      const q = f.question || f.q || f.title || 'Flashcard';
+      const ans = f.answer || f.correct_answer || f.correct_option || '';
+      const exp = f.explanation || f.flashcard || f.concept || '';
+      const date = f.date || f.created_at || '';
+      return `
+        <article class="glass card-press reveal rounded-3xl p-5" style="animation-delay:${Math.min(idx * 0.04, 0.4)}s">
+          <div class="flex items-center justify-between">
+            <span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-neon/12 px-2.5 py-1 text-[10px] font-semibold text-indigo-soft">
+              <i class="fa-solid fa-lightbulb"></i> Concept
+            </span>
+            ${date ? `<span class="text-[10px] text-muted">${escapeHtml(date)}</span>` : ''}
+          </div>
+          <h3 class="mt-3 text-sm font-semibold leading-relaxed text-pretty">${escapeHtml(q)}</h3>
+          ${ans ? `<div class="mt-3 flex items-start gap-2 rounded-2xl border border-emerald-neon/20 bg-emerald-neon/10 px-3 py-2 text-sm">
+            <i class="fa-solid fa-check mt-0.5 text-emerald-soft"></i>
+            <span><span class="text-muted">Answer:</span> <span class="font-semibold">${escapeHtml(ans)}</span></span>
+          </div>` : ''}
+          ${exp ? `<p class="mt-2.5 text-[13px] leading-relaxed text-muted">${escapeHtml(exp)}</p>` : ''}
+        </article>`;
+    }
+
+    async function loadVault() {
+      vaultLoaded = true;
+      $('vaultLoading').classList.remove('hidden');
+      $('vaultEmpty').classList.add('hidden');
+      $('vaultList').innerHTML = '';
+      let items = [];
+      try {
+        const res = await fetch('/api/past_flashcards', { headers: { 'Accept': 'application/json' } });
+        if (res.ok) {
+          const json = await res.json();
+          items = Array.isArray(json) ? json : (json.flashcards || json.past_flashcards || json.data || []);
+        } else { throw new Error('HTTP ' + res.status); }
+      } catch (e) {
+        items = DEMO_VAULT;
+      }
+      $('vaultLoading').classList.add('hidden');
+      if (!items.length) { $('vaultEmpty').classList.remove('hidden'); $('vaultEmpty').classList.add('flex'); return; }
+      $('vaultCount').textContent = items.length + ' cards';
+      $('vaultList').innerHTML = items.map((f, i) => flashcardItem(f, i)).join('');
+    }
+
+    /* ============================================================
+       Boot: load today's quiz
+       ============================================================ */
+    async function loadQuiz() {
+      try {
+        const res = await fetch(`/api/daily_quiz/${UID}`, { headers: { 'Accept': 'application/json' } });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        renderQuiz(await res.json());
+      } catch (e) {
+        renderQuiz(DEMO_QUIZ);
+      }
+    }
+
+    /* ---------- Demo data for browser preview ---------- */
+    const DEMO_QUIZ = {
+      date: 'Today',
+      subject: 'General Science',
+      question: 'Which gas is most abundant in the Earth\u2019s atmosphere?',
+      options: ['Oxygen', 'Nitrogen', 'Carbon Dioxide', 'Hydrogen'],
+      correct_option: 'B',
+      correct_answer: 'Nitrogen',
+      explanation: 'Nitrogen makes up about 78% of the Earth\u2019s atmosphere by volume, far more than oxygen (~21%). It is largely inert, which is why it dominates the air we breathe.',
+      flash_title: 'Composition of Air',
+    };
+    const DEMO_VAULT = [
+      { date: 'Yesterday', question: 'Who wrote the Indian National Anthem?', answer: 'Rabindranath Tagore', explanation: '\u201cJana Gana Mana\u201d was composed by Rabindranath Tagore and adopted as the national anthem in 1950.' },
+      { date: '2 days ago', question: 'The SI unit of electric current is?', answer: 'Ampere', explanation: 'The ampere (A) is the SI base unit of electric current, named after Andr\u00e9-Marie Amp\u00e8re.' },
+      { date: '3 days ago', question: 'Which is the longest river in India?', answer: 'The Ganga', explanation: 'The Ganga is the longest river flowing entirely within India, stretching over 2,500 km.' },
+    ];
+
+    loadQuiz();
+  </script>
 </body>
 </html>
