@@ -49,6 +49,9 @@
         
         .score-box { background: rgba(99, 102, 241, 0.1); color: var(--accent-main); padding: 6px 12px; border-radius: 10px; font-weight: 900; font-size: 14px; }
 
+        .btn-share { width: 100%; background: #27A5E7; color: white; border: none; padding: 16px; border-radius: 16px; font-weight: 800; cursor: pointer; transition: 0.3s; font-size: 16px; display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 20px;}
+        .btn-share:active { transform: scale(0.96); }
+
         .floating-dock { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: max-content; padding: 8px 16px; background: var(--dock-bg); backdrop-filter: blur(24px); border: 1px solid var(--border-subtle); border-radius: 100px; display: flex; gap: 20px; z-index: 9999; box-shadow: var(--dock-shadow); transition: 0.3s;}
         .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); width: 45px; height: 45px; border-radius: 50%; cursor: pointer; text-decoration: none; transition: 0.3s; }
         .nav-item i { font-size: 18px; transition: 0.3s; }
@@ -70,6 +73,10 @@
     <div id="leaderboard-container">
         <div style="text-align: center; padding: 40px; color: var(--text-secondary);"><i class="fa-solid fa-spinner fa-spin text-2xl"></i> Loading...</div>
     </div>
+
+    <button class="btn-share" onclick="shareLeaderboard()">
+        <i class="fa-brands fa-telegram"></i> Share Leaderboard
+    </button>
 
     <div class="floating-dock">
         <a href="/" class="nav-item"><i class="fa-solid fa-house"></i></a>
@@ -93,27 +100,23 @@
             btnElement.classList.add('tab-active');
             
             let container = document.getElementById('leaderboard-container');
-            container.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-secondary);"><i class="fa-solid fa-spinner fa-spin" style="font-size:30px; color:var(--accent-main); margin-bottom:10px;"></i><br>Syncing Data...</div>';
+            container.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-secondary);"><i class="fa-solid fa-spinner fa-spin" style="font-size:30px; color:var(--accent-main); margin-bottom:10px;"></i><br>Fetching Ranks...</div>';
 
             try {
                 let res = await fetch(`/api/leaderboard/${metric}`);
                 let data = await res.json();
                 
-                if(data.error) {
-                    container.innerHTML = '<p style="text-align:center; color:var(--text-secondary); padding:20px;">No ranks found.</p>';
-                    return;
-                }
-                
-                if(data.length === 0) {
-                    container.innerHTML = '<p style="text-align:center; color:var(--text-secondary); padding:20px;">Leaderboard is empty.</p>';
+                if(data.error || data.length === 0) {
+                    container.innerHTML = '<p style="text-align:center; color:var(--text-secondary); padding:20px;">Leaderboard is updating. Play a test to rank up!</p>';
                     return;
                 }
 
                 let html = '';
                 data.forEach((user, index) => {
                     let rankClass = index === 0 ? 'rank-1' : index === 1 ? 'rank-2' : index === 2 ? 'rank-3' : '';
-                    let val = metric === 'points' ? user.points + ' XP' : metric === 'accuracy' ? user.accuracy + '%' : user.streak + ' 🔥';
-                    let initial = user.name ? user.name.charAt(0) : 'U';
+                    let val = metric === 'points' ? (user.points || 0) + ' XP' : metric === 'accuracy' ? (user.accuracy || 0) + '%' : (user.streak || 0) + ' 🔥';
+                    let safeName = (user.name && user.name !== "undefined") ? user.name : "Premium User";
+                    let initial = safeName.charAt(0).toUpperCase();
                     
                     html += `
                     <div class="rank-card ${rankClass}">
@@ -122,7 +125,7 @@
                             <img src="/api/user/avatar/${user.uid}" onerror="this.style.display='none'; this.parentElement.innerHTML='${initial}'">
                         </div>
                         <div class="user-info">
-                            <p class="user-name">${user.name}</p>
+                            <p class="user-name">${safeName}</p>
                             <p class="user-uid">ID: ${user.uid}</p>
                         </div>
                         <div class="score-box">${val}</div>
@@ -132,6 +135,14 @@
             } catch (e) {
                 container.innerHTML = '<p style="text-align:center; color:red;">Database Error</p>';
             }
+        }
+
+        // 🔥 SHARE LEADERBOARD FUNCTION
+        function shareLeaderboard() {
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            let text = `🏆 Check out the Hall of Fame on H4R Bot!\n\nCan you beat the top scores? Compete in Daily Flash Challenges now! 👇`;
+            let appLink = "https://t.me/H4R_Contact_bot/App"; 
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(appLink)}&text=${encodeURIComponent(text)}`);
         }
     </script>
 </body>
