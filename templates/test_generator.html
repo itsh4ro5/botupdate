@@ -3,301 +3,294 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Hybrid Test Engine</title>
+    <title>Daily Flash Challenge</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
-    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <style>
         :root {
-            --bg-base: #f4f4f5; --bg-surface: #ffffff; --border-subtle: #e4e4e7; 
-            --text-primary: #09090b; --text-secondary: #71717a; --accent-main: #4f46e5; 
-            --accent-glow: rgba(79, 70, 229, 0.15); --dock-bg: rgba(255, 255, 255, 0.85); 
-            --dock-shadow: 0 20px 40px rgba(0,0,0,0.08);
+            --bg-base: #f4f4f5; --bg-surface: #ffffff; --bg-surface-hover: #f4f4f5;
+            --border-subtle: #e4e4e7; --text-primary: #09090b; --text-secondary: #71717a;
+            --accent-main: #4f46e5; --accent-glow: rgba(79, 70, 229, 0.15);
+            --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+            --dock-bg: rgba(255, 255, 255, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.08);
         }
         [data-theme="dark"] {
-            --bg-base: #000000; --bg-surface: #111111; --border-subtle: #27272a; 
-            --text-primary: #fafafa; --text-secondary: #a1a1aa; --accent-main: #6366f1; 
+            --bg-base: #000000; --bg-surface: #111111; --bg-surface-hover: #1f1f22;
+            --border-subtle: #27272a; --text-primary: #fafafa; --text-secondary: #a1a1aa;
+            --accent-main: #6366f1; --accent-glow: rgba(99, 102, 241, 0.25);
             --dock-bg: rgba(24, 24, 27, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.5);
         }
-        * { box-sizing: border-box; font-family: 'Outfit', sans-serif; }
-        body { background: var(--bg-base); color: var(--text-primary); margin: 0; padding: 0 16px 120px 16px; transition: 0.3s ease; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: 'Outfit', sans-serif; }
+        body { background: var(--bg-base); color: var(--text-primary); margin: 0; padding: 0 16px 120px 16px; transition: background-color 0.4s ease; }
+        
         .header-area { display: flex; justify-content: space-between; align-items: center; padding: 24px 0 20px 0; }
         .header-area h2 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
-        .theme-btn { background: var(--bg-surface); border: 1px solid var(--border-subtle); width: 44px; height: 44px; border-radius: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
-        .bento-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 24px; padding: 20px; margin-bottom: 24px; transition: 0.3s; }
-        .custom-input { width: 100%; padding: 16px; border-radius: 16px; border: 1px solid var(--border-subtle); background: var(--bg-base); color: var(--text-primary); outline: none; margin-bottom: 16px;}
-        .btn-primary-full { width: 100%; background: var(--accent-main); color: white; border: none; padding: 16px; border-radius: 20px; font-weight: 800; cursor: pointer; transition: 0.2s; display: flex; justify-content: center; align-items: center; gap: 8px;}
-        .btn-primary-full:active { transform: scale(0.96); }
-        .tab-btn { flex: 1; padding: 12px; font-weight: 700; border-radius: 16px; text-align: center; cursor: pointer; transition: 0.3s; }
-        .tab-active { background: var(--accent-main); color: white; box-shadow: 0 10px 20px var(--accent-glow); }
-        .tab-inactive { background: var(--bg-surface); color: var(--text-secondary); border: 1px solid var(--border-subtle); }
-        .hidden { display: none !important; }
         
+        /* Fixed Theme Button */
+        .theme-btn { background: var(--bg-surface); border: 1px solid var(--border-subtle); color: var(--text-primary); width: 44px; height: 44px; border-radius: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
+        .theme-btn i { color: var(--text-primary); } 
+        .theme-btn:active { transform: scale(0.85); }
+
+        .bento-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 24px; padding: 20px; margin-bottom: 16px; }
+        
+        /* Stats & Badges UI */
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+        .stat-box { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 20px; padding: 16px; text-align: center; }
+        .stat-value { font-size: 24px; font-weight: 900; color: var(--text-primary); }
+        .stat-label { font-size: 12px; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; margin-top: 4px; }
+        
+        .badge-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 100px; font-size: 12px; font-weight: 800; background: rgba(168, 85, 247, 0.15); color: #a855f7; margin: 4px; }
+
+        /* Quiz UI */
+        .question-text { font-size: 18px; font-weight: 700; margin-bottom: 20px; line-height: 1.4; }
+        .option-btn { width: 100%; text-align: left; background: var(--bg-base); border: 2px solid var(--border-subtle); color: var(--text-primary); padding: 16px; border-radius: 16px; margin-bottom: 12px; font-size: 15px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        .option-btn:active { transform: scale(0.98); }
+        .option-btn.selected { border-color: var(--accent-main); background: var(--accent-glow); }
+        .option-btn.correct { border-color: var(--success); background: rgba(16, 185, 129, 0.15); color: var(--success); }
+        .option-btn.wrong { border-color: var(--danger); background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+
+        .btn-primary { width: 100%; background: var(--accent-main); color: white; border: none; padding: 16px; border-radius: 16px; font-weight: 800; cursor: pointer; transition: 0.3s; margin-top: 10px; font-size: 16px; }
+        .btn-share { width: 100%; background: #27A5E7; color: white; border: none; padding: 16px; border-radius: 16px; font-weight: 800; cursor: pointer; transition: 0.3s; margin-top: 10px; font-size: 16px; display: none; justify-content: center; align-items: center; gap: 8px;}
+
         /* Floating Dock */
-        .floating-dock { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: max-content; padding: 8px 16px; background: var(--dock-bg); backdrop-filter: blur(24px); border: 1px solid var(--border-subtle); border-radius: 100px; display: flex; gap: 24px; box-shadow: var(--dock-shadow); z-index: 9999; }
-        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); cursor: pointer; text-decoration: none; width: 50px; height: 50px; border-radius: 50%; transition: 0.3s; }
-        .nav-item.active { background: var(--accent-main); color: white; transform: translateY(-10px); }
+        .floating-dock { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: max-content; padding: 8px 16px; background: var(--dock-bg); backdrop-filter: blur(24px); border: 1px solid var(--border-subtle); border-radius: 100px; display: flex; gap: 24px; z-index: 9999; box-shadow: var(--dock-shadow); transition: 0.3s;}
+        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); width: 50px; height: 50px; border-radius: 50%; cursor: pointer; text-decoration: none; transition: 0.3s; }
+        .nav-item span { display: none; }
+        .nav-item i { font-size: 20px; transition: 0.3s; }
+        .nav-item.active { background: var(--accent-main); color: white; box-shadow: 0 8px 20px var(--accent-glow); transform: translateY(-10px); }
     </style>
 </head>
 <body data-theme="dark">
+
     <div class="header-area">
-        <h2>Hybrid Test Engine</h2>
+        <h2>Flash Arena</h2>
         <button class="theme-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon" id="theme-icon"></i></button>
     </div>
 
-    <!-- TABS -->
-    <div class="flex gap-3 mb-6" style="display: flex;">
-        <div id="tab-btn-tb" class="tab-btn tab-active" onclick="switchTab('tb')"><i class="fa-solid fa-database"></i> Testbook</div>
-        <div id="tab-btn-ai" class="tab-btn tab-inactive" onclick="switchTab('ai')"><i class="fa-solid fa-brain"></i> AI PDF</div>
+    <!-- MAINTENANCE SCREEN -->
+    <div id="maintenance-screen" style="display: none; flex-direction: column; align-items: center; justify-content: center; height: 60vh; text-align: center;">
+        <i class="fa-solid fa-person-digging" style="font-size: 70px; color: var(--warning); margin-bottom: 24px;"></i>
+        <h2 style="font-size: 26px; font-weight: 900; margin: 0 0 12px 0;">Under Maintenance</h2>
+        <p style="color: var(--text-secondary); font-size: 15px;">Flash Arena is currently updating today's challenge. Please wait!</p>
     </div>
 
-    <!-- TAB 1: TESTBOOK ENGINE -->
-    <div id="tab-tb">
-        <div class="bento-card">
-            <div style="display: flex; gap: 8px;">
-                <input type="text" id="tbSearchQuery" class="custom-input" placeholder="Search SSC, UPSC, Banking..." style="margin:0;" onkeypress="if(event.key === 'Enter') searchTB()">
-                <button onclick="searchTB()" style="background:var(--accent-main); color:white; border:none; border-radius:16px; padding:0 24px; font-weight:bold; cursor:pointer;"><i class="fa-solid fa-search"></i></button>
+    <div id="main-content">
+        <!-- User Profile & Gamification Stats -->
+        <div class="stats-grid">
+            <div class="stat-box">
+                <div class="stat-value" id="user-points">0</div>
+                <div class="stat-label"><i class="fa-solid fa-star" style="color:var(--warning);"></i> Total Points</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="user-streak">0</div>
+                <div class="stat-label"><i class="fa-solid fa-fire" style="color:#ea580c;"></i> Day Streak</div>
             </div>
         </div>
-        <div id="tb-dynamic-area" class="bento-card" style="min-height: 200px; text-align: center; color: var(--text-secondary);">
-            <i class="fa-solid fa-magnifying-glass" style="font-size: 40px; opacity: 0.3; margin-top: 20px; margin-bottom: 10px;"></i>
-            <p>Search for a test series to begin.</p>
+        
+        <div class="bento-card" style="padding: 12px 20px;" id="badges-card">
+            <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Earned Badges:</span><br>
+            <div id="badges-container" style="margin-top: 8px;">
+                <span class="badge-pill"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</span>
+            </div>
+        </div>
+
+        <!-- Daily Challenge Card -->
+        <div class="bento-card" id="quiz-card">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
+                <span style="font-size: 12px; font-weight: 800; color: var(--warning); text-transform: uppercase;">🔥 Challenge of the Day</span>
+                <span style="font-size: 12px; font-weight: 800; color: var(--text-secondary);" id="date-display">Today</span>
+            </div>
+            
+            <div class="question-text" id="question-text"><i class="fa-solid fa-spinner fa-spin"></i> Fetching challenge...</div>
+            
+            <div id="options-container">
+                <!-- Options dynamically render honge -->
+            </div>
+
+            <button class="btn-primary" id="submit-btn" style="display:none;" onclick="submitAnswer()">Submit Answer</button>
+            
+            <!-- Study Buddy Feature (Deep Linking) -->
+            <button class="btn-share" id="share-btn" onclick="challengeFriend()">
+                <i class="fa-brands fa-telegram"></i> Challenge a Friend
+            </button>
         </div>
     </div>
 
-    <!-- TAB 2: AI PDF GENERATOR (Existing) -->
-    <div id="tab-ai" class="hidden">
-        <div class="bento-card">
-            <form id="quizForm">
-                <label style="font-size:14px; font-weight:700; color:var(--text-secondary); margin-bottom:8px; display:block;">Upload Study Material (PDF/JSON)</label>
-                <input type="file" id="pdfFile" class="custom-input" required>
-                <label style="font-size:14px; font-weight:700; color:var(--text-secondary); margin-bottom:8px; display:block;">Number of Questions</label>
-                <input type="number" id="numQuestions" class="custom-input" value="5" min="1" max="20" required>
-                <button type="submit" class="btn-primary-full" id="submitBtn">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i> Generate AI Quiz
-                </button>
-            </form>
-        </div>
-        <div id="quizContainer"></div>
-    </div>
-
-    <!-- FLOATING DOCK -->
+    <!-- Floating Dock -->
     <div class="floating-dock">
-        <a href="/" class="nav-item"><i class="fa-solid fa-house"></i></a>
-        <a href="/explore" class="nav-item"><i class="fa-solid fa-magnifying-glass"></i></a>
-        <a href="/quiz" class="nav-item active"><i class="fa-solid fa-brain"></i></a>
+        <a href="/" class="nav-item"><i class="fa-solid fa-house"></i><span>Home</span></a>
+        <a href="/explore" class="nav-item"><i class="fa-solid fa-magnifying-glass"></i><span>Explore</span></a>
+        <a href="/quiz" class="nav-item active"><i class="fa-solid fa-bolt"></i><span>Arena</span></a>
+        <a href="/admin_panel" class="nav-item" id="btn-nav-admin" style="display:none;"><i class="fa-solid fa-shield-halved"></i><span>Admin</span></a>
+        <a href="/owner_panel" class="nav-item" id="btn-nav-owner" style="display:none;"><i class="fa-solid fa-crown"></i><span>Owner</span></a>
     </div>
 
     <script>
         let tg = window.Telegram.WebApp; tg.expand();
+        let uid = tg.initDataUnsafe?.user?.id || 9999999;
+        const TESTER_ID = 7993892902; 
+        
+        let selectedOption = null;
+        let todayQuestionId = null;
 
-        // THEME LOGIC
+        // Sync Animations & Theme
+        document.querySelectorAll('a.nav-item').forEach(link => {
+            link.addEventListener('click', function(e) {
+                if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+                let icon = this.querySelector('i');
+                if(icon) icon.className = 'fas fa-spinner fa-spin';
+            });
+        });
+
         window.onload = () => {
             let saved = localStorage.getItem('edtech_theme') || 'dark';
             document.body.setAttribute('data-theme', saved);
             document.getElementById("theme-icon").className = saved === 'dark' ? "fa-solid fa-moon" : "fa-solid fa-sun";
+            
+            const options = { weekday: 'short', month: 'short', day: 'numeric' };
+            document.getElementById('date-display').innerText = new Date().toLocaleDateString('en-US', options);
+
+            checkMaintenanceAndLoad();
         }
+
         function toggleTheme() {
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
             let theme = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
             document.body.setAttribute('data-theme', theme);
             localStorage.setItem('edtech_theme', theme);
             document.getElementById("theme-icon").className = theme === 'dark' ? "fa-solid fa-moon" : "fa-solid fa-sun";
         }
 
-        // TAB SWITCH LOGIC
-        function switchTab(tabId) {
-            if(tg.HapticFeedback) tg.HapticFeedback.selectionChanged();
-            document.getElementById('tab-ai').classList.add('hidden');
-            document.getElementById('tab-tb').classList.add('hidden');
-            document.getElementById('tab-btn-ai').className = "tab-btn tab-inactive";
-            document.getElementById('tab-btn-tb').className = "tab-btn tab-inactive";
-            
-            document.getElementById('tab-' + tabId).classList.remove('hidden');
-            document.getElementById('tab-btn-' + tabId).className = "tab-btn tab-active";
-        }
-
-        // ==========================================
-        // TESTBOOK ENGINE LOGIC
-        // ==========================================
-        let tbCache = {};
-
-        async function searchTB() {
-            let q = document.getElementById('tbSearchQuery').value;
-            if(!q) return;
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-            
-            let area = document.getElementById('tb-dynamic-area');
-            area.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size: 30px; color: var(--accent-main); margin-top:20px;"></i><p>Searching Database...</p>';
-            
+        async function checkMaintenanceAndLoad() {
             try {
-                let res = await fetch('/api/tb/search?q=' + encodeURIComponent(q));
+                let res = await fetch('/api/user/' + uid);
                 let data = await res.json();
                 
-                if(data.length === 0) {
-                    area.innerHTML = '<p style="padding:20px;">No results found.</p>';
+                if (data.is_admin || data.is_owner) document.getElementById("btn-nav-admin").style.display = "flex";
+                if (data.is_owner) document.getElementById("btn-nav-owner").style.display = "flex";
+
+                if (!data.is_owner && uid !== TESTER_ID && data.system_stats?.maintenance_mode) {
+                    document.getElementById("main-content").style.display = "none";
+                    document.getElementById("maintenance-screen").style.display = "flex";
                     return;
                 }
-                
-                let html = '<h3 style="font-size:18px; margin-bottom:16px;">Select Series</h3>';
-                data.forEach(s => {
-                    html += `
-                    <div style="padding: 16px; margin-bottom: 8px; border: 1px solid var(--border-subtle); border-radius: 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="loadSeries('${s.slug}', '${s.name.replace(/'/g, "\\'")}')">
-                        <b style="font-size:14px; max-width: 80%;">${s.name}</b>
-                        <span style="font-size:11px; background:var(--accent-glow); color:var(--accent-main); padding:4px 8px; border-radius:8px; font-weight:bold;">${s.testsCount || 0} Tests</span>
-                    </div>`;
-                });
-                area.innerHTML = html;
-            } catch(e) { area.innerHTML = '<p style="color:red;">Error searching database.</p>'; }
+                loadDailyChallenge();
+            } catch (e) {
+                console.error("User fetch error", e);
+                loadDailyChallenge(); // Fallback
+            }
         }
 
-        async function loadSeries(slug, name) {
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-            let area = document.getElementById('tb-dynamic-area');
-            area.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size: 30px; color: var(--accent-main); margin-top:20px;"></i><p>Loading Structure...</p>';
-            
+        async function loadDailyChallenge() {
             try {
-                let res = await fetch('/api/tb/series/' + slug);
-                let data = await res.json();
-                tbCache.series = data;
+                // Fetch user gamification stats
+                let userRes = await fetch(`/api/user_stats/${uid}`);
+                let userData = await userRes.json();
                 
-                let html = `<button onclick="searchTB()" style="background:transparent; border:none; color:var(--accent-main); font-weight:bold; cursor:pointer; padding:0; margin-bottom:16px;"><i class="fas fa-arrow-left"></i> Back</button>
-                            <h3 style="font-size:18px; margin-bottom:16px;">${name}</h3>`;
+                document.getElementById('user-points').innerText = userData.points || 0;
+                document.getElementById('user-streak').innerText = userData.streak || 0;
                 
-                data.sections.forEach(sec => {
-                    html += `<div style="margin-bottom:16px;"><h4 style="font-size:14px; font-weight:800; border-bottom:1px solid var(--border-subtle); padding-bottom:8px; margin-bottom:12px;">${sec.name}</h4><div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">`;
-                    sec.subsections.forEach(sub => {
-                        html += `<div style="padding:12px; background:var(--bg-base); border:1px solid var(--border-subtle); border-radius:12px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" onclick="loadTests('${data.id}', '${sec.id}', '${sub.id}', '${sec.name.replace(/'/g, "\\'")}', '${sub.name.replace(/'/g, "\\'")}')">
-                            <i class="fas fa-folder text-indigo-400"></i> ${sub.name}
-                        </div>`;
-                    });
-                    html += `</div></div>`;
+                if(userData.badges && userData.badges.length > 0) {
+                    document.getElementById('badges-container').innerHTML = userData.badges.map(b => `<span class="badge-pill"><i class="fa-solid fa-medal"></i> ${b}</span>`).join('');
+                } else {
+                    document.getElementById('badges-container').innerHTML = `<span style="font-size: 12px; color: var(--text-secondary);">No badges yet. Play to earn!</span>`;
+                }
+
+                // Fetch today's question
+                let quizRes = await fetch(`/api/daily_quiz/${uid}`);
+                let quizData = await quizRes.json();
+
+                if(quizData.already_solved) {
+                    document.getElementById('question-text').innerHTML = "🎉 You have already completed today's challenge!<br><br>Come back tomorrow for a new one to keep your streak alive.";
+                    document.getElementById('share-btn').style.display = 'flex';
+                    return;
+                }
+
+                if(quizData.error) {
+                    document.getElementById('question-text').innerHTML = "No active challenge for today. Check back later!";
+                    return;
+                }
+
+                todayQuestionId = quizData.id;
+                document.getElementById('question-text').innerText = quizData.question;
+                
+                let optsHtml = '';
+                quizData.options.forEach((opt, index) => {
+                    optsHtml += `<button class="option-btn" onclick="selectOption(${index}, this)">${opt}</button>`;
                 });
-                area.innerHTML = html;
-            } catch(e) { area.innerHTML = '<p style="color:red;">Error loading series.</p>'; }
+                document.getElementById('options-container').innerHTML = optsHtml;
+
+            } catch (e) {
+                document.getElementById('question-text').innerText = "Failed to load today's challenge.";
+            }
         }
 
-        async function loadTests(seriesId, secId, subId, secName, subName) {
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-            tbCache.section = {name: secName}; tbCache.subsection = {name: subName};
-            let area = document.getElementById('tb-dynamic-area');
-            area.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size: 30px; color: var(--accent-main); margin-top:20px;"></i><p>Loading Tests...</p>';
+        function selectOption(index, btnElement) {
+            if (tg.HapticFeedback) tg.HapticFeedback.selectionChanged();
+            selectedOption = index;
             
-            try {
-                let res = await fetch(`/api/tb/tests/${seriesId}/${secId}/${subId}`);
-                let tests = await res.json();
-                
-                let html = `<button onclick="loadSeries(tbCache.series.slug, tbCache.series.name)" style="background:transparent; border:none; color:var(--accent-main); font-weight:bold; cursor:pointer; padding:0; margin-bottom:16px;"><i class="fas fa-arrow-left"></i> Back</button>
-                            <h3 style="font-size:16px; margin-bottom:16px; color:var(--text-secondary);">${subName}</h3>`;
-                
-                tests.forEach((t, i) => {
-                    html += `<div style="padding: 16px; margin-bottom: 12px; border: 1px solid var(--border-subtle); border-left: 4px solid var(--accent-main); border-radius: 16px; background:var(--bg-base);">
-                        <b style="font-size:15px; display:block; margin-bottom:12px;">${t.title}</b>
-                        <div style="display:flex; gap:16px; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:16px;">
-                            <span><i class="fas fa-list-ol"></i> ${t.questionCount} Qs</span>
-                            <span><i class="fas fa-clock"></i> ${t.duration}m</span>
-                            <span><i class="fas fa-star"></i> ${t.totalMark} Marks</span>
-                        </div>
-                        <button id="extract-btn-${i}" onclick='extractTest("${t.id}", ${JSON.stringify(t).replace(/'/g, "&#39;")}, this)' class="btn-primary-full" style="padding:10px; font-size:14px;">
-                            <i class="fas fa-play"></i> Start Test
-                        </button>
-                    </div>`;
-                });
-                area.innerHTML = html;
-            } catch(e) { area.innerHTML = '<p style="color:red;">Error loading tests.</p>'; }
+            document.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
+            btnElement.classList.add('selected');
+            document.getElementById('submit-btn').style.display = 'block';
         }
 
-        async function extractTest(testId, testData, btnElement) {
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('heavy');
-            let originalText = btnElement.innerHTML;
-            btnElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing Engine...';
-            btnElement.disabled = true;
-            
-            let payload = { 
-                test_summary: testData, 
-                series_details: tbCache.series, 
-                section: tbCache.section, 
-                subsection: tbCache.subsection 
-            };
-            
+        async function submitAnswer() {
+            if (selectedOption === null) return;
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+
+            let submitBtn = document.getElementById('submit-btn');
+            submitBtn.innerText = "Checking...";
+            submitBtn.disabled = true;
+
             try {
-                let res = await fetch(`/api/tb/extract/${testId}`, {
+                let res = await fetch(`/api/submit_quiz`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify({ uid: uid, selected_option: selectedOption })
                 });
+                let result = await res.json();
+
+                let allBtns = document.querySelectorAll('.option-btn');
                 
-                if(!res.ok) {
-                    let err = await res.json();
-                    alert("Error: " + err.error);
+                if (result.is_correct) {
+                    allBtns[selectedOption].classList.add('correct');
+                    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
                     
-                    btnElement.innerHTML = originalText;
-                    btnElement.disabled = false;
-                    return;
+                    // Update stats live for visual feedback
+                    let pts = parseInt(document.getElementById('user-points').innerText);
+                    document.getElementById('user-points').innerText = pts + 10;
+                    
+                    let strk = parseInt(document.getElementById('user-streak').innerText);
+                    document.getElementById('user-streak').innerText = strk + 1;
+                } else {
+                    allBtns[selectedOption].classList.add('wrong');
+                    if(result.correct_index !== undefined) {
+                        allBtns[result.correct_index].classList.add('correct');
+                    }
+                    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
                 }
-                
-                let htmlContent = await res.text();
-                
-                // --- FIX FOR TELEGRAM MINI APP ---
-                // Telegram me naya tab ('blob:' URL) block ho jata hai. 
-                // Isliye hum current document ko hi naye Test UI se replace kar denge.
-                document.open();
-                document.write(htmlContent);
-                document.close();
-                
+
+                allBtns.forEach(btn => btn.disabled = true);
+                submitBtn.style.display = 'none';
+                document.getElementById('share-btn').style.display = 'flex';
+
             } catch(e) {
-                // Error message ko specific kar diya taaki aage debugging aasan ho
-                alert("Frontend Error: " + e.message);
-                
-                btnElement.innerHTML = originalText;
-                btnElement.disabled = false;
+                submitBtn.innerText = "Error. Try again.";
+                submitBtn.disabled = false;
             }
         }
 
-        // ==========================================
-        // AI PDF ENGINE LOGIC (Existing logic)
-        // ==========================================
-        const AI_API_URL = "https://itsh4r01-live-stream-engine.hf.space/generate-quiz";
-        document.getElementById('quizForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-            const file = document.getElementById('pdfFile').files[0];
-            const num = document.getElementById('numQuestions').value;
-            const btn = document.getElementById('submitBtn');
-            const container = document.getElementById('quizContainer');
+        function challengeFriend() {
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            let text = `🔥 I just solved the Daily Flash Challenge on H4R Bot and earned Points!\n\nCan you beat my score? Let's find out! 👇`;
             
-            if (!file) return alert("Please select a PDF!");
+            // Deep link format: "startapp=flash" will directly open this page inside the bot
+            let appLink = "https://t.me/H4R_Contact_bot/App?startapp=flash";
             
-            btn.disabled = true;
-            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Generating (1-2 mins)...`;
-            container.innerHTML = "";
-            
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("num_questions", num);
-            
-            try {
-                const response = await fetch(AI_API_URL, { method: "POST", body: formData });
-                if (!response.ok) throw new Error("Something went wrong on the server.");
-                const data = await response.json();
-                
-                let html = `<div class="bento-card"><h3 style="margin-bottom:16px;">${data.quiz_title}</h3>`;
-                data.questions.forEach((q, i) => {
-                    html += `<div style="margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--border-subtle);">
-                                <b>Q${i+1}: ${q.question}</b><br>
-                                <p style="color:var(--success); margin-top:8px;">Ans: ${q.correct_answer}</p>
-                             </div>`;
-                });
-                container.innerHTML = html + `</div>`;
-            } catch (error) {
-                alert("Error: " + error.message);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> Generate AI Quiz`;
-            }
-        });
+            let url = `https://t.me/share/url?url=${encodeURIComponent(appLink)}&text=${encodeURIComponent(text)}`;
+            tg.openTelegramLink(url);
+        }
     </script>
 </body>
 </html>
