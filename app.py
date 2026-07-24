@@ -12,11 +12,12 @@ import config
 from config import DB, OWNER_ID, is_admin, get_membership_cached
 from pyrogram.enums import ChatMemberStatus
 
-# Firebase Init
+# ==========================================
+# FIREBASE SETUP
+# ==========================================
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# --- MODERN FIREBASE INITIALIZATION ---
 def init_firebase():
     cred_b64 = os.environ.get("FIREBASE_CRED_B64")
     if not cred_b64:
@@ -24,7 +25,6 @@ def init_firebase():
         return None
         
     try:
-        # Decode the base64 string
         cred_dict = json.loads(base64.b64decode(cred_b64).decode('utf-8'))
         project_id = cred_dict.get("project_id")
         cred = credentials.Certificate(cred_dict)
@@ -102,7 +102,6 @@ async def profile_page():
 async def leaderboard_page():
     try: return await render_template('leaderboard.html')
     except Exception as e: return f"Error: {e}", 200
-
 
 # ==========================================
 # AVATAR & USER DASHBOARD LOGIC
@@ -230,7 +229,7 @@ async def get_user_data(user_id):
 
 
 # =====================================================================
-# DAILY FLASH CHALLENGE (FIREBASE + MONGODB HYBRID)
+# DAILY FLASH CHALLENGE (FIREBASE GAMIFICATION)
 # =====================================================================
 @app.route('/api/profile_stats/<int:user_id>')
 async def get_profile_stats(user_id):
@@ -258,11 +257,18 @@ async def get_daily_quiz(user_id):
     
     today_str = datetime.datetime.now().strftime('%Y-%m-%d')
     
+    # Fallback/Dummy Logic (Agar JSON file missing hai)
     if not os.path.exists(filename):
-        return jsonify({"error": "No challenge configured for today."}), 404
-
-    with open(filename, 'r', encoding='utf-8') as f:
-        question_data = json.load(f)
+        question_data = {
+            "id": "q_dummy",
+            "question": "Welcome to H4R! This is a test question to check Firebase saving. What is 2 + 2?",
+            "options": ["3", "4", "5", "6"],
+            "answer_index": 1,
+            "flashcard": "Math is simple! 2 + 2 = 4. And your Firebase is working perfectly!"
+        }
+    else:
+        with open(filename, 'r', encoding='utf-8') as f:
+            question_data = json.load(f)
 
     if fs_data.get("last_played") == today_str:
         return jsonify({
@@ -288,9 +294,16 @@ async def submit_quiz():
 
     day_number = datetime.datetime.now().day
     filename = f"daily_questions/day_{day_number:03d}.json"
-    if not os.path.exists(filename): return jsonify({"error": "Missing"}), 404
-
-    with open(filename, 'r', encoding='utf-8') as f: question_data = json.load(f)
+    
+    if not os.path.exists(filename):
+        question_data = {
+            "answer_index": 1,
+            "flashcard": "Math is simple! 2 + 2 = 4. And your Firebase is working perfectly!",
+            "options": ["3", "4", "5", "6"]
+        }
+    else:
+        with open(filename, 'r', encoding='utf-8') as f: 
+            question_data = json.load(f)
     
     correct_index = question_data["answer_index"]
     is_correct = (selected_option == correct_index)
@@ -450,6 +463,31 @@ async def tb_extract_proxy(test_id):
     return html_content, 200, {'Content-Type': 'text/html'}
 
 
+# 🔥 TESTBOOK FIREBASE INTEGRATION (Naya Code Yahan Hai)
+@app.route('/api/submit_tb_test', methods=['POST'])
+async def submit_tb_test():
+    data = await request.json
+    user_id = data.get("uid")
+    
+    if not user_id: 
+        return jsonify({"error": "No user ID"}), 400
+        
+    fs_data = await asyncio.to_thread(sync_fs_read, user_id)
+    
+    # Gamification: Testbook ka Full Mock Test dene par 50 XP Points 
+    points = fs_data.get("points", 0) + 50 
+    attempts = fs_data.get("flash_attempted", 0) + 1 
+    
+    new_fs_data = {
+        "uid": user_id,
+        "points": points,
+        "flash_attempted": attempts
+    }
+    
+    await asyncio.to_thread(sync_fs_write, user_id, new_fs_data)
+    return jsonify({"success": True})
+
+
 # =====================================================================
 # OWNER API LOGIC
 # =====================================================================
@@ -457,8 +495,88 @@ async def tb_extract_proxy(test_id):
 async def api_owner_users(req_user_id):
     if str(req_user_id) != str(OWNER_ID) and req_user_id != OWNER_ID:
         return jsonify({"error": "Unauthorized"}), 403
-    return jsonify({"users": []}) # Keep it simple for owner route snippet to save space if untouched
+        
+    all_chats_dict = DB.get("ALL_CHATS", {})
+    free_chats = DB.get("FREE_CHANNELS", {})
+    paid_chats = DB.get("PAID_CHANNELS", {})
+    users_list = []
+    now = time.time()
     
+    for uid, data in DB.get("USER_DATA", {}).items():
+        joined_batches = data.get("joined_batches", [])
+        free_joined = []
+        paid_joined = []
+        for bid in joined_batches:
+            bid_str = str(bid)
+            bid_int = int(bid) if bid_str.lstrip('-').isdigit() else bid
+            
+            if bid_str in free_chats or bid_int in free_chats:
+                name = free_chats.get(bid_str) or free_chats.get(bid_int) or all_chats_dict.get(bid_int, f"Batch {bid}")
+                free_joined.append({"id": bid, "name": name})
+            elif bid_str in paid_chats or bid_int in paid_chats:
+                name = paid_chats.get(bid_str) or paid_chats.get(bid_int) or all_chats_dict.get(bid_int, f"Batch {bid}")
+                paid_joined.append({"id": bid, "name": name})
+            else:
+                name = all_chats_dict.get(bid_int, f"Batch {bid}")
+                paid_joined.append({"id": bid, "name": name})
+        
+        demos_list = []
+        for bid, d_data in data.get("demos", {}).items():
+            exp = d_data["expiry"] if isinstance(d_data, dict) else float(d_data)
+            demos_list.append({
+                "id": bid, "name": all_chats_dict.get(int(bid) if str(bid).lstrip('-').isdigit() else bid, f"Batch {bid}"),
+                "is_expired": now > exp, "time_left": max(0, int(exp - now)) // 3600
+            })
+            
+        users_list.append({
+            "id": uid, 
+            "name": data.get("name", "Unknown"), 
+            "username": data.get("username", "N/A"),
+            "streak": data.get("current_streak", 0), 
+            "free_joined": free_joined,
+            "paid_joined": paid_joined,
+            "demos": demos_list,
+            "is_admin": is_admin(uid),
+            "is_owner": str(uid) == str(OWNER_ID)
+        })
+    return jsonify({"users": users_list})
+
 @app.route('/api/owner/action', methods=['POST'])
 async def api_owner_action():
-    return jsonify({"success": True})
+    from quart import request
+    data = await request.json
+    req_user_id = data.get('req_user_id')
+    action = data.get('action')
+    target_uid = int(data.get('target_uid'))
+    
+    if str(req_user_id) != str(OWNER_ID) and req_user_id != OWNER_ID:
+        return jsonify({"error": "Unauthorized"}), 403
+        
+    bot = getattr(config, 'bot_app', None)
+    if not bot:
+        return jsonify({"error": "Bot not ready"}), 503
+
+    if action == "ban":
+        if target_uid not in DB.get("BLOCKED_USERS", []):
+            DB.setdefault("BLOCKED_USERS", []).append(target_uid)
+        asyncio.create_task(config.save_data_async())
+        try:
+            await config.execute_universal_kick(target_uid, bot, permanent_ban=True)
+        except Exception:
+            pass
+        return jsonify({"success": True})
+        
+    elif action == "kick":
+        batch_id = int(data.get('batch_id'))
+        try:
+            await bot.ban_chat_member(batch_id, target_uid)
+            await bot.unban_chat_member(batch_id, target_uid)
+            if target_uid in DB.get("USER_DATA", {}) and "demos" in DB["USER_DATA"][target_uid]:
+                if str(batch_id) in DB["USER_DATA"][target_uid]["demos"]:
+                    del DB["USER_DATA"][target_uid]["demos"][str(batch_id)]
+            asyncio.create_task(config.save_data_async())
+            return jsonify({"success": True})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+            
+    return jsonify({"error": "Invalid Action"}), 400
