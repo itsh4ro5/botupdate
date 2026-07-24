@@ -1,223 +1,506 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Hybrid Test Engine</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-base: #f4f4f5; --bg-surface: #ffffff; --border-subtle: #e4e4e7; 
-            --text-primary: #09090b; --text-secondary: #71717a; --accent-main: #4f46e5; 
-            --dock-bg: rgba(255, 255, 255, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.08);
-        }
-        [data-theme="dark"] {
-            --bg-base: #000000; --bg-surface: #111111; --border-subtle: #27272a; 
-            --text-primary: #fafafa; --text-secondary: #a1a1aa; --accent-main: #6366f1; 
-            --dock-bg: rgba(24, 24, 27, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.5);
-        }
-        * { box-sizing: border-box; font-family: 'Outfit', sans-serif; }
-        body { background: var(--bg-base); color: var(--text-primary); margin: 0; padding: 0 16px 120px 16px; transition: 0.3s ease; }
-        
-        .header-area { display: flex; justify-content: space-between; align-items: center; padding: 24px 0 20px 0; }
-        .header-area h2 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
-        
-        .theme-btn { background: var(--bg-surface); border: 1px solid var(--border-subtle); width: 44px; height: 44px; border-radius: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; color: var(--text-primary);}
-        .bento-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 24px; padding: 20px; margin-bottom: 24px; transition: 0.3s; }
-        
-        .custom-input { width: 100%; padding: 16px; border-radius: 16px; border: 1px solid var(--border-subtle); background: var(--bg-base); color: var(--text-primary); outline: none; margin-bottom: 16px;}
-        .btn-primary-full { width: 100%; background: var(--accent-main); color: white; border: none; padding: 16px; border-radius: 20px; font-weight: 800; cursor: pointer; transition: 0.2s; display: flex; justify-content: center; align-items: center; gap: 8px;}
-        .btn-primary-full:active { transform: scale(0.96); }
-        
-        .floating-dock { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: max-content; padding: 8px 16px; background: var(--dock-bg); backdrop-filter: blur(24px); border: 1px solid var(--border-subtle); border-radius: 100px; display: flex; gap: 20px; z-index: 9999; box-shadow: var(--dock-shadow); transition: 0.3s;}
-        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); width: 45px; height: 45px; border-radius: 50%; cursor: pointer; text-decoration: none; transition: 0.3s; }
-        .nav-item i { font-size: 18px; transition: 0.3s; }
-        .nav-item.active { background: var(--accent-main); color: white; box-shadow: 0 8px 20px rgba(79, 70, 229, 0.15); transform: translateY(-10px); }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#050509" />
+  <title>H4R — Test Engine</title>
+
+  <!-- Telegram Web App SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+
+  <!-- Google Fonts: Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Outfit', 'system-ui', 'sans-serif'] },
+          colors: {
+            ink: '#050509',
+            surface: '#0d0d16',
+            indigo: { neon: '#6366f1', soft: '#818cf8' },
+            emerald: { neon: '#10b981', soft: '#34d399' },
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    :root {
+      --bg: #050509;
+      --surface: rgba(255, 255, 255, 0.04);
+      --surface-strong: rgba(255, 255, 255, 0.06);
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #f4f4f7;
+      --muted: #8b8b9e;
+      --indigo: #6366f1;
+      --emerald: #10b981;
+    }
+
+    html.light {
+      --bg: #f3f4f8;
+      --surface: rgba(10, 10, 25, 0.03);
+      --surface-strong: rgba(10, 10, 25, 0.05);
+      --border: rgba(10, 10, 25, 0.08);
+      --text: #10101c;
+      --muted: #5b5b6b;
+    }
+
+    * { -webkit-tap-highlight-color: transparent; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Outfit', system-ui, sans-serif;
+      overflow-x: hidden;
+      transition: background 0.4s ease, color 0.4s ease;
+    }
+
+    /* ambient neon glow behind content */
+    .aurora::before {
+      content: '';
+      position: fixed;
+      top: -160px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 420px;
+      height: 420px;
+      background: radial-gradient(circle at center, rgba(99, 102, 241, 0.22), transparent 65%);
+      filter: blur(30px);
+      z-index: 0;
+      pointer-events: none;
+    }
+    .aurora::after {
+      content: '';
+      position: fixed;
+      bottom: -120px;
+      right: -80px;
+      width: 340px;
+      height: 340px;
+      background: radial-gradient(circle at center, rgba(16, 185, 129, 0.16), transparent 65%);
+      filter: blur(40px);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .glass {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+
+    .card-press { transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease; }
+    .card-press:active { transform: scale(0.965); }
+
+    .text-muted { color: var(--muted); }
+
+    /* dock */
+    .dock {
+      background: rgba(13, 13, 22, 0.72);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(24px) saturate(160%);
+      -webkit-backdrop-filter: blur(24px) saturate(160%);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+    }
+    html.light .dock { background: rgba(255, 255, 255, 0.78); }
+
+    .dock-item { transition: color 0.2s ease, transform 0.2s ease; }
+    .dock-item.active { color: var(--indigo); }
+    .dock-item.active .dock-glow { opacity: 1; transform: scale(1); }
+    .dock-glow {
+      opacity: 0;
+      transform: scale(0.4);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      box-shadow: 0 0 18px 2px rgba(99, 102, 241, 0.55);
+    }
+
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    @keyframes floatUp {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .reveal { animation: floatUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+    
+    /* Input Styling */
+    .search-input:focus { border-color: rgba(99, 102, 241, 0.6); box-shadow: 0 0 15px rgba(99, 102, 241, 0.2); }
+  </style>
 </head>
-<body data-theme="dark">
 
-    <div class="header-area">
-        <h2>Hybrid Test Engine</h2>
-        <button class="theme-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon" id="theme-icon"></i></button>
+<body class="aurora min-h-screen pb-32">
+  <div class="relative z-10 mx-auto w-full max-w-md px-5 pt-6">
+
+    <!-- ===== Header ===== -->
+    <header class="flex items-center justify-between reveal">
+      <div>
+        <p class="text-xs text-muted">Testbook Proxy Engine</p>
+        <h1 class="-mt-0.5 flex items-center gap-2 text-xl font-bold leading-tight">
+          <i class="fa-solid fa-file-signature text-indigo-soft"></i> Mock Tests
+        </h1>
+      </div>
+      <button id="themeToggle" aria-label="Toggle theme" class="glass card-press flex h-10 w-10 items-center justify-center rounded-full text-base">
+        <i class="fa-solid fa-moon"></i>
+      </button>
+    </header>
+
+    <!-- ===== Search Engine ===== -->
+    <section class="reveal mt-5" style="animation-delay:.05s">
+        <div class="relative flex items-center w-full">
+            <i class="fa-solid fa-magnifying-glass absolute left-4 text-muted"></i>
+            <input type="text" id="searchInput" placeholder="Search exams (e.g., SSC CGL, UPSC)..." 
+                class="search-input glass w-full rounded-2xl py-4 pl-12 pr-12 text-sm text-text outline-none transition-all placeholder-muted bg-transparent">
+            <button id="searchBtn" class="absolute right-2 h-10 w-10 rounded-xl bg-indigo-neon text-white flex items-center justify-center card-press shadow-lg shadow-indigo-600/25">
+                <i class="fa-solid fa-arrow-right"></i>
+            </button>
+        </div>
+    </section>
+
+    <!-- ===== RECENTLY PLAYED TESTS (The New Addition) ===== -->
+    <section id="recentSection" class="reveal mt-6 hidden" style="animation-delay:.1s">
+        <div class="mb-3 flex items-center justify-between">
+            <h2 class="flex items-center gap-2 text-base font-semibold">
+                <i class="fa-solid fa-clock-rotate-left text-emerald-soft"></i> Recent Missions
+            </h2>
+            <button onclick="clearRecentTests()" class="text-[11px] font-bold uppercase tracking-wider text-muted card-press">Clear</button>
+        </div>
+        <div id="recentList" class="flex gap-3 overflow-x-auto no-scrollbar pb-1">
+            <!-- Rendered via JS -->
+        </div>
+    </section>
+
+    <!-- ===== Loading State ===== -->
+    <div id="loadingState" class="mt-8 hidden flex-col items-center text-center">
+        <i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-soft mb-3"></i>
+        <p class="text-sm font-semibold text-muted" id="loadingText">Extracting resources...</p>
     </div>
 
-    <div id="tab-tb">
-        <div class="bento-card">
-            <div style="display: flex; gap: 8px;">
-                <input type="text" id="tbSearchQuery" class="custom-input" placeholder="Search Testbook Series..." style="margin:0;" onkeypress="if(event.key === 'Enter') searchTB()">
-                <button onclick="searchTB()" style="background:var(--accent-main); color:white; border:none; border-radius:16px; padding:0 24px; font-weight:bold; cursor:pointer;"><i class="fa-solid fa-search"></i></button>
+    <!-- ===== Dynamic Content Area (Search Results / Series Details / Test List) ===== -->
+    <section id="contentArea" class="reveal mt-6" style="animation-delay:.15s">
+        
+        <!-- Default Empty State -->
+        <div id="emptyState" class="mt-4 flex flex-col items-center text-center">
+            <div class="glass flex h-16 w-16 items-center justify-center rounded-2xl text-2xl text-indigo-soft">
+                <i class="fa-solid fa-robot"></i>
             </div>
+            <p class="mt-4 font-semibold">Ready to extract tests</p>
+            <p class="mt-1 max-w-[240px] text-sm text-muted">Search for any exam to fetch its premium mock tests directly from the source.</p>
         </div>
-        
-        <div id="tb-dynamic-area" class="bento-card" style="min-height: 200px; text-align: center; color: var(--text-secondary);">
-            <i class="fa-solid fa-database" style="font-size: 40px; opacity: 0.3; margin-top: 20px; margin-bottom: 10px;"></i>
-            <p>Search for a test series to begin extraction.</p>
-        </div>
+
+        <!-- Rendered Results go here -->
+        <div id="dynamicList" class="grid gap-3"></div>
+
+    </section>
+
+  </div>
+
+  <!-- ===== Floating Bottom Dock ===== -->
+  <nav class="fixed bottom-4 left-1/2 z-30 -translate-x-1/2">
+    <div class="dock flex items-center gap-1 rounded-full px-2 py-2">
+      <a href="/" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted">
+        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
+        <i class="fa-solid fa-house text-[17px]"></i><span class="text-[9px] font-medium">Home</span>
+      </a>
+      <a href="/explore" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted">
+        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
+        <i class="fa-solid fa-compass text-[17px]"></i><span class="text-[9px] font-medium">Explore</span>
+      </a>
+      <a href="/quiz" class="dock-item active relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5">
+        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
+        <i class="fa-solid fa-file-pen text-[17px]"></i><span class="text-[9px] font-medium">Quiz</span>
+      </a>
+      <a href="/flash" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted">
+        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
+        <i class="fa-solid fa-bolt text-[17px]"></i><span class="text-[9px] font-medium">Flash</span>
+      </a>
+      <a href="/leaderboard" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted">
+        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
+        <i class="fa-solid fa-ranking-star text-[17px]"></i><span class="text-[9px] font-medium">Rank</span>
+      </a>
+      <a href="/profile" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted">
+        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
+        <i class="fa-solid fa-user text-[17px]"></i><span class="text-[9px] font-medium">Profile</span>
+      </a>
     </div>
+  </nav>
 
-    <div class="floating-dock">
-        <a href="/" class="nav-item"><i class="fa-solid fa-house"></i></a>
-        <a href="/explore" class="nav-item"><i class="fa-solid fa-magnifying-glass"></i></a>
-        <a href="/quiz" class="nav-item active"><i class="fa-solid fa-file-signature"></i></a>
-        <a href="/flash" class="nav-item"><i class="fa-solid fa-bolt"></i></a>
-        <a href="/leaderboard" class="nav-item"><i class="fa-solid fa-trophy"></i></a>
-        <a href="/profile" class="nav-item"><i class="fa-solid fa-user"></i></a>
-    </div>
+  <script>
+    /* ============================================================
+       H4R Test Generator Engine (Vanilla JS)
+       ============================================================ */
+    const tg = window.Telegram ? window.Telegram.WebApp : null;
+    if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
 
-    <script>
-        let tg = window.Telegram.WebApp; tg.expand();
-        let uid = tg.initDataUnsafe?.user?.id || 9999999;
+    const $ = (id) => document.getElementById(id);
+    const haptic = (t) => { if (tg && tg.HapticFeedback) { try { t === 'sel' ? tg.HapticFeedback.selectionChanged() : tg.HapticFeedback.impactOccurred(t); } catch (e) {} } };
+
+    let currentSeriesData = null; // Cache for breadcrumbs navigation
+
+    /* ---------- Theme toggle ---------- */
+    (function initTheme() {
+      const saved = localStorage.getItem('h4r_theme');
+      if (saved === 'light') document.documentElement.classList.replace('dark', 'light');
+      syncThemeIcon();
+    })();
+    function syncThemeIcon() {
+      const light = document.documentElement.classList.contains('light');
+      $('themeToggle').innerHTML = light ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', light ? '#f3f4f8' : '#050509');
+    }
+    $('themeToggle').addEventListener('click', () => {
+      const root = document.documentElement;
+      root.classList.contains('dark') ? root.classList.replace('dark', 'light') : root.classList.replace('light', 'dark');
+      localStorage.setItem('h4r_theme', root.classList.contains('light') ? 'light' : 'dark');
+      syncThemeIcon();
+      haptic('light');
+    });
+
+    function escapeHtml(str) {
+      return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function showLoading(text) {
+        $('emptyState').classList.add('hidden');
+        $('dynamicList').innerHTML = '';
+        $('loadingText').innerText = text;
+        $('loadingState').classList.remove('hidden');
+        $('loadingState').classList.add('flex');
+    }
+    function hideLoading() {
+        $('loadingState').classList.add('hidden');
+        $('loadingState').classList.remove('flex');
+    }
+
+    /* ============================================================
+       RECENTLY PLAYED LOGIC (New Feature)
+       ============================================================ */
+    function loadRecentTests() {
+        let recent = [];
+        try { recent = JSON.parse(localStorage.getItem('h4r_recent_tests') || '[]'); } catch (e) {}
         
-        document.querySelectorAll('a.nav-item').forEach(link => {
-            link.addEventListener('click', function() {
-                if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-                let icon = this.querySelector('i');
-                if(icon) icon.className = 'fas fa-spinner fa-spin';
-            });
-        });
-
-        window.onload = () => {
-            document.body.setAttribute('data-theme', localStorage.getItem('edtech_theme') || 'dark');
-            document.getElementById("theme-icon").className = localStorage.getItem('edtech_theme') === 'dark' ? "fa-solid fa-moon" : "fa-solid fa-sun";
+        if (recent.length === 0) {
+            $('recentSection').classList.add('hidden');
+            return;
         }
 
-        function toggleTheme() {
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-            let theme = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-            document.body.setAttribute('data-theme', theme);
-            localStorage.setItem('edtech_theme', theme);
-            document.getElementById("theme-icon").className = theme === 'dark' ? "fa-solid fa-moon" : "fa-solid fa-sun";
-        }
+        $('recentSection').classList.remove('hidden');
+        $('recentList').innerHTML = recent.map(t => `
+            <div class="glass w-44 shrink-0 rounded-2xl p-4 card-press cursor-pointer" onclick="extractTest('${escapeHtml(t.id)}', '${escapeHtml(t.title)}')">
+                <div class="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-neon/15 text-emerald-soft">
+                    <i class="fa-solid fa-play"></i>
+                </div>
+                <p class="line-clamp-2 text-sm font-semibold leading-tight">${escapeHtml(t.title)}</p>
+                <p class="mt-1 text-[11px] text-muted"><i class="fa-regular fa-clock"></i> Re-attempt</p>
+            </div>
+        `).join('');
+    }
 
-        let tbCache = {};
+    function saveRecentTest(testId, testTitle) {
+        try {
+            let recent = JSON.parse(localStorage.getItem('h4r_recent_tests') || '[]');
+            recent = recent.filter(t => t.id !== testId); // Remove duplicates
+            recent.unshift({ id: testId, title: testTitle }); // Add to front
+            localStorage.setItem('h4r_recent_tests', JSON.stringify(recent.slice(0, 10))); // Keep top 10
+        } catch (e) {}
+    }
+
+    function clearRecentTests() {
+        haptic('light');
+        localStorage.removeItem('h4r_recent_tests');
+        loadRecentTests();
+    }
+
+    // Initialize Recent Tests on load
+    loadRecentTests();
+
+
+    /* ============================================================
+       SEARCH API CALL
+       ============================================================ */
+    $('searchBtn').addEventListener('click', performSearch);
+    $('searchInput').addEventListener('keypress', (e) => { if(e.key === 'Enter') performSearch(); });
+
+    async function performSearch() {
+        let q = $('searchInput').value.trim();
+        if(!q) return;
+        haptic('medium');
+        showLoading("Scanning global index...");
         
-        async function searchTB() {
-            let q = document.getElementById('tbSearchQuery').value;
-            if(!q) return;
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-            
-            let area = document.getElementById('tb-dynamic-area');
-            area.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size: 30px; color: var(--accent-main); margin-top:20px;"></i><p>Searching Database...</p>';
-            
-            try {
-                let res = await fetch('/api/tb/search?q=' + encodeURIComponent(q));
-                let data = await res.json();
-                
-                if(data.length === 0) {
-                    area.innerHTML = '<p style="padding:20px;">No results found.</p>';
-                    return;
-                }
-                
-                let html = '<h3 style="font-size:18px; margin-bottom:16px;">Select Series</h3>';
-                data.forEach(s => {
-                    html += `
-                    <div style="padding: 16px; margin-bottom: 8px; border: 1px solid var(--border-subtle); border-radius: 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="loadSeries('${s.slug}', '${s.name.replace(/'/g, "\\'")}')">
-                        <b style="font-size:14px; max-width: 80%;">${s.name}</b>
-                        <span style="font-size:11px; background:var(--accent-glow); color:var(--accent-main); padding:4px 8px; border-radius:8px; font-weight:bold;">${s.testsCount || 0} Tests</span>
-                    </div>`;
-                });
-                area.innerHTML = html;
-            } catch(e) { area.innerHTML = '<p style="color:red;">Error searching database.</p>'; }
-        }
+        try {
+            let res = await fetch(`/api/tb/search?q=${encodeURIComponent(q)}`);
+            let data = await res.json();
+            hideLoading();
 
-        async function loadSeries(slug, name) {
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-            let area = document.getElementById('tb-dynamic-area');
-            area.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size: 30px; color: var(--accent-main); margin-top:20px;"></i><p>Loading Structure...</p>';
+            if(!data || data.length === 0) {
+                $('dynamicList').innerHTML = `<div class="text-center text-muted p-4"><i class="fa-solid fa-ghost text-2xl mb-2"></i><br>No test series found.</div>`;
+                return;
+            }
+
+            $('dynamicList').innerHTML = data.map(item => `
+                <div class="glass card-press flex w-full items-center gap-3 rounded-2xl p-4 text-left cursor-pointer border-l-4 border-indigo-soft"
+                     onclick="fetchSeriesDetails('${escapeHtml(item.slug || item._id)}')">
+                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-neon/12 text-xl text-indigo-soft">
+                        <i class="fa-solid fa-layer-group"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <p class="truncate text-sm font-semibold text-pretty">${escapeHtml(item.title)}</p>
+                        <span class="mt-1 inline-block rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-muted">Test Series</span>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-xs text-muted"></i>
+                </div>
+            `).join('');
+        } catch(e) {
+            hideLoading();
+            $('dynamicList').innerHTML = `<p class="text-red-400 text-center">Network Error. Try again.</p>`;
+        }
+    }
+
+    /* ============================================================
+       FETCH SERIES / SECTIONS
+       ============================================================ */
+    async function fetchSeriesDetails(slug) {
+        haptic('sel');
+        showLoading("Decoding structure...");
+        
+        try {
+            let res = await fetch(`/api/tb/series/${slug}`);
+            let data = await res.json();
+            hideLoading();
+            currentSeriesData = data; // Save for breadcrumb
+
+            if(!data.sections || data.sections.length === 0) {
+                $('dynamicList').innerHTML = `<p class="text-muted text-center p-4">No content inside this series.</p>`;
+                return;
+            }
+
+            // Render Sections (Grouped Subsections)
+            let html = `<div class="flex items-center gap-2 mb-3 text-xs font-bold text-muted cursor-pointer" onclick="performSearch()">
+                            <i class="fa-solid fa-arrow-left"></i> Back to Search
+                        </div>`;
             
-            try {
-                let res = await fetch('/api/tb/series/' + slug);
-                let data = await res.json();
-                tbCache.series = data;
-                
-                let html = `<button onclick="searchTB()" style="background:transparent; border:none; color:var(--accent-main); font-weight:bold; cursor:pointer; padding:0; margin-bottom:16px;"><i class="fas fa-arrow-left"></i> Back</button>
-                            <h3 style="font-size:18px; margin-bottom:16px;">${name}</h3>`;
-                
-                data.sections.forEach(sec => {
-                    html += `<div style="margin-bottom:16px;"><h4 style="font-size:14px; font-weight:800; border-bottom:1px solid var(--border-subtle); padding-bottom:8px; margin-bottom:12px;">${sec.name}</h4><div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">`;
+            data.sections.forEach(sec => {
+                html += `<div class="mt-5 mb-2 font-black text-indigo-soft uppercase text-xs tracking-widest flex items-center gap-2">
+                            <i class="fa-solid fa-folder-open"></i> ${escapeHtml(sec.name)}
+                         </div>`;
+                         
+                if(sec.subsections) {
                     sec.subsections.forEach(sub => {
-                        html += `<div style="padding:12px; background:var(--bg-base); border:1px solid var(--border-subtle); border-radius:12px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" onclick="loadTests('${data.id}', '${sec.id}', '${sub.id}', '${sec.name.replace(/'/g, "\\'")}', '${sub.name.replace(/'/g, "\\'")}')">
-                            <i class="fas fa-folder text-indigo-400"></i> ${sub.name}
+                        html += `
+                        <div class="glass card-press flex w-full items-center gap-3 rounded-xl p-3 text-left cursor-pointer mb-2"
+                             onclick="fetchTests('${data._id}', '${sec._id}', '${sub._id}', '${escapeHtml(sub.name)}')">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-[13px] font-semibold text-text">${escapeHtml(sub.name)}</p>
+                            </div>
+                            <span class="bg-emerald-neon/15 text-emerald-soft rounded-full px-2 py-0.5 text-[10px] font-bold">Open</span>
                         </div>`;
                     });
-                    html += `</div></div>`;
-                });
-                area.innerHTML = html;
-            } catch(e) { area.innerHTML = '<p style="color:red;">Error loading series.</p>'; }
-        }
-
-        async function loadTests(seriesId, secId, subId, secName, subName) {
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-            tbCache.section = {name: secName}; tbCache.subsection = {name: subName};
-            let area = document.getElementById('tb-dynamic-area');
-            area.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size: 30px; color: var(--accent-main); margin-top:20px;"></i><p>Loading Tests...</p>';
-            
-            try {
-                let res = await fetch(`/api/tb/tests/${seriesId}/${secId}/${subId}`);
-                let tests = await res.json();
-                
-                let html = `<button onclick="loadSeries(tbCache.series.slug, tbCache.series.name)" style="background:transparent; border:none; color:var(--accent-main); font-weight:bold; cursor:pointer; padding:0; margin-bottom:16px;"><i class="fas fa-arrow-left"></i> Back</button>
-                            <h3 style="font-size:16px; margin-bottom:16px; color:var(--text-secondary);">${subName}</h3>`;
-                
-                tests.forEach((t, i) => {
-                    html += `<div style="padding: 16px; margin-bottom: 12px; border: 1px solid var(--border-subtle); border-left: 4px solid var(--accent-main); border-radius: 16px; background:var(--bg-base);">
-                        <b style="font-size:15px; display:block; margin-bottom:12px;">${t.title}</b>
-                        <div style="display:flex; gap:16px; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:16px;">
-                            <span><i class="fas fa-list-ol"></i> ${t.questionCount} Qs</span>
-                            <span><i class="fas fa-clock"></i> ${t.duration}m</span>
-                            <span><i class="fas fa-star"></i> ${t.totalMark} Marks</span>
-                        </div>
-                        <button id="extract-btn-${i}" onclick='extractTest("${t.id}", ${JSON.stringify(t).replace(/'/g, "&#39;")}, this)' class="btn-primary-full" style="padding:10px; font-size:14px;">
-                            <i class="fas fa-play"></i> Start Test
-                        </button>
-                    </div>`;
-                });
-                area.innerHTML = html;
-            } catch(e) { area.innerHTML = '<p style="color:red;">Error loading tests.</p>'; }
-        }
-
-        async function extractTest(testId, testData, btnElement) {
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('heavy');
-            let originalText = btnElement.innerHTML;
-            btnElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing Engine...';
-            btnElement.disabled = true;
-            
-            let payload = { 
-                test_summary: testData, 
-                series_details: tbCache.series, 
-                section: tbCache.section, 
-                subsection: tbCache.subsection 
-            };
-            
-            try {
-                let res = await fetch(`/api/tb/extract/${testId}`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
-                });
-                
-                if(!res.ok) {
-                    let err = await res.json();
-                    alert("Error: " + err.error);
-                    btnElement.innerHTML = originalText;
-                    btnElement.disabled = false;
-                    return;
                 }
-                
-                let htmlContent = await res.text();
-                document.open();
-                document.write(htmlContent);
-                document.close();
-                
-            } catch(e) {
-                alert("Frontend Error: " + e.message);
-                btnElement.innerHTML = originalText;
-                btnElement.disabled = false;
-            }
+            });
+            $('dynamicList').innerHTML = html;
+            
+        } catch(e) {
+            hideLoading();
+            $('dynamicList').innerHTML = `<p class="text-red-400 text-center">Failed to load series structure.</p>`;
         }
-    </script>
+    }
+
+    /* ============================================================
+       FETCH ACTUAL TESTS
+       ============================================================ */
+    async function fetchTests(seriesId, secId, subId, subName) {
+        haptic('sel');
+        showLoading("Fetching exams...");
+        
+        try {
+            let res = await fetch(`/api/tb/tests/${seriesId}/${secId}/${subId}`);
+            let data = await res.json();
+            hideLoading();
+
+            if(!data || data.length === 0) {
+                $('dynamicList').innerHTML = `<p class="text-muted text-center p-4">No tests found here.</p>`;
+                return;
+            }
+
+            // Render Back Button + Tests List
+            let html = `<div class="flex items-center gap-2 mb-4 text-xs font-bold text-muted cursor-pointer" onclick="fetchSeriesDetails('${currentSeriesData.slug || currentSeriesData._id}')">
+                            <i class="fa-solid fa-arrow-left"></i> Back to ${escapeHtml(currentSeriesData.title).substring(0, 20)}...
+                        </div>
+                        <h3 class="mb-3 text-sm font-bold text-indigo-soft"><i class="fa-solid fa-list-check"></i> ${subName}</h3>`;
+            
+            html += data.map(t => `
+                <div class="glass rounded-2xl p-4 mb-3 border-l-4 border-emerald-soft">
+                    <h4 class="text-sm font-bold text-white mb-2 leading-tight">${escapeHtml(t.title)}</h4>
+                    <div class="flex items-center gap-4 text-[11px] font-semibold text-muted mb-4">
+                        <span class="bg-white/5 px-2 py-1 rounded-md"><i class="fa-regular fa-clock text-emerald-soft"></i> ${t.duration} Mins</span>
+                        <span class="bg-white/5 px-2 py-1 rounded-md"><i class="fa-solid fa-check-double text-indigo-soft"></i> ${t.totalMark} Marks</span>
+                    </div>
+                    <button onclick="extractTest('${t._id}', '${escapeHtml(t.title).replace(/'/g, "\\'")}')" 
+                        class="w-full card-press rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-neon py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20">
+                        <i class="fa-solid fa-rocket mr-1"></i> Launch Engine
+                    </button>
+                </div>
+            `).join('');
+
+            $('dynamicList').innerHTML = html;
+        } catch(e) {
+            hideLoading();
+            $('dynamicList').innerHTML = `<p class="text-red-400 text-center">Failed to load tests.</p>`;
+        }
+    }
+
+    /* ============================================================
+       EXTRACT AND LAUNCH TEST (API POST & HTML Render)
+       ============================================================ */
+    async function extractTest(testId, testTitle) {
+        haptic('medium');
+        
+        // Save to Recent (localStorage)
+        saveRecentTest(testId, testTitle);
+        loadRecentTests(); // Update UI immediately
+
+        showLoading("Compiling Engine Sandbox...");
+        
+        try {
+            // POST Request to backend to generate pure HTML
+            let res = await fetch(`/api/tb/extract/${testId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    series_details: currentSeriesData ? { name: currentSeriesData.title } : {},
+                    section: {}, subsection: {},
+                    test_summary: { title: testTitle }
+                })
+            });
+
+            if(!res.ok) throw new Error("API Error");
+            
+            let htmlContent = await res.text();
+            
+            // Render the returned HTML cleanly in the current window
+            document.open();
+            document.write(htmlContent);
+            document.close();
+            
+        } catch(e) {
+            hideLoading();
+            alert("Error launching test. It might be encrypted or unavailable.");
+        }
+    }
+  </script>
 </body>
 </html>
