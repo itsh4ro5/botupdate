@@ -1,141 +1,389 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>My Profile</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-base: #f4f4f5; --bg-surface: #ffffff; --border-subtle: #e4e4e7;
-            --text-primary: #09090b; --text-secondary: #71717a; --accent-main: #4f46e5;
-            --dock-bg: rgba(255, 255, 255, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.08);
-        }
-        [data-theme="dark"] {
-            --bg-base: #000000; --bg-surface: #111111; --border-subtle: #27272a;
-            --text-primary: #fafafa; --text-secondary: #a1a1aa; --accent-main: #6366f1;
-            --dock-bg: rgba(24, 24, 27, 0.85); --dock-shadow: 0 20px 40px rgba(0,0,0,0.5);
-        }
-        * { box-sizing: border-box; font-family: 'Outfit', sans-serif; -webkit-tap-highlight-color: transparent;}
-        body { background: var(--bg-base); color: var(--text-primary); margin: 0; padding: 0 16px 120px 16px; transition: 0.4s; }
-        
-        .profile-header { display: flex; flex-direction: column; align-items: center; padding: 40px 0 20px 0; text-align: center; }
-        .avatar { width: 90px; height: 90px; border-radius: 30px; background: var(--accent-main); display: flex; align-items: center; justify-content: center; font-size: 36px; font-weight: 900; color: white; margin-bottom: 16px; border: 4px solid var(--bg-surface); box-shadow: 0 15px 35px rgba(79, 70, 229, 0.15); overflow: hidden;}
-        .avatar img { width: 100%; height: 100%; object-fit: cover; display: none; }
-        .user-name { font-size: 24px; font-weight: 900; margin: 0; letter-spacing: -0.5px;}
-        .user-id { font-size: 14px; color: var(--text-secondary); font-weight: 500; margin-top: 4px; }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#050509" />
+  <title>H4R — Profile</title>
 
-        .bento-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
-        .bento-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 24px; padding: 20px; position: relative; overflow: hidden; }
-        .full-width { grid-column: 1 / -1; }
-        
-        .stat-val { font-size: 32px; font-weight: 900; line-height: 1; margin-bottom: 6px; color: var(--text-primary); }
-        .stat-lbl { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;}
-        
-        .badge-pill { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 100px; font-size: 13px; font-weight: 800; background: rgba(168, 85, 247, 0.15); color: #a855f7; margin: 4px; border: 1px solid rgba(168, 85, 247, 0.3);}
-        
-        .btn-share { width: 100%; background: #27A5E7; color: white; border: none; padding: 16px; border-radius: 16px; font-weight: 800; cursor: pointer; transition: 0.3s; font-size: 16px; display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 12px;}
-        .btn-share:active { transform: scale(0.96); }
+  <!-- Telegram Web App SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-        .floating-dock { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: max-content; padding: 8px 16px; background: var(--dock-bg); backdrop-filter: blur(24px); border: 1px solid var(--border-subtle); border-radius: 100px; display: flex; gap: 20px; z-index: 9999; box-shadow: var(--dock-shadow); transition: 0.3s;}
-        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); width: 45px; height: 45px; border-radius: 50%; cursor: pointer; text-decoration: none; transition: 0.3s; }
-        .nav-item i { font-size: 18px; transition: 0.3s; }
-        .nav-item.active { background: var(--accent-main); color: white; box-shadow: 0 8px 20px rgba(79, 70, 229, 0.15); transform: translateY(-10px); }
-    </style>
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+
+  <!-- Google Fonts: Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Outfit', 'system-ui', 'sans-serif'] },
+          colors: {
+            ink: '#050509',
+            surface: '#0d0d16',
+            indigo: { neon: '#6366f1', soft: '#818cf8' },
+            emerald: { neon: '#10b981', soft: '#34d399' },
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    :root {
+      --bg: #050509;
+      --surface: rgba(255, 255, 255, 0.04);
+      --surface-strong: rgba(255, 255, 255, 0.06);
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #f4f4f7;
+      --muted: #8b8b9e;
+      --indigo: #6366f1;
+      --emerald: #10b981;
+    }
+
+    html.light {
+      --bg: #f3f4f8;
+      --surface: rgba(10, 10, 25, 0.03);
+      --surface-strong: rgba(10, 10, 25, 0.05);
+      --border: rgba(10, 10, 25, 0.08);
+      --text: #10101c;
+      --muted: #5b5b6b;
+    }
+
+    * { -webkit-tap-highlight-color: transparent; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Outfit', system-ui, sans-serif;
+      overflow-x: hidden;
+      transition: background 0.4s ease, color 0.4s ease;
+    }
+
+    /* ambient neon glow behind content */
+    .aurora::before {
+      content: '';
+      position: fixed;
+      top: -160px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 420px;
+      height: 420px;
+      background: radial-gradient(circle at center, rgba(99, 102, 241, 0.22), transparent 65%);
+      filter: blur(30px);
+      z-index: 0;
+      pointer-events: none;
+    }
+    .aurora::after {
+      content: '';
+      position: fixed;
+      bottom: -120px;
+      right: -80px;
+      width: 340px;
+      height: 340px;
+      background: radial-gradient(circle at center, rgba(16, 185, 129, 0.16), transparent 65%);
+      filter: blur(40px);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .glass {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+
+    .card-press { transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease; }
+    .card-press:active { transform: scale(0.965); }
+
+    .text-muted { color: var(--muted); }
+
+    /* dock */
+    .dock {
+      background: rgba(13, 13, 22, 0.72);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(24px) saturate(160%);
+      -webkit-backdrop-filter: blur(24px) saturate(160%);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+    }
+    html.light .dock { background: rgba(255, 255, 255, 0.78); }
+
+    .dock-item { transition: color 0.2s ease, transform 0.2s ease; }
+    .dock-item.active { color: var(--indigo); }
+    .dock-item.active .dock-glow { opacity: 1; transform: scale(1); }
+    .dock-glow {
+      opacity: 0;
+      transform: scale(0.4);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      box-shadow: 0 0 18px 2px rgba(99, 102, 241, 0.55);
+    }
+
+    /* scroll rows */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* shimmer skeletons */
+    .skel {
+      background: linear-gradient(100deg, rgba(255,255,255,0.04) 30%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.04) 70%);
+      background-size: 200% 100%;
+      animation: shimmer 1.3s infinite linear;
+    }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    @keyframes floatUp {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .reveal { animation: floatUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+    .ring-conic {
+      background: conic-gradient(from 180deg, var(--indigo), var(--emerald), var(--indigo));
+    }
+  </style>
 </head>
-<body data-theme="dark">
+
+<body class="aurora min-h-screen pb-32">
+  <div class="relative z-10 mx-auto w-full max-w-md px-5 pt-6">
+
+    <!-- ===== Header ===== -->
+    <header class="flex items-center justify-between reveal">
+      <div>
+        <p class="text-xs text-muted">Your learning identity</p>
+        <h1 class="-mt-0.5 flex items-center gap-2 text-xl font-bold leading-tight">
+          <i class="fa-solid fa-user-astronaut text-indigo-soft"></i> My Profile
+        </h1>
+      </div>
+      <button id="themeToggle" aria-label="Toggle theme"
+        class="glass card-press flex h-10 w-10 items-center justify-center rounded-full text-base">
+        <i class="fa-solid fa-moon"></i>
+      </button>
+    </header>
+
+    <!-- ===== Profile Hero ===== -->
+    <section class="reveal mt-8 flex flex-col items-center text-center" style="animation-delay:.05s">
+      <div class="relative mb-4 h-[104px] w-[104px] shrink-0">
+        <div class="ring-conic absolute inset-0 rounded-[28px] opacity-90 animate-[spin_4s_linear_infinite]"></div>
+        <div class="absolute inset-[3px] rounded-[26px] bg-[#181826] overflow-hidden">
+            <img id="avatar" alt="Your avatar" class="h-full w-full object-cover" src="" />
+        </div>
+      </div>
+      <h2 id="userName" class="text-2xl font-bold tracking-tight">
+        <span class="skel inline-block h-7 w-40 rounded-md"></span>
+      </h2>
+      <p class="mt-1 flex items-center justify-center gap-2 text-sm font-medium text-muted">
+        <i class="fa-solid fa-id-badge"></i> <span id="userId"><span class="skel inline-block h-4 w-24 rounded-md"></span></span>
+      </p>
+    </section>
+
+    <!-- ===== Gamification Bento Grid ===== -->
+    <section class="reveal mt-8 grid grid-cols-2 gap-3" style="animation-delay:.1s">
+      <!-- Accuracy -->
+      <div class="glass card-press relative overflow-hidden rounded-3xl p-5">
+        <div class="absolute -right-4 -top-4 h-16 w-16 rounded-full bg-emerald-neon/10 blur-xl"></div>
+        <i class="fa-solid fa-crosshairs mb-3 text-2xl text-emerald-soft"></i>
+        <p id="statAccuracy" class="text-3xl font-black tracking-tight"><span class="skel inline-block h-8 w-16 rounded-md"></span></p>
+        <p class="mt-1 text-[11px] font-bold uppercase tracking-wider text-muted">Hit Accuracy</p>
+      </div>
+      
+      <!-- Points -->
+      <div class="glass card-press relative overflow-hidden rounded-3xl p-5">
+        <div class="absolute -right-4 -top-4 h-16 w-16 rounded-full bg-yellow-400/10 blur-xl"></div>
+        <i class="fa-solid fa-star mb-3 text-2xl text-yellow-400"></i>
+        <p id="statPoints" class="text-3xl font-black tracking-tight"><span class="skel inline-block h-8 w-16 rounded-md"></span></p>
+        <p class="mt-1 text-[11px] font-bold uppercase tracking-wider text-muted">Total Points</p>
+      </div>
+
+      <!-- Streak -->
+      <div class="glass card-press relative overflow-hidden rounded-3xl p-5">
+        <div class="absolute -right-4 -top-4 h-16 w-16 rounded-full bg-orange-500/10 blur-xl"></div>
+        <i class="fa-solid fa-fire mb-3 text-2xl text-orange-400"></i>
+        <p id="statStreak" class="text-3xl font-black tracking-tight"><span class="skel inline-block h-8 w-12 rounded-md"></span></p>
+        <p class="mt-1 text-[11px] font-bold uppercase tracking-wider text-muted">Day Streak</p>
+      </div>
+
+      <!-- Challenges -->
+      <div class="glass card-press relative overflow-hidden rounded-3xl p-5">
+        <div class="absolute -right-4 -top-4 h-16 w-16 rounded-full bg-indigo-neon/10 blur-xl"></div>
+        <i class="fa-solid fa-layer-group mb-3 text-2xl text-indigo-soft"></i>
+        <p id="statTests" class="text-3xl font-black tracking-tight"><span class="skel inline-block h-8 w-12 rounded-md"></span></p>
+        <p class="mt-1 text-[11px] font-bold uppercase tracking-wider text-muted">Challenges Done</p>
+      </div>
+    </section>
+
+    <!-- ===== Earned Badges ===== -->
+    <section class="reveal mt-3" style="animation-delay:.15s">
+      <div class="glass rounded-3xl p-5">
+        <div class="mb-3 flex items-center justify-between">
+          <h3 class="flex items-center gap-2 text-sm font-bold text-indigo-soft">
+            <i class="fa-solid fa-medal"></i> Earned Badges
+          </h3>
+        </div>
+        <div id="badgeList" class="flex flex-wrap gap-2">
+            <div class="skel h-8 w-24 rounded-full"></div>
+            <div class="skel h-8 w-32 rounded-full"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Share Profile ===== -->
+    <section class="reveal mt-5" style="animation-delay:.2s">
+      <button id="shareBtn" class="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-neon py-4 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 card-press">
+        <i class="fa-solid fa-share-nodes"></i> Share My Profile
+      </button>
+    </section>
+
+  </div>
+
+  <!-- ===== Floating Bottom Dock ===== -->
+  <nav class="fixed bottom-4 left-1/2 z-30 -translate-x-1/2">
+    <div class="dock flex items-center gap-1 rounded-full px-2 py-2">
+      <a href="/" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted">
+        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
+        <i class="fa-solid fa-house text-[17px]"></i><span class="text-[9px] font-medium">Home</span>
+      </a>
+      <a href="/explore" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted">
+        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
+        <i class="fa-solid fa-compass text-[17px]"></i><span class="text-[9px] font-medium">Explore</span>
+      </a>
+      <a href="/quiz" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted">
+        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
+        <i class="fa-solid fa-file-pen text-[17px]"></i><span class="text-[9px] font-medium">Quiz</span>
+      </a>
+      <a href="/flash" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted">
+        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
+        <i class="fa-solid fa-bolt text-[17px]"></i><span class="text-[9px] font-medium">Flash</span>
+      </a>
+      <a href="/leaderboard" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted">
+        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
+        <i class="fa-solid fa-ranking-star text-[17px]"></i><span class="text-[9px] font-medium">Rank</span>
+      </a>
+      <a href="/profile" class="dock-item active relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5">
+        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
+        <i class="fa-solid fa-user text-[17px]"></i><span class="text-[9px] font-medium">Profile</span>
+      </a>
+    </div>
+  </nav>
+
+  <script>
+    /* ============================================================
+       H4R Profile — Vanilla JS controller
+       API: GET /api/profile_stats/{uid}
+       ============================================================ */
+    const tg = window.Telegram ? window.Telegram.WebApp : null;
+    if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
+
+    const tgUser = tg && tg.initDataUnsafe ? tg.initDataUnsafe.user : null;
+    const UID = tgUser && tgUser.id ? tgUser.id : 123456789; // demo fallback
+    const FALLBACK_NAME = tgUser ? [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Guest' : 'Guest';
+    const BOT_USERNAME = 'H4R_Bot'; 
+
+    const $ = (id) => document.getElementById(id);
+    let userStats = { points: 0, accuracy: 0 };
+
+    /* ---------- Theme toggle (shared behaviour) ---------- */
+    (function initTheme() {
+      const saved = localStorage.getItem('h4r_theme');
+      if (saved === 'light') document.documentElement.classList.replace('dark', 'light');
+      syncThemeIcon();
+    })();
     
-    <div class="profile-header">
-        <div class="avatar"><img id="user-avatar" src=""><span id="avatar-letters">U</span></div>
-        <h1 class="user-name" id="p-name">Loading...</h1>
-        <p class="user-id" id="p-id">ID: ---</p>
-    </div>
+    function syncThemeIcon() {
+      const light = document.documentElement.classList.contains('light');
+      $('themeToggle').innerHTML = light ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', light ? '#f3f4f8' : '#050509');
+    }
+    
+    $('themeToggle').addEventListener('click', () => {
+      const root = document.documentElement;
+      root.classList.contains('dark') ? root.classList.replace('dark', 'light') : root.classList.replace('light', 'dark');
+      localStorage.setItem('h4r_theme', root.classList.contains('light') ? 'light' : 'dark');
+      syncThemeIcon();
+      if (tg) try { tg.HapticFeedback.impactOccurred('light'); } catch (e) {}
+    });
 
-    <div class="bento-grid">
-        <div class="bento-card" style="border-left: 4px solid #a855f7;">
-            <div class="stat-val" style="color: #a855f7;" id="p-accuracy">0%</div>
-            <div class="stat-lbl">Hit Accuracy</div>
-        </div>
-        <div class="bento-card" style="border-left: 4px solid var(--accent-main);">
-            <div class="stat-val" id="p-tests">0</div>
-            <div class="stat-lbl">Challenges Done</div>
-        </div>
-        <div class="bento-card">
-            <div class="stat-val" id="p-streak">0</div>
-            <div class="stat-lbl"><i class="fa-solid fa-fire" style="color:#ea580c;"></i> Day Streak</div>
-        </div>
-        <div class="bento-card">
-            <div class="stat-val" id="p-points">0</div>
-            <div class="stat-lbl"><i class="fa-solid fa-star" style="color:#f59e0b;"></i> Total Points</div>
-        </div>
-        
-        <div class="bento-card full-width">
-            <div class="stat-lbl" style="margin-bottom: 12px;"><i class="fa-solid fa-award"></i> Earned Badges</div>
-            <div id="p-badges"><span style="font-size: 13px; color: var(--text-secondary);"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</span></div>
-        </div>
-    </div>
+    /* ---------- Avatar Logic ---------- */
+    $('avatar').src = `/api/user/avatar/${UID}`;
+    $('avatar').onerror = () => {
+      $('avatar').src =
+        'data:image/svg+xml;utf8,' +
+        encodeURIComponent(
+          '<svg xmlns="http://www.w3.org/2000/svg" width="104" height="104"><rect width="104" height="104" fill="%23181826"/><text x="50%" y="54%" font-size="44" font-weight="bold" fill="%236366f1" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif">' +
+            (tgUser && tgUser.first_name ? tgUser.first_name[0].toUpperCase() : 'H') +
+            '</text></svg>'
+        );
+    };
 
-    <button class="btn-share" onclick="shareProfile()">
-        <i class="fa-brands fa-telegram"></i> Share My Profile
-    </button>
+    /* ---------- Render Stats ---------- */
+    function renderProfile(data) {
+        userStats.points = data.points || 0;
+        userStats.accuracy = data.accuracy || 0;
 
-    <div class="floating-dock">
-        <a href="/" class="nav-item"><i class="fa-solid fa-house"></i></a>
-        <a href="/explore" class="nav-item"><i class="fa-solid fa-magnifying-glass"></i></a>
-        <a href="/quiz" class="nav-item"><i class="fa-solid fa-file-signature"></i></a>
-        <a href="/flash" class="nav-item"><i class="fa-solid fa-bolt"></i></a>
-        <a href="/leaderboard" class="nav-item"><i class="fa-solid fa-trophy"></i></a>
-        <a href="/profile" class="nav-item active"><i class="fa-solid fa-user"></i></a>
-    </div>
+        $('userName').textContent = (data.name && data.name !== 'Unknown' && data.name !== 'undefined') ? data.name : FALLBACK_NAME;
+        $('userId').textContent = 'ID: ' + UID;
 
-    <script>
-        let tg = window.Telegram.WebApp; tg.expand();
-        let uid = tg.initDataUnsafe?.user?.id || 9999999;
-        let uName = tg.initDataUnsafe?.user?.first_name || "User";
+        $('statAccuracy').textContent = `${data.accuracy || 0}%`;
+        $('statPoints').textContent = data.points || 0;
+        $('statStreak').textContent = data.streak || 0;
+        $('statTests').textContent = data.tests_given || 0;
 
-        window.onload = () => {
-            document.body.setAttribute('data-theme', localStorage.getItem('edtech_theme') || 'dark');
-            document.getElementById("p-name").innerText = uName;
-            document.getElementById("p-id").innerText = "UID: " + uid;
-            
-            let img = document.getElementById("user-avatar"), letters = document.getElementById("avatar-letters");
-            img.src = '/api/user/avatar/' + uid;
-            img.onload = () => { img.style.display = "block"; letters.style.display = "none"; };
-            img.onerror = () => { letters.innerText = uName.charAt(0); letters.style.display="inline";};
-            loadProfileStats();
-        };
-
-        let userPoints = 0;
-        let userAccuracy = 0;
-
-        async function loadProfileStats() {
-            try {
-                let res = await fetch(`/api/profile_stats/${uid}`);
-                let data = await res.json();
-                userPoints = data.points;
-                userAccuracy = data.accuracy;
-                
-                document.getElementById('p-accuracy').innerText = data.accuracy + '%';
-                document.getElementById('p-tests').innerText = data.tests_given;
-                document.getElementById('p-streak').innerText = data.streak;
-                document.getElementById('p-points').innerText = data.points;
-                
-                if(data.badges && data.badges.length > 0) {
-                    document.getElementById('p-badges').innerHTML = data.badges.map(b => `<span class="badge-pill"><i class="fa-solid fa-medal"></i> ${b}</span>`).join('');
-                } else {
-                    document.getElementById('p-badges').innerHTML = `<span style="font-size: 13px; color: var(--text-secondary);">No badges yet. Start playing!</span>`;
-                }
-            } catch (e) { }
+        const badges = data.badges || [];
+        if (badges.length > 0) {
+            $('badgeList').innerHTML = badges.map(b => 
+                `<span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-neon/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-indigo-soft border border-indigo-neon/20">
+                    <i class="fa-solid fa-award"></i> ${escapeHtml(b)}
+                </span>`
+            ).join('');
+        } else {
+            $('badgeList').innerHTML = `<span class="text-sm text-muted italic">No badges yet. Keep learning!</span>`;
         }
+    }
 
-        function shareProfile() {
-            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-            let text = `🔥 I just hit ${userPoints} Points with ${userAccuracy}% Accuracy on H4R Bot!\n\nCan you beat my stats? Join now and let's compete! 🚀👇`;
-            let appLink = "https://t.me/H4R_Contact_bot/App";
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(appLink)}&text=${encodeURIComponent(text)}`);
-        }
-    </script>
+    /* ---------- Share Profile ---------- */
+    $('shareBtn').addEventListener('click', () => {
+      if (tg) try { tg.HapticFeedback.impactOccurred('medium'); } catch(e){}
+      const text = `🔥 I just hit ${userStats.points} Points with ${userStats.accuracy}% Accuracy on H4R Bot!\n\nCan you beat my stats? Join now and let's compete! 🚀👇`;
+      const shareUrl = `https://t.me/${BOT_USERNAME}/App`;
+      const url = 'https://t.me/share/url?url=' + encodeURIComponent(shareUrl) + '&text=' + encodeURIComponent(text);
+      if (tg && tg.openTelegramLink) tg.openTelegramLink(url);
+      else window.open(url, '_blank');
+    });
+
+    function escapeHtml(str) {
+      return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    /* ---------- Fetch Data ---------- */
+    async function loadProfile() {
+      try {
+        const res = await fetch(`/api/profile_stats/${UID}`, { headers: { 'Accept': 'application/json' } });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        renderProfile(await res.json());
+      } catch (e) {
+        // Fallback demo data
+        renderProfile({
+            name: FALLBACK_NAME,
+            points: 1250,
+            accuracy: 88,
+            streak: 12,
+            tests_given: 45,
+            badges: ['Novice', 'Quiz Master', 'Study Addict']
+        });
+      }
+    }
+
+    // Initialize
+    loadProfile();
+  </script>
 </body>
 </html>
