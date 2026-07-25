@@ -371,7 +371,7 @@
     }
 
     /* ============================================================
-       FETCH SERIES / SECTIONS
+       FETCH SERIES / SECTIONS (UPDATED WITH ID FIX)
        ============================================================ */
     async function fetchSeriesDetails(slug) {
         haptic('sel');
@@ -393,18 +393,27 @@
                             <i class="fa-solid fa-arrow-left"></i> Back to Search
                         </div>`;
             
+            // 🔥 FIX: Check both _id and id formats safely
+            let seriesId = data._id || data.id || slug; 
+
             data.sections.forEach(sec => {
+                let secName = sec.name || sec.title || "Section";
+                let secId = sec._id || sec.id; // 🔥 FIX
+
                 html += `<div class="mt-5 mb-2 font-black text-indigo-soft uppercase text-xs tracking-widest flex items-center gap-2">
-                            <i class="fa-solid fa-folder-open"></i> ${escapeHtml(sec.name)}
+                            <i class="fa-solid fa-folder-open"></i> ${escapeHtml(secName)}
                          </div>`;
                          
                 if(sec.subsections) {
                     sec.subsections.forEach(sub => {
+                        let subName = sub.name || sub.title || "Tests";
+                        let subId = sub._id || sub.id; // 🔥 FIX
+
                         html += `
                         <div class="glass card-press flex w-full items-center gap-3 rounded-xl p-3 text-left cursor-pointer mb-2"
-                             onclick="fetchTests('${data._id}', '${sec._id}', '${sub._id}', '${escapeHtml(sub.name)}')">
+                             onclick="fetchTests('${seriesId}', '${secId}', '${subId}', '${escapeHtml(subName).replace(/'/g, "\\'")}')">
                             <div class="min-w-0 flex-1">
-                                <p class="text-[13px] font-semibold text-text">${escapeHtml(sub.name)}</p>
+                                <p class="text-[13px] font-semibold text-text">${escapeHtml(subName)}</p>
                             </div>
                             <span class="bg-emerald-neon/15 text-emerald-soft rounded-full px-2 py-0.5 text-[10px] font-bold">Open</span>
                         </div>`;
