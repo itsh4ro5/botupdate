@@ -315,7 +315,7 @@
         });
     });
 
-    /* ---------- Render Rank Card ---------- */
+    /* ---------- Render Rank Card (BUG FIXED) ---------- */
     function buildRankCard(user, index, metric) {
         let isTop3 = index < 3;
         let rankClass = index === 0 ? 'rank-1' : index === 1 ? 'rank-2' : index === 2 ? 'rank-3' : 'glass';
@@ -330,20 +330,20 @@
 
         let safeName = (user.name && user.name !== "undefined" && user.name !== "Unknown") ? user.name : "Premium User";
         let initial = safeName.charAt(0).toUpperCase();
-
-        // Image fallback handler inline logic
         let avatarSrc = `/api/user/avatar/${user.uid}`;
-        let fallbackHTML = `<div class="absolute inset-[2px] h-[36px] w-[36px] rounded-xl flex items-center justify-center bg-[#181826] text-indigo-soft font-bold text-sm">${initial}</div>`;
 
+        // 🔥 FIX: Initial ko z-0 (peeche) aur Image ko z-10 (aage) rakha hai. 
+        // Image fail hui toh bas hide ho jayegi, HTML screen par leak nahi karega.
         return `
         <div class="${rankClass} card-press flex w-full items-center gap-3 rounded-2xl p-3.5 relative overflow-hidden transition-all">
             <div class="flex h-10 w-8 shrink-0 items-center justify-center">
                 ${rankIconOrNum}
             </div>
             
-            <div class="relative h-10 w-10 shrink-0">
-                <div class="${isTop3 ? 'avatar-ring border-[2px]' : 'border border-border'} absolute inset-0 rounded-[14px]"></div>
-                <img src="${avatarSrc}" onerror="this.outerHTML='${fallbackHTML}'" class="absolute inset-[2px] h-[36px] w-[36px] rounded-[12px] object-cover bg-[#181826]"/>
+            <div class="relative h-10 w-10 shrink-0 flex items-center justify-center rounded-[14px] bg-[#181826]">
+                <span class="absolute text-indigo-soft font-bold text-sm z-0">${initial}</span>
+                <img src="${avatarSrc}" onerror="this.style.display='none'" class="absolute inset-[2px] h-[36px] w-[36px] rounded-[12px] object-cover z-10"/>
+                <div class="${isTop3 ? 'avatar-ring border-[2px]' : 'border border-border'} absolute inset-0 rounded-[14px] z-20 pointer-events-none"></div>
             </div>
 
             <div class="min-w-0 flex-1">
@@ -358,7 +358,6 @@
             </div>
         </div>`;
     }
-
     /* ---------- Fetch Data ---------- */
     async function fetchLeaderboard(metric) {
         $('emptyState').classList.add('hidden');
