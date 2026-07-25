@@ -317,22 +317,21 @@
     const tg = window.Telegram ? window.Telegram.WebApp : null;
     if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
 
-    // Resolve the Telegram user id
-    const tgUser = tg && tg.initDataUnsafe ? tg.initDataUnsafe.user : null;
-    const UID = tgUser && tgUser.id ? tgUser.id : 123456789; // demo fallback
-
-    // 🔥 FIX 1: DEEP LINKING ROUTER 🔥
-    const startParam = tg.initDataUnsafe?.start_param;
+    // 🔥 DEEP LINKING ROUTER 🔥
+    const startParam = tg?.initDataUnsafe?.start_param;
     if (startParam) {
         if (startParam.startsWith('profile_')) {
-            const targetUid = startParam.replace('profile_', '');
-            window.location.href = `/profile?view=${targetUid}`;
+            window.location.href = `/profile?view=${startParam.replace('profile_', '')}`;
         } else if (startParam === 'flash') {
             window.location.href = '/flash';
         } else if (startParam === 'leaderboard') {
             window.location.href = '/leaderboard';
         }
     }
+
+    // Resolve the Telegram user id
+    const tgUser = tg && tg.initDataUnsafe ? tg.initDataUnsafe.user : null;
+    const UID = tgUser && tgUser.id ? tgUser.id : 123456789; // demo fallback
     const IS_DEMO = !(tgUser && tgUser.id);
 
     const $ = (id) => document.getElementById(id);
