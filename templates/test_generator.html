@@ -168,7 +168,7 @@
         </div>
     </section>
 
-    <!-- ===== RECENTLY PLAYED TESTS (The New Addition) ===== -->
+    <!-- ===== RECENTLY PLAYED TESTS ===== -->
     <section id="recentSection" class="reveal mt-6 hidden" style="animation-delay:.1s">
         <div class="mb-3 flex items-center justify-between">
             <h2 class="flex items-center gap-2 text-base font-semibold">
@@ -187,9 +187,8 @@
         <p class="text-sm font-semibold text-muted" id="loadingText">Extracting resources...</p>
     </div>
 
-    <!-- ===== Dynamic Content Area (Search Results / Series Details / Test List) ===== -->
+    <!-- ===== Dynamic Content Area ===== -->
     <section id="contentArea" class="reveal mt-6" style="animation-delay:.15s">
-        
         <!-- Default Empty State -->
         <div id="emptyState" class="mt-4 flex flex-col items-center text-center">
             <div class="glass flex h-16 w-16 items-center justify-center rounded-2xl text-2xl text-indigo-soft">
@@ -198,10 +197,8 @@
             <p class="mt-4 font-semibold">Ready to extract tests</p>
             <p class="mt-1 max-w-[240px] text-sm text-muted">Search for any exam to fetch its premium mock tests directly from the source.</p>
         </div>
-
         <!-- Rendered Results go here -->
         <div id="dynamicList" class="grid gap-3"></div>
-
     </section>
 
   </div>
@@ -238,7 +235,7 @@
 
   <script>
     /* ============================================================
-       H4R Test Generator Engine (Vanilla JS)
+       H4R Test Generator Engine (Vanilla JS) - FULLY FIXED
        ============================================================ */
     const tg = window.Telegram ? window.Telegram.WebApp : null;
     if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
@@ -254,12 +251,14 @@
       if (saved === 'light') document.documentElement.classList.replace('dark', 'light');
       syncThemeIcon();
     })();
+    
     function syncThemeIcon() {
       const light = document.documentElement.classList.contains('light');
       $('themeToggle').innerHTML = light ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
       const meta = document.querySelector('meta[name="theme-color"]');
       if (meta) meta.setAttribute('content', light ? '#f3f4f8' : '#050509');
     }
+    
     $('themeToggle').addEventListener('click', () => {
       const root = document.documentElement;
       root.classList.contains('dark') ? root.classList.replace('dark', 'light') : root.classList.replace('light', 'dark');
@@ -268,10 +267,15 @@
       haptic('light');
     });
 
+    /* 🔥 BULLETPROOF ESCAPE HTML - PREVENTS ONCLICK CRASHES 🔥 */
     function escapeHtml(str) {
-      return String(str == null ? '' : str)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
     function showLoading(text) {
@@ -281,13 +285,14 @@
         $('loadingState').classList.remove('hidden');
         $('loadingState').classList.add('flex');
     }
+    
     function hideLoading() {
         $('loadingState').classList.add('hidden');
         $('loadingState').classList.remove('flex');
     }
 
     /* ============================================================
-       RECENTLY PLAYED LOGIC (New Feature)
+       RECENTLY PLAYED LOGIC
        ============================================================ */
     function loadRecentTests() {
         let recent = [];
@@ -352,7 +357,6 @@
             }
 
             $('dynamicList').innerHTML = data.map(item => {
-                // 🔥 FIX: Catch all possible ID and Title formats
                 let sId = item.slug || item._id || item.id;
                 let sTitle = item.title || item.name || "Test Series";
                 
@@ -374,56 +378,64 @@
             $('dynamicList').innerHTML = `<p class="text-red-400 text-center">Network Error. Try again.</p>`;
         }
     }
+
+
     /* ============================================================
-       FETCH ACTUAL TESTS (UPDATED FIX)
+       FETCH SERIES / SECTIONS
        ============================================================ */
-    async function fetchTests(seriesId, secId, subId, subName) {
+    async function fetchSeriesDetails(slug) {
         haptic('sel');
-        showLoading("Fetching exams...");
+        showLoading("Decoding structure...");
         
         try {
-            let res = await fetch(`/api/tb/tests/${seriesId}/${secId}/${subId}`);
+            let res = await fetch(`/api/tb/series/${slug}`);
             let data = await res.json();
             hideLoading();
+            currentSeriesData = data; 
 
-            if(!data || data.length === 0) {
-                $('dynamicList').innerHTML = `<p class="text-muted text-center p-4">No tests found here.</p>`;
+            if(!data.sections || data.sections.length === 0) {
+                $('dynamicList').innerHTML = `<p class="text-muted text-center p-4">No content inside this series.</p>`;
                 return;
             }
 
-            // Render Back Button + Tests List
-            let html = `<div class="flex items-center gap-2 mb-4 text-xs font-bold text-muted cursor-pointer" onclick="fetchSeriesDetails('${currentSeriesData.slug || currentSeriesData._id || currentSeriesData.id}')">
-                            <i class="fa-solid fa-arrow-left"></i> Back to ${escapeHtml(currentSeriesData.title || currentSeriesData.name || "Series").substring(0, 20)}...
-                        </div>
-                        <h3 class="mb-3 text-sm font-bold text-indigo-soft"><i class="fa-solid fa-list-check"></i> ${subName}</h3>`;
+            let html = `<div class="flex items-center gap-2 mb-3 text-xs font-bold text-muted cursor-pointer" onclick="performSearch()">
+                            <i class="fa-solid fa-arrow-left"></i> Back to Search
+                        </div>`;
             
-            html += data.map(t => {
-                // 🔥 FIX: Test ID aur Test Name safley catch karna
-                let testId = t._id || t.id;
-                let testTitle = t.title || t.name || "Mock Test";
-                let tDuration = t.duration || 0;
-                let tMarks = t.totalMark || t.totalQuestions || 0;
+            let seriesId = data._id || data.id || slug; 
 
-                return `
-                <div class="glass rounded-2xl p-4 mb-3 border-l-4 border-emerald-soft">
-                    <h4 class="text-sm font-bold text-white mb-2 leading-tight">${escapeHtml(testTitle)}</h4>
-                    <div class="flex items-center gap-4 text-[11px] font-semibold text-muted mb-4">
-                        <span class="bg-white/5 px-2 py-1 rounded-md"><i class="fa-regular fa-clock text-emerald-soft"></i> ${tDuration} Mins</span>
-                        <span class="bg-white/5 px-2 py-1 rounded-md"><i class="fa-solid fa-check-double text-indigo-soft"></i> ${tMarks} Marks</span>
-                    </div>
-                    <button onclick="extractTest('${testId}', '${escapeHtml(testTitle).replace(/'/g, "\\'")}')" 
-                        class="w-full card-press rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-neon py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20">
-                        <i class="fa-solid fa-rocket mr-1"></i> Launch Engine
-                    </button>
-                </div>
-            `}).join('');
+            data.sections.forEach(sec => {
+                let secName = sec.name || sec.title || "Section";
+                let secId = sec._id || sec.id; 
 
+                html += `<div class="mt-5 mb-2 font-black text-indigo-soft uppercase text-xs tracking-widest flex items-center gap-2">
+                            <i class="fa-solid fa-folder-open"></i> ${escapeHtml(secName)}
+                         </div>`;
+                         
+                if(sec.subsections) {
+                    sec.subsections.forEach(sub => {
+                        let subName = sub.name || sub.title || "Tests";
+                        let subId = sub._id || sub.id; 
+
+                        html += `
+                        <div class="glass card-press flex w-full items-center gap-3 rounded-xl p-3 text-left cursor-pointer mb-2"
+                             onclick="fetchTests('${escapeHtml(seriesId)}', '${escapeHtml(secId)}', '${escapeHtml(subId)}', '${escapeHtml(subName)}')">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-[13px] font-semibold text-text">${escapeHtml(subName)}</p>
+                            </div>
+                            <span class="bg-emerald-neon/15 text-emerald-soft rounded-full px-2 py-0.5 text-[10px] font-bold">Open</span>
+                        </div>`;
+                    });
+                }
+            });
             $('dynamicList').innerHTML = html;
+            
         } catch(e) {
             hideLoading();
-            $('dynamicList').innerHTML = `<p class="text-red-400 text-center">Failed to load tests.</p>`;
+            $('dynamicList').innerHTML = `<p class="text-red-400 text-center">Failed to load series structure.</p>`;
         }
     }
+
 
     /* ============================================================
        FETCH ACTUAL TESTS
@@ -442,25 +454,33 @@
                 return;
             }
 
-            // Render Back Button + Tests List
-            let html = `<div class="flex items-center gap-2 mb-4 text-xs font-bold text-muted cursor-pointer" onclick="fetchSeriesDetails('${currentSeriesData.slug || currentSeriesData._id}')">
-                            <i class="fa-solid fa-arrow-left"></i> Back to ${escapeHtml(currentSeriesData.title).substring(0, 20)}...
-                        </div>
-                        <h3 class="mb-3 text-sm font-bold text-indigo-soft"><i class="fa-solid fa-list-check"></i> ${subName}</h3>`;
+            let backSlug = currentSeriesData.slug || currentSeriesData._id || currentSeriesData.id;
+            let seriesTitle = currentSeriesData.title || currentSeriesData.name || "Series";
             
-            html += data.map(t => `
+            let html = `<div class="flex items-center gap-2 mb-4 text-xs font-bold text-muted cursor-pointer" onclick="fetchSeriesDetails('${escapeHtml(backSlug)}')">
+                            <i class="fa-solid fa-arrow-left"></i> Back to ${escapeHtml(seriesTitle).substring(0, 20)}...
+                        </div>
+                        <h3 class="mb-3 text-sm font-bold text-indigo-soft"><i class="fa-solid fa-list-check"></i> ${escapeHtml(subName)}</h3>`;
+            
+            html += data.map(t => {
+                let testId = t._id || t.id;
+                let testTitle = t.title || t.name || "Mock Test";
+                let tDuration = t.duration || 0;
+                let tMarks = t.totalMark || t.totalQuestions || 0;
+
+                return `
                 <div class="glass rounded-2xl p-4 mb-3 border-l-4 border-emerald-soft">
-                    <h4 class="text-sm font-bold text-white mb-2 leading-tight">${escapeHtml(t.title)}</h4>
+                    <h4 class="text-sm font-bold text-white mb-2 leading-tight">${escapeHtml(testTitle)}</h4>
                     <div class="flex items-center gap-4 text-[11px] font-semibold text-muted mb-4">
-                        <span class="bg-white/5 px-2 py-1 rounded-md"><i class="fa-regular fa-clock text-emerald-soft"></i> ${t.duration} Mins</span>
-                        <span class="bg-white/5 px-2 py-1 rounded-md"><i class="fa-solid fa-check-double text-indigo-soft"></i> ${t.totalMark} Marks</span>
+                        <span class="bg-white/5 px-2 py-1 rounded-md"><i class="fa-regular fa-clock text-emerald-soft"></i> ${tDuration} Mins</span>
+                        <span class="bg-white/5 px-2 py-1 rounded-md"><i class="fa-solid fa-check-double text-indigo-soft"></i> ${tMarks} Marks</span>
                     </div>
-                    <button onclick="extractTest('${t._id}', '${escapeHtml(t.title).replace(/'/g, "\\'")}')" 
+                    <button onclick="extractTest('${escapeHtml(testId)}', '${escapeHtml(testTitle)}')" 
                         class="w-full card-press rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-neon py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20">
                         <i class="fa-solid fa-rocket mr-1"></i> Launch Engine
                     </button>
                 </div>
-            `).join('');
+            `}).join('');
 
             $('dynamicList').innerHTML = html;
         } catch(e) {
@@ -469,25 +489,24 @@
         }
     }
 
+
     /* ============================================================
-       EXTRACT AND LAUNCH TEST (API POST & HTML Render)
+       EXTRACT AND LAUNCH TEST
        ============================================================ */
     async function extractTest(testId, testTitle) {
         haptic('medium');
         
-        // Save to Recent (localStorage)
         saveRecentTest(testId, testTitle);
-        loadRecentTests(); // Update UI immediately
+        loadRecentTests();
 
         showLoading("Compiling Engine Sandbox...");
         
         try {
-            // POST Request to backend to generate pure HTML
             let res = await fetch(`/api/tb/extract/${testId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    series_details: currentSeriesData ? { name: currentSeriesData.title } : {},
+                    series_details: currentSeriesData ? { name: currentSeriesData.title || currentSeriesData.name } : {},
                     section: {}, subsection: {},
                     test_summary: { title: testTitle }
                 })
@@ -497,7 +516,6 @@
             
             let htmlContent = await res.text();
             
-            // Render the returned HTML cleanly in the current window
             document.open();
             document.write(htmlContent);
             document.close();
