@@ -57,7 +57,11 @@
       --muted: #5b5b6b;
     }
 
-    * { -webkit-tap-highlight-color: transparent; }
+    * { 
+      -webkit-tap-highlight-color: transparent; 
+      -webkit-touch-callout: none; /* Long press popup hide karega iOS pe */
+      user-select: none; /* Text selection band karega */
+    }
 
     body {
       background: var(--bg);
