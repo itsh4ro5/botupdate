@@ -593,13 +593,16 @@
       vaultLoaded = false;
     }
 
-    /* ---------- Share Quiz ---------- */
+    /* ---------- Share Quiz (DEEP LINK) ---------- */
     $('shareBtn').addEventListener('click', () => {
       haptic('light');
       const q = (QUIZ && (QUIZ.question || QUIZ.q)) ? (QUIZ.question || QUIZ.q) : 'Daily Flash Quiz';
       const text = `🧠 H4R Flash Arena — Question of the day:\n\n${q}\n\nCan you crack it? Play daily quizzes & climb the leaderboard 👇`;
-      const shareUrl = `https://t.me/${BOT_USERNAME}?start=flash`;
+      
+      const BOT_USERNAME = 'H4R_Contact_bot';
+      const shareUrl = `https://t.me/${BOT_USERNAME}/App?startapp=flash`;
       const url = 'https://t.me/share/url?url=' + encodeURIComponent(shareUrl) + '&text=' + encodeURIComponent(text);
+      
       if (tg && tg.openTelegramLink) tg.openTelegramLink(url);
       else window.open(url, '_blank');
     });
