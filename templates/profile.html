@@ -281,9 +281,17 @@
     if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
 
     const tgUser = tg && tg.initDataUnsafe ? tg.initDataUnsafe.user : null;
-    const UID = tgUser && tgUser.id ? tgUser.id : 123456789; // demo fallback
+    const MY_UID = tgUser && tgUser.id ? tgUser.id : 123456789;
+
+    // 🔥 CHECK IF VIEWING SOMEONE ELSE'S PROFILE
+    const urlParams = new URLSearchParams(window.location.search);
+    const TARGET_UID = urlParams.get('view') ? urlParams.get('view') : MY_UID;
+    const isOwnProfile = (TARGET_UID == MY_UID);
+
+    const UID = TARGET_UID; // Ab tumhara baaki saara code automatically isi UID ko use karega!
+    
     const FALLBACK_NAME = tgUser ? [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Guest' : 'Guest';
-    const BOT_USERNAME = 'H4R_Bot'; 
+    const BOT_USERNAME = 'H4R_Contact_bot'; 
 
     const $ = (id) => document.getElementById(id);
     let userStats = { points: 0, accuracy: 0 };
@@ -347,16 +355,28 @@
         }
     }
 
-    /* ---------- Share Profile ---------- */
-    $('shareBtn').addEventListener('click', () => {
-      if (tg) try { tg.HapticFeedback.impactOccurred('medium'); } catch(e){}
-      const text = `🔥 I just hit ${userStats.points} Points with ${userStats.accuracy}% Accuracy on H4R Bot!\n\nCan you beat my stats? Join now and let's compete! 🚀👇`;
-      const shareUrl = `https://t.me/${BOT_USERNAME}/App`;
-      const url = 'https://t.me/share/url?url=' + encodeURIComponent(shareUrl) + '&text=' + encodeURIComponent(text);
-      if (tg && tg.openTelegramLink) tg.openTelegramLink(url);
-      else window.open(url, '_blank');
-    });
-
+    /* ---------- Share / Challenge Button Logic ---------- */
+    if (!isOwnProfile) {
+        // Agar dusre ki profile hai, toh "Challenge" button dikhao
+        let btn = $('shareBtn');
+        btn.innerHTML = `<i class="fa-solid fa-bolt"></i> Challenge this Player`;
+        btn.classList.replace('from-indigo-600', 'from-emerald-500');
+        btn.classList.replace('to-indigo-neon', 'to-emerald-neon');
+        btn.classList.replace('shadow-indigo-600/25', 'shadow-emerald-500/25');
+        btn.onclick = () => { window.location.href = '/flash'; };
+    } else {
+        // Agar khud ki profile hai, toh apna special link share karo
+        $('shareBtn').addEventListener('click', () => {
+          if (tg) try { tg.HapticFeedback.impactOccurred('medium'); } catch(e){}
+          const text = `🔥 I just hit ${userStats.points} Points with ${userStats.accuracy}% Accuracy on H4R Bot!\n\nCan you beat my stats? Tap to view my profile & challenge me! 🚀👇`;
+          
+          const shareUrl = `https://t.me/${BOT_USERNAME}/App?startapp=profile_${MY_UID}`;
+          const url = 'https://t.me/share/url?url=' + encodeURIComponent(shareUrl) + '&text=' + encodeURIComponent(text);
+          
+          if (tg && tg.openTelegramLink) tg.openTelegramLink(url);
+          else window.open(url, '_blank');
+        });
+    }
     function escapeHtml(str) {
       return String(str == null ? '' : str)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;')
