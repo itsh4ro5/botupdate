@@ -395,16 +395,18 @@
         }
     }
 
-    /* ---------- Share Button Logic ---------- */
+    /* ---------- Share Button Logic (DEEP LINK) ---------- */
     $('shareBtn').addEventListener('click', () => {
       haptic('light');
       const text = `🏆 Check out the Hall of Fame on H4R Bot!\n\nCan you beat the top scores? Compete in Daily Flash Challenges now! 👇`;
-      const shareUrl = `https://t.me/${BOT_USERNAME}/App`;
+      
+      const BOT_USERNAME = 'H4R_Contact_bot';
+      const shareUrl = `https://t.me/${BOT_USERNAME}/App?startapp=leaderboard`;
       const url = 'https://t.me/share/url?url=' + encodeURIComponent(shareUrl) + '&text=' + encodeURIComponent(text);
+      
       if (tg && tg.openTelegramLink) tg.openTelegramLink(url);
       else window.open(url, '_blank');
     });
-
     // Initialize
     fetchLeaderboard('points');
   </script>
