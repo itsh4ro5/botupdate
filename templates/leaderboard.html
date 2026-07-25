@@ -237,35 +237,39 @@
   </div>
 
   <!-- ===== Floating Bottom Dock ===== -->
-  <nav class="fixed bottom-4 left-1/2 z-30 -translate-x-1/2">
+  <nav class="fixed bottom-4 left-1/2 z-30 -translate-x-1/2" oncontextmenu="return false;">
     <div class="dock flex items-center gap-1 rounded-full px-2 py-2">
-      <a href="/" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted">
+      <div onclick="window.location.href='/'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-house text-[17px]"></i><span class="text-[9px] font-medium">Home</span>
-      </a>
-      <a href="/explore" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted">
+      </div>
+      
+      <div onclick="window.location.href='/explore'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-compass text-[17px]"></i><span class="text-[9px] font-medium">Explore</span>
-      </a>
-      <a href="/quiz" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted">
+      </div>
+      
+      <div onclick="window.location.href='/quiz'" class="dock-item active relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-file-pen text-[17px]"></i><span class="text-[9px] font-medium">Quiz</span>
-      </a>
-      <a href="/flash" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted">
+      </div>
+      
+      <div onclick="window.location.href='/flash'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-bolt text-[17px]"></i><span class="text-[9px] font-medium">Flash</span>
-      </a>
-      <a href="/leaderboard" class="dock-item active relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5">
+      </div>
+      
+      <div onclick="window.location.href='/leaderboard'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-ranking-star text-[17px]"></i><span class="text-[9px] font-medium">Rank</span>
-      </a>
-      <a href="/profile" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted">
+      </div>
+      
+      <div onclick="window.location.href='/profile'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-user text-[17px]"></i><span class="text-[9px] font-medium">Profile</span>
-      </a>
+      </div>
     </div>
   </nav>
-
   <script>
     /* ============================================================
        H4R Leaderboard — Vanilla JS controller
