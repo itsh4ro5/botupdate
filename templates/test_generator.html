@@ -351,80 +351,77 @@
                 return;
             }
 
-            $('dynamicList').innerHTML = data.map(item => `
+            $('dynamicList').innerHTML = data.map(item => {
+                // 🔥 FIX: Catch all possible ID and Title formats
+                let sId = item.slug || item._id || item.id;
+                let sTitle = item.title || item.name || "Test Series";
+                
+                return `
                 <div class="glass card-press flex w-full items-center gap-3 rounded-2xl p-4 text-left cursor-pointer border-l-4 border-indigo-soft"
-                     onclick="fetchSeriesDetails('${escapeHtml(item.slug || item._id)}')">
+                     onclick="fetchSeriesDetails('${escapeHtml(sId)}')">
                     <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-neon/12 text-xl text-indigo-soft">
                         <i class="fa-solid fa-layer-group"></i>
                     </div>
                     <div class="min-w-0 flex-1">
-                        <p class="truncate text-sm font-semibold text-pretty">${escapeHtml(item.title)}</p>
+                        <p class="truncate text-sm font-semibold text-pretty">${escapeHtml(sTitle)}</p>
                         <span class="mt-1 inline-block rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-muted">Test Series</span>
                     </div>
                     <i class="fa-solid fa-chevron-right text-xs text-muted"></i>
                 </div>
-            `).join('');
+            `}).join('');
         } catch(e) {
             hideLoading();
             $('dynamicList').innerHTML = `<p class="text-red-400 text-center">Network Error. Try again.</p>`;
         }
     }
-
     /* ============================================================
-       FETCH SERIES / SECTIONS (UPDATED WITH ID FIX)
+       FETCH ACTUAL TESTS (UPDATED FIX)
        ============================================================ */
-    async function fetchSeriesDetails(slug) {
+    async function fetchTests(seriesId, secId, subId, subName) {
         haptic('sel');
-        showLoading("Decoding structure...");
+        showLoading("Fetching exams...");
         
         try {
-            let res = await fetch(`/api/tb/series/${slug}`);
+            let res = await fetch(`/api/tb/tests/${seriesId}/${secId}/${subId}`);
             let data = await res.json();
             hideLoading();
-            currentSeriesData = data; // Save for breadcrumb
 
-            if(!data.sections || data.sections.length === 0) {
-                $('dynamicList').innerHTML = `<p class="text-muted text-center p-4">No content inside this series.</p>`;
+            if(!data || data.length === 0) {
+                $('dynamicList').innerHTML = `<p class="text-muted text-center p-4">No tests found here.</p>`;
                 return;
             }
 
-            // Render Sections (Grouped Subsections)
-            let html = `<div class="flex items-center gap-2 mb-3 text-xs font-bold text-muted cursor-pointer" onclick="performSearch()">
-                            <i class="fa-solid fa-arrow-left"></i> Back to Search
-                        </div>`;
+            // Render Back Button + Tests List
+            let html = `<div class="flex items-center gap-2 mb-4 text-xs font-bold text-muted cursor-pointer" onclick="fetchSeriesDetails('${currentSeriesData.slug || currentSeriesData._id || currentSeriesData.id}')">
+                            <i class="fa-solid fa-arrow-left"></i> Back to ${escapeHtml(currentSeriesData.title || currentSeriesData.name || "Series").substring(0, 20)}...
+                        </div>
+                        <h3 class="mb-3 text-sm font-bold text-indigo-soft"><i class="fa-solid fa-list-check"></i> ${subName}</h3>`;
             
-            // 🔥 FIX: Check both _id and id formats safely
-            let seriesId = data._id || data.id || slug; 
+            html += data.map(t => {
+                // 🔥 FIX: Test ID aur Test Name safley catch karna
+                let testId = t._id || t.id;
+                let testTitle = t.title || t.name || "Mock Test";
+                let tDuration = t.duration || 0;
+                let tMarks = t.totalMark || t.totalQuestions || 0;
 
-            data.sections.forEach(sec => {
-                let secName = sec.name || sec.title || "Section";
-                let secId = sec._id || sec.id; // 🔥 FIX
+                return `
+                <div class="glass rounded-2xl p-4 mb-3 border-l-4 border-emerald-soft">
+                    <h4 class="text-sm font-bold text-white mb-2 leading-tight">${escapeHtml(testTitle)}</h4>
+                    <div class="flex items-center gap-4 text-[11px] font-semibold text-muted mb-4">
+                        <span class="bg-white/5 px-2 py-1 rounded-md"><i class="fa-regular fa-clock text-emerald-soft"></i> ${tDuration} Mins</span>
+                        <span class="bg-white/5 px-2 py-1 rounded-md"><i class="fa-solid fa-check-double text-indigo-soft"></i> ${tMarks} Marks</span>
+                    </div>
+                    <button onclick="extractTest('${testId}', '${escapeHtml(testTitle).replace(/'/g, "\\'")}')" 
+                        class="w-full card-press rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-neon py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20">
+                        <i class="fa-solid fa-rocket mr-1"></i> Launch Engine
+                    </button>
+                </div>
+            `}).join('');
 
-                html += `<div class="mt-5 mb-2 font-black text-indigo-soft uppercase text-xs tracking-widest flex items-center gap-2">
-                            <i class="fa-solid fa-folder-open"></i> ${escapeHtml(secName)}
-                         </div>`;
-                         
-                if(sec.subsections) {
-                    sec.subsections.forEach(sub => {
-                        let subName = sub.name || sub.title || "Tests";
-                        let subId = sub._id || sub.id; // 🔥 FIX
-
-                        html += `
-                        <div class="glass card-press flex w-full items-center gap-3 rounded-xl p-3 text-left cursor-pointer mb-2"
-                             onclick="fetchTests('${seriesId}', '${secId}', '${subId}', '${escapeHtml(subName).replace(/'/g, "\\'")}')">
-                            <div class="min-w-0 flex-1">
-                                <p class="text-[13px] font-semibold text-text">${escapeHtml(subName)}</p>
-                            </div>
-                            <span class="bg-emerald-neon/15 text-emerald-soft rounded-full px-2 py-0.5 text-[10px] font-bold">Open</span>
-                        </div>`;
-                    });
-                }
-            });
             $('dynamicList').innerHTML = html;
-            
         } catch(e) {
             hideLoading();
-            $('dynamicList').innerHTML = `<p class="text-red-400 text-center">Failed to load series structure.</p>`;
+            $('dynamicList').innerHTML = `<p class="text-red-400 text-center">Failed to load tests.</p>`;
         }
     }
 
