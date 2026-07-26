@@ -7,7 +7,6 @@ import json
 import os
 import base64
 from quart import Quart, jsonify, render_template, send_file, request
-
 import config
 from config import DB, OWNER_ID, is_admin, get_membership_cached
 from pyrogram.enums import ChatMemberStatus
@@ -21,21 +20,21 @@ from firebase_admin import credentials, firestore
 def init_firebase():
     cred_b64 = os.environ.get("FIREBASE_CRED_B64")
     if not cred_b64:
-        print("❌ FIREBASE ERROR: FIREBASE_CRED_B64 secret HF me nahi mila!")
+        print("  FIREBASE ERROR: FIREBASE_CRED_B64 secret HF me nahi mila!")
         return None
-        
+             
     try:
         cred_dict = json.loads(base64.b64decode(cred_b64).decode('utf-8'))
         project_id = cred_dict.get("project_id")
         cred = credentials.Certificate(cred_dict)
-        
+                 
         if not firebase_admin._apps:
             firebase_admin.initialize_app(cred, {'projectId': project_id})
-        
-        print(f"✅ Firebase Firestore Connected Successfully! (Project: {project_id})")
+                 
+        print(f"  Firebase Firestore Connected Successfully! (Project: {project_id})")
         return firestore.client()
     except Exception as e:
-        print(f"❌ Firebase Init Error: {e}")
+        print(f"  Firebase Init Error: {e}")
         return None
 
 db_fs = init_firebase()
@@ -51,12 +50,24 @@ def sync_fs_read(uid):
 
 TESTBOOK_API_URL = "https://itsh4r01-live-stream-engine.hf.space"
 app = Quart(__name__)
-
 AVATAR_CACHE = {}
 AVATAR_CACHE_MAX_ENTRIES = 500
 
 # ==========================================
-# PAGE ROUTES
+# MIDDLEWARE: MANDATORY CHANNEL ENFORCEMENT
+# ==========================================
+async def enforce_mandatory(user_id):
+    if not getattr(config, "MANDATORY_CHANNEL_ID", 0): return None
+    if str(user_id) == str(config.OWNER_ID) or config.is_admin(user_id): return None
+    bot = getattr(config, 'bot_app', None)
+    if not bot: return None
+    is_joined = await config.get_membership_cached(bot, config.MANDATORY_CHANNEL_ID, user_id)
+    if not is_joined:
+        return jsonify({"error": "must_join", "channel_link": getattr(config, "MANDATORY_CHANNEL_LINK", "https://t.me/")}), 403
+    return None
+
+# ==========================================
+# PAGE ROUTES (Passing Bot Username)
 # ==========================================
 @app.route('/health')
 async def health():
@@ -65,43 +76,35 @@ async def health():
 
 @app.route('/')
 async def index():
-    try: return await render_template('dashboard.html')
-    except Exception as e: return f"Error: {e}", 200
+    return await render_template('dashboard.html', bot_username=getattr(config, 'BOT_USERNAME', 'H4R_Bot'))
 
 @app.route('/explore')
 async def explore_page():
-    try: return await render_template('explore.html')
-    except Exception as e: return f"Error: {e}", 200
+    return await render_template('explore.html', bot_username=getattr(config, 'BOT_USERNAME', 'H4R_Bot'))
 
 @app.route('/admin_panel')
 async def admin_page():
-    try: return await render_template('admin.html')
-    except Exception as e: return f"Error: {e}", 200
+    return await render_template('admin.html', bot_username=getattr(config, 'BOT_USERNAME', 'H4R_Bot'))
 
 @app.route('/owner_panel')
 async def owner_page():
-    try: return await render_template('owner.html')
-    except Exception as e: return f"Error: {e}", 200
+    return await render_template('owner.html', bot_username=getattr(config, 'BOT_USERNAME', 'H4R_Bot'))
 
 @app.route('/quiz')
 async def quiz_page():
-    try: return await render_template('test_generator.html')
-    except Exception as e: return f"Error: {e}", 200
+    return await render_template('test_generator.html', bot_username=getattr(config, 'BOT_USERNAME', 'H4R_Bot'))
 
 @app.route('/flash')
 async def flash_page():
-    try: return await render_template('flash_arena.html')
-    except Exception as e: return f"Error: {e}", 200
+    return await render_template('flash_arena.html', bot_username=getattr(config, 'BOT_USERNAME', 'H4R_Bot'))
 
 @app.route('/profile')
 async def profile_page():
-    try: return await render_template('profile.html')
-    except Exception as e: return f"Error: {e}", 200
+    return await render_template('profile.html', bot_username=getattr(config, 'BOT_USERNAME', 'H4R_Bot'))
 
 @app.route('/leaderboard')
 async def leaderboard_page():
-    try: return await render_template('leaderboard.html')
-    except Exception as e: return f"Error: {e}", 200
+    return await render_template('leaderboard.html', bot_username=getattr(config, 'BOT_USERNAME', 'H4R_Bot'))
 
 # ==========================================
 # AVATAR & USER DASHBOARD LOGIC
@@ -134,13 +137,16 @@ async def get_user_avatar(user_id):
 
 @app.route('/api/user/<int:user_id>')
 async def get_user_data(user_id):
+    chk = await enforce_mandatory(user_id)
+    if chk: return chk
+    
     user_key = str(user_id) if str(user_id) in DB["USER_DATA"] else (user_id if user_id in DB["USER_DATA"] else None)
     user_data = DB["USER_DATA"].get(user_key) if user_key else {}
-    
+         
     is_user_owner = (str(user_id) == str(OWNER_ID)) or (user_id == OWNER_ID)
     is_user_admin = is_admin(user_id)
     flood_active, flood_seconds = config.get_flood_wait_status()
-    
+         
     current_streak = user_data.get("current_streak", 0)
     if user_key and user_data:
         today_str = datetime.datetime.now().strftime('%Y-%m-%d')
@@ -152,11 +158,11 @@ async def get_user_data(user_id):
                 if delta == 1: current_streak += 1
                 else: current_streak = 1
             else: current_streak = 1
-            
+                         
             DB["USER_DATA"][user_key]['last_active_date'] = today_str
             DB["USER_DATA"][user_key]['current_streak'] = current_streak
             asyncio.create_task(config.save_data_async())
-            
+                 
     response = {
         "is_owner": is_user_owner,
         "is_admin": is_user_admin,
@@ -171,12 +177,12 @@ async def get_user_data(user_id):
         "my_batches": [],
         "demos": []
     }
-    
+         
     all_chats_dict = DB.get("ALL_CHATS", {})
     batch_cats = DB.get("BATCH_CATEGORIES", {})
     now = time.time()
     joined_list = []
-    
+         
     if hasattr(config, 'bot_app') and config.bot_app:
         bot = config.bot_app
         async def check_membership(bid):
@@ -185,11 +191,11 @@ async def get_user_data(user_id):
         tasks = [check_membership(bid) for bid in all_chats_dict.keys()]
         results = await asyncio.gather(*tasks)
         joined_list = [r for r in results if r is not None]
-        
+                 
         if user_key:
             DB["USER_DATA"][user_key]["joined_batches"] = joined_list
             asyncio.create_task(config.save_data_async())
-
+            
     demo_keys = list(user_data.get("demos", {}).keys()) if user_data else []
     if "demos" in user_data:
         for bid, d_data in user_data["demos"].items():
@@ -202,22 +208,22 @@ async def get_user_data(user_id):
                 "expiry_date": time.strftime('%d %b %Y, %I:%M %p', time.localtime(expiry_time)), 
                 "time_left_hours": round(time_left / 3600, 1)
             })
-
+            
     for bid, name in DB.get("FREE_CHANNELS", {}).items():
         if int(bid) in joined_list or str(bid) in joined_list:
-            response["my_batches"].append({"id": bid, "name": name, "type": "Free Channel", "status": "Joined ✔️", "category": batch_cats.get(str(bid), "Other Batches")})
-            
+            response["my_batches"].append({"id": bid, "name": name, "type": "Free Channel", "status": "Joined", "category": batch_cats.get(str(bid), "Other Batches")})
+                 
     for bid, name in DB.get("PAID_CHANNELS", {}).items():
         bid_str = str(bid)
         is_joined = int(bid) in joined_list or bid_str in joined_list
         has_demo = bid_str in demo_keys
         if is_joined or has_demo:
-            status = "Lifetime Access 👑" if is_joined else "Demo Run ⏳"
+            status = "Lifetime Access" if is_joined else "Demo Run"
             if has_demo:
                 exp = user_data["demos"][bid_str]["expiry"] if isinstance(user_data["demos"][bid_str], dict) else float(user_data["demos"][bid_str])
                 if now > exp: continue
             response["my_batches"].append({"id": bid, "name": name, "type": "Premium Core", "status": status, "category": batch_cats.get(bid_str, "Other Batches")})
-
+            
     if is_user_owner or is_user_admin:
         response["system_stats"] = {
             "total_users": len(DB.get("USER_DATA", {})),
@@ -227,18 +233,20 @@ async def get_user_data(user_id):
         }
     return jsonify(response)
 
-
 # =====================================================================
 # DAILY FLASH CHALLENGE (FIREBASE GAMIFICATION)
 # =====================================================================
 @app.route('/api/profile_stats/<int:user_id>')
 async def get_profile_stats(user_id):
-    fs_data = await asyncio.to_thread(sync_fs_read, user_id)
+    chk = await enforce_mandatory(user_id)
+    if chk: return chk
     
+    fs_data = await asyncio.to_thread(sync_fs_read, user_id)
+         
     total_flash = fs_data.get("flash_attempted", 0)
     correct_flash = fs_data.get("flash_correct", 0)
     accuracy = int((correct_flash / total_flash) * 100) if total_flash > 0 else 0
-    
+         
     stats = {
         "name": fs_data.get("name", "Unknown"),
         "points": fs_data.get("points", 0),
@@ -251,13 +259,16 @@ async def get_profile_stats(user_id):
 
 @app.route('/api/daily_quiz/<int:user_id>')
 async def get_daily_quiz(user_id):
+    chk = await enforce_mandatory(user_id)
+    if chk: return chk
+    
     fs_data = await asyncio.to_thread(sync_fs_read, user_id)
     day_number = datetime.datetime.now().day
     filename = f"daily_questions/day_{day_number:03d}.json"
-    
+         
     today_str = datetime.datetime.now().strftime('%Y-%m-%d')
-    
-    # Fallback/Dummy Logic (Agar JSON file missing hai)
+         
+    # Fallback/Dummy Logic
     if not os.path.exists(filename):
         question_data = {
             "id": "q_dummy",
@@ -269,13 +280,13 @@ async def get_daily_quiz(user_id):
     else:
         with open(filename, 'r', encoding='utf-8') as f:
             question_data = json.load(f)
-
+            
     if fs_data.get("last_played") == today_str:
         return jsonify({
             "already_solved": True,
             "flashcard": question_data.get("flashcard", "Keep learning everyday!")
         })
-
+        
     safe_data = {
         "id": question_data["id"],
         "question": question_data["question"],
@@ -288,13 +299,12 @@ async def submit_quiz():
     data = await request.json
     user_id = data.get("uid")
     selected_option = data.get("selected_option")
-    
+         
     user_key = str(user_id) if str(user_id) in DB["USER_DATA"] else (user_id if user_id in DB["USER_DATA"] else None)
     if not user_key: return jsonify({"error": "User not found"}), 404
-
     day_number = datetime.datetime.now().day
     filename = f"daily_questions/day_{day_number:03d}.json"
-    
+         
     if not os.path.exists(filename):
         question_data = {
             "answer_index": 1,
@@ -304,20 +314,20 @@ async def submit_quiz():
     else:
         with open(filename, 'r', encoding='utf-8') as f: 
             question_data = json.load(f)
-    
+         
     correct_index = question_data["answer_index"]
     is_correct = (selected_option == correct_index)
     flashcard_text = question_data.get("flashcard", "Concept updated!")
-    
+         
     today_str = datetime.datetime.now().strftime('%Y-%m-%d')
-    
+         
     fs_data = await asyncio.to_thread(sync_fs_read, user_id)
     points = fs_data.get("points", 0)
     streak = fs_data.get("streak", 0)
     attempts = fs_data.get("flash_attempted", 0) + 1
     corrects = fs_data.get("flash_correct", 0)
     badges = fs_data.get("badges", ["Novice"])
-
+    
     if is_correct:
         points += 10
         streak += 1
@@ -325,10 +335,9 @@ async def submit_quiz():
         if points >= 50 and "Quiz Master" not in badges: badges.append("Quiz Master")
         if streak >= 7 and "Study Addict" not in badges: badges.append("Study Addict")
     else:
-        streak = 0 
-
+        streak = 0
+        
     accuracy = int((corrects / attempts) * 100)
-
     new_fs_data = {
         "uid": user_id,
         "name": DB["USER_DATA"][user_key].get("name", "User"),
@@ -340,9 +349,9 @@ async def submit_quiz():
         "badges": badges,
         "last_played": today_str
     }
-    
+         
     await asyncio.to_thread(sync_fs_write, user_id, new_fs_data)
-    
+         
     return jsonify({
         "is_correct": is_correct, 
         "correct_index": correct_index,
@@ -379,43 +388,45 @@ async def get_leaderboard(metric):
     lb_data = await asyncio.to_thread(fetch_lb)
     return jsonify(lb_data)
 
-
 # =====================================================================
 # EXPLORE & TESTBOOK LOGIC (Proxy)
 # =====================================================================
 @app.route('/api/explore/<int:user_id>')
 async def api_explore_data(user_id):
+    chk = await enforce_mandatory(user_id)
+    if chk: return chk
+    
     user_key = str(user_id) if str(user_id) in DB["USER_DATA"] else (user_id if user_id in DB["USER_DATA"] else None)
     user_data = DB["USER_DATA"].get(user_key) if user_key else {}
-    
+         
     joined_list = user_data.get("joined_batches", [])
     demo_keys = list(user_data.get("demos", {}).keys())
     now = time.time()
-    
+         
     explore_data = {cat: {"free": [], "paid": []} for cat in DB.get("CATEGORIES", [])}
     if "Other Batches" not in explore_data: explore_data["Other Batches"] = {"free": [], "paid": []}
-    
+         
     for bid, name in DB.get("FREE_CHANNELS", {}).items():
         cat = DB.get("BATCH_CATEGORIES", {}).get(str(bid), "Other Batches")
         if cat not in explore_data: explore_data[cat] = {"free": [], "paid": []}
         is_joined = int(bid) in joined_list or str(bid) in joined_list
-        explore_data[cat]["free"].append({"id": bid, "name": name, "status": "Joined ✔️" if is_joined else "Join Now ➡️"})
-        
+        explore_data[cat]["free"].append({"id": bid, "name": name, "status": "Joined" if is_joined else "Join Now"})
+              
     for bid, name in DB.get("PAID_CHANNELS", {}).items():
         bid_str = str(bid)
         cat = DB.get("BATCH_CATEGORIES", {}).get(bid_str, "Other Batches")
         if cat not in explore_data: explore_data[cat] = {"free": [], "paid": []}
-        
+                 
         is_joined = int(bid) in joined_list or bid_str in joined_list
         has_demo = bid_str in demo_keys
-        status = "Lifetime Access 👑" if is_joined else ("Demo Run ⏳" if has_demo else "Buy Access 🔒")
-        
+        status = "Lifetime Access" if is_joined else ("Demo Run" if has_demo else "Buy Access")
+                  
         if has_demo:
             exp = user_data["demos"][bid_str]["expiry"] if isinstance(user_data["demos"][bid_str], dict) else float(user_data["demos"][bid_str])
-            if now > exp: status = "Expired ❌"
-            
+            if now > exp: status = "Expired"
+                      
         explore_data[cat]["paid"].append({"id": bid, "name": name, "status": status})
-        
+             
     return jsonify({"categories": DB.get("CATEGORIES", []), "explore_data": explore_data, "paid_locked": DB.get("PAID_LOCKED", False)})
 
 @app.route('/api/tb/search')
@@ -446,7 +457,6 @@ async def tb_extract_proxy(test_id):
         q_data = res.json().get('quiz_data', {})
     if 'error' in q_data:
         return jsonify({"error": q_data['error']}), 400
-
     from html_generator import generate_html
     details = {
         "Test Series": data.get('series_details', {}).get('name', 'N/A'),
@@ -462,31 +472,27 @@ async def tb_extract_proxy(test_id):
     html_content = generate_html(q_data, details)
     return html_content, 200, {'Content-Type': 'text/html'}
 
-
-# 🔥 TESTBOOK FIREBASE INTEGRATION (Naya Code Yahan Hai)
 @app.route('/api/submit_tb_test', methods=['POST'])
 async def submit_tb_test():
     data = await request.json
     user_id = data.get("uid")
-    
+         
     if not user_id: 
         return jsonify({"error": "No user ID"}), 400
-        
+             
     fs_data = await asyncio.to_thread(sync_fs_read, user_id)
-    
-    # Gamification: Testbook ka Full Mock Test dene par 50 XP Points 
+         
     points = fs_data.get("points", 0) + 50 
-    attempts = fs_data.get("flash_attempted", 0) + 1 
-    
+    attempts = fs_data.get("flash_attempted", 0) + 1
+          
     new_fs_data = {
         "uid": user_id,
         "points": points,
         "flash_attempted": attempts
     }
-    
+         
     await asyncio.to_thread(sync_fs_write, user_id, new_fs_data)
     return jsonify({"success": True})
-
 
 # =====================================================================
 # OWNER API LOGIC
@@ -495,13 +501,13 @@ async def submit_tb_test():
 async def api_owner_users(req_user_id):
     if str(req_user_id) != str(OWNER_ID) and req_user_id != OWNER_ID:
         return jsonify({"error": "Unauthorized"}), 403
-        
+             
     all_chats_dict = DB.get("ALL_CHATS", {})
     free_chats = DB.get("FREE_CHANNELS", {})
     paid_chats = DB.get("PAID_CHANNELS", {})
     users_list = []
     now = time.time()
-    
+         
     for uid, data in DB.get("USER_DATA", {}).items():
         joined_batches = data.get("joined_batches", [])
         free_joined = []
@@ -509,7 +515,7 @@ async def api_owner_users(req_user_id):
         for bid in joined_batches:
             bid_str = str(bid)
             bid_int = int(bid) if bid_str.lstrip('-').isdigit() else bid
-            
+                         
             if bid_str in free_chats or bid_int in free_chats:
                 name = free_chats.get(bid_str) or free_chats.get(bid_int) or all_chats_dict.get(bid_int, f"Batch {bid}")
                 free_joined.append({"id": bid, "name": name})
@@ -519,7 +525,7 @@ async def api_owner_users(req_user_id):
             else:
                 name = all_chats_dict.get(bid_int, f"Batch {bid}")
                 paid_joined.append({"id": bid, "name": name})
-        
+                 
         demos_list = []
         for bid, d_data in data.get("demos", {}).items():
             exp = d_data["expiry"] if isinstance(d_data, dict) else float(d_data)
@@ -527,7 +533,7 @@ async def api_owner_users(req_user_id):
                 "id": bid, "name": all_chats_dict.get(int(bid) if str(bid).lstrip('-').isdigit() else bid, f"Batch {bid}"),
                 "is_expired": now > exp, "time_left": max(0, int(exp - now)) // 3600
             })
-            
+                     
         users_list.append({
             "id": uid, 
             "name": data.get("name", "Unknown"), 
@@ -548,14 +554,14 @@ async def api_owner_action():
     req_user_id = data.get('req_user_id')
     action = data.get('action')
     target_uid = int(data.get('target_uid'))
-    
+         
     if str(req_user_id) != str(OWNER_ID) and req_user_id != OWNER_ID:
         return jsonify({"error": "Unauthorized"}), 403
-        
+             
     bot = getattr(config, 'bot_app', None)
     if not bot:
         return jsonify({"error": "Bot not ready"}), 503
-
+        
     if action == "ban":
         if target_uid not in DB.get("BLOCKED_USERS", []):
             DB.setdefault("BLOCKED_USERS", []).append(target_uid)
@@ -565,7 +571,7 @@ async def api_owner_action():
         except Exception:
             pass
         return jsonify({"success": True})
-        
+             
     elif action == "kick":
         batch_id = int(data.get('batch_id'))
         try:
@@ -578,5 +584,5 @@ async def api_owner_action():
             return jsonify({"success": True})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
-            
+                 
     return jsonify({"error": "Invalid Action"}), 400
