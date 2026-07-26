@@ -370,7 +370,7 @@
       const kind = premium ? 'paid' : 'free';
       return `
         <button type="button"
-          data-id="${escapeHtml(b.id)}" data-name="${escapeHtml(b.name)}" data-kind="${kind}"
+          data-id="${escapeHtml(b.id)}" data-name="${escapeHtml(b.name)}" data-kind="${kind}" data-status="${escapeHtml(badge.label)}"
           class="batch-link glass card-press flex w-full items-center gap-3 rounded-2xl p-4 text-left">
           <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${tint} text-lg">
             <i class="fa-solid ${icon}"></i>
@@ -452,35 +452,62 @@
       bindCardActions();
     }
 
-    /* ---------- Card click: track recent + open bot deep link ---------- */
+    /* ---------- Card click: track recent + smart link routing ---------- */
     function bindCardActions() {
       document.querySelectorAll('.batch-link').forEach((el) => {
         el.addEventListener('click', () => {
           const id = el.getAttribute('data-id');
           const name = el.getAttribute('data-name');
           const kind = el.getAttribute('data-kind');
+          const status = el.getAttribute('data-status');
 
-          // Recently viewed (shared key with dashboard)
+          // Recently viewed
           try {
             let list = JSON.parse(localStorage.getItem('h4r_recent') || '[]').filter((x) => x.name !== name);
-            list.unshift({ name, type: kind === 'paid' ? 'Premium Core' : 'Free Channel' });
+            list.unshift({ id, name, type: kind === 'paid' ? 'Premium Core' : 'Free Channel' });
             localStorage.setItem('h4r_recent', JSON.stringify(list.slice(0, 8)));
           } catch (e) {}
 
           if (tg) try { tg.HapticFeedback.impactOccurred('medium'); } catch (e) {}
 
-          // Deep-link into the bot to join / buy the batch
-          // Deep-link into the bot to join / buy the batch
-          const startParam = (kind === 'paid' ? 'buy_' : 'join_') + id;
-          const botUser = SERVER_BOT_USERNAME || 'H4R_Bot';
-
-          const deepLink = `https://t.me/${botUser}?start=${startParam}`;
-          const webLink = 'https://t.me/share/url?url=' + encodeURIComponent(deepLink);
-
-          if (tg && tg.openTelegramLink) {
-            tg.openTelegramLink(deepLink);
+          // ROUTING LOGIC
+          if (status === 'Joined' || status === 'Owned' || status === 'Trial') {
+             // Already joined: Open the chat directly
+             const cleanId = String(id).replace('-100', '');
+             const channelLink = `https://t.me/c/${cleanId}/999999999`;
+             if (tg && tg.openTelegramLink) {
+                 tg.openTelegramLink(channelLink);
+             } else {
+                 window.open(channelLink, '_blank');
+             }
           } else {
-            window.open(webLink, '_blank');
+             // Not joined: Open Bot Link
+             const startParam = (kind === 'paid' ? 'buy_' : 'join_') + id;
+             
+             // Dynamic bot username placeholder from Quart backend if passed, else fallback
+             const botUser = (typeof SERVER_BOT_USERNAME !== 'undefined' && SERVER_BOT_USERNAME) ? SERVER_BOT_USERNAME : 'H4R_Bot';
+             
+             const deepLink = `https://t.me/${botUser}?start=${startParam}`;
+             const webLink = 'https://t.me/share/url?url=' + encodeURIComponent(deepLink);
+
+             if (kind === 'paid') {
+                 // The requested alert for Paid Batches
+                 if(tg && tg.showAlert) {
+                     tg.showAlert("Redirecting to bot. Please generate the link from the bot to request access.", () => {
+                         if (tg.openTelegramLink) tg.openTelegramLink(deepLink);
+                         else window.open(webLink, '_blank');
+                     });
+                     return;
+                 } else {
+                     alert("Redirecting to bot. Please generate the link from the bot to request access.");
+                 }
+             }
+
+             if (tg && tg.openTelegramLink) {
+                 tg.openTelegramLink(deepLink);
+             } else {
+                 window.open(webLink, '_blank');
+             }
           }
         });
       });
