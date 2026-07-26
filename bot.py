@@ -252,10 +252,12 @@ async def _run_pyrogram_engine():
     # --- STARTING THE MTPROTO CONNECTION ---
     for attempt in range(1, 6):
         try:
-            print(f"🟡 BOT: Connecting via Pyrogram MTProto Sockets (Attempt {attempt}/5)...", flush=True)
+            print(f"  BOT: Connecting via Pyrogram MTProto Sockets (Attempt {attempt}/5)...", flush=True)
             await _start_with_floodwait_guard(app)
             me = await app.get_me()
-            print(f"✅ BOT LIVE! Authorized successfully as @{me.username} (ID: {me.id})!", flush=True)
+            import config
+            config.BOT_USERNAME = me.username # <--- ADD THIS LINE
+            print(f"  BOT LIVE! Authorized successfully as @{me.username} (ID: {me.id})!", flush=True)
             
             # 🔥 NATIVE MTPROTO PEER CACHE WARM-UP (no HTTP hacks)
             # NOTE: get_dialogs() is a USER-ACCOUNT-ONLY method — Telegram
