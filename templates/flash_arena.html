@@ -423,6 +423,28 @@
     const BOT_USERNAME = 'H4R_Bot'; // used for the share deep link
 
     const $ = (id) => document.getElementById(id);
+
+    // --- NEW LOGIC: Server Bot Username & Mandatory Channel Middleware ---
+    const SERVER_BOT_USERNAME = "{{ bot_username }}";
+
+    async function checkResponseForMandatory(res) {
+        if (res.status === 403) {
+            const data = await res.json();
+            if (data.error === "must_join") {
+                document.body.innerHTML = `
+                    <div style="display:flex; height:100vh; align-items:center; justify-content:center; flex-direction:column; text-align:center; padding: 20px; background:var(--bg); color:var(--text); font-family:'Outfit', sans-serif;">
+                        <div class="glass flex h-20 w-20 items-center justify-center rounded-3xl text-3xl text-indigo-soft mb-6 shadow-lg">
+                            <i class="fa-solid fa-lock"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold tracking-tight mb-2">Access Denied</h2>
+                        <p class="text-sm text-muted mb-8">You must join our main channel to unlock access to the App.</p>
+                        <a href="${data.channel_link}" target="_blank" class="rounded-full bg-indigo-neon px-8 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 card-press">Join Channel</a>
+                    </div>`;
+                throw new Error("must_join");
+            }
+        }
+        return res;
+    }
     const haptic = (t) => { if (tg && tg.HapticFeedback) { try { t === 'sel' ? tg.HapticFeedback.selectionChanged() : tg.HapticFeedback.impactOccurred(t); } catch (e) {} } };
 
     let QUIZ = null;            // current daily quiz object
@@ -601,16 +623,13 @@
       vaultLoaded = false;
     }
 
-    /* ---------- Share Quiz (DEEP LINK) ---------- */
     $('shareBtn').addEventListener('click', () => {
       haptic('light');
       const q = (QUIZ && (QUIZ.question || QUIZ.q)) ? (QUIZ.question || QUIZ.q) : 'Daily Flash Quiz';
       const text = `🧠 H4R Flash Arena — Question of the day:\n\n${q}\n\nCan you crack it? Play daily quizzes & climb the leaderboard 👇`;
-      
-      const BOT_USERNAME = 'H4R_Contact_bot';
-      const shareUrl = `https://t.me/${BOT_USERNAME}/App?startapp=flash`;
+      const botUser = SERVER_BOT_USERNAME || 'H4R_Bot';
+      const shareUrl = `https://t.me/${botUser}?start=flash`;
       const url = 'https://t.me/share/url?url=' + encodeURIComponent(shareUrl) + '&text=' + encodeURIComponent(text);
-      
       if (tg && tg.openTelegramLink) tg.openTelegramLink(url);
       else window.open(url, '_blank');
     });
@@ -666,14 +685,13 @@
        ============================================================ */
     async function loadQuiz() {
       try {
-        const res = await fetch(`/api/daily_quiz/${UID}`, { headers: { 'Accept': 'application/json' } });
+        const res = await checkResponseForMandatory(await fetch(`/api/daily_quiz/${UID}`, { headers: { 'Accept': 'application/json' } }));
         if (!res.ok) throw new Error('HTTP ' + res.status);
         renderQuiz(await res.json());
       } catch (e) {
-        renderQuiz(DEMO_QUIZ);
+        if (e.message !== "must_join") render(DEMO_QUIZ);
       }
     }
-
     /* ---------- Demo data for browser preview ---------- */
     const DEMO_QUIZ = {
       date: 'Today',
