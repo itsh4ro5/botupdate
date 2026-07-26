@@ -250,7 +250,9 @@ async def _run_pyrogram_engine():
         await H.main_message_handler(client, message)
 
     # --- STARTING THE MTPROTO CONNECTION ---
-    for attempt in range(1, 6):
+    # --- STARTING THE MTPROTO CONNECTION ---
+    attempt = 1
+    while attempt <= 5:
         try:
             print(f"  BOT: Connecting via Pyrogram MTProto Sockets (Attempt {attempt}/5)...", flush=True)
             await _start_with_floodwait_guard(app)
@@ -258,19 +260,19 @@ async def _run_pyrogram_engine():
             import config
             config.BOT_USERNAME = me.username # <--- ADD THIS LINE
             print(f"  BOT LIVE! Authorized successfully as @{me.username} (ID: {me.id})!", flush=True)
-            
-            # 🔥 NATIVE MTPROTO PEER CACHE WARM-UP (no HTTP hacks)
-            # NOTE: get_dialogs() is a USER-ACCOUNT-ONLY method — Telegram
+                         
+            #   NATIVE MTPROTO PEER CACHE WARM-UP (no HTTP hacks)
+            # NOTE: get_dialogs() is a USER-ACCOUNT-ONLY method   Telegram
             # rejects it for bots with BOT_METHOD_INVALID (bots have no
             # "dialog list" concept), so it's deliberately not used here.
             # get_chat() on the numeric ID is the correct bot-compatible
             # primitive: since this bot is already a member/admin of the
             # Support Group, Telegram resolves it correctly via
             # channels.GetChannels even with no prior local peer knowledge
-            # — the only thing that was ever blocking this was pyrogram's
+            #   the only thing that was ever blocking this was pyrogram's
             # own MIN_CHANNEL_ID bound rejecting the ID locally before the
             # request could even be sent (see the patch in config.py).
-            print("🔄 Warming up Support Group peer cache via native get_chat()...", flush=True)
+            print("  Warming up Support Group peer cache via native get_chat()...", flush=True)
             try:
                 import config
                 supp_id = getattr(config, "SUPPORT_GROUP_ID", 0)
@@ -278,15 +280,15 @@ async def _run_pyrogram_engine():
                     for peer_attempt in range(1, 4):
                         try:
                             await app.get_chat(int(supp_id))
-                            print("✅ Support Group peer cached successfully!", flush=True)
+                            print("  Support Group peer cached successfully!", flush=True)
                             break
                         except Exception as peer_err:
-                            print(f"⚠️ Support Group peer cache attempt {peer_attempt}/3 failed: {peer_err}", flush=True)
+                            print(f"  Support Group peer cache attempt {peer_attempt}/3 failed: {peer_err}", flush=True)
                             if peer_attempt < 3:
                                 await asyncio.sleep(2)
             except Exception as diag_err:
-                print(f"⚠️ Peer warm-up warning: {diag_err}", flush=True)
-                
+                print(f"  Peer warm-up warning: {diag_err}", flush=True)
+                             
             break
         except FloodWait as e:
             # Belt-and-suspenders: covers FloodWait raised anywhere else in
@@ -295,17 +297,18 @@ async def _run_pyrogram_engine():
             import config
             wait_time = int(getattr(e, "value", getattr(e, "x", 30)))
             config.FLOOD_WAIT_UNTIL = time.time() + wait_time
-            print(f"🐢 FloodWait caught during startup sequence! Sleeping {wait_time}s...", flush=True)
+            print(f"  FloodWait caught during startup sequence! Sleeping {wait_time}s...", flush=True)
             await asyncio.sleep(wait_time + 2)
             config.FLOOD_WAIT_UNTIL = 0
-            # Doesn't count against the 5-attempt budget — retry immediately.
+            # Doesn't count against the 5-attempt budget   retry immediately.
             continue
         except Exception as e:
-            print(f"⚠️ Socket Connect Error: {type(e).__name__}: {e}", flush=True)
+            print(f"  Socket Connect Error: {type(e).__name__}: {e}", flush=True)
             if attempt == 5:
-                print("❌ Could not connect to Telegram servers.", flush=True)
+                print("  Could not connect to Telegram servers.", flush=True)
                 return
             await asyncio.sleep(3)
+            attempt += 1
 
     print("🟢 BOT: OPERATIONAL — MTProto Socket Listening...", flush=True)
 
@@ -328,22 +331,24 @@ async def _run_pyrogram_engine():
                 await asyncio.sleep(60)
                 if hasattr(H, "check_demos"):
                     await H.check_demos(app)
+            except asyncio.CancelledError:
+                break
             except Exception as e:
                 print(f"Job Error: {e}", flush=True)
-                
-    asyncio.create_task(run_jobs())
+                     
+    bg_task = asyncio.create_task(run_jobs())
 
     # Keep alive loop
     try:
         while True:
             await asyncio.sleep(15)
     finally:
+        bg_task.cancel()
         try:
             await app.stop()
         except Exception:
             pass
-        print("⚠️ BOT: Socket disconnected.", flush=True)
-
+        print("  BOT: Socket disconnected.", flush=True)
 async def _bot_supervisor():
     while True:
         try:
