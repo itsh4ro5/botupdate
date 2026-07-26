@@ -297,6 +297,28 @@
 
     const $ = (id) => document.getElementById(id);
 
+    // --- NEW LOGIC: Server Bot Username & Mandatory Channel Middleware ---
+    const SERVER_BOT_USERNAME = "{{ bot_username }}";
+
+    async function checkResponseForMandatory(res) {
+        if (res.status === 403) {
+            const data = await res.json();
+            if (data.error === "must_join") {
+                document.body.innerHTML = `
+                    <div style="display:flex; height:100vh; align-items:center; justify-content:center; flex-direction:column; text-align:center; padding: 20px; background:var(--bg); color:var(--text); font-family:'Outfit', sans-serif;">
+                        <div class="glass flex h-20 w-20 items-center justify-center rounded-3xl text-3xl text-indigo-soft mb-6 shadow-lg">
+                            <i class="fa-solid fa-lock"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold tracking-tight mb-2">Access Denied</h2>
+                        <p class="text-sm text-muted mb-8">You must join our main channel to unlock access to the App.</p>
+                        <a href="${data.channel_link}" target="_blank" class="rounded-full bg-indigo-neon px-8 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 card-press">Join Channel</a>
+                    </div>`;
+                throw new Error("must_join");
+            }
+        }
+        return res;
+    }
+
     let STATE = { categories: [], data: {}, paidLocked: false, active: null };
 
     /* ---------- Theme toggle (shared behaviour) ---------- */
@@ -448,28 +470,30 @@
           if (tg) try { tg.HapticFeedback.impactOccurred('medium'); } catch (e) {}
 
           // Deep-link into the bot to join / buy the batch
+          // Deep-link into the bot to join / buy the batch
           const startParam = (kind === 'paid' ? 'buy_' : 'join_') + id;
-          const botUser = (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) ? '' : '';
-          const link = 'https://t.me/share/url?url=' + encodeURIComponent('https://t.me/?start=' + startParam);
+          const botUser = SERVER_BOT_USERNAME || 'H4R_Bot';
+
+          const deepLink = `https://t.me/${botUser}?start=${startParam}`;
+          const webLink = 'https://t.me/share/url?url=' + encodeURIComponent(deepLink);
+
           if (tg && tg.openTelegramLink) {
-            // If the mini app knows its bot, prefer a direct start link
-            tg.openTelegramLink('https://t.me/?start=' + encodeURIComponent(startParam));
+            tg.openTelegramLink(deepLink);
           } else {
-            window.open(link, '_blank');
+            window.open(webLink, '_blank');
           }
         });
       });
     }
 
-    /* ---------- Fetch explore data ---------- */
     async function loadExplore() {
       try {
-        const res = await fetch(`/api/explore/${UID}`, { headers: { 'Accept': 'application/json' } });
+        const res = await checkResponseForMandatory(await fetch(`/api/explore/${UID}`, { headers: { 'Accept': 'application/json' } }));
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const json = await res.json();
         apply(json);
       } catch (err) {
-        apply(DEMO_DATA);
+        if (err.message !== "must_join") apply(DEMO_DATA);
       }
     }
 
