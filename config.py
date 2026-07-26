@@ -72,20 +72,20 @@ DEFAULT_CATEGORIES = ["Civil Engg.", "Electrical Engg.", "Mechanical Engg.", "El
 
 # --- DATABASE & MEMORY ---
 DB = {
-    "ADMIN_IDS": [], "FREE_CHANNELS": {}, "PAID_CHANNELS": {}, "ALL_CHATS": {}, 
+    "ADMIN_IDS": [], "FREE_CHANNELS": {}, "PAID_CHANNELS": {}, "ALL_CHATS": {},
     "USER_DATA": {}, "BLOCKED_USERS": [], "USER_TOPICS": {}, "PENDING_REQUESTS": {},
     "LINK_MAP": {}, "CUSTOM_WELCOMES": {}, "NEW_USERS_ALLOWED": True, 
     "FREE_LOCKED": False, "PAID_LOCKED": False, "TEST_BOT_LOCKED": False, 
     "SCHEDULED_DELETES": [], "TEST_BOT_LINK": "", "BATCH_CATEGORIES": {},
     "CATEGORIES": DEFAULT_CATEGORIES.copy(), "MAINTENANCE_MODE": False
 }
-MESSAGE_MAP = {}
-ADMIN_WIZARD = {}
-BROADCAST_STATE = {}
-TOPIC_CREATION_LOCK = set()
-SPAM_CACHE = {}
 
-data_lock = asyncio.Lock()
+MESSAGE_MAP = {}  
+ADMIN_WIZARD = {}  
+BROADCAST_STATE = {}  
+TOPIC_CREATION_LOCK = set() 
+SPAM_CACHE = {}  
+data_lock = asyncio.Lock() 
 mongo_client = mongo_collection = None
 
 # --- GLOBAL FLOODWAIT STATE ---
@@ -225,25 +225,30 @@ async def _background_save():
 # =====================================================================
 SAVE_DEBOUNCE_SECONDS = 4
 _save_flush_task = None
+_db_is_dirty = False
 
 async def _debounced_flush():
+    global _db_is_dirty
     try:
-        await asyncio.sleep(SAVE_DEBOUNCE_SECONDS)
-        await _background_save()
+        while _db_is_dirty:
+            _db_is_dirty = False
+            await asyncio.sleep(SAVE_DEBOUNCE_SECONDS)
+            await _background_save()
     except Exception as e:
         logger.error(f"  Debounced Save Failed: {e}")
 
 async def save_data_async():
     """
     Marks the DB dirty and ensures exactly one debounced flush is pending.
-    Safe to call as often as you like   extra calls inside the debounce
-    window are free (no new task, no new write).
+    Guarantees that state changes made DURING an active flush are caught 
+    and processed in a follow-up flush cycle.
     """
-    global _save_flush_task
+    global _save_flush_task, _db_is_dirty
+    _db_is_dirty = True
+    
     # No `await` happens between this check and the create_task call, so
     # there's no window for two coroutines to both see "no task running"
-    # and schedule two flushes   asyncio is single-threaded/cooperative,
-    # so this is race-free without needing an extra lock.
+    # and schedule two flushes.
     if _save_flush_task is None or _save_flush_task.done():
         _save_flush_task = asyncio.create_task(_debounced_flush())
 
@@ -290,15 +295,25 @@ def invalidate_membership_cache(user_id, chat_id=None):
 
 # --- CORE HELPERS (100% PYROGRAM CONVERTED) ---
 async def execute_universal_kick(user_id, client, permanent_ban=False):
+    from pyrogram.errors import FloodWait
     mod = False
+
     async def _kick_free(bid):
         try:
             await client.ban_chat_member(int(bid), user_id)
             if not permanent_ban:
                 await client.unban_chat_member(int(bid), user_id)
+        except FloodWait as e:
+            await asyncio.sleep(e.value + 1)
+            try:
+                await client.ban_chat_member(int(bid), user_id)
+                if not permanent_ban:
+                    await client.unban_chat_member(int(bid), user_id)
+            except Exception:
+                pass
         except Exception:
             pass
-            
+
     async def _kick_paid(bid):
         nonlocal mod
         try:
@@ -310,9 +325,22 @@ async def execute_universal_kick(user_id, client, permanent_ban=False):
             if is_demo:
                 del DB["USER_DATA"][user_id]["demos"][bid_str]
                 mod = True
+        except FloodWait as e:
+            await asyncio.sleep(e.value + 1)
+            try:
+                bid_str = str(bid)
+                is_demo = bid_str in DB["USER_DATA"].get(user_id, {}).get("demos", {})
+                await client.ban_chat_member(int(bid), user_id)
+                if not permanent_ban:
+                    await client.unban_chat_member(int(bid), user_id)
+                if is_demo:
+                    del DB["USER_DATA"][user_id]["demos"][bid_str]
+                    mod = True
+            except Exception:
+                pass
         except Exception:
             pass
-            
+
     #   PERFORMANCE: this used to ban/unban across every free THEN every
     # paid channel one at a time (2N sequential Telegram round-trips for a
     # user in N+N channels). asyncio.gather fires them all concurrently 
