@@ -420,29 +420,88 @@
     function getRecent() {
       try { return JSON.parse(localStorage.getItem('h4r_recent') || '[]'); } catch (e) { return []; }
     }
+
     function renderRecent() {
       const items = getRecent();
       const wrap = $('recentList');
       if (!items.length) { $('recentSection').classList.add('hidden'); return; }
       $('recentSection').classList.remove('hidden');
+      
       wrap.innerHTML = items
         .map(
-          (b) => `
-        <button type="button" onclick="window.location.href='/explore'"
-          class="glass card-press w-40 shrink-0 rounded-2xl p-4 text-left">
+          (b) => {
+            const stat = b.status || 'Joined'; // Backward compatibility
+            const kind = b.kind || (b.type === 'Premium Core' ? 'paid' : 'free');
+            return `
+        <button type="button" data-id="${escapeHtml(b.id)}" data-name="${escapeHtml(b.name)}" data-kind="${escapeHtml(kind)}" data-status="${escapeHtml(stat)}" data-type="${escapeHtml(b.type || 'Batch')}"
+          class="recent-batch-link glass card-press w-40 shrink-0 rounded-2xl p-4 text-left">
           <div class="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-neon/15 text-indigo-soft">
             <i class="fa-solid fa-book-open"></i>
           </div>
           <p class="line-clamp-2 text-sm font-semibold">${escapeHtml(b.name)}</p>
           <p class="mt-1 text-[11px] text-muted">${escapeHtml(b.type || 'Batch')}</p>
         </button>`
+          }
         )
         .join('');
+        
+      bindRecentActions();
     }
+
     $('clearRecent').addEventListener('click', () => {
       localStorage.removeItem('h4r_recent');
       renderRecent();
     });
+
+    /* ---------- Route handling for Recently Viewed cards ---------- */
+    function bindRecentActions() {
+      document.querySelectorAll('.recent-batch-link').forEach((el) => {
+        el.addEventListener('click', () => {
+          const id = el.getAttribute('data-id');
+          const name = el.getAttribute('data-name');
+          const kind = el.getAttribute('data-kind');
+          const status = el.getAttribute('data-status');
+          const type = el.getAttribute('data-type');
+
+          // Push to front of recently viewed to keep it fresh
+          let list = getRecent().filter((x) => x.name !== name);
+          list.unshift({ id, name, type, status, kind });
+          localStorage.setItem('h4r_recent', JSON.stringify(list.slice(0, 8)));
+          
+          renderRecent(); // IMMEDIATE UI UPDATE!
+
+          if (tg) try { tg.HapticFeedback.impactOccurred('medium'); } catch (e) {}
+
+          // EXACT SAME SMART ROUTING LOGIC
+          if (status === 'Joined' || status === 'Owned' || status === 'Trial') {
+             const cleanId = String(id).replace('-100', '');
+             const channelLink = `https://t.me/c/${cleanId}/999999999`;
+             if (tg && tg.openTelegramLink) tg.openTelegramLink(channelLink);
+             else window.open(channelLink, '_blank');
+          } else {
+             const startParam = (kind === 'paid' ? 'buy_' : 'join_') + id;
+             const botUser = (typeof SERVER_BOT_USERNAME !== 'undefined' && SERVER_BOT_USERNAME) ? SERVER_BOT_USERNAME : 'H4R_Bot';
+             const deepLink = `https://t.me/${botUser}?start=${startParam}`;
+             const webLink = 'https://t.me/share/url?url=' + encodeURIComponent(deepLink);
+
+             if (kind === 'paid') {
+                 if(tg && tg.showAlert) {
+                     tg.showAlert("Redirecting to bot. Please generate the link from the bot to request access.", () => {
+                         if (tg.openTelegramLink) tg.openTelegramLink(deepLink);
+                         else window.open(webLink, '_blank');
+                     });
+                     return;
+                 } else {
+                     alert("Redirecting to bot. Please generate the link from the bot to request access.");
+                 }
+             }
+
+             if (tg && tg.openTelegramLink) tg.openTelegramLink(deepLink);
+             else window.open(webLink, '_blank');
+          }
+        });
+      });
+    }
 
     /* ---------- Batch card template ---------- */
     function batchCard(b, premium) {
@@ -556,9 +615,12 @@
           const type = el.getAttribute('data-type');
           const id = el.getAttribute('data-id');
           
+          // Save with full attributes
           let list = getRecent().filter((x) => x.name !== name);
-          list.unshift({ id, name, type });
+          list.unshift({ id, name, type, status: 'Joined', kind: type === 'Premium Core' ? 'paid' : 'free' });
           localStorage.setItem('h4r_recent', JSON.stringify(list.slice(0, 8)));
+          
+          renderRecent(); // IMMEDIATE UI UPDATE FOR DASHBOARD!
 
           if (tg) try { tg.HapticFeedback.impactOccurred('medium'); } catch(e){}
 
@@ -569,7 +631,7 @@
           if (tg && tg.openTelegramLink) tg.openTelegramLink(channelLink);
           else window.open(channelLink, '_blank');
         });
-      });
+      });;
 
       renderRecent();
     }
