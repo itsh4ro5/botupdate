@@ -142,11 +142,11 @@ async def get_user_data(user_id):
     
     user_key = str(user_id) if str(user_id) in DB["USER_DATA"] else (user_id if user_id in DB["USER_DATA"] else None)
     user_data = DB["USER_DATA"].get(user_key) if user_key else {}
-         
+    
     is_user_owner = (str(user_id) == str(OWNER_ID)) or (user_id == OWNER_ID)
     is_user_admin = is_admin(user_id)
     flood_active, flood_seconds = config.get_flood_wait_status()
-         
+    
     current_streak = user_data.get("current_streak", 0)
     if user_key and user_data:
         today_str = datetime.datetime.now().strftime('%Y-%m-%d')
@@ -158,11 +158,11 @@ async def get_user_data(user_id):
                 if delta == 1: current_streak += 1
                 else: current_streak = 1
             else: current_streak = 1
-                         
+            
             DB["USER_DATA"][user_key]['last_active_date'] = today_str
             DB["USER_DATA"][user_key]['current_streak'] = current_streak
             asyncio.create_task(config.save_data_async())
-                 
+            
     response = {
         "is_owner": is_user_owner,
         "is_admin": is_user_admin,
@@ -177,21 +177,25 @@ async def get_user_data(user_id):
         "my_batches": [],
         "demos": []
     }
-         
+    
     all_chats_dict = DB.get("ALL_CHATS", {})
     batch_cats = DB.get("BATCH_CATEGORIES", {})
     now = time.time()
     joined_list = []
-         
+    
     if hasattr(config, 'bot_app') and config.bot_app:
         bot = config.bot_app
+        sem = asyncio.Semaphore(5)  # Limit concurrent MTProto requests to avoid instant FloodWaits
+        
         async def check_membership(bid):
-            is_member = await get_membership_cached(bot, bid, user_id)
-            return int(bid) if is_member else None
+            async with sem:
+                is_member = await get_membership_cached(bot, bid, user_id)
+                return int(bid) if is_member else None
+                
         tasks = [check_membership(bid) for bid in all_chats_dict.keys()]
         results = await asyncio.gather(*tasks)
         joined_list = [r for r in results if r is not None]
-                 
+        
         if user_key:
             DB["USER_DATA"][user_key]["joined_batches"] = joined_list
             asyncio.create_task(config.save_data_async())
@@ -212,7 +216,7 @@ async def get_user_data(user_id):
     for bid, name in DB.get("FREE_CHANNELS", {}).items():
         if int(bid) in joined_list or str(bid) in joined_list:
             response["my_batches"].append({"id": bid, "name": name, "type": "Free Channel", "status": "Joined", "category": batch_cats.get(str(bid), "Other Batches")})
-                 
+            
     for bid, name in DB.get("PAID_CHANNELS", {}).items():
         bid_str = str(bid)
         is_joined = int(bid) in joined_list or bid_str in joined_list
@@ -459,19 +463,19 @@ async def tb_extract_proxy(test_id):
         return jsonify({"error": q_data['error']}), 400
     from html_generator import generate_html
     details = {
-        "Test Series": data.get('series_details', {}).get('name', 'N/A'),
-        "Section": data.get('section', {}).get('name', 'N/A'),
-        "Subsection": data.get('subsection', {}).get('name', 'N/A'),
-        "Test Name": data.get('test_summary', {}).get('title', 'N/A'),
-        "Questions": str(data.get('test_summary', {}).get('questionCount', '?')),
-        "Duration": f"{data.get('test_summary', {}).get('duration', 'N/A')} minutes",
-        "Total Marks": str(data.get('test_summary', {}).get('totalMark', 'N/A')),
+        "Test Series": (data.get('series_details') or {}).get('name', 'N/A'),
+        "Section": (data.get('section') or {}).get('name', 'N/A'),
+        "Subsection": (data.get('subsection') or {}).get('name', 'N/A'),
+        "Test Name": (data.get('test_summary') or {}).get('title', 'N/A'),
+        "Questions": str((data.get('test_summary') or {}).get('questionCount', '?')),
+        "Duration": f"{(data.get('test_summary') or {}).get('duration', 'N/A')} minutes",
+        "Total Marks": str((data.get('test_summary') or {}).get('totalMark', 'N/A')),
         "Correct": "+1",
         "Incorrect": "-0.25" 
     }
     html_content = generate_html(q_data, details)
     return html_content, 200, {'Content-Type': 'text/html'}
-
+    
 @app.route('/api/submit_tb_test', methods=['POST'])
 async def submit_tb_test():
     data = await request.json
@@ -550,14 +554,17 @@ async def api_owner_users(req_user_id):
 @app.route('/api/owner/action', methods=['POST'])
 async def api_owner_action():
     from quart import request
+    from pyrogram.errors import FloodWait
+    import asyncio
+    
     data = await request.json
     req_user_id = data.get('req_user_id')
     action = data.get('action')
     target_uid = int(data.get('target_uid'))
-         
+    
     if str(req_user_id) != str(OWNER_ID) and req_user_id != OWNER_ID:
         return jsonify({"error": "Unauthorized"}), 403
-             
+        
     bot = getattr(config, 'bot_app', None)
     if not bot:
         return jsonify({"error": "Bot not ready"}), 503
@@ -571,7 +578,7 @@ async def api_owner_action():
         except Exception:
             pass
         return jsonify({"success": True})
-             
+        
     elif action == "kick":
         batch_id = int(data.get('batch_id'))
         try:
@@ -582,7 +589,19 @@ async def api_owner_action():
                     del DB["USER_DATA"][target_uid]["demos"][str(batch_id)]
             asyncio.create_task(config.save_data_async())
             return jsonify({"success": True})
+        except FloodWait as e:
+            await asyncio.sleep(e.value + 1)
+            try:
+                await bot.ban_chat_member(batch_id, target_uid)
+                await bot.unban_chat_member(batch_id, target_uid)
+                if target_uid in DB.get("USER_DATA", {}) and "demos" in DB["USER_DATA"][target_uid]:
+                    if str(batch_id) in DB["USER_DATA"][target_uid]["demos"]:
+                        del DB["USER_DATA"][target_uid]["demos"][str(batch_id)]
+                asyncio.create_task(config.save_data_async())
+                return jsonify({"success": True})
+            except Exception as final_e:
+                return jsonify({"error": f"Failed after retry: {str(final_e)}"}), 500
         except Exception as e:
             return jsonify({"error": str(e)}), 500
-                 
+            
     return jsonify({"error": "Invalid Action"}), 400
