@@ -41,7 +41,6 @@ _BOT_SELF_ID = None
 GLOBAL_LINK_COOLDOWN = 15 * 60   # Rule A: 15 minutes between ANY link generation
 ACTIVE_LINK_TTL = 60             # Rule B: matches the 60s invite-link expiry
 
-
 def get_cooldown_remaining(uid: int) -> int:
   """Rule A: returns remaining whole minutes of the global cooldown (0 = clear)."""
   entry = DB.get("PENDING_REQUESTS", {}).get(str(uid))
@@ -53,7 +52,6 @@ def get_cooldown_remaining(uid: int) -> int:
     return 0
   return max(1, int(remaining // 60) + (1 if remaining % 60 else 0))
 
-
 def has_active_request(uid: int, cid: int) -> bool:
   """Rule B: True if this user still has a live pending link for this exact batch."""
   entry = DB.get("PENDING_REQUESTS", {}).get(str(uid))
@@ -61,7 +59,6 @@ def has_active_request(uid: int, cid: int) -> bool:
     return False
   exp = entry.get("active_batches", {}).get(str(cid))
   return bool(exp and time.time() < exp)
-
 
 def register_link_request(uid: int, cid: int):
   """Call this the moment a link is successfully generated (free or paid)."""
@@ -73,13 +70,11 @@ def register_link_request(uid: int, cid: int):
   entry["active_batches"][str(cid)] = now + ACTIVE_LINK_TTL
   asyncio.create_task(save_data_async())
 
-
 def clear_active_request(uid, cid):
   """Call this when an admin approves/rejects a request early, freeing the slot."""
   entry = DB.get("PENDING_REQUESTS", {}).get(str(uid))
   if entry and str(cid) in entry.get("active_batches", {}):
     del entry["active_batches"][str(cid)]
-
 
 # --- HELPER: COMMAND ARGUMENTS EXTRACTOR ---
 def get_args(message: Message):
@@ -91,20 +86,12 @@ def get_args(message: Message):
     return message.text.split()
   return []
 
-
 # --- HELPER: CRASH-SAFE SENDER CHECKS (Anonymous Admin / Linked-Channel safe) ---
-# 🔥 FIX: message.from_user is None whenever a message is sent by an
-# "Anonymous Admin" (group setting) or on behalf of a linked channel.
-# Every command handler used to read message.from_user.id directly, which
-# raised AttributeError: 'NoneType' object has no attribute 'id' the moment
-# any admin sent a command that way (very common in supergroups where admins
-# default to posting anonymously). These two helpers centralize the safe
-# check so no handler has to touch message.from_user.id without a guard.
 def is_admin_msg(message: Message) -> bool:
   """
   Admin check that never crashes on Anonymous Admin / linked-channel posts.
   Telegram only lets a chat's own admins send as "the group itself" or via
-  a linked channel signature — a regular member can never trigger this —
+  a linked channel signature   a regular member can never trigger this 
   so inside our own Support Group we trust an Anonymous Admin post as an
   authorized admin action (this is what lets an anonymous admin's /del
   still work). Everywhere else we have no user id to verify against
@@ -114,25 +101,112 @@ def is_admin_msg(message: Message) -> bool:
     return is_admin(message.from_user.id)
   return bool(message.sender_chat) and str(message.chat.id) == str(SUPPORT_GROUP_ID)
 
-
 def is_owner_msg(message: Message) -> bool:
   """Owner check that's crash-safe against Anonymous Admin / linked-channel posts."""
   return bool(message.from_user) and str(message.from_user.id) == str(OWNER_ID)
 
-
 # --- HELPER: ROBUST MEMBERSHIP CHECKS FOR PYROGRAM ---
 async def check_membership_pyro(uid: int, client: Client):
-  # 🚀 PERFORMANCE: now backed by config.get_membership_cached() — a 30s
-  # TTL cache shared across every caller in the app (bot callbacks AND the
-  # web dashboard), instead of a fresh get_chat_member() every single time.
   if not MANDATORY_CHANNEL_ID:
     return True
   return await get_membership_cached(client, MANDATORY_CHANNEL_ID, uid)
 
-
 async def is_already_in_channel_pyro(client: Client, cid: int, uid: int):
   return await get_membership_cached(client, cid, uid)
 
+# --- NEW HELPERS: DEEP-LINK PROCESSING FROM WEB APP ---
+async def process_deep_link_free(client: Client, message: Message, cid: int):
+  uid = message.from_user.id
+  if await is_already_in_channel_pyro(client, cid, uid):
+    return await message.reply_text("  Already Joined!")
+  cooldown_left = get_cooldown_remaining(uid)
+  if cooldown_left > 0:
+    return await message.reply_text("  Please wait 15 minutes before requesting another link.")
+  if has_active_request(uid, cid):
+    return await message.reply_text("  You already have an active request/link for this batch!")
+  try:
+    bname = DB["ALL_CHATS"].get(cid, f"Batch {cid}")
+    l = await client.create_chat_invite_link(
+        cid,
+        creates_join_request=True,
+        name=f"Free-{uid}",
+        expire_date=datetime.now() + timedelta(seconds=60),
+    )
+    register_link_request(uid, cid)
+    kb = [[InlineKeyboardButton("  Join Batch", url=l.invite_link)]]
+    sent_msg = await message.reply_text(
+        f"  <b>Link Generated!</b>\n\n<b>{bname}</b>\n\n  <i>Request auto-approved.</i>\n  <i>(Expires in 1 min)</i>",
+        reply_markup=InlineKeyboardMarkup(kb),
+        parse_mode=ParseMode.HTML,
+    )
+    await schedule_delete(client, sent_msg, delay=60)
+  except Exception as e:
+    await message.reply_text(f"Bot Error: {e}")
+
+async def process_deep_link_paid(client: Client, message: Message, cid: int):
+  uid = message.from_user.id
+  if DB.get("PAID_LOCKED", False):
+    return await message.reply_text("Sorry, but at this moment the paid batch is locked. When it will unlock I will inform you.")
+  if not await check_membership_pyro(uid, client):
+    return await message.reply_text("  Join Main First!")
+  if await is_already_in_channel_pyro(client, cid, uid):
+    return await message.reply_text("  Already joined!")
+  cooldown_left = get_cooldown_remaining(uid)
+  if cooldown_left > 0:
+    return await message.reply_text("  Please wait 15 minutes before requesting another link.")
+  if has_active_request(uid, cid):
+    return await message.reply_text("  You already have an active request/link for this batch!")
+  
+  msg = await message.reply_text("  Generating Link...")
+  try:
+    bname = DB["ALL_CHATS"].get(cid, f"Batch {cid}")
+    l = await client.create_chat_invite_link(
+        cid,
+        creates_join_request=True,
+        name=f"Req-{uid}",
+        expire_date=datetime.now() + timedelta(seconds=60),
+    )
+    DB["LINK_MAP"][l.invite_link] = {"u": uid, "b": cid}
+    register_link_request(uid, cid)
+    await save_data_async()
+    
+    topic_id = await get_or_create_topic(message.from_user, client)
+    if topic_id:
+      notification_text = (
+          f"  <b>NEW REQUEST</b>\n"
+          f"  User: {message.from_user.mention}\n"
+          f"  Batch: <b>{bname}</b>\n"
+          f"  Link: {l.invite_link}\n\n"
+          f"  <b>Action:</b>\n"
+          f"/demo {l.invite_link}\n"
+          f"/per {l.invite_link}"
+      )
+      try:
+        await client.send_message(
+            int(SUPPORT_GROUP_ID),
+            notification_text,
+            message_thread_id=topic_id,
+            parse_mode=ParseMode.HTML,
+        )
+      except TypeError:
+        await client.send_message(
+            int(SUPPORT_GROUP_ID),
+            notification_text,
+            reply_to_message_id=topic_id,
+            parse_mode=ParseMode.HTML,
+        )
+      except Exception as e:
+        print(f"Admin notification failed: {e}")
+    
+    kb = [[InlineKeyboardButton("  Request Access", url=l.invite_link)]]
+    await msg.edit_text(
+        f"  <b>Access Link Generated!</b>\n\n<b>{bname}</b>\n\n  <b>Sent to Admin.</b> Wait for approval.\n  <i>(Expires in 1 min)</i>",
+        reply_markup=InlineKeyboardMarkup(kb),
+        parse_mode=ParseMode.HTML,
+    )
+    await schedule_delete(client, msg, delay=60)
+  except Exception as e:
+    await msg.edit_text(f"  Error: {e}")
 
 # --- MENU SETTERS ---
 async def set_role_based_commands(user_id: int, client: Client):
@@ -157,7 +231,6 @@ async def set_role_based_commands(user_id: int, client: Client):
   except Exception:
     pass
 
-
 # --- COMMANDS ---
 async def cmd_add_admin(client: Client, message: Message):
   if not is_owner_msg(message):
@@ -165,7 +238,7 @@ async def cmd_add_admin(client: Client, message: Message):
   args = get_args(message)
   if not args:
     return await message.reply_text("  Usage: /addadmin <user_id>")
-    
+       
   try:
     new_admin = int(args[0])
     if new_admin not in DB["ADMIN_IDS"]:
@@ -183,7 +256,7 @@ async def cmd_del_admin(client: Client, message: Message):
   args = get_args(message)
   if not args:
     return await message.reply_text("  Usage: /deladmin <user_id>")
-    
+       
   try:
     target = int(args[0])
     if target in DB["ADMIN_IDS"]:
@@ -195,28 +268,23 @@ async def cmd_del_admin(client: Client, message: Message):
   except Exception as e:
     await message.reply_text(f"  Error removing admin: {e}")
 
-
 async def cmd_userbotphone(client: Client, message: Message):
   if not is_owner_msg(message):
       return
   uid = message.from_user.id
-
   if not API_ID or API_ID == 0:
     return await message.reply_text(
-        "❌ **API_ID Missing!** Kripya Cloud Dashboard me API_ID theek karein.",
+        "  **API_ID Missing!** Kripya Cloud Dashboard me API_ID theek karein.",
         parse_mode=ParseMode.MARKDOWN,
     )
-
   phone = message.text.split(" ", 1)[-1].replace(" ", "").strip()
   msg = await message.reply_text(
-      "⏳ OTP request bhej raha hu, kripya wait karein..."
+      "  OTP request bhej raha hu, kripya wait karein..."
   )
-
   temp_client = Client(
       "temp_login", api_id=API_ID, api_hash=API_HASH, in_memory=True
   )
   await temp_client.connect()
-
   try:
     sent_code = await temp_client.send_code(phone)
     if not hasattr(client, "user_data_store"):
@@ -226,93 +294,79 @@ async def cmd_userbotphone(client: Client, message: Message):
     client.user_data_store["phone_code_hash"] = sent_code.phone_code_hash
     ADMIN_WIZARD[uid] = {"step": "call_cmd_userbototp"}
     await msg.edit_text(
-        "✅ **OTP Bhej diya gaya hai!**\n\nKripya apna OTP yahan type karein.\n⚠️"
-        " **DHYAN DEIN:** OTP space lagakar likhein (Example: `1 2 3 4 5`)",
+        "  **OTP Bhej diya gaya hai!**\n\nKripya apna OTP yahan type karein.\n"
+        "**DHYAN DEIN:** OTP space lagakar likhein (Example: `1 2 3 4 5`)",
         parse_mode=ParseMode.MARKDOWN,
     )
   except Exception as e:
     await temp_client.disconnect()
-    await msg.edit_text(f"❌ Error: `{e}`", parse_mode=ParseMode.MARKDOWN)
-
+    await msg.edit_text(f"  Error: `{e}`", parse_mode=ParseMode.MARKDOWN)
 
 async def cmd_userbototp(client: Client, message: Message):
   if not is_owner_msg(message):
       return
   uid = message.from_user.id
-
   otp = message.text.split(" ", 1)[-1].replace(" ", "").replace("-", "").strip()
   user_store = getattr(client, "user_data_store", {})
   phone = user_store.get("login_phone")
   phone_code_hash = user_store.get("phone_code_hash")
   temp_client = user_store.get("login_client")
-
   if not phone or not phone_code_hash or not temp_client:
     return await message.reply_text(
-        "❌ Session expire ho gaya. Kripya wapas login par click karein."
+        "  Session expire ho gaya. Kripya wapas login par click karein."
     )
-
-  msg = await message.reply_text("⏳ OTP Verify kar raha hu...")
-
+  msg = await message.reply_text("  OTP Verify kar raha hu...")
   try:
     await temp_client.sign_in(phone, phone_code_hash, otp)
     session_string = await temp_client.export_session_string()
     DB["USERBOT_SESSION"] = session_string
     DB["USERBOT_PHONE"] = phone
     await save_data_async()
-
     await temp_client.disconnect()
     user_store.pop("login_client", None)
     user_store.pop("login_phone", None)
     user_store.pop("phone_code_hash", None)
-
     await msg.edit_text(
-        "🎉 **LOGIN SUCCESSFUL!**\n\nBina 2FA ke Session Database me save ho gaya"
+        "  **LOGIN SUCCESSFUL!**\n\nBina 2FA ke Session Database me save ho gaya"
         " hai.",
         parse_mode=ParseMode.MARKDOWN,
     )
   except SessionPasswordNeeded:
     ADMIN_WIZARD[uid] = {"step": "call_cmd_userbotpass"}
     await msg.edit_text(
-        "🔒 **2-Step Verification Detected!**\n\nIs account me 2FA on hai."
+        "  **2-Step Verification Detected!**\n\nIs account me 2FA on hai."
         " Kripya apna **2FA Password** type karein:",
         parse_mode=ParseMode.MARKDOWN,
     )
   except Exception as e:
     await temp_client.disconnect()
     user_store.pop("login_client", None)
-    await msg.edit_text(f"❌ OTP Error: `{e}`", parse_mode=ParseMode.MARKDOWN)
-
+    await msg.edit_text(f"  OTP Error: `{e}`", parse_mode=ParseMode.MARKDOWN)
 
 async def cmd_userbotpass(client: Client, message: Message):
   if not is_owner_msg(message):
       return
   uid = message.from_user.id
-
   password = message.text.split(" ", 1)[-1].strip()
   user_store = getattr(client, "user_data_store", {})
   phone = user_store.get("login_phone")
   temp_client = user_store.get("login_client")
-
   if not phone or not temp_client:
     return await message.reply_text(
-        "❌ Session expire ho gaya. Kripya wapas login par click karein."
+        "  Session expire ho gaya. Kripya wapas login par click karein."
     )
-
-  msg = await message.reply_text("⏳ Password check kar raha hu...")
-
+  msg = await message.reply_text("  Password check kar raha hu...")
   try:
     await temp_client.check_password(password)
     session_string = await temp_client.export_session_string()
     DB["USERBOT_SESSION"] = session_string
     DB["USERBOT_PHONE"] = phone
     await save_data_async()
-
     await temp_client.disconnect()
     user_store.pop("login_client", None)
     user_store.pop("login_phone", None)
-
     await msg.edit_text(
-        "🎉 **LOGIN SUCCESSFUL!**\n\n2FA Password verified. Session save ho gaya"
+        "  **LOGIN SUCCESSFUL!**\n\n2FA Password verified. Session save ho gaya"
         " hai.",
         parse_mode=ParseMode.MARKDOWN,
     )
@@ -320,14 +374,12 @@ async def cmd_userbotpass(client: Client, message: Message):
     await temp_client.disconnect()
     user_store.pop("login_client", None)
     await msg.edit_text(
-        f"❌ Password Error: `{e}`", parse_mode=ParseMode.MARKDOWN
+        f"  Password Error: `{e}`", parse_mode=ParseMode.MARKDOWN
     )
-
 
 async def cmd_del_msg(client: Client, message: Message):
   if not is_admin_msg(message) or not message.reply_to_message:
     return
-
   key = (message.chat.id, message.reply_to_message.id)
   if key in MESSAGE_MAP:
     tc, tm = MESSAGE_MAP[key]
@@ -340,7 +392,7 @@ async def cmd_del_msg(client: Client, message: Message):
         del MESSAGE_MAP[(tc, tm)]
     except Exception as e:
       logger.error(f"Error deleting message: {e}")
-      msg = await message.reply_text(f"⚠️ Delete failed: {e}")
+      msg = await message.reply_text(f"  Delete failed: {e}")
       await schedule_delete(client, msg)
   else:
     try:
@@ -349,28 +401,24 @@ async def cmd_del_msg(client: Client, message: Message):
     except Exception as e:
       logger.error(f"Delete failed: {e}")
 
-
 async def cmd_emptybatch(client: Client, message: Message):
   if not is_admin_msg(message):
     return
   args = get_args(message)
   if not args:
     return
-
   try:
     cid = int(args[0])
   except ValueError:
-    return await message.reply_text("❌ Error: Valid Batch ID bhejein.")
-
+    return await message.reply_text("  Error: Valid Batch ID bhejein.")
   session_string = DB.get("USERBOT_SESSION")
   if not session_string or not API_ID:
     return await message.reply_text(
-        "❌ **Userbot Not Logged In!** Pehle Owner dashboard se login karein.",
+        "  **Userbot Not Logged In!** Pehle Owner dashboard se login karein.",
         parse_mode=ParseMode.MARKDOWN,
     )
-
   msg = await message.reply_text(
-      f"⏳ **Emptying Batch `{cid}`...**\nUserbot start ho raha hai. Isme thoda"
+      f"  **Emptying Batch `{cid}`...**\nUserbot start ho raha hai. Isme thoda"
       " time lag sakta hai, please wait.",
       parse_mode=ParseMode.MARKDOWN,
   )
@@ -381,14 +429,13 @@ async def cmd_emptybatch(client: Client, message: Message):
       session_string=session_string,
       in_memory=True,
   )
-
   try:
     await userbot.start()
     try:
       await userbot.get_chat(cid)
     except Exception:
       await msg.edit_text(
-          "🔄 **Userbot Syncing...**\nChat list ko memory me load kar raha hu"
+          "  **Userbot Syncing...**\nChat list ko memory me load kar raha hu"
           " taaki ID mil sake. Isme 5-10 seconds lag sakte hain...",
           parse_mode=ParseMode.MARKDOWN,
       )
@@ -396,11 +443,10 @@ async def cmd_emptybatch(client: Client, message: Message):
         if dialog.chat.id == cid:
           break
       await msg.edit_text(
-          f"⏳ **Emptying Batch `{cid}`...**\nSync complete! Ab members remove"
+          f"  **Emptying Batch `{cid}`...**\nSync complete! Ab members remove"
           " kar raha hu...",
           parse_mode=ParseMode.MARKDOWN,
       )
-
     removed_count = 0
     async for member in userbot.get_chat_members(cid):
       uid = member.user.id
@@ -409,51 +455,28 @@ async def cmd_emptybatch(client: Client, message: Message):
           await client.ban_chat_member(cid, uid)
           await client.unban_chat_member(cid, uid)
           removed_count += 1
-
           if uid in DB["USER_DATA"] and "demos" in DB["USER_DATA"][uid]:
             if str(cid) in DB["USER_DATA"][uid]["demos"]:
               del DB["USER_DATA"][uid]["demos"][str(cid)]
-
           await asyncio.sleep(1.5)
         except Exception:
           pass
-
     await save_data_async()
     await userbot.stop()
     await msg.edit_text(
-        f"✅ **Batch `{cid}` Pura Khali Ho Gaya!**\n\nTotal `{removed_count}`"
+        f"  **Batch `{cid}` Pura Khali Ho Gaya!**\n\nTotal `{removed_count}`"
         " users ko remove kiya aur DB se clean kar diya.",
         parse_mode=ParseMode.MARKDOWN,
     )
   except Exception as e:
-    await msg.edit_text(f"❌ Error: `{e}`", parse_mode=ParseMode.MARKDOWN)
-
-
-async def cmd_del_admin(client: Client, message: Message):
-  if not is_owner_msg(message):
-    return
-  args = get_args(message)
-  if not args:
-    return
-  try:
-    target = int(args[0])
-    if target in DB["ADMIN_IDS"]:
-      DB["ADMIN_IDS"].remove(target)
-      await save_data_async()
-      await message.reply_text(
-          f"🗑 User `{target}` removed.", parse_mode=ParseMode.MARKDOWN
-      )
-  except Exception:
-    pass
-
+    await msg.edit_text(f"  Error: `{e}`", parse_mode=ParseMode.MARKDOWN)
 
 async def cmd_sync(client: Client, message: Message):
   if not is_admin_msg(message):
     return
-  msg = await message.reply_text("🔄 Background sync started manually.")
+  msg = await message.reply_text("  Background sync started manually.")
   asyncio.create_task(background_sync(client))
   await schedule_delete(client, msg)
-
 
 async def cmd_joinall(client: Client, message: Message):
   if not is_owner_msg(message):
@@ -461,9 +484,9 @@ async def cmd_joinall(client: Client, message: Message):
   session_string = DB.get("USERBOT_SESSION")
   if not session_string or not API_ID:
     return await message.reply_text(
-        "❌ Error: Userbot not logged in. Owner dashboard se login karein."
+        "  Error: Userbot not logged in. Owner dashboard se login karein."
     )
-  msg = await message.reply_text("⏳ Auto-joining userbot...")
+  msg = await message.reply_text("  Auto-joining userbot...")
   userbot = Client(
       "temp_bot",
       api_id=API_ID,
@@ -476,8 +499,7 @@ async def cmd_joinall(client: Client, message: Message):
     userbot_id = (await userbot.get_me()).id
     await userbot.stop()
   except Exception as e:
-    return await msg.edit_text(f"❌ Error: {e}")
-
+    return await msg.edit_text(f"  Error: {e}")
   all_chats = (
       [MANDATORY_CHANNEL_ID]
       + list(DB["FREE_CHANNELS"].keys())
@@ -498,11 +520,10 @@ async def cmd_joinall(client: Client, message: Message):
     except Exception:
       failed += 1
   await msg.edit_text(
-      f"✅ **Auto-Join Process Pura Hua!**\nSuccess: `{success}`\nFailed:"
+      f"  **Auto-Join Process Pura Hua!**\nSuccess: `{success}`\nFailed:"
       f" `{failed}`",
       parse_mode=ParseMode.MARKDOWN,
   )
-
 
 async def cmd_lockpaid(client: Client, message: Message):
   if not is_admin_msg(message):
@@ -510,25 +531,24 @@ async def cmd_lockpaid(client: Client, message: Message):
   DB["PAID_LOCKED"] = not DB.get("PAID_LOCKED", False)
   await save_data_async()
   await message.reply_text(
-      "Paid Batches **LOCKED 🔐**."
+      "Paid Batches **LOCKED  **."
       if DB["PAID_LOCKED"]
-      else "Paid Batches **UNLOCKED 🔓**.",
+      else "Paid Batches **UNLOCKED  **.",
       parse_mode=ParseMode.MARKDOWN,
   )
-
 
 async def cmd_id(client: Client, message: Message):
   chat, user = message.chat, message.from_user
   text = (
-      f"👤 **Your User ID:** `{user.id}`"
+      f"  **Your User ID:** `{user.id}`"
       if chat.type == ChatType.PRIVATE and user
-      else f"🆔 **Chat ID:** `{chat.id}`"
+      else f"  **Chat ID:** `{chat.id}`"
   )
   if chat.type != ChatType.PRIVATE:
     if message.message_thread_id:
-      text += f"\n🧵 **Topic ID:** `{message.message_thread_id}`"
+      text += f"\n  **Topic ID:** `{message.message_thread_id}`"
     if user:
-      text += f"\n👤 **User ID:** `{user.id}`"
+      text += f"\n  **User ID:** `{user.id}`"
   try:
     await message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
   except Exception:
@@ -536,10 +556,8 @@ async def cmd_id(client: Client, message: Message):
   if user and is_admin(user.id):
     await schedule_delete(client, message)
 
-
 async def cmd_start(client: Client, message: Message):
   await start(client, message)
-
 
 async def cmd_backup(client: Client, message: Message):
   if not is_owner_msg(message):
@@ -547,7 +565,6 @@ async def cmd_backup(client: Client, message: Message):
   save_data_sync()
   if os.path.exists(DATA_FILE):
     await message.reply_document(document=DATA_FILE, caption="DB Backup")
-
 
 async def cmd_all_users(client: Client, message: Message):
   if not is_owner_msg(message):
@@ -561,9 +578,8 @@ async def cmd_all_users(client: Client, message: Message):
     report += f"{uid} | {data.get('name')} | @{data.get('username')}\n"
   f = io.BytesIO(report.encode("utf-8"))
   f.name = "all_users.txt"
-  f.seek(0) # <--- YEH LINE ADD KAREIN
+  f.seek(0) 
   await message.reply_document(document=f, caption="  All Users List")
-
 
 async def cmd_ban(client: Client, message: Message):
   if not is_admin_msg(message):
@@ -578,29 +594,24 @@ async def cmd_ban(client: Client, message: Message):
   if target not in DB["BLOCKED_USERS"] and target != OWNER_ID:
     await execute_universal_kick(target, client, permanent_ban=True)
     await message.reply_text(
-        f"🚫 User `{target}` BANNED.", parse_mode=ParseMode.MARKDOWN
+        f"  User `{target}` BANNED.", parse_mode=ParseMode.MARKDOWN
     )
-
 
 async def cmd_unban(client: Client, message: Message):
   if not is_admin_msg(message):
     return
-
   args = get_args(message)
   target_id = args[0] if args else None
   if not target_id and message.text and len(message.text.split()) > 1:
     target_id = message.text.split()[1].strip()
-
   if not target_id:
-    return await message.reply_text("❌ Error: Kripya ek User ID bhejein.")
-
+    return await message.reply_text("  Error: Kripya ek User ID bhejein.")
   try:
     target = int(target_id)
   except (ValueError, TypeError):
     return await message.reply_text(
-        "❌ Error: Kripya ek valid Numeric User ID bhejein."
+        "  Error: Kripya ek valid Numeric User ID bhejein."
     )
-
   modified = False
   if target in DB.get("BLOCKED_USERS", []):
     DB["BLOCKED_USERS"].remove(target)
@@ -608,7 +619,6 @@ async def cmd_unban(client: Client, message: Message):
   if str(target) in DB.get("BLOCKED_USERS", []):
     DB["BLOCKED_USERS"].remove(str(target))
     modified = True
-
   user_key = (
       target
       if target in DB["USER_DATA"]
@@ -619,19 +629,16 @@ async def cmd_unban(client: Client, message: Message):
   if user_key:
     DB["USER_DATA"][user_key]["tnc_accepted"] = False
     modified = True
-
   if modified:
     await save_data_async()
-    db_msg = "✅ Database se unban kiya gaya aur Profile reset kar di gayi."
+    db_msg = "  Database se unban kiya gaya aur Profile reset kar di gayi."
   else:
-    db_msg = "ℹ️ Database me pehle se unbanned tha."
-
+    db_msg = "  Database me pehle se unbanned tha."
   all_channels = list(DB.get("FREE_CHANNELS", {}).keys()) + list(
       DB.get("PAID_CHANNELS", {}).keys()
   )
   if MANDATORY_CHANNEL_ID:
     all_channels.append(MANDATORY_CHANNEL_ID)
-
   success_count = 0
   for bid in all_channels:
     try:
@@ -639,13 +646,11 @@ async def cmd_unban(client: Client, message: Message):
       success_count += 1
     except Exception:
       pass
-
   await message.reply_text(
-      f"✅ **User `{target}` Successfully Unbanned!**\n{db_msg}\n📢"
+      f"  **User `{target}` Successfully Unbanned!**\n{db_msg}\n"
       f" `{success_count}` channels/groups se unban request bheji gayi.",
       parse_mode=ParseMode.MARKDOWN,
   )
-
 
 async def cmd_reset_user(client: Client, message: Message):
   if not is_admin_msg(message):
@@ -662,9 +667,8 @@ async def cmd_reset_user(client: Client, message: Message):
       DB["BLOCKED_USERS"].remove(target_uid)
     await save_data_async()
     await message.reply_text(
-        f"✅ User `{target_uid}` reset.", parse_mode=ParseMode.MARKDOWN
+        f"  User `{target_uid}` reset.", parse_mode=ParseMode.MARKDOWN
     )
-
 
 async def cmd_find_user(client: Client, message: Message):
   if not is_admin_msg(message):
@@ -676,12 +680,11 @@ async def cmd_find_user(client: Client, message: Message):
   found = []
   for uid, data in DB["USER_DATA"].items():
     if query in data.get("username", "").lower():
-      found.append(f"🆔 `{uid}` | @{data.get('username', '')}")
+      found.append(f"  `{uid}` | @{data.get('username', '')}")
   await message.reply_text(
-      "🔍 **Found:**\n\n" + "\n".join(found) if found else "❌ Not found.",
+      "  **Found:**\n\n" + "\n".join(found) if found else "  Not found.",
       parse_mode=ParseMode.MARKDOWN,
   )
-
 
 async def cmd_addcat(client: Client, message: Message):
   if not is_admin_msg(message):
@@ -694,8 +697,7 @@ async def cmd_addcat(client: Client, message: Message):
   if new_cat not in categories:
     DB["CATEGORIES"].append(new_cat)
     await save_data_async()
-  await message.reply_text(f"✅ Added Category: {new_cat}")
-
+  await message.reply_text(f"  Added Category: {new_cat}")
 
 async def cmd_setcategory(client: Client, message: Message):
   if not is_admin_msg(message):
@@ -703,48 +705,43 @@ async def cmd_setcategory(client: Client, message: Message):
   raw_text = message.text or message.caption or ""
   ids = re.findall(r"-?\d+", raw_text)
   if not ids:
-    return await message.reply_text("❌ Error: Koi valid ID nahi mili.")
-
+    return await message.reply_text("  Error: Koi valid ID nahi mili.")
   if not hasattr(client, "user_data_store"):
     client.user_data_store = {}
   client.user_data_store["setcat_ids"] = ids
-
   kb = [
       [InlineKeyboardButton(c, callback_data=f"setextcat_{i}")]
       for i, c in enumerate(DB.get("CATEGORIES", DEFAULT_CATEGORIES))
   ]
   await message.reply_text(
-      f"📁 **{len(ids)} Batches** detect hue hain.\nIn sabhi ke liye nayi"
+      f"  **{len(ids)} Batches** detect hue hain.\nIn sabhi ke liye nayi"
       " category select karein:",
       reply_markup=InlineKeyboardMarkup(kb),
       parse_mode=ParseMode.MARKDOWN,
   )
 
-
 async def cmd_delcat(client: Client, message: Message):
   if not is_admin_msg(message):
     return
   kb = [
-      [InlineKeyboardButton(f"🗑 Delete: {c}", callback_data=f"delcat_{i}")]
+      [InlineKeyboardButton(f"  Delete: {c}", callback_data=f"delcat_{i}")]
       for i, c in enumerate(DB.get("CATEGORIES", DEFAULT_CATEGORIES))
       if c != "Other Batches"
   ]
-  kb.append([InlineKeyboardButton("❌ Cancel", callback_data="dash_home")])
+  kb.append([InlineKeyboardButton("  Cancel", callback_data="dash_home")])
   await message.reply_text(
-      "🗑 **Delete Category:**",
+      "  **Delete Category:**",
       reply_markup=InlineKeyboardMarkup(kb),
       parse_mode=ParseMode.MARKDOWN,
   )
 
-
 async def cmd_batch_stats(client: Client, message: Message):
   if not is_admin_msg(message):
     return
-  msg = await message.reply_text("⏳ Calculating...")
+  msg = await message.reply_text("  Calculating...")
   batches = {**DB["FREE_CHANNELS"], **DB["PAID_CHANNELS"]}
-
-  # 🚀 PERFORMANCE: previously awaited get_chat_members_count() one batch
-  # at a time — N sequential Telegram round-trips for N channels. Firing
+  #   PERFORMANCE: previously awaited get_chat_members_count() one batch
+  # at a time   N sequential Telegram round-trips for N channels. Firing
   # them concurrently via asyncio.gather turns total wait time from
   # O(N * latency) into roughly O(latency), regardless of how many
   # batches the bot manages.
@@ -753,14 +750,11 @@ async def cmd_batch_stats(client: Client, message: Message):
       return await client.get_chat_members_count(int(cid))
     except Exception:
       return "N/A"
-
   counts = await asyncio.gather(*[_count(cid) for cid in batches.keys()])
-
-  text = "📊 **BATCH STATS**\n\n"
+  text = "  **BATCH STATS**\n\n"
   for (cid, name), count in zip(batches.items(), counts):
-    text += f"📂 **{name}** | ID: `{cid}` | Members: `{count}`\n"
+    text += f"  **{name}** | ID: `{cid}` | Members: `{count}`\n"
   await msg.edit_text(text, parse_mode=ParseMode.MARKDOWN)
-
 
 async def cmd_set_welcome(client: Client, message: Message):
   if not is_admin_msg(message):
@@ -770,8 +764,7 @@ async def cmd_set_welcome(client: Client, message: Message):
     return
   DB["CUSTOM_WELCOMES"][int(args[0])] = " ".join(args[1:])
   await save_data_async()
-  await message.reply_text("✅ Welcome Set.")
-
+  await message.reply_text("  Welcome Set.")
 
 async def cmd_set_testbot(client: Client, message: Message):
   if not is_admin_msg(message):
@@ -781,8 +774,7 @@ async def cmd_set_testbot(client: Client, message: Message):
     return
   DB["TEST_BOT_LINK"] = args[0]
   await save_data_async()
-  await message.reply_text("✅ Test bot link updated.")
-
+  await message.reply_text("  Test bot link updated.")
 
 async def cmd_extend_demo(client: Client, message: Message):
   if not is_admin_msg(message):
@@ -803,8 +795,7 @@ async def cmd_extend_demo(client: Client, message: Message):
         "warned": False,
     }
     await save_data_async()
-    await message.reply_text("✅ Extended.")
-
+    await message.reply_text("  Extended.")
 
 async def cmd_kick_user(client: Client, message: Message):
   if not is_admin_msg(message):
@@ -812,7 +803,7 @@ async def cmd_kick_user(client: Client, message: Message):
   args = get_args(message)
   if len(args) < 2:
     return await message.reply_text("  Usage: /kick <user_id> <batch_id>")
-    
+       
   uid, bid = int(args[0]), int(args[1])
   try:
     await client.ban_chat_member(bid, uid)
@@ -824,14 +815,12 @@ async def cmd_kick_user(client: Client, message: Message):
   except Exception as e:
     await message.reply_text(f"  Kick failed: {e}")
 
-
 async def cmd_myinfo(client: Client, message: Message):
   if not message.from_user:
     return
   uid = message.from_user.id
-  txt = f"👤 **MY INFO**\n🆔 ID: `{uid}`\n"
+  txt = f"  **MY INFO**\n  ID: `{uid}`\n"
   await message.reply_text(txt, parse_mode=ParseMode.MARKDOWN)
-
 
 async def cmd_approve_demo(client: Client, message: Message):
   if not is_admin_msg(message):
@@ -839,7 +828,6 @@ async def cmd_approve_demo(client: Client, message: Message):
   args = get_args(message)
   link = None
   hours = 3.0
-  
   if message.reply_to_message:
     replied = message.reply_to_message
     msg_text = replied.text or replied.caption or ""
@@ -851,7 +839,7 @@ async def cmd_approve_demo(client: Client, message: Message):
         hours = float(args[0].lower().replace("h", ""))
       except:
         pass
-        
+           
   if not link and args:
     for arg in args:
       if "t.me" in arg:
@@ -861,20 +849,19 @@ async def cmd_approve_demo(client: Client, message: Message):
           hours = float(arg.lower().replace("h", ""))
         except:
           pass
-          
+             
   if not link:
     return await message.reply_text("  Error: Link nahi mila.")
-    
+       
   ld = DB.get("LINK_MAP", {}).get(link)
   if not ld:
     return await message.reply_text("  Error: Ye link database me registered nahi hai.")
-    
+       
   target_uid = ld.get("u") if isinstance(ld, dict) else None
   batch_id = ld.get("b") if isinstance(ld, dict) else ld
-  
   if not target_uid or not batch_id:
     return await message.reply_text("  Error: Invalid data in database for this link.")
-    
+       
   try:
     await client.approve_chat_join_request(batch_id, target_uid)
     invalidate_membership_cache(target_uid, batch_id)  # don't serve a stale "not joined" cache hit
@@ -884,27 +871,27 @@ async def cmd_approve_demo(client: Client, message: Message):
     ] = {"expiry": expiry_time, "warned": False}
     clear_active_request(target_uid, batch_id)  # free up the Rule-B slot early
     await save_data_async()
-    
+         
     # Admin ko confirmation
     await message.reply_text(
         f"  **APPROVED (DEMO)**\n  Time Given: `{hours} Hours`",
         parse_mode=ParseMode.MARKDOWN,
     )
-    
+         
     # --- NAYA CODE: USER KO AUTO-MESSAGE BHEJNA ---
     try:
       bname = DB["ALL_CHATS"].get(int(batch_id), f"Batch {batch_id}")
       user_msg = (
-          f"🎉 **Congratulations!**\n\n"
+          f"  **Congratulations!**\n\n"
           f"Aapki request **{bname}** ke liye approve ho gayi hai.\n\n"
-          f"⏱ **Access Type:** Demo Trial\n"
-          f"⏳ **Duration:** `{hours} Hours`\n\n"
+          f"  **Access Type:** Demo Trial\n"
+          f"  **Duration:** `{hours} Hours`\n\n"
           f"Kripya diye gaye samay me batch access kar lein."
       )
       await client.send_message(target_uid, user_msg, parse_mode=ParseMode.MARKDOWN)
     except Exception as e:
       print(f"User demo notification failed: {e}")
-      
+         
   except Exception as e:
     await message.reply_text(f"  Approval failed: {e}")
 
@@ -913,30 +900,28 @@ async def cmd_approve_perm(client: Client, message: Message):
     return
   link = None
   args = get_args(message)
-  
   if message.reply_to_message:
     replied = message.reply_to_message
     msg_text = replied.text or replied.caption or ""
     m = re.search(r"(https?://t\.me/(?:\+|joinchat/)[a-zA-Z0-9_\-]+)", msg_text)
     if m:
       link = m.group(1)
-      
+         
   if not link and args:
     link = args[0]
-    
+       
   if not link:
     return await message.reply_text("  Error: Link nahi mila. Kripya link provide karein.")
-    
+       
   ld = DB.get("LINK_MAP", {}).get(link)
   if not ld:
     return await message.reply_text("  Error: Ye link database me registered nahi hai.")
-    
+       
   target_uid = ld.get("u") if isinstance(ld, dict) else None
   batch_id = ld.get("b") if isinstance(ld, dict) else ld
-  
   if not target_uid or not batch_id:
     return await message.reply_text("  Error: Invalid data in database for this link.")
-    
+       
   try:
     await client.approve_chat_join_request(batch_id, target_uid)
     invalidate_membership_cache(target_uid, batch_id)  # don't serve a stale "not joined" cache hit
@@ -944,26 +929,25 @@ async def cmd_approve_perm(client: Client, message: Message):
       del DB["USER_DATA"][target_uid]["demos"][str(batch_id)]
     clear_active_request(target_uid, batch_id)  # free up the Rule-B slot early
     await save_data_async()
-    
+         
     # Admin ko confirmation
     await message.reply_text("  **APPROVED (PERM)**", parse_mode=ParseMode.MARKDOWN)
-    
+         
     # --- NAYA CODE: USER KO AUTO-MESSAGE BHEJNA ---
     try:
       bname = DB["ALL_CHATS"].get(int(batch_id), f"Batch {batch_id}")
       user_msg = (
-          f"🎉 **Congratulations!**\n\n"
+          f"  **Congratulations!**\n\n"
           f"Aapki request **{bname}** ke liye approve ho gayi hai.\n\n"
-          f"🌟 **Access Type:** Lifetime Premium Access\n\n"
+          f"  **Access Type:** Lifetime Premium Access\n\n"
           f"Welcome to the premium community! Ab aap jab chahein apne batches section se isey access kar sakte hain."
       )
       await client.send_message(target_uid, user_msg, parse_mode=ParseMode.MARKDOWN)
     except Exception as e:
       print(f"User perm notification failed: {e}")
-      
+         
   except Exception as e:
     await message.reply_text(f"  Approval failed: {e}")
-
 
 async def cmd_delbatch(client: Client, message: Message):
   if not is_admin_msg(message):
@@ -973,21 +957,18 @@ async def cmd_delbatch(client: Client, message: Message):
     return
   t, cid = args[0].lower(), int(args[1])
   d = DB["FREE_CHANNELS"] if t == "free" else DB["PAID_CHANNELS"]
-
   if cid in d:
     del d[cid]
     if cid in DB["ALL_CHATS"]:
       del DB["ALL_CHATS"][cid]
     if str(cid) in DB.get("BATCH_CATEGORIES", {}):
       del DB["BATCH_CATEGORIES"][str(cid)]
-
     await save_data_async()
-    await message.reply_text("✅ Batch poori tarah database se Delete ho gaya.")
-
+    await message.reply_text("  Batch poori tarah database se Delete ho gaya.")
 
 async def cmd_addbatch_start(client: Client, message: Message):
   # This wizard tracks state per-user in ADMIN_WIZARD, so (unlike a simple
-  # one-shot admin action) it needs a real, identifiable sender — an
+  # one-shot admin action) it needs a real, identifiable sender 
   # Anonymous Admin post has no personal user id to key the wizard on.
   if not message.from_user or not is_admin(message.from_user.id):
     return
@@ -1002,27 +983,24 @@ async def cmd_addbatch_start(client: Client, message: Message):
       )
     kb.append(row)
   await message.reply_text(
-      "🆕 **Add Batch Wizard**\nSelect Category:",
+      "  **Add Batch Wizard**\nSelect Category:",
       reply_markup=InlineKeyboardMarkup(kb),
       parse_mode=ParseMode.MARKDOWN,
   )
 
-
 async def cmd_broadcast_start(client: Client, message: Message):
-  # Stateful (keyed by user id in BROADCAST_STATE) — needs a real sender.
+  # Stateful (keyed by user id in BROADCAST_STATE)   needs a real sender.
   if not message.from_user:
     return
   BROADCAST_STATE[message.from_user.id] = {"type": "broadcast", "step": "wait_msg"}
-  await message.reply_text("📢 Send message to broadcast.")
-
+  await message.reply_text("  Send message to broadcast.")
 
 async def cmd_post_start(client: Client, message: Message):
-  # Stateful (keyed by user id in BROADCAST_STATE) — needs a real sender.
+  # Stateful (keyed by user id in BROADCAST_STATE)   needs a real sender.
   if not message.from_user:
     return
   BROADCAST_STATE[message.from_user.id] = {"type": "post", "step": "wait_msg"}
-  await message.reply_text("📝 Send message to post.")
-
+  await message.reply_text("  Send message to post.")
 
 async def cmd_user_details(client: Client, message: Message):
   if not is_admin_msg(message):
@@ -1035,7 +1013,7 @@ async def cmd_user_details(client: Client, message: Message):
   info = DB["USER_DATA"].get(target_id, {})
   r = (
       f"USER DETAILS: {target_id}\nName: {info.get('name', 'Unknown')}\n\n"
-      + ("🚫 BLOCKED\n\n" if target_id in DB["BLOCKED_USERS"] else "")
+      + ("  BLOCKED\n\n" if target_id in DB["BLOCKED_USERS"] else "")
       + "--- MEMBERSHIP ---\n"
   )
   found = False
@@ -1052,7 +1030,7 @@ async def cmd_user_details(client: Client, message: Message):
           ChatMemberStatus.OWNER,
           ChatMemberStatus.RESTRICTED,
       ]:
-        r += f"{DB['ALL_CHATS'].get(cid, cid)}: ✅\n"
+        r += f"{DB['ALL_CHATS'].get(cid, cid)}\n"
         found = True
     except Exception:
       pass
@@ -1060,13 +1038,12 @@ async def cmd_user_details(client: Client, message: Message):
     r += "Not found in any batch.\n"
   if "demo_history" in info:
     r += "\n--- DEMO HISTORY ---\n" + "\n".join(
-        [f"• {h}" for h in info["demo_history"]]
+        [f"  {h}" for h in info["demo_history"]]
     )
   f = io.BytesIO(r.encode("utf-8"))
   f.name = f"scan_{target_id}.txt"
-  f.seek(0) # <--- YEH LINE ADD KAREIN
+  f.seek(0)
   await message.reply_document(document=f, caption="  Deep Scan")
-
 
 async def cmd_batches(client: Client, message: Message):
   if not is_admin_msg(message):
@@ -1089,13 +1066,11 @@ async def cmd_batches(client: Client, message: Message):
   f.seek(0)
   await message.reply_document(document=f)
 
-
 async def cmd_stats(client: Client, message: Message):
   if not is_admin_msg(message):
     return
-  t = f"📊 **Statistics**\n💾 Storage: {'MongoDB ☁️' if MONGO_URL else 'Local 📁'}\n🔒 Lockdown: {'🔴 ON' if not DB.get('NEW_USERS_ALLOWED', True) else '🟢 OFF'}\n🔓 Free Locked: {'🔴 YES' if DB.get('FREE_LOCKED', False) else '🟢 NO'}\n🔐 Paid Locked: {'🔴 YES' if DB.get('PAID_LOCKED', False) else '🟢 NO'}\n🤖 Test Bot Locked: {'🔴 YES' if DB.get('TEST_BOT_LOCKED', False) else '🟢 NO'}\n\n👥 Users: {len(DB['USER_DATA'])}\n🆓 Free: {len(DB['FREE_CHANNELS'])}\n💎 Paid: {len(DB['PAID_CHANNELS'])}\n🚫 Blocked: {len(DB['BLOCKED_USERS'])}"
+  t = f"  **Statistics**\n  Storage: {'MongoDB  ' if MONGO_URL else 'Local  '}\n  Lockdown: {'  ON' if not DB.get('NEW_USERS_ALLOWED', True) else '  OFF'}\n  Free Locked: {'  YES' if DB.get('FREE_LOCKED', False) else '  NO'}\n  Paid Locked: {'  YES' if DB.get('PAID_LOCKED', False) else '  NO'}\n  Test Bot Locked: {'  YES' if DB.get('TEST_BOT_LOCKED', False) else '  NO'}\n\n  Users: {len(DB['USER_DATA'])}\n  Free: {len(DB['FREE_CHANNELS'])}\n  Paid: {len(DB['PAID_CHANNELS'])}\n  Blocked: {len(DB['BLOCKED_USERS'])}"
   await message.reply_text(t, parse_mode=ParseMode.MARKDOWN)
-
 
 async def cmd_cancel(client: Client, message: Message):
   if not message.from_user:
@@ -1105,8 +1080,7 @@ async def cmd_cancel(client: Client, message: Message):
     del BROADCAST_STATE[uid]
   if uid in ADMIN_WIZARD:
     del ADMIN_WIZARD[uid]
-  await message.reply_text("❌ Cancelled")
-
+  await message.reply_text("  Cancelled")
 
 async def cmd_lockdown(client: Client, message: Message):
   if not is_admin_msg(message):
@@ -1114,13 +1088,12 @@ async def cmd_lockdown(client: Client, message: Message):
   DB["NEW_USERS_ALLOWED"] = not DB.get("NEW_USERS_ALLOWED", True)
   await save_data_async()
   msg = await message.reply_text(
-      "🔓 **Lockdown Lifted!**"
+      "  **Lockdown Lifted!**"
       if DB["NEW_USERS_ALLOWED"]
-      else "🔒 **Lockdown Enabled!**",
+      else "  **Lockdown Enabled!**",
       parse_mode=ParseMode.MARKDOWN,
   )
   await schedule_delete(client, msg)
-
 
 async def cmd_lockfree(client: Client, message: Message):
   if not is_admin_msg(message):
@@ -1128,12 +1101,11 @@ async def cmd_lockfree(client: Client, message: Message):
   DB["FREE_LOCKED"] = not DB.get("FREE_LOCKED", False)
   await save_data_async()
   await message.reply_text(
-      "Free Batches **LOCKED 🔒**."
+      "Free Batches **LOCKED  **."
       if DB["FREE_LOCKED"]
-      else "Free Batches **UNLOCKED 🔓**.",
+      else "Free Batches **UNLOCKED  **.",
       parse_mode=ParseMode.MARKDOWN,
   )
-
 
 async def cmd_locktestbot(client: Client, message: Message):
   if not is_admin_msg(message):
@@ -1141,12 +1113,11 @@ async def cmd_locktestbot(client: Client, message: Message):
   DB["TEST_BOT_LOCKED"] = not DB.get("TEST_BOT_LOCKED", False)
   await save_data_async()
   await message.reply_text(
-      "Test Bot **LOCKED 🔒**."
+      "Test Bot **LOCKED  **."
       if DB["TEST_BOT_LOCKED"]
-      else "Test Bot **UNLOCKED 🔓**.",
+      else "Test Bot **UNLOCKED  **.",
       parse_mode=ParseMode.MARKDOWN,
   )
-
 
 async def cmd_clear(client: Client, message: Message):
   if not is_owner_msg(message):
@@ -1154,12 +1125,11 @@ async def cmd_clear(client: Client, message: Message):
   session_string = DB.get("USERBOT_SESSION")
   if not session_string or not API_ID:
     return await message.reply_text(
-        "❌ **Userbot Not Logged In!** Dashboard se login karein.",
+        "  **Userbot Not Logged In!** Dashboard se login karein.",
         parse_mode=ParseMode.MARKDOWN,
     )
-
   msg = await message.reply_text(
-      "⏳ **Super Exit /clear Start...**", parse_mode=ParseMode.MARKDOWN
+      "  **Super Exit /clear Start...**", parse_mode=ParseMode.MARKDOWN
   )
   userbot = Client(
       "clear_bot",
@@ -1168,27 +1138,24 @@ async def cmd_clear(client: Client, message: Message):
       session_string=session_string,
       in_memory=True,
   )
-
   try:
     await userbot.start()
     await msg.edit_text(
-        "🔄 **Userbot Syncing...**\nSaare chats ko memory me load kar raha hu"
+        "  **Userbot Syncing...**\nSaare chats ko memory me load kar raha hu"
         " (Peer ID Error bachane ke liye)...",
         parse_mode=ParseMode.MARKDOWN,
     )
     async for _ in userbot.get_dialogs():
       pass
     await msg.edit_text(
-        "⏳ **Super Exit /clear Start...**\nSync complete! Ab removing process"
+        "  **Super Exit /clear Start...**\nSync complete! Ab removing process"
         " chalu hai...",
         parse_mode=ParseMode.MARKDOWN,
     )
-
     all_channels = list(DB["FREE_CHANNELS"].keys()) + list(
         DB["PAID_CHANNELS"].keys()
     )
     removed_count = checked_users = safe_users = 0
-
     for bid in all_channels:
       try:
         async for member in userbot.get_chat_members(int(bid)):
@@ -1213,16 +1180,14 @@ async def cmd_clear(client: Client, message: Message):
           await asyncio.sleep(0.1)
       except Exception:
         pass
-
     await userbot.stop()
     await msg.edit_text(
-        f"✅ **/clear Process Pura Hua!**\n\nChecked: `{checked_users}`\nSafe:"
+        f"  **/clear Process Pura Hua!**\n\nChecked: `{checked_users}`\nSafe:"
         f" `{safe_users}`\nRemoved: `{removed_count}`",
         parse_mode=ParseMode.MARKDOWN,
     )
   except Exception as e:
-    await msg.edit_text(f"❌ Error: `{e}`", parse_mode=ParseMode.MARKDOWN)
-
+    await msg.edit_text(f"  Error: `{e}`", parse_mode=ParseMode.MARKDOWN)
 
 async def cmd_maintenance(client: Client, message: Message):
   if not is_admin_msg(message):
@@ -1230,14 +1195,13 @@ async def cmd_maintenance(client: Client, message: Message):
   DB["MAINTENANCE_MODE"] = not DB.get("MAINTENANCE_MODE", False)
   await save_data_async()
   msg = await message.reply_text(
-      "🛠️ **Maintenance Mode Enabled!**\nNormal users ka support message ab"
+      "  **Maintenance Mode Enabled!**\nNormal users ka support message ab"
       " aana band ho gaya hai."
       if DB["MAINTENANCE_MODE"]
-      else "✅ **Maintenance Mode Disabled!**\nBot ab normally kaam kar raha hai.",
+      else "  **Maintenance Mode Disabled!**\nBot ab normally kaam kar raha hai.",
       parse_mode=ParseMode.MARKDOWN,
   )
   await schedule_delete(client, msg)
-
 
 # --- WIZARDS, MENUS & CALLBACKS ---
 async def wizard_callback(client: Client, q: CallbackQuery):
@@ -1255,7 +1219,7 @@ async def wizard_callback(client: Client, q: CallbackQuery):
         InlineKeyboardButton("Paid", callback_data="wiz_paid"),
     ]]
     return await q.edit_message_text(
-        f"✅ Category: **{ADMIN_WIZARD[uid]['category']}**\n\n➡️ **Step 2:**"
+        f"  Category: **{ADMIN_WIZARD[uid]['category']}**\n\n  **Step 2:**"
         " Select Batch Type:",
         reply_markup=InlineKeyboardMarkup(kb),
         parse_mode=ParseMode.MARKDOWN,
@@ -1266,16 +1230,14 @@ async def wizard_callback(client: Client, q: CallbackQuery):
     ADMIN_WIZARD[uid]["type"] = q.data.split("_")[1]
     ADMIN_WIZARD[uid]["step"] = "ask_id"
     return await q.edit_message_text(
-        f"➡️ **Step 3:** Send **Channel ID** for {q.data.split('_')[1].upper()}:",
+        f"  **Step 3:** Send **Channel ID** for {q.data.split('_')[1].upper()}:",
         parse_mode=ParseMode.MARKDOWN,
     )
-
 
 async def wizard_message(client: Client, message: Message):
   if not message.from_user or message.from_user.id not in ADMIN_WIZARD:
     return False
   uid, state = message.from_user.id, ADMIN_WIZARD[message.from_user.id]
-
   if state["step"] == "ask_id":
     try:
       cid = int(message.text)
@@ -1287,20 +1249,20 @@ async def wizard_message(client: Client, message: Message):
       DB.setdefault("BATCH_CATEGORIES", {})[str(cid)] = state["category"]
       await save_data_async()
       await message.reply_text(
-          f"✅ **Added!**\nName: {cname} ({cid})\nCategory: {state['category']}",
+          f"  **Added!**\nName: {cname} ({cid})\nCategory: {state['category']}",
           parse_mode=ParseMode.MARKDOWN,
       )
       if state["type"] == "free":
         b_count = 0
         await message.reply_text(
-            "📢 Sending Auto-Broadcast...", parse_mode=ParseMode.MARKDOWN
+            "  Sending Auto-Broadcast...", parse_mode=ParseMode.MARKDOWN
         )
         for t_cid in list(DB["ALL_CHATS"].keys()):
           if t_cid != cid:
             try:
               sent_msg = await client.send_message(
                   int(t_cid),
-                  f"🎉 <b>NEW FREE BATCH ADDED!</b>\n📛 Name: {cname}\n👉 Join via"
+                  f"  <b>NEW FREE BATCH ADDED!</b>\n  Name: {cname}\n  Join via"
                   " Bot Menu!",
                   parse_mode=ParseMode.HTML,
               )
@@ -1312,13 +1274,12 @@ async def wizard_message(client: Client, message: Message):
               b_count += 1
             except Exception:
               pass
-        await message.reply_text(f"✅ Broadcast sent to {b_count} chats.")
+        await message.reply_text(f"  Broadcast sent to {b_count} chats.")
         await save_data_async()
       del ADMIN_WIZARD[uid]
     except Exception:
-      await message.reply_text("❌ Error. Ensure valid ID.")
+      await message.reply_text("  Error. Ensure valid ID.")
     return True
-
   elif state["step"].startswith("call_cmd_"):
     cmd_name = state["step"].replace("call_cmd_", "")
     current_step = state["step"]
@@ -1353,7 +1314,6 @@ async def wizard_message(client: Client, message: Message):
     return True
   return False
 
-
 async def handle_broadcast_flow(client: Client, message: Message):
   if not message.from_user or message.from_user.id not in BROADCAST_STATE:
     return False
@@ -1362,17 +1322,16 @@ async def handle_broadcast_flow(client: Client, message: Message):
     state["content"] = message
     state["step"] = "confirm"
     kb = [[
-        InlineKeyboardButton("✅ YES", callback_data="bc_yes"),
-        InlineKeyboardButton("❌ NO", callback_data="bc_no"),
+        InlineKeyboardButton("  YES", callback_data="bc_yes"),
+        InlineKeyboardButton("  NO", callback_data="bc_no"),
     ]]
     await message.reply_text(
-        "📢 **Confirm?**",
+        "  **Confirm?**",
         reply_markup=InlineKeyboardMarkup(kb),
         parse_mode=ParseMode.MARKDOWN,
     )
     return True
   return False
-
 
 async def broadcast_callback(client: Client, q: CallbackQuery):
   uid = q.from_user.id
@@ -1380,10 +1339,10 @@ async def broadcast_callback(client: Client, q: CallbackQuery):
     return await q.answer("Expired")
   if q.data == "bc_no":
     del BROADCAST_STATE[uid]
-    return await q.edit_message_text("❌ Cancelled")
+    return await q.edit_message_text("  Cancelled")
   if q.data == "bc_yes":
     await q.answer()
-    await q.edit_message_text("⏳ Processing...")
+    await q.edit_message_text("  Processing...")
     count = 0
     targets = (
         list(DB["USER_DATA"].keys())
@@ -1402,72 +1361,65 @@ async def broadcast_callback(client: Client, q: CallbackQuery):
         await asyncio.sleep(e.value + 1)
       except Exception:
         pass
-    await client.send_message(uid, f"✅ Done. Sent to {count}.")
+    await client.send_message(uid, f"  Done. Sent to {count}.")
     del BROADCAST_STATE[uid]
-
 
 async def general_callback(client: Client, q: CallbackQuery):
   uid = q.from_user.id
   data = q.data
-  
   # FIX: Button click par message ka owner real admin ko banayein, bot ko nahi.
   if q.message:
       q.message.from_user = q.from_user
-
   if uid in DB["BLOCKED_USERS"]:
-    return await q.answer("🚫 You are blocked by the admin.", show_alert=True)
-
+    return await q.answer("  You are blocked by the admin.", show_alert=True)
   try:
     if data.startswith("wiz_") or data.startswith("wcat_"):
       return await wizard_callback(client, q)
     if data.startswith("bc_"):
       return await broadcast_callback(client, q)
-
     if data == "dash_home":
       if uid in ADMIN_WIZARD:
         del ADMIN_WIZARD[uid]
       await q.answer()
       await start_from_cb(client, q)
-
     elif data == "dash_locks":
       await q.answer()
       kb = [
           [
               InlineKeyboardButton(
-                  f"System Lockdown: {'🔴 ON' if not DB.get('NEW_USERS_ALLOWED', True) else '🟢 OFF'}",
+                  f"System Lockdown: {'  ON' if not DB.get('NEW_USERS_ALLOWED', True) else '  OFF'}",
                   callback_data="toggle_lockdown",
               )
           ],
           [
               InlineKeyboardButton(
-                  f"Free Batches: {'🔴 LOCKED' if DB.get('FREE_LOCKED', False) else '🟢 OPEN'}",
+                  f"Free Batches: {'  LOCKED' if DB.get('FREE_LOCKED', False) else '  OPEN'}",
                   callback_data="toggle_free",
               ),
               InlineKeyboardButton(
-                  f"Paid Batches: {'🔴 LOCKED' if DB.get('PAID_LOCKED', False) else '🟢 OPEN'}",
+                  f"Paid Batches: {'  LOCKED' if DB.get('PAID_LOCKED', False) else '  OPEN'}",
                   callback_data="toggle_paid",
               ),
           ],
           [
               InlineKeyboardButton(
-                  f"Test Bot: {'🔴 LOCKED' if DB.get('TEST_BOT_LOCKED', False) else '🟢 OPEN'}",
+                  f"Test Bot: {'  LOCKED' if DB.get('TEST_BOT_LOCKED', False) else '  OPEN'}",
                   callback_data="toggle_testbot",
               )
           ],
           [
               InlineKeyboardButton(
-                  f"Maintenance Mode: {'🔴 ON' if DB.get('MAINTENANCE_MODE', False) else '🟢 OFF'}",
+                  f"Maintenance Mode: {'  ON' if DB.get('MAINTENANCE_MODE', False) else '  OFF'}",
                   callback_data="toggle_maintenance",
               )
           ],
-          [InlineKeyboardButton("🔙 Back to Terminal", callback_data="dash_home")],
+          [InlineKeyboardButton("  Back to Terminal", callback_data="dash_home")],
       ]
       await q.edit_message_text(
-          "🔒 **Security & Access Control**",
+          "  **Security & Access Control**",
           reply_markup=InlineKeyboardMarkup(kb),
           parse_mode=ParseMode.MARKDOWN,
       )
-
     elif data.startswith("toggle_"):
       await q.answer()
       key = data.split("_")[1].upper()
@@ -1482,189 +1434,179 @@ async def general_callback(client: Client, q: CallbackQuery):
       elif key == "TESTBOT":
         DB["TEST_BOT_LOCKED"] = not DB.get("TEST_BOT_LOCKED", False)
       await save_data_async()
-
       kb = [
           [
               InlineKeyboardButton(
-                  f"System Lockdown: {'🔴 ON' if not DB.get('NEW_USERS_ALLOWED', True) else '🟢 OFF'}",
+                  f"System Lockdown: {'  ON' if not DB.get('NEW_USERS_ALLOWED', True) else '  OFF'}",
                   callback_data="toggle_lockdown",
               )
           ],
           [
               InlineKeyboardButton(
-                  f"Free Batches: {'🔴 LOCKED' if DB.get('FREE_LOCKED', False) else '🟢 OPEN'}",
+                  f"Free Batches: {'  LOCKED' if DB.get('FREE_LOCKED', False) else '  OPEN'}",
                   callback_data="toggle_free",
               ),
               InlineKeyboardButton(
-                  f"Paid Batches: {'🔴 LOCKED' if DB.get('PAID_LOCKED', False) else '🟢 OPEN'}",
+                  f"Paid Batches: {'  LOCKED' if DB.get('PAID_LOCKED', False) else '  OPEN'}",
                   callback_data="toggle_paid",
               ),
           ],
           [
               InlineKeyboardButton(
-                  f"Test Bot: {'🔴 LOCKED' if DB.get('TEST_BOT_LOCKED', False) else '🟢 OPEN'}",
+                  f"Test Bot: {'  LOCKED' if DB.get('TEST_BOT_LOCKED', False) else '  OPEN'}",
                   callback_data="toggle_testbot",
               )
           ],
           [
               InlineKeyboardButton(
-                  f"Maintenance Mode: {'🔴 ON' if DB.get('MAINTENANCE_MODE', False) else '🟢 OFF'}",
+                  f"Maintenance Mode: {'  ON' if DB.get('MAINTENANCE_MODE', False) else '  OFF'}",
                   callback_data="toggle_maintenance",
               )
           ],
-          [InlineKeyboardButton("🔙 Back to Terminal", callback_data="dash_home")],
+          [InlineKeyboardButton("  Back to Terminal", callback_data="dash_home")],
       ]
       await q.edit_message_text(
-          "🔒 **Security & Access Control**",
+          "  **Security & Access Control**",
           reply_markup=InlineKeyboardMarkup(kb),
           parse_mode=ParseMode.MARKDOWN,
       )
-
     elif data == "dash_db":
       await q.answer()
       kb = [
           [
               InlineKeyboardButton(
-                  "📥 Download Backup", callback_data="act_backup"
+                  "  Download Backup", callback_data="act_backup"
               ),
-              InlineKeyboardButton("🔄 Run Sync", callback_data="act_sync"),
+              InlineKeyboardButton("  Run Sync", callback_data="act_sync"),
           ],
           [
               InlineKeyboardButton(
-                  "👥 Download All Users List", callback_data="act_allusers"
+                  "  Download All Users List", callback_data="act_allusers"
               )
           ],
-          [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
+          [InlineKeyboardButton("  Back", callback_data="dash_home")],
       ]
       await q.edit_message_text(
-          "🗄️ **Database Tools**",
+          "  **Database Tools**",
           reply_markup=InlineKeyboardMarkup(kb),
           parse_mode=ParseMode.MARKDOWN,
       )
-
     elif data in ["dash_batches", "adash_batches"]:
       await q.answer()
       kb = [
           [
-              InlineKeyboardButton("➕ Add Batch", callback_data="act_addbatch"),
+              InlineKeyboardButton("  Add Batch", callback_data="act_addbatch"),
               InlineKeyboardButton(
-                  "🗑️ Delete Batch", callback_data="input_delbatch"
+                  "  Delete Batch", callback_data="input_delbatch"
               ),
           ],
           [
               InlineKeyboardButton(
-                  "📁 Add Category", callback_data="input_addcat"
+                  "  Add Category", callback_data="input_addcat"
               ),
               InlineKeyboardButton(
-                  "🗑️ Delete Category", callback_data="act_delcat"
-              ),
-          ],
-          [
-              InlineKeyboardButton(
-                  "📂 Set Batch Category", callback_data="input_setcat"
-              ),
-              InlineKeyboardButton(
-                  "🧹 Empty Batch", callback_data="input_emptybatch"
+                  "  Delete Category", callback_data="act_delcat"
               ),
           ],
           [
               InlineKeyboardButton(
-                  "📊 Batch Stats", callback_data="act_batchstats"
+                  "  Set Batch Category", callback_data="input_setcat"
+              ),
+              InlineKeyboardButton(
+                  "  Empty Batch", callback_data="input_emptybatch"
+              ),
+          ],
+          [
+              InlineKeyboardButton(
+                  "  Batch Stats", callback_data="act_batchstats"
               )
           ],
-          [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
+          [InlineKeyboardButton("  Back", callback_data="dash_home")],
       ]
       await q.edit_message_text(
-          "📦 **Batches Management**",
+          "  **Batches Management**",
           reply_markup=InlineKeyboardMarkup(kb),
           parse_mode=ParseMode.MARKDOWN,
       )
-
     elif data == "dash_staff":
       await q.answer()
       kb = [
           [
               InlineKeyboardButton(
-                  "👮 Add Admin", callback_data="input_addadmin"
+                  "  Add Admin", callback_data="input_addadmin"
               ),
               InlineKeyboardButton(
-                  "🚫 Remove Admin", callback_data="input_deladmin"
+                  "  Remove Admin", callback_data="input_deladmin"
               ),
           ],
-          [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
+          [InlineKeyboardButton("  Back", callback_data="dash_home")],
       ]
       await q.edit_message_text(
-          "👥 **Staff Management**",
+          "  **Staff Management**",
           reply_markup=InlineKeyboardMarkup(kb),
           parse_mode=ParseMode.MARKDOWN,
       )
-
     elif data in ["dash_comms", "adash_comms"]:
       await q.answer()
       kb = [
           [
-              InlineKeyboardButton("📢 Broadcast", callback_data="act_broadcast"),
-              InlineKeyboardButton("📝 Post Message", callback_data="act_post"),
+              InlineKeyboardButton("  Broadcast", callback_data="act_broadcast"),
+              InlineKeyboardButton("  Post Message", callback_data="act_post"),
           ],
           [
               InlineKeyboardButton(
-                  "🔗 Set Test Bot", callback_data="input_settestbot"
+                  "  Set Test Bot", callback_data="input_settestbot"
               ),
               InlineKeyboardButton(
-                  "👋 Set Welcome", callback_data="input_setwelcome"
+                  "  Set Welcome", callback_data="input_setwelcome"
               ),
           ],
-          [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
+          [InlineKeyboardButton("  Back", callback_data="dash_home")],
       ]
       await q.edit_message_text(
-          "📢 **Communications**",
+          "  **Communications**",
           reply_markup=InlineKeyboardMarkup(kb),
           parse_mode=ParseMode.MARKDOWN,
       )
-
     elif data == "userbot_details":
       await q.answer()
       if uid != OWNER_ID:
-        return await q.answer("❌ Access Denied! Owner only.", show_alert=True)
-
+        return await q.answer("  Access Denied! Owner only.", show_alert=True)
       session = DB.get("USERBOT_SESSION")
       phone = DB.get("USERBOT_PHONE", "Not Found")
-
       if session:
-        connected_status = "🟢 Active & Ready"
+        connected_status = "  Active & Ready"
         text = (
-            f"🛡️ **USERBOT CONTROL PANEL**\n\n✅ **Status:**"
-            f" {connected_status}\n📱 **Logged in Number:** `{phone}`\n\n⚡"
-            " *Userbot is fully linked and ready to execute /emptybatch,"
+            f"  **USERBOT CONTROL PANEL**\n\n  **Status:**"
+            f" {connected_status}\n  **Logged in Number:** `{phone}`\n\n"
+            "  *Userbot is fully linked and ready to execute /emptybatch,"
             " /clear, and /joinall commands.*"
         )
         kb = [
             [
                 InlineKeyboardButton(
-                    "🚪 Logout (Delete Session)", callback_data="userbot_logout"
+                    "  Logout (Delete Session)", callback_data="userbot_logout"
                 )
             ],
-            [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
+            [InlineKeyboardButton("  Back", callback_data="dash_home")],
         ]
       else:
         text = (
-            "🛡️ **USERBOT CONTROL PANEL**\n\n❌ **Status:** 🔴 NOT LOGGED"
-            " IN\n\n⚠️ *Koi active session nahi hai. Userbot features won't"
+            "  **USERBOT CONTROL PANEL**\n\n  **Status:**   NOT LOGGED"
+            " IN\n\n  *Koi active session nahi hai. Userbot features won't"
             " work. Kripya login karein.*"
         )
         kb = [
             [
                 InlineKeyboardButton(
-                    "📲 Login Now", callback_data="input_userbotphone"
+                    "  Login Now", callback_data="input_userbotphone"
                 )
             ],
-            [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
+            [InlineKeyboardButton("  Back", callback_data="dash_home")],
         ]
-
       await q.edit_message_text(
           text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN
       )
-
     elif data == "userbot_logout":
       if uid != OWNER_ID:
         return
@@ -1673,14 +1615,13 @@ async def general_callback(client: Client, q: CallbackQuery):
       await save_data_async()
       if os.path.exists("temp_owner.session"):
         os.remove("temp_owner.session")
-      await q.answer("✅ Session Deleted Successfully!", show_alert=True)
+      await q.answer("  Session Deleted Successfully!", show_alert=True)
       await q.edit_message_text(
-          "❌ **Userbot is now LOGGED OUT.**",
+          "  **Userbot is now LOGGED OUT.**",
           reply_markup=InlineKeyboardMarkup([
-              [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]
+              [InlineKeyboardButton("  Back", callback_data="dash_home")]
           ]),
       )
-
     elif data.startswith("input_"):
       await q.answer()
       cmd_name = data.split("_")[1]
@@ -1705,75 +1646,71 @@ async def general_callback(client: Client, q: CallbackQuery):
               " -100y`"
           ),
           "emptybatch": (
-              "⚠️ **DHYAN DEIN!**\nSend Batch ID jisko poora khali (empty) karna"
+              "  **DHYAN DEIN!**\nSend Batch ID jisko poora khali (empty) karna"
               " hai:\nFormat: `-100123456789`"
           ),
           "userbotphone": (
-              "📱 **Apna Phone Number bhejein**\nCountry code ke sath (Jaise:"
+              "  **Apna Phone Number bhejein**\nCountry code ke sath (Jaise:"
               " `+919876543210`):"
           ),
           "userbototp": (
-              "💬 **OTP Bhejein**\n⚠️ *OTP spaces me bhejein!* Jaise: `1 2 3 4"
+              "  **OTP Bhejein**\n  *OTP spaces me bhejein!* Jaise: `1 2 3 4"
               " 5`:"
           ),
-          "userbotpass": "🔒 **2FA Password bhejein:**",
+          "userbotpass": "  **2FA Password bhejein:**",
       }
       await q.edit_message_text(
-          f"⚡ **INPUT REQUIRED FOR: {cmd_name.upper()}**\n\n{prompts.get(cmd_name, 'Send input:')}",
+          f"  **INPUT REQUIRED FOR: {cmd_name.upper()}**\n\n{prompts.get(cmd_name, 'Send input:')}",
           reply_markup=InlineKeyboardMarkup([[
-              InlineKeyboardButton("❌ Cancel Input", callback_data="dash_home")
+              InlineKeyboardButton("  Cancel Input", callback_data="dash_home")
           ]]),
           parse_mode=ParseMode.MARKDOWN,
       )
-
     elif data == "dash_stats":
       await q.answer("Generating Stats...")
       await cmd_stats(client, q.message)
-
     elif data == "adash_users":
       await q.answer()
       kb = [
           [
-              InlineKeyboardButton("🚫 Ban", callback_data="input_ban"),
-              InlineKeyboardButton("✅ Unban", callback_data="input_unban"),
+              InlineKeyboardButton("  Ban", callback_data="input_ban"),
+              InlineKeyboardButton("  Unban", callback_data="input_unban"),
           ],
           [
-              InlineKeyboardButton("🥾 Kick", callback_data="input_kick"),
-              InlineKeyboardButton("🔍 Find", callback_data="input_find"),
+              InlineKeyboardButton("  Kick", callback_data="input_kick"),
+              InlineKeyboardButton("  Find", callback_data="input_find"),
           ],
           [
               InlineKeyboardButton(
-                  "🔄 Reset User Data", callback_data="input_resetuser"
+                  "  Reset User Data", callback_data="input_resetuser"
               )
           ],
-          [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
+          [InlineKeyboardButton("  Back", callback_data="dash_home")],
       ]
       await q.edit_message_text(
-          "👤 **User Management**",
+          "  **User Management**",
           reply_markup=InlineKeyboardMarkup(kb),
           parse_mode=ParseMode.MARKDOWN,
       )
-
     elif data == "adash_approvals":
       await q.answer()
       kb = [
           [
-              InlineKeyboardButton("⏳ Approve Demo", callback_data="input_demo"),
-              InlineKeyboardButton("💎 Approve Perm", callback_data="input_perm"),
+              InlineKeyboardButton("  Approve Demo", callback_data="input_demo"),
+              InlineKeyboardButton("  Approve Perm", callback_data="input_perm"),
           ],
           [
               InlineKeyboardButton(
-                  "➕ Extend Demo Time", callback_data="input_extend"
+                  "  Extend Demo Time", callback_data="input_extend"
               )
           ],
-          [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
+          [InlineKeyboardButton("  Back", callback_data="dash_home")],
       ]
       await q.edit_message_text(
-          "✅ **Access Approvals**",
+          "  **Access Approvals**",
           reply_markup=InlineKeyboardMarkup(kb),
           parse_mode=ParseMode.MARKDOWN,
       )
-
     elif data == "act_backup":
       await q.answer("Sending...")
       await cmd_backup(client, q.message)
@@ -1798,7 +1735,6 @@ async def general_callback(client: Client, q: CallbackQuery):
     elif data == "act_post":
       await q.answer()
       await cmd_post_start(client, q.message)
-
     elif data == "accept_tnc":
       await q.answer()
       DB.setdefault("USER_DATA", {}).setdefault(uid, {})["tnc_accepted"] = True
@@ -1810,34 +1746,32 @@ async def general_callback(client: Client, q: CallbackQuery):
     elif data == "my_info":
       await q.answer()
       await cmd_myinfo(client, q.message)
-
     elif data == "verify":
       if await check_membership_pyro(uid, client):
-        await q.answer("✅ Verification Successful!", show_alert=True)
+        await q.answer("  Verification Successful!", show_alert=True)
         await start_from_cb(client, q)
       else:
         await q.answer(
-            "❌ Abhi tak join nahi kiya hai. Kripya pehle channel join karein!",
+            "  Abhi tak join nahi kiya hai. Kripya pehle channel join karein!",
             show_alert=True,
         )
-
     elif data == "test_bot":
       if DB.get("TEST_BOT_LOCKED", False):
-        return await q.answer("🔒 Locked by Admin.", show_alert=True)
+        return await q.answer("  Locked by Admin.", show_alert=True)
       if not await check_membership_pyro(uid, client):
-        return await q.answer("❌ Join Main Channel First!", show_alert=True)
+        return await q.answer("  Join Main Channel First!", show_alert=True)
       if not DB.get("TEST_BOT_LINK"):
         return await q.answer(
-            "⚠️ Test Bot is not setup by Admin yet!", show_alert=True
+            "  Test Bot is not setup by Admin yet!", show_alert=True
         )
       await q.answer("Verifying & Generating Link...")
       kb = [
-          [InlineKeyboardButton("🔗 Open Test Bot", url=DB.get("TEST_BOT_LINK"))]
+          [InlineKeyboardButton("  Open Test Bot", url=DB.get("TEST_BOT_LINK"))]
       ]
       try:
         sent_msg = await client.send_message(
             uid,
-            "🤖 **Test Bot Access Verification:**\n\nYou are verified! Click the"
+            "  **Test Bot Access Verification:**\n\nYou are verified! Click the"
             " button below to open the Test Bot.",
             reply_markup=InlineKeyboardMarkup(kb),
             parse_mode=ParseMode.MARKDOWN,
@@ -1845,18 +1779,16 @@ async def general_callback(client: Client, q: CallbackQuery):
         await schedule_delete(client, sent_msg, delay=60)
       except Exception:
         pass
-
     elif data.startswith("my_batches_"):
       await q.answer()
       if not DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
         return await show_tnc_menu_cb(client, q)
       await q.edit_message_text(
-          "⏳ **Aapke batches fetch kiye ja rahe hain... Please wait.**",
+          "  **Aapke batches fetch kiye ja rahe hain... Please wait.**",
           parse_mode=ParseMode.MARKDOWN,
       )
       page = int(data.split("_")[-1])
       all_batches = {**DB["FREE_CHANNELS"], **DB["PAID_CHANNELS"]}
-
       async def check_member(cid, name):
         try:
           m = await client.get_chat_member(int(cid), uid)
@@ -1870,20 +1802,18 @@ async def general_callback(client: Client, q: CallbackQuery):
         except Exception:
           pass
         return None
-
       results = await asyncio.gather(
           *[check_member(cid, name) for cid, name in all_batches.items()]
       )
       joined_batches = [r for r in results if r is not None]
       if not joined_batches:
         return await q.edit_message_text(
-            "❌ Aap abhi kisi bhi batch me join nahi hain.",
+            "  Aap abhi kisi bhi batch me join nahi hain.",
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 Back to Menu", callback_data="u_main")
+                InlineKeyboardButton("  Back to Menu", callback_data="u_main")
             ]]),
             parse_mode=ParseMode.MARKDOWN,
         )
-
       MAX_PER_PAGE = 10
       total_batches = len(joined_batches)
       start_idx = page * MAX_PER_PAGE
@@ -1891,7 +1821,7 @@ async def general_callback(client: Client, q: CallbackQuery):
       kb = [
           [
               InlineKeyboardButton(
-                  f"✅ {name}",
+                  f"  {name}",
                   url=f"https://t.me/c/{str(cid).replace('-100', '')}/1",
               )
           ]
@@ -1900,61 +1830,58 @@ async def general_callback(client: Client, q: CallbackQuery):
       nav_buttons = []
       if page > 0:
         nav_buttons.append(
-            InlineKeyboardButton("⬅️ Back", callback_data=f"my_batches_{page-1}")
+            InlineKeyboardButton("  Back", callback_data=f"my_batches_{page-1}")
         )
       if end_idx < total_batches:
         nav_buttons.append(
-            InlineKeyboardButton("Next ➡️", callback_data=f"my_batches_{page+1}")
+            InlineKeyboardButton("Next  ", callback_data=f"my_batches_{page+1}")
         )
       if nav_buttons:
         kb.append(nav_buttons)
-      kb.append([InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")])
+      kb.append([InlineKeyboardButton("  Main Menu", callback_data="u_main")])
       await q.edit_message_text(
-          f"📚 **My Batches (Page {page+1})**\n\nYahan wo sabhi batches hain"
+          f"  **My Batches (Page {page+1})**\n\nYahan wo sabhi batches hain"
           " jisme aap successfully join hain. Click karke direct channel"
           " access karein:",
           reply_markup=InlineKeyboardMarkup(kb),
           parse_mode=ParseMode.MARKDOWN,
       )
-
     elif data.startswith("all_batches_"):
       await q.answer()
       kb = [
           [InlineKeyboardButton(cat, callback_data=f"showcat_{i}")]
           for i, cat in enumerate(DB.get("CATEGORIES", DEFAULT_CATEGORIES))
       ] + [
-          [InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")]
+          [InlineKeyboardButton("  Main Menu", callback_data="u_main")]
       ]
       await q.edit_message_text(
-          "🌐 **All Batches - Select Category:**",
+          "  **All Batches - Select Category:**",
           reply_markup=InlineKeyboardMarkup(kb),
           parse_mode=ParseMode.MARKDOWN,
       )
-
     elif data.startswith("showcat_"):
       await q.answer()
       cat_idx = int(data.split("_")[1])
       kb = [
           [
               InlineKeyboardButton(
-                  "🆓 Free Batches", callback_data=f"listcat_{cat_idx}_free_0"
+                  "  Free Batches", callback_data=f"listcat_{cat_idx}_free_0"
               ),
               InlineKeyboardButton(
-                  "💎 Paid Batches", callback_data=f"listcat_{cat_idx}_paid_0"
+                  "  Paid Batches", callback_data=f"listcat_{cat_idx}_paid_0"
               ),
           ],
           [
               InlineKeyboardButton(
-                  "🔙 Back to Categories", callback_data="all_batches_0"
+                  "  Back to Categories", callback_data="all_batches_0"
               )
           ],
       ]
       await q.edit_message_text(
-          f"📂 **Category: {DB.get('CATEGORIES', DEFAULT_CATEGORIES)[cat_idx]}**\n\nAapko kis type ke batch chahiye?",
+          f"  **Category: {DB.get('CATEGORIES', DEFAULT_CATEGORIES)[cat_idx]}**\n\nAapko kis type ke batch chahiye?",
           reply_markup=InlineKeyboardMarkup(kb),
           parse_mode=ParseMode.MARKDOWN,
       )
-
     elif data.startswith("setextcat_"):
       await q.answer()
       cat_idx = int(data.split("_")[1])
@@ -1963,7 +1890,7 @@ async def general_callback(client: Client, q: CallbackQuery):
       ids = user_store.get("setcat_ids", [])
       if not ids:
         await q.edit_message_text(
-            "❌ Session expired ya IDs nahi mili. Kripya wapas /start karke try"
+            "  Session expired ya IDs nahi mili. Kripya wapas /start karke try"
             " karein."
         )
         return
@@ -1972,17 +1899,13 @@ async def general_callback(client: Client, q: CallbackQuery):
       await save_data_async()
       user_store.pop("setcat_ids", None)
       await q.edit_message_text(
-          f"✅ **Success!**\n\nTotal `{len(ids)}` batches ko successfully"
+          f"  **Success!**\n\nTotal `{len(ids)}` batches ko successfully"
           f" **{selected_cat}** category me shift kar diya gaya hai!",
           parse_mode=ParseMode.MARKDOWN,
       )
-
     elif data.startswith("listcat_"):
       parts = data.split("_")
       cat_idx, b_type, page = int(parts[1]), parts[2], int(parts[3])
-      # 🔥 FIX: lock check happens BEFORE any q.answer() — otherwise the
-      # first unconditional q.answer() below eats Telegram's one-shot
-      # answer budget and this alert silently never shows.
       if b_type == "free" and DB.get("FREE_LOCKED", False):
         return await q.answer("Sorry, but at this moment the free batch is locked. When it will unlock I will inform you.", show_alert=True)
       if b_type == "paid" and DB.get("PAID_LOCKED", False):
@@ -2002,11 +1925,11 @@ async def general_callback(client: Client, q: CallbackQuery):
       ]
       if not filtered_batches:
         return await q.edit_message_text(
-            f"❌ Is category ({cat_name}) me abhi koi {b_type.title()} batch"
+            f"  Is category ({cat_name}) me abhi koi {b_type.title()} batch"
             " nahi hai.",
             reply_markup=InlineKeyboardMarkup([[
                 InlineKeyboardButton(
-                    "🔙 Back", callback_data=f"showcat_{cat_idx}"
+                    "  Back", callback_data=f"showcat_{cat_idx}"
                 )
             ]]),
             parse_mode=ParseMode.MARKDOWN,
@@ -2018,7 +1941,7 @@ async def general_callback(client: Client, q: CallbackQuery):
       kb = [
           [
               InlineKeyboardButton(
-                  f"{'🔗' if b_type == 'free' else '💎'} {name}",
+                  f"{' ' if b_type == 'free' else ' '} {name}",
                   callback_data=(
                       f"get_f_{cid}" if b_type == "free" else f"view_p_{cid}"
                   ),
@@ -2030,29 +1953,28 @@ async def general_callback(client: Client, q: CallbackQuery):
       if page > 0:
         nav_buttons.append(
             InlineKeyboardButton(
-                "⬅️ Back", callback_data=f"listcat_{cat_idx}_{b_type}_{page-1}"
+                "  Back", callback_data=f"listcat_{cat_idx}_{b_type}_{page-1}"
             )
         )
       if end_idx < total:
         nav_buttons.append(
             InlineKeyboardButton(
-                "Next ➡️", callback_data=f"listcat_{cat_idx}_{b_type}_{page+1}"
+                "Next  ", callback_data=f"listcat_{cat_idx}_{b_type}_{page+1}"
             )
         )
       if nav_buttons:
         kb.append(nav_buttons)
       kb.append([
           InlineKeyboardButton(
-              "🔙 Category Menu", callback_data=f"showcat_{cat_idx}"
+              "  Category Menu", callback_data=f"showcat_{cat_idx}"
           )
       ])
       await q.edit_message_text(
-          f"📚 **{cat_name} ({b_type.title()})**\n\nNeeche diye gaye batches par"
+          f"  **{cat_name} ({b_type.title()})**\n\nNeeche diye gaye batches par"
           " click karke join karein:",
           reply_markup=InlineKeyboardMarkup(kb),
           parse_mode=ParseMode.MARKDOWN,
       )
-
     elif data.startswith("delcat_"):
       await q.answer()
       cat_idx = int(data.split("_")[1])
@@ -2062,7 +1984,7 @@ async def general_callback(client: Client, q: CallbackQuery):
       deleted_cat = categories[cat_idx]
       if deleted_cat == "Other Batches":
         return await q.answer(
-            "❌ 'Other Batches' ko delete nahi kiya ja sakta!", show_alert=True
+            "  'Other Batches' ko delete nahi kiya ja sakta!", show_alert=True
         )
       DB["CATEGORIES"].remove(deleted_cat)
       shifted_count = 0
@@ -2073,35 +1995,29 @@ async def general_callback(client: Client, q: CallbackQuery):
             shifted_count += 1
       await save_data_async()
       await q.edit_message_text(
-          f"✅ Category **{deleted_cat}** delete kar di gayi hai.\n\n🔄 Uske"
+          f"  Category **{deleted_cat}** delete kar di gayi hai.\n\n  Uske"
           f" **{shifted_count} batches** automatically 'Other Batches' me shift"
           " ho gaye hain.",
           parse_mode=ParseMode.MARKDOWN,
       )
-
     elif data == "cancel_delcat":
       await q.answer()
-      await q.edit_message_text("❌ Category deletion cancelled.")
-
+      await q.edit_message_text("  Category deletion cancelled.")
     elif data.startswith("get_f_"):
       cid = int(data.split("_")[2])
       if await is_already_in_channel_pyro(client, cid, uid):
-        return await q.answer("⚠️ Already Joined!", show_alert=True)
-
-      # --- ANTI-SPAM Rule A: global 15-min cooldown ---
+        return await q.answer("  Already Joined!", show_alert=True)
       cooldown_left = get_cooldown_remaining(uid)
       if cooldown_left > 0:
         return await q.answer(
-            "⏳ Please wait 15 minutes before requesting another link.",
+            "  Please wait 15 minutes before requesting another link.",
             show_alert=True,
         )
-      # --- ANTI-SPAM Rule B: one active link per batch ---
       if has_active_request(uid, cid):
         return await q.answer(
-            "⚠️ You already have an active request/link for this batch!",
+            "  You already have an active request/link for this batch!",
             show_alert=True,
         )
-
       try:
         bname = DB["ALL_CHATS"].get(cid, f"Batch {cid}")
         l = await client.create_chat_invite_link(
@@ -2110,10 +2026,9 @@ async def general_callback(client: Client, q: CallbackQuery):
             name=f"Free-{uid}",
             expire_date=datetime.now() + timedelta(seconds=60),
         )
-        register_link_request(uid, cid)  # stamp cooldown + mark batch active
-        # Button generate karna
+        register_link_request(uid, cid)  
         kb = [[InlineKeyboardButton("  Join Batch", url=l.invite_link)]]
-        
+                 
         sent_msg = await client.send_message(
             uid,
             f"  <b>Link Generated!</b>\n\n<b>{bname}</b>\n\n  <i>Request auto-approved.</i>\n  <i>(Expires in 1 min)</i>",
@@ -2124,61 +2039,51 @@ async def general_callback(client: Client, q: CallbackQuery):
         await q.answer("Sent to DM")
       except Exception as e:
         await q.answer(f"Bot Error: {e}", show_alert=True)
-
     elif data.startswith("view_p_"):
       cid = int(data.split("_")[2])
-      # 🔥 FIX: check the lock BEFORE q.answer() — view_p_ previously had
-      # no lock check at all, so a locked paid batch would still open.
       if DB.get("PAID_LOCKED", False):
         return await q.answer("Sorry, but at this moment the paid batch is locked. When it will unlock I will inform you.", show_alert=True)
       await q.answer()
       kb = [
           [
               InlineKeyboardButton(
-                  "🔗 Request Access", callback_data=f"req_access_{cid}"
+                  "  Request Access", callback_data=f"req_access_{cid}"
               )
           ],
-          [InlineKeyboardButton("🔙 Back", callback_data="u_main")],
+          [InlineKeyboardButton("  Back", callback_data="u_main")],
       ]
       try:
         await q.edit_message_text(
-            "💎 **Premium Access:**\nClick below.",
+            "  **Premium Access:**\nClick below.",
             reply_markup=InlineKeyboardMarkup(kb),
             parse_mode=ParseMode.MARKDOWN,
         )
       except Exception:
         pass
-
     elif data.startswith("req_access_"):
       cid = int(data.split("_")[2])
-      # 🔥 FIX: lock check FIRST, before any q.answer() call.
       if DB.get("PAID_LOCKED", False):
         return await q.answer("Sorry, but at this moment the paid batch is locked. When it will unlock I will inform you.", show_alert=True)
       if not await check_membership_pyro(uid, client):
         return await q.answer("  Join Main First!", show_alert=True)
       if await is_already_in_channel_pyro(client, cid, uid):
         return await q.answer("  Already joined!", show_alert=True)
-
-      # --- ANTI-SPAM Rule A: global 15-min cooldown across ANY link type ---
       cooldown_left = get_cooldown_remaining(uid)
       if cooldown_left > 0:
         return await q.answer(
-            "⏳ Please wait 15 minutes before requesting another link.",
+            "  Please wait 15 minutes before requesting another link.",
             show_alert=True,
         )
-      # --- ANTI-SPAM Rule B: one active link per batch ---
       if has_active_request(uid, cid):
         return await q.answer(
-            "⚠️ You already have an active request/link for this batch!",
+            "  You already have an active request/link for this batch!",
             show_alert=True,
         )
-
       await q.answer("  Generating Link...")
-      
+             
       try:
         bname = DB["ALL_CHATS"].get(cid, f"Batch {cid}")
-        
-        # 1. FIXED TIMESTAMP ERROR HERE
+                 
         l = await client.create_chat_invite_link(
             cid,
             creates_join_request=True,
@@ -2186,20 +2091,18 @@ async def general_callback(client: Client, q: CallbackQuery):
             expire_date=datetime.now() + timedelta(seconds=60),
         )
         DB["LINK_MAP"][l.invite_link] = {"u": uid, "b": cid}
-        register_link_request(uid, cid)  # stamp cooldown + mark batch active
+        register_link_request(uid, cid)  
         await save_data_async()
-        
-        # YE LINE MISSING THI (topic_id define karna)
+                 
         topic_id = await get_or_create_topic(q.from_user, client)
-        
-        # 2. FIXED ADMIN NOTIFICATION HERE
+                 
         if topic_id:
           notification_text = (
-              f"🔔 <b>NEW REQUEST</b>\n"
-              f"👤 User: {q.from_user.mention}\n"
-              f"📂 Batch: <b>{bname}</b>\n"
-              f"🔗 Link: {l.invite_link}\n\n"
-              f"👇 <b>Action:</b>\n"
+              f"  <b>NEW REQUEST</b>\n"
+              f"  User: {q.from_user.mention}\n"
+              f"  Batch: <b>{bname}</b>\n"
+              f"  Link: {l.invite_link}\n\n"
+              f"  <b>Action:</b>\n"
               f"/demo {l.invite_link}\n"
               f"/per {l.invite_link}"
           )
@@ -2219,8 +2122,6 @@ async def general_callback(client: Client, q: CallbackQuery):
             )
           except Exception as e:
             print(f"Admin notification failed: {e}")
-
-        # 3. FIXED LINK HIDDEN IN BUTTON FOR USER HERE
         kb = [[InlineKeyboardButton("  Request Access", url=l.invite_link)]]
         user_msg_obj = await client.send_message(
             uid,
@@ -2229,94 +2130,88 @@ async def general_callback(client: Client, q: CallbackQuery):
             parse_mode=ParseMode.HTML,
         )
         await schedule_delete(client, user_msg_obj, delay=60)
-        
+               
       except Exception as e:
         await client.send_message(uid, f"  Error: {e}")
-
   except Exception as e:
     logger.error(f"Callback Error: {e}")
 
-
 # --- START, MENUS & CORE EVENTS ---
 async def show_tnc_menu(client: Client, message: Message):
-  kb = [[InlineKeyboardButton("✅ I Read & Accept", callback_data="accept_tnc")]]
+  kb = [[InlineKeyboardButton("  I Read & Accept", callback_data="accept_tnc")]]
   txt = (
-      "🚨 **STRICT WARNING & TERMS OF SERVICE** 🚨\n\n"
-      "🇬🇧 **ENGLISH:**\n"
+      "  **STRICT WARNING & TERMS OF SERVICE**  \n\n"
+      "  **ENGLISH:**\n"
       "If you leave the Main Channel or block this bot, you will be **INSTANTLY"
       " REMOVED** from ALL joined groups and channels.\n\n"
-      "🇮🇳 **HINDI:**\n"
+      "  **HINDI:**\n"
       "Agar aapne Main Channel ko chhoda (leave kiya) ya is bot ko block kiya,"
       " toh aapko sabhi groups aur channels se **TURANT NIKAL** diya jayega.\n\n"
-      "⚠️ *Click 'I Read & Accept' only if you agree to these terms.*"
+      "  *Click 'I Read & Accept' only if you agree to these terms.*"
   )
   await message.reply_text(
       txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN
   )
 
-
 async def show_tnc_menu_cb(client: Client, q: CallbackQuery):
-  kb = [[InlineKeyboardButton("✅ I Read & Accept", callback_data="accept_tnc")]]
+  kb = [[InlineKeyboardButton("  I Read & Accept", callback_data="accept_tnc")]]
   txt = (
-      "🚨 **STRICT WARNING & TERMS OF SERVICE** 🚨\n\n"
-      "🇬🇧 **ENGLISH:**\n"
+      "  **STRICT WARNING & TERMS OF SERVICE**  \n\n"
+      "  **ENGLISH:**\n"
       "If you leave the Main Channel or block this bot, you will be **INSTANTLY"
       " REMOVED** from ALL joined groups and channels.\n\n"
-      "🇮🇳 **HINDI:**\n"
+      "  **HINDI:**\n"
       "Agar aapne Main Channel ko chhoda (leave kiya) ya is bot ko block kiya,"
       " toh aapko sabhi groups aur channels se **TURANT NIKAL** diya jayega.\n\n"
-      "⚠️ *Click 'I Read & Accept' only if you agree to these terms.*"
+      "  *Click 'I Read & Accept' only if you agree to these terms.*"
   )
   await q.edit_message_text(
       txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN
   )
-
 
 async def show_user_menu(client: Client, message: Message):
   kb = [
       [
-          InlineKeyboardButton("📚 My Batches", callback_data="my_batches_0"),
-          InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0"),
+          InlineKeyboardButton("  My Batches", callback_data="my_batches_0"),
+          InlineKeyboardButton("  All Batches", callback_data="all_batches_0"),
       ],
-      [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")],
+      [InlineKeyboardButton("  Test Bot", callback_data="test_bot")],
       [
           InlineKeyboardButton(
-              "🎥 How to use the bot", url="https://t.me/telegram"
+              "  How to use the bot", url="https://t.me/telegram"
           )
       ],
-      [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")],
+      [InlineKeyboardButton("  My Info", callback_data="my_info")],
   ]
   txt = (
-      "🌟 **Welcome to the Premium Hub!** 🌟\nYour centralized portal for"
-      " exclusive communities.\n\n👇 *Select an option below:*"
+      "  **Welcome to the Premium Hub!**  \nYour centralized portal for"
+      " exclusive communities.\n\n  *Select an option below:*"
   )
   await message.reply_text(
       txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN
   )
 
-
 async def show_user_menu_cb(client: Client, q: CallbackQuery):
   kb = [
       [
-          InlineKeyboardButton("📚 My Batches", callback_data="my_batches_0"),
-          InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0"),
+          InlineKeyboardButton("  My Batches", callback_data="my_batches_0"),
+          InlineKeyboardButton("  All Batches", callback_data="all_batches_0"),
       ],
-      [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")],
+      [InlineKeyboardButton("  Test Bot", callback_data="test_bot")],
       [
           InlineKeyboardButton(
-              "🎥 How to use the bot", url="https://t.me/telegram"
+              "  How to use the bot", url="https://t.me/telegram"
           )
       ],
-      [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")],
+      [InlineKeyboardButton("  My Info", callback_data="my_info")],
   ]
   txt = (
-      "🌟 **Welcome to the Premium Hub!** 🌟\nYour centralized portal for"
-      " exclusive communities.\n\n👇 *Select an option below:*"
+      "  **Welcome to the Premium Hub!**  \nYour centralized portal for"
+      " exclusive communities.\n\n  *Select an option below:*"
   )
   await q.edit_message_text(
       txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN
   )
-
 
 async def start(client: Client, message: Message):
   user = message.from_user
@@ -2332,42 +2227,59 @@ async def start(client: Client, message: Message):
     await save_data_async()
   await get_or_create_topic(user, client)
 
+  if len(message.command) > 1:
+    start_param = message.command[1]
+    if start_param.startswith("join_"):
+        try:
+            cid = int(start_param.replace("join_", ""))
+            await process_deep_link_free(client, message, cid)
+            return
+        except Exception:
+            pass
+    elif start_param.startswith("buy_"):
+        try:
+            cid = int(start_param.replace("buy_", ""))
+            await process_deep_link_paid(client, message, cid)
+            return
+        except Exception:
+            pass
+
   if str(user.id) == str(OWNER_ID):
     kb = [
         [
-            InlineKeyboardButton("🔒 Security", callback_data="dash_locks"),
-            InlineKeyboardButton("🗄️ Database", callback_data="dash_db"),
+            InlineKeyboardButton("  Security", callback_data="dash_locks"),
+            InlineKeyboardButton("  Database", callback_data="dash_db"),
         ],
         [
-            InlineKeyboardButton("📦 Batches", callback_data="dash_batches"),
-            InlineKeyboardButton("👥 Staff", callback_data="dash_staff"),
+            InlineKeyboardButton("  Batches", callback_data="dash_batches"),
+            InlineKeyboardButton("  Staff", callback_data="dash_staff"),
         ],
         [
-            InlineKeyboardButton("📢 Comms", callback_data="dash_comms"),
-            InlineKeyboardButton("📊 Analytics", callback_data="dash_stats"),
+            InlineKeyboardButton("  Comms", callback_data="dash_comms"),
+            InlineKeyboardButton("  Analytics", callback_data="dash_stats"),
         ],
         [
             InlineKeyboardButton(
-                "🔑 Userbot Login & Stats", callback_data="userbot_details"
+                "  Userbot Login & Stats", callback_data="userbot_details"
             )
         ],
     ]
-    text = "🚀 **SYSTEM MASTER TERMINAL**\nSelect a module:"
+    text = "  **SYSTEM MASTER TERMINAL**\nSelect a module:"
     await message.reply_text(
         text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN
     )
   elif is_admin(user.id):
     kb = [
         [
-            InlineKeyboardButton("👤 Users", callback_data="adash_users"),
-            InlineKeyboardButton("✅ Approvals", callback_data="adash_approvals"),
+            InlineKeyboardButton("  Users", callback_data="adash_users"),
+            InlineKeyboardButton("  Approvals", callback_data="adash_approvals"),
         ],
         [
-            InlineKeyboardButton("📁 Batches", callback_data="adash_batches"),
-            InlineKeyboardButton("📢 Comms", callback_data="adash_comms"),
+            InlineKeyboardButton("  Batches", callback_data="adash_batches"),
+            InlineKeyboardButton("  Comms", callback_data="adash_comms"),
         ],
     ]
-    text = "🛡️ **ADMINISTRATOR DASHBOARD**\nSelect an action:"
+    text = "  **ADMINISTRATOR DASHBOARD**\nSelect an action:"
     await message.reply_text(
         text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN
     )
@@ -2379,18 +2291,17 @@ async def start(client: Client, message: Message):
   else:
     if not DB.get("NEW_USERS_ALLOWED", True):
       return await message.reply_text(
-          "⛔ **Entry Closed!**", parse_mode=ParseMode.MARKDOWN
+          "  **Entry Closed!**", parse_mode=ParseMode.MARKDOWN
       )
     kb = [
-        [InlineKeyboardButton("📢 Join Channel", url=MANDATORY_CHANNEL_LINK)],
-        [InlineKeyboardButton("✅ Verified", callback_data="verify")],
+        [InlineKeyboardButton("  Join Channel", url=MANDATORY_CHANNEL_LINK)],
+        [InlineKeyboardButton("  Verified", callback_data="verify")],
     ]
     await message.reply_text(
-        "⚠️ **Join Main Channel First**",
+        "  **Join Main Channel First**",
         reply_markup=InlineKeyboardMarkup(kb),
         parse_mode=ParseMode.MARKDOWN,
     )
-
 
 async def start_from_cb(client: Client, q: CallbackQuery):
   user = q.from_user
@@ -2398,39 +2309,39 @@ async def start_from_cb(client: Client, q: CallbackQuery):
   if str(user.id) == str(OWNER_ID):
     kb = [
         [
-            InlineKeyboardButton("🔒 Security", callback_data="dash_locks"),
-            InlineKeyboardButton("🗄️ Database", callback_data="dash_db"),
+            InlineKeyboardButton("  Security", callback_data="dash_locks"),
+            InlineKeyboardButton("  Database", callback_data="dash_db"),
         ],
         [
-            InlineKeyboardButton("📦 Batches", callback_data="dash_batches"),
-            InlineKeyboardButton("👥 Staff", callback_data="dash_staff"),
+            InlineKeyboardButton("  Batches", callback_data="dash_batches"),
+            InlineKeyboardButton("  Staff", callback_data="dash_staff"),
         ],
         [
-            InlineKeyboardButton("📢 Comms", callback_data="dash_comms"),
-            InlineKeyboardButton("📊 Analytics", callback_data="dash_stats"),
+            InlineKeyboardButton("  Comms", callback_data="dash_comms"),
+            InlineKeyboardButton("  Analytics", callback_data="dash_stats"),
         ],
         [
             InlineKeyboardButton(
-                "🔑 Userbot Login & Stats", callback_data="userbot_details"
+                "  Userbot Login & Stats", callback_data="userbot_details"
             )
         ],
     ]
-    text = "🚀 **SYSTEM MASTER TERMINAL**\nSelect a module:"
+    text = "  **SYSTEM MASTER TERMINAL**\nSelect a module:"
     await q.edit_message_text(
         text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN
     )
   elif is_admin(user.id):
     kb = [
         [
-            InlineKeyboardButton("👤 Users", callback_data="adash_users"),
-            InlineKeyboardButton("✅ Approvals", callback_data="adash_approvals"),
+            InlineKeyboardButton("  Users", callback_data="adash_users"),
+            InlineKeyboardButton("  Approvals", callback_data="adash_approvals"),
         ],
         [
-            InlineKeyboardButton("📁 Batches", callback_data="adash_batches"),
-            InlineKeyboardButton("📢 Comms", callback_data="adash_comms"),
+            InlineKeyboardButton("  Batches", callback_data="adash_batches"),
+            InlineKeyboardButton("  Comms", callback_data="adash_comms"),
         ],
     ]
-    text = "🛡️ **ADMINISTRATOR DASHBOARD**\nSelect an action:"
+    text = "  **ADMINISTRATOR DASHBOARD**\nSelect an action:"
     await q.edit_message_text(
         text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN
     )
@@ -2442,18 +2353,17 @@ async def start_from_cb(client: Client, q: CallbackQuery):
   else:
     if not DB.get("NEW_USERS_ALLOWED", True):
       return await q.edit_message_text(
-          "⛔ **Entry Closed!**", parse_mode=ParseMode.MARKDOWN
+          "  **Entry Closed!**", parse_mode=ParseMode.MARKDOWN
       )
     kb = [
-        [InlineKeyboardButton("📢 Join Channel", url=MANDATORY_CHANNEL_LINK)],
-        [InlineKeyboardButton("✅ Verified", callback_data="verify")],
+        [InlineKeyboardButton("  Join Channel", url=MANDATORY_CHANNEL_LINK)],
+        [InlineKeyboardButton("  Verified", callback_data="verify")],
     ]
     await q.edit_message_text(
-        "⚠️ **Join Main Channel First**",
+        "  **Join Main Channel First**",
         reply_markup=InlineKeyboardMarkup(kb),
         parse_mode=ParseMode.MARKDOWN,
     )
-
 
 async def delete_service_messages(client: Client, message: Message):
   try:
@@ -2463,9 +2373,8 @@ async def delete_service_messages(client: Client, message: Message):
     # Agar ab fail hua, toh terminal/logs mein exact error dikhayega
     print(f"Service message delete fail hua: {type(e).__name__} - {e}")
 
-
 # =====================================================================
-# 🔄 LIVE EDITED MESSAGES SYNC ENGINE
+# LIVE EDITED MESSAGES SYNC ENGINE
 # =====================================================================
 async def handle_edit(client: Client, message: Message):
     key = (message.chat.id, message.id)
@@ -2480,7 +2389,7 @@ async def handle_edit(client: Client, message: Message):
             pass
 
 # =====================================================================
-# 🗑️ LIVE DELETED MESSAGES SYNC ENGINE
+# LIVE DELETED MESSAGES SYNC ENGINE
 # =====================================================================
 async def handle_delete(client: Client, messages):
     try:
@@ -2498,7 +2407,7 @@ async def handle_delete(client: Client, messages):
         pass
 
 # =====================================================================
-# ❤️ 2-WAY REACTION SYNC ENGINE
+# 2-WAY REACTION SYNC ENGINE
 # =====================================================================
 # Mirrors a reaction added/changed/removed on either side of a support
 # ticket (User's DM <-> Admin's Forum Topic message) onto the paired
@@ -2511,15 +2420,13 @@ async def handle_reaction(client: Client, update):
         msg_id = getattr(update, "message_id", None)
         if not chat or not msg_id:
             return
-
         key = (chat.id, msg_id)
         if key not in MESSAGE_MAP:
             return
         target_chat, target_msg = MESSAGE_MAP[key]
-
         # `new_reaction` is the list of reactions now on the message (empty
         # list means the reaction was removed). We only mirror the first
-        # one — Telegram allows multiple reactions per message on some
+        # one   Telegram allows multiple reactions per message on some
         # tiers, but a 1:1 mirror keeps this predictable and simple.
         new_reactions = getattr(update, "new_reaction", None) or []
         emoji = None
@@ -2527,28 +2434,26 @@ async def handle_reaction(client: Client, update):
             emoji = getattr(new_reactions[0], "emoji", None)
             if not emoji:
                 # Custom (Telegram Premium) emoji reactions can't be mirrored
-                # with a plain emoji string — skip rather than send garbage.
+                # with a plain emoji string   skip rather than send garbage.
                 return
-
         # Passing emoji=None clears the bot's reaction on the target
         # message, which is exactly what should happen when the reaction
         # is removed on the source side.
         await client.send_reaction(target_chat, target_msg, emoji=emoji)
     except Exception as e:
-        logger.error(f"⚠️ Reaction sync failed: {e}")
+        logger.error(f"  Reaction sync failed: {e}")
 
 # =====================================================================
-# 💬 REGULAR MESSAGES & SUPPORT TICKETS ENGINE (BULLETPROOF 2-WAY)
+# REGULAR MESSAGES & SUPPORT TICKETS ENGINE (BULLETPROOF 2-WAY)
 # =====================================================================
 async def main_message_handler(client: Client, message: Message, is_retry=False):
     user, chat = message.from_user, message.chat
-
-    # 🔥 FIX (Bug A root cause): the old code did `if not user: return` right
+    #   FIX (Bug A root cause): the old code did `if not user: return` right
     # here, unconditionally, for the ENTIRE handler. message.from_user is
     # None whenever a message is sent by an Anonymous Admin or on behalf of
-    # a linked channel — which is exactly how a lot of admins post inside
+    # a linked channel   which is exactly how a lot of admins post inside
     # internal Support/Admin groups. That single early-return was silently
-    # eating every Admin ➔ User reply typed anonymously in the Support
+    # eating every Admin   User reply typed anonymously in the Support
     # Group topic, before the routing logic below ever got a chance to run.
     # Spam-throttling and the wizard/broadcast intercepts only make sense
     # for a real, identifiable DM sender, so they're now scoped to that
@@ -2567,24 +2472,24 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
         return
 
     # -------------------------------------------------------------
-    # 1. USER ➔ ADMIN (DM se Support Group Topic Me Forward)
+    # 1. USER   ADMIN (DM se Support Group Topic Me Forward)
     # -------------------------------------------------------------
     if chat.type == ChatType.PRIVATE:
         if DB.get("MAINTENANCE_MODE", False) and not is_admin(user.id):
-            return await message.reply_text("⚠️ **Under Maintenance.**")
-        
+            return await message.reply_text("  **Under Maintenance.**")
+                 
         try:
             topic_id = await get_or_create_topic(user, client)
             if not topic_id:
-                return await message.reply_text("⚠️ **Support Ticket Error:** Admin ne Support Group me Forum Topics enable nahi kiya hai.")
-            
+                return await message.reply_text("  **Support Ticket Error:** Admin ne Support Group me Forum Topics enable nahi kiya hai.")
+                         
             reply_id = None
             if message.reply_to_message:
                 reply_key = (chat.id, message.reply_to_message.id)
                 if reply_key in MESSAGE_MAP:
                     _, reply_id = MESSAGE_MAP[reply_key]
-            
-            # 🔥 FIX: message_thread_id reliably files the message under the
+                         
+            #   FIX: message_thread_id reliably files the message under the
             # user's topic in the forum group. reply_to_message_id is only
             # used to additionally quote a specific earlier message inside
             # that same thread. Some Pyrogram builds don't accept
@@ -2601,46 +2506,47 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
                 sent = await message.copy(int(SUPPORT_GROUP_ID), reply_to_message_id=target_reply_id)
             MESSAGE_MAP[(chat.id, message.id)] = (int(SUPPORT_GROUP_ID), sent.id)
             MESSAGE_MAP[(int(SUPPORT_GROUP_ID), sent.id)] = (chat.id, message.id)
+
         except Exception as e:
             err_str = str(e).lower()
-            
-            # 🔥 AUTO-HEALING: Agar Pyrogram peer cache stale ho gaya (PeerIdInvalid)
+                         
+            #   AUTO-HEALING: Agar Pyrogram peer cache stale ho gaya (PeerIdInvalid)
             if isinstance(e, (PeerIdInvalid,)) or "peer" in err_str and "invalid" in err_str:
                 if not is_retry:
                     try:
-                        await message.reply_text("⏳ Connection sync in progress... please wait a moment.")
+                        await message.reply_text("  Connection sync in progress... please wait a moment.")
                         import config
                         await config.refresh_peer_cache(client, SUPPORT_GROUP_ID)
                         return await main_message_handler(client, message, is_retry=True)
                     except Exception:
                         pass
-                
-            # 🔥 AUTO-HEALING: Agar purana topic delete ho gaya ho
+                             
+            #   AUTO-HEALING: Agar purana topic delete ho gaya ho
             elif ("reply" in err_str or "deleted" in err_str or "topic" in err_str) and not is_retry:
                 if user.id in DB.get("USER_TOPICS", {}):
                     del DB["USER_TOPICS"][user.id]
                     await save_data_async()
                     return await main_message_handler(client, message, is_retry=True)
-                    
+                                 
             if not is_retry:
-                await message.reply_text("⚠️ **Message deliver nahi ho paya!**\nAdmin ka Support Group ID theek se configured nahi hai.")
+                await message.reply_text("  **Message deliver nahi ho paya!**\nAdmin ka Support Group ID theek se configured nahi hai.")
 
     # -------------------------------------------------------------
-    # 2. ADMIN ➔ USER (Support Group Topic se DM Me Reply)
+    # 2. ADMIN   USER (Support Group Topic se DM Me Reply)
     # -------------------------------------------------------------
     elif str(chat.id) == str(SUPPORT_GROUP_ID):
         global _BOT_SELF_ID
         if _BOT_SELF_ID is None:
             _BOT_SELF_ID = (await client.get_me()).id
         # NOTE: `user` can legitimately be None here (Anonymous Admin /
-        # linked-channel post) — that's fine, we only need it to skip the
+        # linked-channel post)   that's fine, we only need it to skip the
         # bot's own echoed messages, never to identify who's replying.
         if user and user.id == _BOT_SELF_ID:
             return
 
         # --- Reliably resolve which support ticket topic this belongs to ---
         # message_thread_id is the field Pyrogram sets for any message
-        # living inside a forum topic — this is populated the same way
+        # living inside a forum topic   this is populated the same way
         # whether the sender is a normal admin or an Anonymous Admin, so
         # it alone is enough; reply_to_top_message_id is an older/secondary
         # signal for the same thing, kept as a fallback for older Pyrogram
@@ -2664,7 +2570,6 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
                 if str(t) == str(topic_id):
                     target_uid = int(u)
                     break
-
         # Fallback: if the topic lookup came up empty but this is a direct
         # reply to a message we already know is paired (via MESSAGE_MAP),
         # trust that pairing instead of giving up.
@@ -2675,32 +2580,31 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
                 target_uid = int(mapped_chat_id)
 
         if not target_uid:
-            return  # Not a recognized ticket topic/thread — ignore quietly.
+            return  # Not a recognized ticket topic/thread   ignore quietly.
 
         reply_id = None
         if message.reply_to_message:
             reply_key = (int(SUPPORT_GROUP_ID), message.reply_to_message.id)
             if reply_key in MESSAGE_MAP:
                 _, reply_id = MESSAGE_MAP[reply_key]
+
         try:
             try:
                 sent = await message.copy(target_uid, reply_to_message_id=reply_id)
             except Exception:
                 sent = await message.copy(target_uid)  # Fallback without reply-quote
-
             MESSAGE_MAP[(int(SUPPORT_GROUP_ID), message.id)] = (target_uid, sent.id)
             MESSAGE_MAP[(target_uid, sent.id)] = (int(SUPPORT_GROUP_ID), message.id)
         except Exception as e:
-            await message.reply_text(f"⚠️ **User ko deliver nahi hua!** Error: `{e}`")
+            await message.reply_text(f"  **User ko deliver nahi hua!** Error: `{e}`")
 
 async def on_chat_member_update(client: Client, update: ChatMemberUpdated):
   # SAFE CHECK: Agar new_chat_member None hai, toh wahi se return kar do
   if not update.new_chat_member:
     return
-    
+       
   user = update.new_chat_member.user
   status = update.new_chat_member.status
-  
   if str(update.chat.id).replace("-100", "") == str(
       MANDATORY_CHANNEL_ID
   ).replace("-100", "") and status in [
@@ -2712,11 +2616,10 @@ async def on_chat_member_update(client: Client, update: ChatMemberUpdated):
 
 async def track_chats(client: Client, update: ChatMemberUpdated):
   chat = update.chat
-  
   # SAFE CHECK: Prevent NoneType crash
   if not update.new_chat_member:
     return
-    
+       
   status = update.new_chat_member.status
   if (
       chat.type == ChatType.PRIVATE and status == ChatMemberStatus.BANNED
@@ -2726,11 +2629,12 @@ async def track_chats(client: Client, update: ChatMemberUpdated):
 async def background_sync(client: Client):
   global SPAM_CACHE, _SYNC_IN_PROGRESS
   SPAM_CACHE = {k: v for k, v in SPAM_CACHE.items() if time.time() - v < 2.0}
+
   if len(MESSAGE_MAP) > 5000:
     MESSAGE_MAP.clear()
 
   if _SYNC_IN_PROGRESS:
-    logger.warning("⚠️ Background sync already running. Skipping this cycle.")
+    logger.warning("  Background sync already running. Skipping this cycle.")
     return
 
   _SYNC_IN_PROGRESS = True
@@ -2751,14 +2655,11 @@ async def background_sync(client: Client):
           await execute_universal_kick(user_id, client)
       except Exception:
         pass
-
       await asyncio.sleep(1.0)
-
       if idx > 0 and idx % 100 == 0:
         await save_data_async()
   finally:
     _SYNC_IN_PROGRESS = False
-
 
 async def handle_join_request(client: Client, req: ChatJoinRequest):
   chat = req.chat
@@ -2775,7 +2676,7 @@ async def handle_join_request(client: Client, req: ChatJoinRequest):
         await client.approve_chat_join_request(chat.id, user.id)
         invalidate_membership_cache(user.id, chat.id)  # don't serve a stale "not joined" cache hit
         welcome_str = DB["CUSTOM_WELCOMES"].get(
-            chat.id, f"✅ **Approved!**\nWelcome to {chat.title}"
+            chat.id, f"  **Approved!**\nWelcome to {chat.title}"
         )
         w_msg = await client.send_message(
             user.id, welcome_str, parse_mode=ParseMode.MARKDOWN
@@ -2787,7 +2688,7 @@ async def handle_join_request(client: Client, req: ChatJoinRequest):
       try:
         await client.send_message(
             user.id,
-            f"⚠️ **Declined!**\nJoin Main:\n{MANDATORY_CHANNEL_LINK}",
+            f"  **Declined!**\nJoin Main:\n{MANDATORY_CHANNEL_LINK}",
             parse_mode=ParseMode.MARKDOWN,
         )
         await client.decline_chat_join_request(chat.id, user.id)
@@ -2801,7 +2702,6 @@ async def handle_join_request(client: Client, req: ChatJoinRequest):
         )
       except Exception:
         pass
-
 
 async def check_demos(client: Client):
   now = time.time()
@@ -2821,7 +2721,6 @@ async def check_demos(client: Client):
         if bid in data["demos"]:
           del data["demos"][bid]
           mod = True
-
   if DB.get("SCHEDULED_DELETES"):
     surviving = []
     for item in DB["SCHEDULED_DELETES"]:
@@ -2833,7 +2732,6 @@ async def check_demos(client: Client):
         mod = True
       else:
         surviving.append(item)
-
     if len(surviving) != len(DB.get("SCHEDULED_DELETES", [])):
       DB["SCHEDULED_DELETES"] = surviving
       mod = True
@@ -2857,16 +2755,14 @@ async def check_demos(client: Client):
     for uid_key in stale_users:
       del DB["PENDING_REQUESTS"][uid_key]
       mod = True
-
   if mod:
     await save_data_async()
-
 
 async def auto_backup_db(client: Client):
   if LOG_CHANNEL_ID and os.path.exists(DATA_FILE):
     try:
       await client.send_document(
-          int(LOG_CHANNEL_ID), document=DATA_FILE, caption="🛡️ Auto Backup"
+          int(LOG_CHANNEL_ID), document=DATA_FILE, caption="  Auto Backup"
       )
     except Exception:
       pass
