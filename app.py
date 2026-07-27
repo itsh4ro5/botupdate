@@ -87,6 +87,10 @@ async def index():
 async def explore_page():
     return await render_template('explore.html', bot_username=getattr(config, 'BOT_USERNAME', 'H4R_Bot'))
 
+@app.route('/extractor')
+async def extractor_page():
+    return await render_template('extractor.html', bot_username=getattr(config, 'BOT_USERNAME', 'H4R_Bot'))
+
 @app.route('/admin_panel')
 async def admin_page():
     return await render_template('admin.html', bot_username=getattr(config, 'BOT_USERNAME', 'H4R_Bot'))
