@@ -6,10 +6,12 @@ import httpx
 import json
 import os
 import base64
+import aiofiles
 from quart import Quart, jsonify, render_template, send_file, request
 import config
 from config import DB, OWNER_ID, is_admin, get_membership_cached
 from pyrogram.enums import ChatMemberStatus
+from pyrogram.errors import FloodWait
 
 # ==========================================
 # FIREBASE SETUP
@@ -22,15 +24,15 @@ def init_firebase():
     if not cred_b64:
         print("  FIREBASE ERROR: FIREBASE_CRED_B64 secret HF me nahi mila!")
         return None
-             
+        
     try:
         cred_dict = json.loads(base64.b64decode(cred_b64).decode('utf-8'))
         project_id = cred_dict.get("project_id")
         cred = credentials.Certificate(cred_dict)
-                 
+        
         if not firebase_admin._apps:
             firebase_admin.initialize_app(cred, {'projectId': project_id})
-                 
+            
         print(f"  Firebase Firestore Connected Successfully! (Project: {project_id})")
         return firestore.client()
     except Exception as e:
@@ -50,6 +52,7 @@ def sync_fs_read(uid):
 
 TESTBOOK_API_URL = "https://itsh4r01-live-stream-engine.hf.space"
 app = Quart(__name__)
+
 AVATAR_CACHE = {}
 AVATAR_CACHE_MAX_ENTRIES = 500
 
@@ -59,8 +62,10 @@ AVATAR_CACHE_MAX_ENTRIES = 500
 async def enforce_mandatory(user_id):
     if not getattr(config, "MANDATORY_CHANNEL_ID", 0): return None
     if str(user_id) == str(config.OWNER_ID) or config.is_admin(user_id): return None
+    
     bot = getattr(config, 'bot_app', None)
     if not bot: return None
+    
     is_joined = await config.get_membership_cached(bot, config.MANDATORY_CHANNEL_ID, user_id)
     if not is_joined:
         return jsonify({"error": "must_join", "channel_link": getattr(config, "MANDATORY_CHANNEL_LINK", "https://t.me/")}), 403
@@ -114,14 +119,17 @@ async def get_user_avatar(user_id):
     now = time.time()
     if user_id in AVATAR_CACHE and now - AVATAR_CACHE[user_id]["time"] < 3600:
         return await send_file(io.BytesIO(AVATAR_CACHE[user_id]["bytes"]), mimetype='image/jpeg')
+        
     if not hasattr(config, 'bot_app') or not config.bot_app:
         return "Bot not ready", 503
+        
     try:
         bot = config.bot_app
         photo = None
         async for p in bot.get_chat_photos(user_id, limit=1):
             photo = p
             break
+            
         if photo:
             file_obj = await bot.download_media(photo.file_id, in_memory=True)
             img_bytes = file_obj.getvalue() if hasattr(file_obj, "getvalue") else file_obj
@@ -133,6 +141,7 @@ async def get_user_avatar(user_id):
                 return await send_file(io.BytesIO(img_bytes), mimetype='image/jpeg')
     except Exception:
         pass
+        
     return "No avatar", 404
 
 @app.route('/api/user/<int:user_id>')
@@ -246,11 +255,11 @@ async def get_profile_stats(user_id):
     if chk: return chk
     
     fs_data = await asyncio.to_thread(sync_fs_read, user_id)
-         
+    
     total_flash = fs_data.get("flash_attempted", 0)
     correct_flash = fs_data.get("flash_correct", 0)
     accuracy = int((correct_flash / total_flash) * 100) if total_flash > 0 else 0
-         
+    
     stats = {
         "name": fs_data.get("name", "Unknown"),
         "points": fs_data.get("points", 0),
@@ -282,8 +291,6 @@ async def get_daily_quiz(user_id):
             "flashcard": "Math is simple! 2 + 2 = 4. And your Firebase is working perfectly!"
         }
     else:
-        import aiofiles
-        import json
         async with aiofiles.open(filename, 'r', encoding='utf-8') as f:
             content = await f.read()
             question_data = json.loads(content)
@@ -320,8 +327,6 @@ async def submit_quiz():
             "options": ["3", "4", "5", "6"]
         }
     else:
-        import aiofiles
-        import json
         async with aiofiles.open(filename, 'r', encoding='utf-8') as f: 
             content = await f.read()
             question_data = json.loads(content)
@@ -374,8 +379,6 @@ async def submit_quiz():
 async def past_flashcards():
     past_cards = []
     today = datetime.datetime.now().day
-    import aiofiles
-    import json
     if os.path.exists("daily_questions"):
         for file in os.listdir("daily_questions"):
             if file.endswith(".json"):
@@ -412,35 +415,35 @@ async def api_explore_data(user_id):
     
     user_key = str(user_id) if str(user_id) in DB["USER_DATA"] else (user_id if user_id in DB["USER_DATA"] else None)
     user_data = DB["USER_DATA"].get(user_key) if user_key else {}
-         
+    
     joined_list = user_data.get("joined_batches", [])
     demo_keys = list(user_data.get("demos", {}).keys())
     now = time.time()
-         
+    
     explore_data = {cat: {"free": [], "paid": []} for cat in DB.get("CATEGORIES", [])}
     if "Other Batches" not in explore_data: explore_data["Other Batches"] = {"free": [], "paid": []}
-         
+    
     for bid, name in DB.get("FREE_CHANNELS", {}).items():
         cat = DB.get("BATCH_CATEGORIES", {}).get(str(bid), "Other Batches")
         if cat not in explore_data: explore_data[cat] = {"free": [], "paid": []}
         is_joined = int(bid) in joined_list or str(bid) in joined_list
         explore_data[cat]["free"].append({"id": bid, "name": name, "status": "Joined" if is_joined else "Join Now"})
-              
+        
     for bid, name in DB.get("PAID_CHANNELS", {}).items():
         bid_str = str(bid)
         cat = DB.get("BATCH_CATEGORIES", {}).get(bid_str, "Other Batches")
         if cat not in explore_data: explore_data[cat] = {"free": [], "paid": []}
-                 
+        
         is_joined = int(bid) in joined_list or bid_str in joined_list
         has_demo = bid_str in demo_keys
         status = "Lifetime Access" if is_joined else ("Demo Run" if has_demo else "Buy Access")
-                  
+        
         if has_demo:
             exp = user_data["demos"][bid_str]["expiry"] if isinstance(user_data["demos"][bid_str], dict) else float(user_data["demos"][bid_str])
             if now > exp: status = "Expired"
-                      
+            
         explore_data[cat]["paid"].append({"id": bid, "name": name, "status": status})
-             
+        
     return jsonify({"categories": DB.get("CATEGORIES", []), "explore_data": explore_data, "paid_locked": DB.get("PAID_LOCKED", False)})
 
 @app.route('/api/tb/search')
@@ -465,7 +468,6 @@ async def tb_tests_proxy(series_id, section_id, sub_id):
 @app.route('/api/tb/extract/<test_id>', methods=['POST'])
 async def tb_extract_proxy(test_id):
     from quart import request
-    import asyncio
     data = await request.json
     async with httpx.AsyncClient(timeout=60) as client:
         res = await client.get(f"{TESTBOOK_API_URL}/api/extract/{test_id}")
@@ -488,26 +490,81 @@ async def tb_extract_proxy(test_id):
     # Offload the heavy CPU-bound string replacement & JSON dumping to a background thread
     html_content = await asyncio.to_thread(generate_html, q_data, details)
     return html_content, 200, {'Content-Type': 'text/html'}
+
+# NEW: PDF Note Extractor Proxy
+@app.route('/api/tb/pdf-note')
+async def tb_pdf_note_proxy():
+    """Proxy for extracting direct PDF links from Testbook"""
+    from quart import request
+    target_url = request.args.get('url')
+    if not target_url:
+        return jsonify({"error": "Missing URL parameter"}), 400
+        
+    async with httpx.AsyncClient(timeout=30) as client:
+        res = await client.get(f"{TESTBOOK_API_URL}/api/extract/pdf-note?url={target_url}")
+        
+    if res.status_code != 200:
+        return jsonify({"error": "Failed to extract PDF"}), res.status_code
+        
+    return jsonify(res.json()), 200
+
+# NEW: Current Affairs Quiz Extractor Proxy
+@app.route('/api/tb/current-affairs', methods=['POST'])
+async def tb_current_affairs_proxy():
+    """Proxy for extracting Current Affairs quizzes and generating the HTML Engine"""
+    from quart import request
     
+    data = await request.json
+    target_url = data.get('url')
+    if not target_url:
+        return jsonify({"error": "Missing URL parameter"}), 400
+        
+    async with httpx.AsyncClient(timeout=60) as client:
+        res = await client.get(f"{TESTBOOK_API_URL}/api/extract/current-affairs?url={target_url}")
+        res_data = res.json()
+        q_data = res_data.get('quiz_data', {})
+        
+    if 'error' in q_data or 'error' in res_data:
+        error_msg = q_data.get('error') or res_data.get('error')
+        return jsonify({"error": error_msg}), 400
+        
+    from html_generator import generate_html
+    
+    details = {
+        "Test Series": "Daily Current Affairs",
+        "Section": "General Knowledge",
+        "Subsection": "Daily Updates",
+        "Test Name": q_data.get('title', 'Current Affairs Quiz'),
+        "Questions": str(len(q_data.get('questions', []))),
+        "Duration": "15 minutes",
+        "Total Marks": str(len(q_data.get('questions', []))),
+        "Correct": "+1",
+        "Incorrect": "-0.25" 
+    }
+    
+    # Offload the heavy HTML compilation to prevent blocking Pyrogram
+    html_content = await asyncio.to_thread(generate_html, q_data, details)
+    return html_content, 200, {'Content-Type': 'text/html'}
+
 @app.route('/api/submit_tb_test', methods=['POST'])
 async def submit_tb_test():
     data = await request.json
     user_id = data.get("uid")
-         
+    
     if not user_id: 
         return jsonify({"error": "No user ID"}), 400
-             
+        
     fs_data = await asyncio.to_thread(sync_fs_read, user_id)
-         
+    
     points = fs_data.get("points", 0) + 50 
-    attempts = fs_data.get("flash_attempted", 0) + 1
-          
+    attempts = fs_data.get("flash_attempted", 0) + 1  
+    
     new_fs_data = {
         "uid": user_id,
         "points": points,
         "flash_attempted": attempts
     }
-         
+    
     await asyncio.to_thread(sync_fs_write, user_id, new_fs_data)
     return jsonify({"success": True})
 
@@ -518,13 +575,13 @@ async def submit_tb_test():
 async def api_owner_users(req_user_id):
     if str(req_user_id) != str(OWNER_ID) and req_user_id != OWNER_ID:
         return jsonify({"error": "Unauthorized"}), 403
-             
+        
     all_chats_dict = DB.get("ALL_CHATS", {})
     free_chats = DB.get("FREE_CHANNELS", {})
     paid_chats = DB.get("PAID_CHANNELS", {})
     users_list = []
     now = time.time()
-         
+    
     for uid, data in DB.get("USER_DATA", {}).items():
         joined_batches = data.get("joined_batches", [])
         free_joined = []
@@ -532,7 +589,7 @@ async def api_owner_users(req_user_id):
         for bid in joined_batches:
             bid_str = str(bid)
             bid_int = int(bid) if bid_str.lstrip('-').isdigit() else bid
-                         
+            
             if bid_str in free_chats or bid_int in free_chats:
                 name = free_chats.get(bid_str) or free_chats.get(bid_int) or all_chats_dict.get(bid_int, f"Batch {bid}")
                 free_joined.append({"id": bid, "name": name})
@@ -542,7 +599,7 @@ async def api_owner_users(req_user_id):
             else:
                 name = all_chats_dict.get(bid_int, f"Batch {bid}")
                 paid_joined.append({"id": bid, "name": name})
-                 
+                
         demos_list = []
         for bid, d_data in data.get("demos", {}).items():
             exp = d_data["expiry"] if isinstance(d_data, dict) else float(d_data)
@@ -550,7 +607,7 @@ async def api_owner_users(req_user_id):
                 "id": bid, "name": all_chats_dict.get(int(bid) if str(bid).lstrip('-').isdigit() else bid, f"Batch {bid}"),
                 "is_expired": now > exp, "time_left": max(0, int(exp - now)) // 3600
             })
-                     
+            
         users_list.append({
             "id": uid, 
             "name": data.get("name", "Unknown"), 
@@ -567,8 +624,6 @@ async def api_owner_users(req_user_id):
 @app.route('/api/owner/action', methods=['POST'])
 async def api_owner_action():
     from quart import request
-    from pyrogram.errors import FloodWait
-    import asyncio
     
     data = await request.json
     req_user_id = data.get('req_user_id')
