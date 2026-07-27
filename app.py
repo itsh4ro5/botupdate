@@ -269,9 +269,9 @@ async def get_daily_quiz(user_id):
     fs_data = await asyncio.to_thread(sync_fs_read, user_id)
     day_number = datetime.datetime.now().day
     filename = f"daily_questions/day_{day_number:03d}.json"
-         
+    
     today_str = datetime.datetime.now().strftime('%Y-%m-%d')
-         
+    
     # Fallback/Dummy Logic
     if not os.path.exists(filename):
         question_data = {
@@ -282,8 +282,11 @@ async def get_daily_quiz(user_id):
             "flashcard": "Math is simple! 2 + 2 = 4. And your Firebase is working perfectly!"
         }
     else:
-        with open(filename, 'r', encoding='utf-8') as f:
-            question_data = json.load(f)
+        import aiofiles
+        import json
+        async with aiofiles.open(filename, 'r', encoding='utf-8') as f:
+            content = await f.read()
+            question_data = json.loads(content)
             
     if fs_data.get("last_played") == today_str:
         return jsonify({
@@ -303,12 +306,13 @@ async def submit_quiz():
     data = await request.json
     user_id = data.get("uid")
     selected_option = data.get("selected_option")
-         
+    
     user_key = str(user_id) if str(user_id) in DB["USER_DATA"] else (user_id if user_id in DB["USER_DATA"] else None)
     if not user_key: return jsonify({"error": "User not found"}), 404
+    
     day_number = datetime.datetime.now().day
     filename = f"daily_questions/day_{day_number:03d}.json"
-         
+    
     if not os.path.exists(filename):
         question_data = {
             "answer_index": 1,
@@ -316,15 +320,18 @@ async def submit_quiz():
             "options": ["3", "4", "5", "6"]
         }
     else:
-        with open(filename, 'r', encoding='utf-8') as f: 
-            question_data = json.load(f)
-         
+        import aiofiles
+        import json
+        async with aiofiles.open(filename, 'r', encoding='utf-8') as f: 
+            content = await f.read()
+            question_data = json.loads(content)
+            
     correct_index = question_data["answer_index"]
     is_correct = (selected_option == correct_index)
     flashcard_text = question_data.get("flashcard", "Concept updated!")
-         
+    
     today_str = datetime.datetime.now().strftime('%Y-%m-%d')
-         
+    
     fs_data = await asyncio.to_thread(sync_fs_read, user_id)
     points = fs_data.get("points", 0)
     streak = fs_data.get("streak", 0)
@@ -353,9 +360,9 @@ async def submit_quiz():
         "badges": badges,
         "last_played": today_str
     }
-         
+    
     await asyncio.to_thread(sync_fs_write, user_id, new_fs_data)
-         
+    
     return jsonify({
         "is_correct": is_correct, 
         "correct_index": correct_index,
@@ -367,13 +374,16 @@ async def submit_quiz():
 async def past_flashcards():
     past_cards = []
     today = datetime.datetime.now().day
+    import aiofiles
+    import json
     if os.path.exists("daily_questions"):
         for file in os.listdir("daily_questions"):
             if file.endswith(".json"):
                 day_num = int(file.split("_")[1].split(".")[0])
                 if day_num < today:
-                    with open(os.path.join("daily_questions", file), 'r', encoding='utf-8') as f:
-                        data = json.load(f)
+                    async with aiofiles.open(os.path.join("daily_questions", file), 'r', encoding='utf-8') as f:
+                        content = await f.read()
+                        data = json.loads(content)
                         past_cards.append({
                             "day": day_num,
                             "question": data["question"],
@@ -455,6 +465,7 @@ async def tb_tests_proxy(series_id, section_id, sub_id):
 @app.route('/api/tb/extract/<test_id>', methods=['POST'])
 async def tb_extract_proxy(test_id):
     from quart import request
+    import asyncio
     data = await request.json
     async with httpx.AsyncClient(timeout=60) as client:
         res = await client.get(f"{TESTBOOK_API_URL}/api/extract/{test_id}")
@@ -473,7 +484,9 @@ async def tb_extract_proxy(test_id):
         "Correct": "+1",
         "Incorrect": "-0.25" 
     }
-    html_content = generate_html(q_data, details)
+    
+    # Offload the heavy CPU-bound string replacement & JSON dumping to a background thread
+    html_content = await asyncio.to_thread(generate_html, q_data, details)
     return html_content, 200, {'Content-Type': 'text/html'}
     
 @app.route('/api/submit_tb_test', methods=['POST'])
