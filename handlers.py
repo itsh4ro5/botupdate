@@ -776,7 +776,14 @@ async def cmd_myinfo(client: Client, message: Message):
     if not message.from_user:
         return
     uid = message.from_user.id
-    txt = f"  **MY INFO**\n  ID: `{uid}`\n"
+    user_key = uid if uid in DB["USER_DATA"] else str(uid)
+    refer_points = DB["USER_DATA"].get(user_key, {}).get("referral_count", 0)
+    
+    txt = (
+        f"👤 **MY INFO**\n"
+        f"🆔 **ID:** `{uid}`\n"
+        f"🎁 **Refer Points:** `{refer_points}`\n"
+    )
     await message.reply_text(txt, parse_mode=ParseMode.MARKDOWN)
 
 async def cmd_approve_demo(client: Client, message: Message):
@@ -1661,9 +1668,46 @@ async def general_callback(client: Client, q: CallbackQuery):
         elif data == "u_main":
             await q.answer()
             await show_user_menu_cb(client, q)
+
+        # --- MY INFO VIEW ---
         elif data == "my_info":
             await q.answer()
-            await cmd_myinfo(client, q.message)
+            user_key = uid if uid in DB["USER_DATA"] else str(uid)
+            refer_points = DB["USER_DATA"].get(user_key, {}).get("referral_count", 0)
+
+            txt = (
+                f"👤 **MY INFO**\n"
+                f"🆔 **ID:** `{uid}`\n"
+                f"🎁 **Refer Points:** `{refer_points}`\n\n"
+                f"💡 *Aapke refer kiye gaye dost jab bot use karke Special Batch unlock karenge, tab aapke points badhenge.*"
+            )
+            kb = [[InlineKeyboardButton("🔙 Back", callback_data="u_main")]]
+            await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
+        # --- HOME MENU: REFER & JOIN LIST ---
+        elif data == "menu_refer":
+            await q.answer()
+            special_batches = DB.get("SPECIAL_CHANNELS", {})
+            if not special_batches:
+                return await q.edit_message_text(
+                    "❌ Abhi koi Special Batch available nahi hai jise aap refer kar sakein.",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="u_main")]]),
+                    parse_mode=ParseMode.MARKDOWN
+                )
+
+            kb = []
+            for cid, name in special_batches.items():
+                kb.append([InlineKeyboardButton(f"✨ {name}", callback_data=f"view_s_{cid}")])
+
+            kb.append([InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")])
+
+            await q.edit_message_text(
+                "🎁 **REFER & JOIN SPECIAL BATCHES**\n\n"
+                "Neeche diye gaye kisi bhi Special Batch ko select karein aur apna Referral Link generate karein. "
+                "Apne dosto ko invite karein aur dono ke liye batch FREE me unlock karein!",
+                reply_markup=InlineKeyboardMarkup(kb),
+                parse_mode=ParseMode.MARKDOWN
+            )
 
         # --- MANDATORY CHANNEL VERIFICATION & REFERRAL PROCESSOR ---
         elif data == "verify":
@@ -2147,30 +2191,32 @@ async def show_tnc_menu_cb(client: Client, q: CallbackQuery):
 async def show_user_menu(client: Client, message: Message):
     kb = [
         [
-            InlineKeyboardButton("  My Batches", callback_data="my_batches_0"),
-            InlineKeyboardButton("  All Batches", callback_data="all_batches_0"),
+            InlineKeyboardButton("📚 My Batches", callback_data="my_batches_0"),
+            InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0"),
         ],
-        [InlineKeyboardButton("  Test Bot", callback_data="test_bot")],
-        [InlineKeyboardButton("  How to use the bot", url="https://t.me/telegram")],
-        [InlineKeyboardButton("  My Info", callback_data="my_info")],
+        [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")],
+        [InlineKeyboardButton("🎥 How to use the bot", url="https://t.me/c/2836314734/1244")],
+        [InlineKeyboardButton("🎁 Refer & Join", callback_data="menu_refer")],
+        [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")],
     ]
     txt = (
-        "  **Welcome to the Premium Hub!**  \nYour centralized portal for exclusive communities.\n\n  *Select an option below:*"
+        "🌟 **Welcome to the Premium Hub!** 🌟\nYour centralized portal for exclusive communities.\n\n👇 *Select an option below:*"
     )
     await message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
 async def show_user_menu_cb(client: Client, q: CallbackQuery):
     kb = [
         [
-            InlineKeyboardButton("  My Batches", callback_data="my_batches_0"),
-            InlineKeyboardButton("  All Batches", callback_data="all_batches_0"),
+            InlineKeyboardButton("📚 My Batches", callback_data="my_batches_0"),
+            InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0"),
         ],
-        [InlineKeyboardButton("  Test Bot", callback_data="test_bot")],
-        [InlineKeyboardButton("  How to use the bot", url="https://t.me/telegram")],
-        [InlineKeyboardButton("  My Info", callback_data="my_info")],
+        [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")],
+        [InlineKeyboardButton("🎥 How to use the bot", url="https://t.me/c/2836314734/1244")],
+        [InlineKeyboardButton("🎁 Refer & Join", callback_data="menu_refer")],
+        [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")],
     ]
     txt = (
-        "  **Welcome to the Premium Hub!**  \nYour centralized portal for exclusive communities.\n\n  *Select an option below:*"
+        "🌟 **Welcome to the Premium Hub!** 🌟\nYour centralized portal for exclusive communities.\n\n👇 *Select an option below:*"
     )
     await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
