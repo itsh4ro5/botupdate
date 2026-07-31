@@ -1752,7 +1752,9 @@ async def general_callback(client: Client, q: CallbackQuery):
         elif data.startswith("gen_ref_"):
             batch_id = int(data.split("_")[2])
             batch_name = DB.get("ALL_CHATS", {}).get(batch_id) or DB.get("SPECIAL_CHANNELS", {}).get(batch_id) or f"Batch {batch_id}"
-            bot_username = getattr(config, "BOT_USERNAME", "H4R_Bot")
+            
+            # 🔥 Hardcoded your exact bot username
+            bot_username = "H4R_Contact_bot"
             
             ref_link = f"https://t.me/{bot_username}?start=ref_{batch_id}_{uid}"
             share_text = f"🎁 Get FREE access to {batch_name}!\n\nClick the link below to start the bot. We BOTH will instantly unlock lifetime access to this batch! 🚀"
@@ -1777,7 +1779,10 @@ async def general_callback(client: Client, q: CallbackQuery):
 
         elif data.startswith("copy_ref_"):
             batch_id = int(data.split("_")[2])
-            bot_username = getattr(config, "BOT_USERNAME", "H4R_Bot")
+            
+            # 🔥 Hardcoded your exact bot username here too
+            bot_username = "H4R_Contact_bot"
+            
             ref_link = f"https://t.me/{bot_username}?start=ref_{batch_id}_{uid}"
             await q.answer(f"Copied: {ref_link}", show_alert=True)
 
@@ -2224,9 +2229,11 @@ async def start(client: Client, message: Message):
     user = message.from_user
     await set_role_based_commands(user.id, client)
     
-    user_key = user.id if user.id in DB["USER_DATA"] else str(user.id)
+    # 🔥 FIX: Properly handle Integer/String ID matching for new users
+    user_key = user.id if user.id in DB.get("USER_DATA", {}) else (str(user.id) if str(user.id) in DB.get("USER_DATA", {}) else user.id)
+    
     if user_key not in DB["USER_DATA"]:
-        DB["USER_DATA"][user.id] = {
+        DB["USER_DATA"][user_key] = {
             "name": f"{user.first_name or ''} {user.last_name or ''}".strip(),
             "username": user.username,
             "joined_at": time.time(),
