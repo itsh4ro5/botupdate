@@ -4,6 +4,7 @@ import io
 import os
 import re
 import time
+import urllib.parse
 import logging
 from config import *
 import pyrogram
@@ -129,99 +130,48 @@ async def set_role_based_commands(user_id: int, client: Client):
         pass
 
 # =====================================================================
-# REFERRAL FULFILLMENT ENGINE
+# REFERRAL POINTS & UNLOCK ENGINE
 # =====================================================================
-async def handle_referral_redemption(client: Client, referee, referrer_id: int, batch_id: int):
-    referee_id = referee.id
-    if referee_id == referrer_id:
-        try:
-            await client.send_message(
-                referee_id,
-                "⚠️ **Aap khud ke referral link se batch unlock nahi kar sakte!**\nApne kisi dost ko link share karein.",
-                parse_mode=ParseMode.MARKDOWN
-            )
-        except Exception:
-            pass
-        return
-
+async def process_successful_referral(client: Client, referee_id: int, referrer_id: int):
     referrer_key = referrer_id if referrer_id in DB["USER_DATA"] else str(referrer_id)
     referee_key = referee_id if referee_id in DB["USER_DATA"] else str(referee_id)
-
+    
     if referrer_key not in DB["USER_DATA"]:
         return
 
-    DB["USER_DATA"][referrer_key].setdefault("unlocked_batches", [])
-    DB["USER_DATA"][referee_key].setdefault("unlocked_batches", [])
-
-    referrer_unlocked = DB["USER_DATA"][referrer_key]["unlocked_batches"]
-    referee_unlocked = DB["USER_DATA"][referee_key]["unlocked_batches"]
-
-    if batch_id in referee_unlocked or str(batch_id) in referee_unlocked:
-        try:
-            await client.send_message(
-                referee_id,
-                "ℹ️ **Aapne pehle se is Special Batch ka access unlock kiya hua hai!**",
-                parse_mode=ParseMode.MARKDOWN
-            )
-        except Exception:
-            pass
-        return
-
-    referee_unlocked.append(batch_id)
-    if batch_id not in referrer_unlocked and str(batch_id) not in referrer_unlocked:
-        referrer_unlocked.append(batch_id)
-        DB["USER_DATA"][referrer_key]["referral_count"] = DB["USER_DATA"][referrer_key].get("referral_count", 0) + 1
-
+    # Referrer ko 1 Point aur +1 Invites count dein
+    DB["USER_DATA"][referrer_key]["referral_count"] = DB["USER_DATA"][referrer_key].get("referral_count", 0) + 1
+    DB["USER_DATA"][referrer_key]["total_invited"] = DB["USER_DATA"][referrer_key].get("total_invited", 0) + 1
+    
+    # Referee (Naye user) ko bhi 1 Point bonus dein
+    if referee_key in DB["USER_DATA"]:
+        DB["USER_DATA"][referee_key]["referral_count"] = DB["USER_DATA"][referee_key].get("referral_count", 0) + 1
+    
     await save_data_async()
 
-    batch_name = DB.get("ALL_CHATS", {}).get(batch_id) or DB.get("SPECIAL_CHANNELS", {}).get(batch_id) or DB.get("PAID_CHANNELS", {}).get(batch_id) or f"Special Batch {batch_id}"
-
+    # Referrer notification
     try:
-        link_referee = await client.create_chat_invite_link(
-            chat_id=int(batch_id),
-            creates_join_request=False,
-            name=f"Ref-Referee-{referee_id}",
-            member_limit=1
-        )
-        link_referrer = await client.create_chat_invite_link(
-            chat_id=int(batch_id),
-            creates_join_request=False,
-            name=f"Ref-Referrer-{referrer_id}",
-            member_limit=1
-        )
-
-        kb_referee = InlineKeyboardMarkup([[InlineKeyboardButton("🚀 Join Special Batch", url=link_referee.invite_link)]])
-        await client.send_message(
-            referee_id,
-            f"🎉 **CONGRATULATIONS!**\n\nAapne saare steps (Mandatory channel & Terms) complete kar liye hain!\nAb aap **1 Special Batch ({batch_name})** join kar sakte hain.\n\nNeeche diye gaye button se batch join karein:",
-            reply_markup=kb_referee,
-            parse_mode=ParseMode.MARKDOWN
-        )
-
-        kb_referrer = InlineKeyboardMarkup([[InlineKeyboardButton("🎁 Claim Unlocked Batch", url=link_referrer.invite_link)]])
         await client.send_message(
             referrer_id,
-            f"🔥 **REFERRAL SUCCESSFUL!**\n\n**{referee.first_name}** ne saare steps complete kar liye hain!\n\nAap dono ke liye **{batch_name}** unlock ho gaya hai. Join karne ke liye button par click karein:",
-            reply_markup=kb_referrer,
+            "🎉 **REFERRAL SUCCESSFUL!**\n\n"
+            "Aapke bheje gaye link se ek naye user ne saare steps complete kar liye hain! Aapko **1 Coin** mil gaya hai. 🎁\n"
+            "Ab aap is coin ka use karke koi bhi Special Batch unlock kar sakte hain.",
             parse_mode=ParseMode.MARKDOWN
         )
-    except Exception as e:
-        logger.error(f"Referral Invite Link Error: {e}")
-        clean_id = str(batch_id).replace("-100", "")
-        direct_url = f"https://t.me/c/{clean_id}/1"
-        kb_fallback = InlineKeyboardMarkup([[InlineKeyboardButton("🚀 Open Special Batch", url=direct_url)]])
+    except Exception:
+        pass
+
+    # Referee notification
+    try:
         await client.send_message(
             referee_id,
-            f"🎉 **CONGRATULATIONS!**\n\nAapne saare steps complete kar liye hain! Aapka **{batch_name}** unlock ho gaya hai.",
-            reply_markup=kb_fallback,
+            "🎉 **WELCOME BONUS!**\n\n"
+            "Aapko referral link use karne ke liye **1 Coin bonus** mila hai! 🎁\n"
+            "Ab aap is coin ka use karke Special Batch unlock kar sakte hain.",
             parse_mode=ParseMode.MARKDOWN
         )
-        await client.send_message(
-            referrer_id,
-            f"🎉 **REFERRAL SUCCESSFUL!** **{referee.first_name}** ne join kiya! Aapka **{batch_name}** unlock ho gaya hai.",
-            reply_markup=kb_fallback,
-            parse_mode=ParseMode.MARKDOWN
-        )
+    except Exception:
+        pass
 
 # --- COMMANDS ---
 async def cmd_add_admin(client: Client, message: Message):
@@ -778,11 +728,13 @@ async def cmd_myinfo(client: Client, message: Message):
     uid = message.from_user.id
     user_key = uid if uid in DB["USER_DATA"] else str(uid)
     refer_points = DB["USER_DATA"].get(user_key, {}).get("referral_count", 0)
+    total_invited = DB["USER_DATA"].get(user_key, {}).get("total_invited", 0)
     
     txt = (
         f"👤 **MY INFO**\n"
         f"🆔 **ID:** `{uid}`\n"
-        f"🎁 **Refer Points:** `{refer_points}`\n"
+        f"👥 **Total Refers:** `{total_invited}`\n"
+        f"🎁 **Available Coins:** `{refer_points}`\n"
     )
     await message.reply_text(txt, parse_mode=ParseMode.MARKDOWN)
 
@@ -1659,9 +1611,9 @@ async def general_callback(client: Client, q: CallbackQuery):
 
             # Process pending referral if referee accepts TnC
             if "pending_referral" in DB["USER_DATA"][user_key]:
-                pref = DB["USER_DATA"][user_key].pop("pending_referral")
+                referrer_id = DB["USER_DATA"][user_key].pop("pending_referral")
                 await save_data_async()
-                await handle_referral_redemption(client, q.from_user, pref["referrer_id"], pref["batch_id"])
+                await process_successful_referral(client, uid, referrer_id)
 
             await show_user_menu_cb(client, q)
 
@@ -1674,39 +1626,52 @@ async def general_callback(client: Client, q: CallbackQuery):
             await q.answer()
             user_key = uid if uid in DB["USER_DATA"] else str(uid)
             refer_points = DB["USER_DATA"].get(user_key, {}).get("referral_count", 0)
+            total_invited = DB["USER_DATA"].get(user_key, {}).get("total_invited", 0)
 
             txt = (
                 f"👤 **MY INFO**\n"
                 f"🆔 **ID:** `{uid}`\n"
-                f"🎁 **Refer Points:** `{refer_points}`\n\n"
-                f"💡 *Aapke refer kiye gaye dost jab bot use karke Special Batch unlock karenge, tab aapke points badhenge.*"
+                f"👥 **Total Refers:** `{total_invited}`\n"
+                f"🎁 **Available Coins:** `{refer_points}`\n\n"
+                f"💡 *In coins ka use karke aap koi bhi Special Batch unlock kar sakte hain.*"
             )
             kb = [[InlineKeyboardButton("🔙 Back", callback_data="u_main")]]
             await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
-        # --- HOME MENU: REFER & JOIN LIST ---
+        # --- HOME MENU: REFER & EARN LAYOUT ---
         elif data == "menu_refer":
             await q.answer()
-            special_batches = DB.get("SPECIAL_CHANNELS", {})
-            if not special_batches:
-                return await q.edit_message_text(
-                    "❌ Abhi koi Special Batch available nahi hai jise aap refer kar sakein.",
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="u_main")]]),
-                    parse_mode=ParseMode.MARKDOWN
-                )
+            bot_username = "H4R_Contact_bot"
+            ref_link = f"https://t.me/{bot_username}?start={uid}"
+            share_text = f"🚀 Crack your exams with H4R Bot! Get free access to premium study materials and special batches.\n\nStart now: {ref_link}"
+            share_url = f"https://t.me/share/url?url={urllib.parse.quote(ref_link)}&text={urllib.parse.quote(share_text)}"
 
-            kb = []
-            for cid, name in special_batches.items():
-                kb.append([InlineKeyboardButton(f"✨ {name}", callback_data=f"view_s_{cid}")])
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("📤 Share to Chat", url=share_url)],
+                [InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")]
+            ])
 
-            kb.append([InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")])
+            user_key = uid if uid in DB["USER_DATA"] else str(uid)
+            pts = DB["USER_DATA"].get(user_key, {}).get("referral_count", 0)
+            total_inv = DB["USER_DATA"].get(user_key, {}).get("total_invited", 0)
+
+            text = (
+                "🎁 **Refer & Earn Program**\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Invite your friends and earn a 1 coin on every successful refer they make!\n\n"
+                "Your friend also get 1 coin as a refer bonus will be instantly added to your wallet, which you can use to access special batch\n\n"
+                f"👥 Total Referred Users: {total_inv}\n"
+                f"💰 Total Earnings: {pts}\n\n"
+                "🔗 Your Referral Link:\n"
+                f"`{ref_link}`\n\n"
+                "Click the button below to share directly with your friends! 👇"
+            )
 
             await q.edit_message_text(
-                "🎁 **REFER & JOIN SPECIAL BATCHES**\n\n"
-                "Neeche diye gaye kisi bhi Special Batch ko select karein aur apna Referral Link generate karein. "
-                "Apne dosto ko invite karein aur dono ke liye batch FREE me unlock karein!",
-                reply_markup=InlineKeyboardMarkup(kb),
-                parse_mode=ParseMode.MARKDOWN
+                text,
+                reply_markup=kb,
+                parse_mode=ParseMode.MARKDOWN,
+                disable_web_page_preview=True
             )
 
         # --- MANDATORY CHANNEL VERIFICATION & REFERRAL PROCESSOR ---
@@ -1718,9 +1683,9 @@ async def general_callback(client: Client, q: CallbackQuery):
                     await show_tnc_menu_cb(client, q)
                 else:
                     if "pending_referral" in DB["USER_DATA"][user_key]:
-                        pref = DB["USER_DATA"][user_key].pop("pending_referral")
+                        referrer_id = DB["USER_DATA"][user_key].pop("pending_referral")
                         await save_data_async()
-                        await handle_referral_redemption(client, q.from_user, pref["referrer_id"], pref["batch_id"])
+                        await process_successful_referral(client, uid, referrer_id)
                     await start_from_cb(client, q)
             else:
                 await q.answer(
@@ -1747,44 +1712,6 @@ async def general_callback(client: Client, q: CallbackQuery):
                 await schedule_delete(client, sent_msg, delay=60)
             except Exception:
                 pass
-
-        # --- REFERRAL GENERATOR FOR BATCHES ---
-        elif data.startswith("gen_ref_"):
-            batch_id = int(data.split("_")[2])
-            batch_name = DB.get("ALL_CHATS", {}).get(batch_id) or DB.get("SPECIAL_CHANNELS", {}).get(batch_id) or f"Batch {batch_id}"
-            
-            # 🔥 Hardcoded your exact bot username
-            bot_username = "H4R_Contact_bot"
-            
-            ref_link = f"https://t.me/{bot_username}?start=ref_{batch_id}_{uid}"
-            share_text = f"🎁 Get FREE access to {batch_name}!\n\nClick the link below to start the bot. We BOTH will instantly unlock lifetime access to this batch! 🚀"
-            share_url = f"https://t.me/share/url?url={ref_link}&text={share_text}"
-
-            kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("📲 Share Link with Friend", url=share_url)],
-                [InlineKeyboardButton("📋 Copy Link", callback_data=f"copy_ref_{batch_id}")],
-                [InlineKeyboardButton("🔙 Back", callback_data="u_main")]
-            ])
-
-            await q.edit_message_text(
-                f"🎯 **REFERRAL LINK FOR SPECIAL BATCH**\n\n"
-                f"📌 **Batch:** `{batch_name}`\n\n"
-                f"🔗 **Your Referral Link:**\n`{ref_link}`\n\n"
-                f"💡 **Kaise kaam karta hai?**\n"
-                f"1️⃣ Upar diye gaye **'Share Link'** button par click karke kisi dost ko bhejein.\n"
-                f"2️⃣ Jaise hi wo mandatory channel join karke TnC accept karega, aap **dono** ke liye ye batch **FREE** me unlock ho jayega!",
-                reply_markup=kb,
-                parse_mode=ParseMode.MARKDOWN
-            )
-
-        elif data.startswith("copy_ref_"):
-            batch_id = int(data.split("_")[2])
-            
-            # 🔥 Hardcoded your exact bot username here too
-            bot_username = "H4R_Contact_bot"
-            
-            ref_link = f"https://t.me/{bot_username}?start=ref_{batch_id}_{uid}"
-            await q.answer(f"Copied: {ref_link}", show_alert=True)
 
         # --- MY BATCHES LISTING ---
         elif data.startswith("my_batches_"):
@@ -2073,32 +2000,91 @@ async def general_callback(client: Client, q: CallbackQuery):
             except Exception:
                 pass
 
-        # --- VIEW SPECIAL BATCH DETAILS ---
+        # =====================================================================
+        # 🌟 VIEW SPECIAL BATCH DETAILS & UNLOCK LOGIC
+        # =====================================================================
         elif data.startswith("view_s_"):
             cid = int(data.split("_")[2])
             await q.answer()
             bname = DB.get("ALL_CHATS", {}).get(cid) or DB.get("SPECIAL_CHANNELS", {}).get(cid) or f"Special Batch {cid}"
+            
             user_key = uid if uid in DB["USER_DATA"] else str(uid)
             unlocked_list = DB["USER_DATA"].get(user_key, {}).get("unlocked_batches", [])
             is_unlocked = cid in unlocked_list or str(cid) in unlocked_list
+            pts = DB["USER_DATA"].get(user_key, {}).get("referral_count", 0)
 
             kb = []
             if is_unlocked:
                 clean_id = str(cid).replace('-100', '')
                 kb.append([InlineKeyboardButton("🚀 Join Special Batch", url=f"https://t.me/c/{clean_id}/1")])
+                status_str = "🎉 Unlocked!"
+                desc = "Aapne is batch ko successfully unlock kar liya hai."
             else:
-                kb.append([InlineKeyboardButton("🎁 Refer 1 Friend to Unlock FREE", callback_data=f"gen_ref_{cid}")])
+                if pts >= 1:
+                    kb.append([InlineKeyboardButton("🔓 Unlock Batch (Cost: 1 Coin)", callback_data=f"unlock_s_{cid}")])
+                    status_str = "🔒 Locked"
+                    desc = f"Aapke paas **{pts} Coins** hain. Aap 1 Coin use karke is batch ko unlock kar sakte hain."
+                else:
+                    kb.append([InlineKeyboardButton("🎁 Get Refer Link", callback_data="menu_refer")])
+                    status_str = "🔒 Locked (Not Enough Coins)"
+                    desc = "Aapke paas enough coins nahi hain. Is batch ko unlock karne ke liye aapko **1 Coin** chahiye.\nApne dosto ko refer karke coins earn karein!"
 
             kb.append([InlineKeyboardButton("🔙 Back", callback_data="u_main")])
 
-            status_str = "🎉 Unlocked!" if is_unlocked else "🔒 Locked (Requires 1 Referral)"
             await q.edit_message_text(
                 f"✨ **SPECIAL BATCH:** `{bname}`\n\n"
-                f"**Status:** `{status_str}`\n\n"
-                f"Is batch ko unlock karne ke liye apne 1 dost ko bot par refer karein. Jaise hi wo mandatory channel join karke TnC accept karega, aap dono ka batch unlock ho jayega!",
+                f"**Status:** `{status_str}`\n\n{desc}",
                 reply_markup=InlineKeyboardMarkup(kb),
                 parse_mode=ParseMode.MARKDOWN
             )
+
+        # =====================================================================
+        # 🔓 UNLOCK SPECIAL BATCH (DEDUCT 1 POINT)
+        # =====================================================================
+        elif data.startswith("unlock_s_"):
+            cid = int(data.split("_")[2])
+            user_key = uid if uid in DB["USER_DATA"] else str(uid)
+            pts = DB["USER_DATA"].get(user_key, {}).get("referral_count", 0)
+
+            if pts < 1:
+                return await q.answer("❌ Aapke paas enough coins nahi hain!", show_alert=True)
+
+            # Deduct 1 point and add to unlocked list
+            DB["USER_DATA"][user_key]["referral_count"] -= 1
+            DB["USER_DATA"][user_key].setdefault("unlocked_batches", []).append(cid)
+            await save_data_async()
+            
+            bname = DB.get("ALL_CHATS", {}).get(cid) or DB.get("SPECIAL_CHANNELS", {}).get(cid) or f"Special Batch {cid}"
+
+            try:
+                # Generate unique 1-time invite link
+                l = await client.create_chat_invite_link(
+                    chat_id=cid,
+                    creates_join_request=False,
+                    name=f"Unlocked-{uid}",
+                    member_limit=1
+                )
+                kb = [
+                    [InlineKeyboardButton("🚀 Join Special Batch", url=l.invite_link)],
+                    [InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")]
+                ]
+                await q.edit_message_text(
+                    f"🎉 **SUCCESS!**\n\nAapne **1 Coin** use karke **{bname}** successfully unlock kar liya hai.\nNeeche diye gaye button par click karke direct join karein.",
+                    reply_markup=InlineKeyboardMarkup(kb),
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            except Exception as e:
+                logger.error(f"Unlock Special Batch Error: {e}")
+                clean_id = str(cid).replace('-100', '')
+                kb = [
+                    [InlineKeyboardButton("🚀 Open Special Batch", url=f"https://t.me/c/{clean_id}/1")],
+                    [InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")]
+                ]
+                await q.edit_message_text(
+                    f"🎉 **SUCCESS!**\n\nAapne **1 Coin** use karke **{bname}** successfully unlock kar liya hai.",
+                    reply_markup=InlineKeyboardMarkup(kb),
+                    parse_mode=ParseMode.MARKDOWN
+                )
 
         elif data.startswith("req_access_"):
             cid = int(data.split("_")[2])
@@ -2201,7 +2187,7 @@ async def show_user_menu(client: Client, message: Message):
         ],
         [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")],
         [InlineKeyboardButton("🎥 How to use the bot", url="https://t.me/c/2836314734/1244")],
-        [InlineKeyboardButton("🎁 Refer & Join", callback_data="menu_refer")],
+        [InlineKeyboardButton("🎁 Refer & Earn", callback_data="menu_refer")],
         [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")],
     ]
     txt = (
@@ -2217,7 +2203,7 @@ async def show_user_menu_cb(client: Client, q: CallbackQuery):
         ],
         [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")],
         [InlineKeyboardButton("🎥 How to use the bot", url="https://t.me/c/2836314734/1244")],
-        [InlineKeyboardButton("🎁 Refer & Join", callback_data="menu_refer")],
+        [InlineKeyboardButton("🎁 Refer & Earn", callback_data="menu_refer")],
         [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")],
     ]
     txt = (
@@ -2229,7 +2215,6 @@ async def start(client: Client, message: Message):
     user = message.from_user
     await set_role_based_commands(user.id, client)
     
-    # 🔥 FIX: Properly handle Integer/String ID matching for new users
     user_key = user.id if user.id in DB.get("USER_DATA", {}) else (str(user.id) if str(user.id) in DB.get("USER_DATA", {}) else user.id)
     
     if user_key not in DB["USER_DATA"]:
@@ -2240,7 +2225,8 @@ async def start(client: Client, message: Message):
             "demos": {},
             "tnc_accepted": False,
             "unlocked_batches": [],
-            "referral_count": 0
+            "referral_count": 0,
+            "total_invited": 0
         }
         await save_data_async()
 
@@ -2248,20 +2234,20 @@ async def start(client: Client, message: Message):
 
     # --- CHECK REFERRAL DEEP LINK PARAMETER ---
     args = get_args(message)
-    if args and args[0].startswith("ref_"):
-        try:
-            parts = args[0].split("_")
-            if len(parts) >= 3:
-                batch_id = int(parts[1])
-                referrer_id = int(parts[2])
-                # Store referral as pending (User must join channel + accept TnC first)
-                DB["USER_DATA"][user_key]["pending_referral"] = {
-                    "batch_id": batch_id,
-                    "referrer_id": referrer_id
-                }
-                await save_data_async()
-        except Exception as e:
-            logger.error(f"Referral parsing error: {e}")
+    if args:
+        ref_val = args[0]
+        referrer_id = None
+        
+        if ref_val.isdigit():
+            referrer_id = int(ref_val)
+        elif ref_val.startswith("ref_"):
+            parts = ref_val.split("_")
+            if len(parts) >= 2 and parts[-1].isdigit():
+                referrer_id = int(parts[-1])
+                
+        if referrer_id and str(referrer_id) != str(user.id):
+            DB["USER_DATA"][user_key]["pending_referral"] = referrer_id
+            await save_data_async()
 
     await get_or_create_topic(user, client)
 
@@ -2300,11 +2286,10 @@ async def start(client: Client, message: Message):
         if not DB["USER_DATA"].get(user_key, {}).get("tnc_accepted", False):
             await show_tnc_menu(client, message)
         else:
-            # Check pending referral fulfillment
             if "pending_referral" in DB["USER_DATA"][user_key]:
-                pref = DB["USER_DATA"][user_key].pop("pending_referral")
+                referrer_id = DB["USER_DATA"][user_key].pop("pending_referral")
                 await save_data_async()
-                await handle_referral_redemption(client, user, pref["referrer_id"], pref["batch_id"])
+                await process_successful_referral(client, user.id, referrer_id)
 
             await show_user_menu(client, message)
     else:
@@ -2322,8 +2307,9 @@ async def start(client: Client, message: Message):
 
 async def start_from_cb(client: Client, q: CallbackQuery):
     user = q.from_user
-    user_key = user.id if user.id in DB["USER_DATA"] else str(user.id)
+    user_key = user.id if user.id in DB.get("USER_DATA", {}) else (str(user.id) if str(user.id) in DB.get("USER_DATA", {}) else user.id)
     await set_role_based_commands(user.id, client)
+    
     if str(user.id) == str(OWNER_ID):
         kb = [
             [
@@ -2360,9 +2346,9 @@ async def start_from_cb(client: Client, q: CallbackQuery):
             await show_tnc_menu_cb(client, q)
         else:
             if "pending_referral" in DB["USER_DATA"].get(user_key, {}):
-                pref = DB["USER_DATA"][user_key].pop("pending_referral")
+                referrer_id = DB["USER_DATA"][user_key].pop("pending_referral")
                 await save_data_async()
-                await handle_referral_redemption(client, user, pref["referrer_id"], pref["batch_id"])
+                await process_successful_referral(client, user.id, referrer_id)
             await show_user_menu_cb(client, q)
     else:
         if not DB.get("NEW_USERS_ALLOWED", True):
