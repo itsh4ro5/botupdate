@@ -7,22 +7,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # =====================================================================
-# ROOT-CAUSE PATCH: pyrogram 2.0.106 (the last release on PyPI 
-# upstream is effectively unmaintained) hard-codes channel/chat ID
-# bounds from ~2021 in pyrogram/utils.py:
-#     MIN_CHANNEL_ID = -1002147483647
-#     MIN_CHAT_ID    = -2147483647
-# Telegram has since extended how negative new channel/supergroup IDs
-# can get. A freshly-created group like your Support Group (e.g.
-# -1003810420561) falls BELOW that hard-coded floor. Pyrogram's own
-# utils.get_peer_type() rejects any ID outside these bounds and raises
-# "Peer id invalid" *before a single byte goes over the MTProto socket* 
-# no amount of peer-cache warm-up, get_chat() retries, or reconnects
-# can work around a purely local, client-side range check. Widening the
-# bound is the community-standard fix for this exact symptom
-# (see pyrogram/pyrogram#1430, still unmerged upstream as of this build).
-# This must run before any Client resolves a peer, so it lives at the
-# very top of config.py, which every other module imports first.
+# ROOT-CAUSE PATCH: pyrogram 2.0.106
 # =====================================================================
 try:
     import pyrogram.utils as _pyro_utils
@@ -60,8 +45,8 @@ OWNER_ID = _safe_int("OWNER_ID", DEFAULTS["OWNER"])
 SUPPORT_GROUP_ID = _safe_int("SUPPORT_GROUP_ID", DEFAULTS["SUPPORT"])
 MANDATORY_CHANNEL_ID = _safe_int("MANDATORY_CHANNEL_ID", DEFAULTS["MAIN_CH"])
 LOG_CHANNEL_ID = _safe_int("LOG_CHANNEL_ID", DEFAULTS["LOG_CH"])
-
 MONGO_URL = os.environ.get("MONGO_URL", None) or None
+
 if not TELEGRAM_BOT_TOKEN:
     logger.warning("TELEGRAM_BOT_TOKEN is empty! Bot engine will not start until this Space secret is set. Web dashboard will still run.")
 
@@ -72,7 +57,7 @@ DEFAULT_CATEGORIES = ["Civil Engg.", "Electrical Engg.", "Mechanical Engg.", "El
 
 # --- DATABASE & MEMORY ---
 DB = {
-    "ADMIN_IDS": [], "FREE_CHANNELS": {}, "PAID_CHANNELS": {}, "ALL_CHATS": {},
+    "ADMIN_IDS": [], "FREE_CHANNELS": {}, "PAID_CHANNELS": {}, "SPECIAL_CHANNELS": {}, "ALL_CHATS": {},
     "USER_DATA": {}, "BLOCKED_USERS": [], "USER_TOPICS": {}, "PENDING_REQUESTS": {},
     "LINK_MAP": {}, "CUSTOM_WELCOMES": {}, "NEW_USERS_ALLOWED": True, 
     "FREE_LOCKED": False, "PAID_LOCKED": False, "TEST_BOT_LOCKED": False, 
@@ -80,22 +65,18 @@ DB = {
     "CATEGORIES": DEFAULT_CATEGORIES.copy(), "MAINTENANCE_MODE": False
 }
 
-MESSAGE_MAP = {}  
-ADMIN_WIZARD = {}  
-BROADCAST_STATE = {}  
-TOPIC_CREATION_LOCK = set() 
-SPAM_CACHE = {}  
-data_lock = asyncio.Lock() 
+MESSAGE_MAP = {} 
+ADMIN_WIZARD = {} 
+BROADCAST_STATE = {} 
+TOPIC_CREATION_LOCK = set()
+SPAM_CACHE = {} 
+data_lock = asyncio.Lock()
 mongo_client = mongo_collection = None
 
 # --- GLOBAL FLOODWAIT STATE ---
-# UNIX timestamp until which Telegram has FloodWait-limited this bot.
-# 0 means no active FloodWait. Set by bot.py whenever a FloodWait is
-# caught, read by app.py to warn the dashboard/front-end.
 FLOOD_WAIT_UNTIL = 0
 
 def get_flood_wait_status():
-    """Returns (is_active: bool, seconds_remaining: int) for the current FloodWait cooldown."""
     remaining = FLOOD_WAIT_UNTIL - time.time()
     if remaining > 0:
         return True, int(remaining) + 1
@@ -107,7 +88,6 @@ if MONGO_URL:
         logger.info("  Connecting to MongoDB Atlas...")
         from pymongo import MongoClient
         import certifi
-        #   5-Second timeout lagaya hai taaki Hugging Face startup par hang na ho!
         mongo_client = MongoClient(
             MONGO_URL, 
             tlsCAFile=certifi.where(),
@@ -143,11 +123,16 @@ def load_data():
                 for k in keys_to_load:
                     if k in loaded: DB[k] = loaded[k]
                 
-                for k in ["CUSTOM_WELCOMES", "FREE_CHANNELS", "PAID_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
+                # --- UPDATE: LOADING SPECIAL_CHANNELS ALONG WITH OTHERS ---
+                for k in ["CUSTOM_WELCOMES", "FREE_CHANNELS", "PAID_CHANNELS", "SPECIAL_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
                     if k in loaded: DB[k] = {int(i): v for i, v in loaded[k].items()}
+                    
                 if OWNER_ID not in DB["ADMIN_IDS"]: DB["ADMIN_IDS"].append(OWNER_ID)
-                for cid, name in DB["FREE_CHANNELS"].items(): DB["ALL_CHATS"][cid] = name
-                for cid, name in DB["PAID_CHANNELS"].items(): DB["ALL_CHATS"][cid] = name
+                
+                for cid, name in DB.get("FREE_CHANNELS", {}).items(): DB["ALL_CHATS"][cid] = name
+                for cid, name in DB.get("PAID_CHANNELS", {}).items(): DB["ALL_CHATS"][cid] = name
+                for cid, name in DB.get("SPECIAL_CHANNELS", {}).items(): DB["ALL_CHATS"][cid] = name
+                
                 logger.info("  Data Loaded from MongoDB!")
                 return
         except Exception as e: logger.error(f"  MongoDB Load Error: {e}")
@@ -163,11 +148,16 @@ def load_data():
             for k in keys_to_load:
                 if k in loaded: DB[k] = loaded[k]
             
-            for k in ["CUSTOM_WELCOMES", "FREE_CHANNELS", "PAID_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
+            # --- UPDATE: LOADING SPECIAL_CHANNELS ALONG WITH OTHERS ---
+            for k in ["CUSTOM_WELCOMES", "FREE_CHANNELS", "PAID_CHANNELS", "SPECIAL_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
                 if k in loaded: DB[k] = {int(i): v for i, v in loaded[k].items()}
+                
             if OWNER_ID not in DB["ADMIN_IDS"]: DB["ADMIN_IDS"].append(OWNER_ID)
-            for cid, name in DB["FREE_CHANNELS"].items(): DB["ALL_CHATS"][cid] = name
-            for cid, name in DB["PAID_CHANNELS"].items(): DB["ALL_CHATS"][cid] = name
+            
+            for cid, name in DB.get("FREE_CHANNELS", {}).items(): DB["ALL_CHATS"][cid] = name
+            for cid, name in DB.get("PAID_CHANNELS", {}).items(): DB["ALL_CHATS"][cid] = name
+            for cid, name in DB.get("SPECIAL_CHANNELS", {}).items(): DB["ALL_CHATS"][cid] = name
+            
             logger.info("  Data Loaded from Local JSON!")
     except Exception as e: logger.error(f"  Local Load Error: {e}")
 
@@ -177,20 +167,24 @@ def save_data_sync():
             "ADMIN_IDS": DB["ADMIN_IDS"], "BLOCKED_USERS": DB["BLOCKED_USERS"],
             "NEW_USERS_ALLOWED": DB.get("NEW_USERS_ALLOWED", True), "FREE_LOCKED": DB.get("FREE_LOCKED", False),
             "PAID_LOCKED": DB.get("PAID_LOCKED", False), "TEST_BOT_LOCKED": DB.get("TEST_BOT_LOCKED", False),
-            "LINK_MAP": DB["LINK_MAP"], "SCHEDULED_DELETES": DB.get("SCHEDULED_DELETES", []),
+            "LINK_MAP": DB.get("LINK_MAP", {}), "SCHEDULED_DELETES": DB.get("SCHEDULED_DELETES", []),
             "TEST_BOT_LINK": DB.get("TEST_BOT_LINK", ""), 
             "CATEGORIES": DB.get("CATEGORIES", DEFAULT_CATEGORIES),
             "BATCH_CATEGORIES": {str(k): v for k, v in DB.get("BATCH_CATEGORIES", {}).items()},
             "MAINTENANCE_MODE": DB.get("MAINTENANCE_MODE", False),
             "USERBOT_SESSION": DB.get("USERBOT_SESSION"), 
             "USERBOT_PHONE": DB.get("USERBOT_PHONE"),
-            "CUSTOM_WELCOMES": {str(k): v for k, v in DB["CUSTOM_WELCOMES"].items()},
-            "FREE_CHANNELS": {str(k): v for k, v in DB["FREE_CHANNELS"].items()},
-            "PAID_CHANNELS": {str(k): v for k, v in DB["PAID_CHANNELS"].items()},
-            "ALL_CHATS": {str(k): v for k, v in DB["ALL_CHATS"].items()},
-            "USER_DATA": {str(k): v for k, v in DB["USER_DATA"].items()},
-            "USER_TOPICS": {str(k): v for k, v in DB["USER_TOPICS"].items()},
-            "PENDING_REQUESTS": {str(k): v for k, v in DB["PENDING_REQUESTS"].items()}
+            "CUSTOM_WELCOMES": {str(k): v for k, v in DB.get("CUSTOM_WELCOMES", {}).items()},
+            "FREE_CHANNELS": {str(k): v for k, v in DB.get("FREE_CHANNELS", {}).items()},
+            "PAID_CHANNELS": {str(k): v for k, v in DB.get("PAID_CHANNELS", {}).items()},
+            
+            # --- UPDATE: SAVING SPECIAL CHANNELS ---
+            "SPECIAL_CHANNELS": {str(k): v for k, v in DB.get("SPECIAL_CHANNELS", {}).items()},
+            
+            "ALL_CHATS": {str(k): v for k, v in DB.get("ALL_CHATS", {}).items()},
+            "USER_DATA": {str(k): v for k, v in DB.get("USER_DATA", {}).items()},
+            "USER_TOPICS": {str(k): v for k, v in DB.get("USER_TOPICS", {}).items()},
+            "PENDING_REQUESTS": {str(k): v for k, v in DB.get("PENDING_REQUESTS", {}).items()}
         }
         if MONGO_URL and mongo_collection is not None:
             try: 
@@ -208,21 +202,6 @@ async def _background_save():
         except Exception as e:
             logger.error(f"  Background Save Failed: {e}")
 
-# =====================================================================
-# PERFORMANCE: DEBOUNCED / BATCHED SAVE
-# Previously, every save_data_async() call immediately spawned its own
-# asyncio.create_task(_background_save())   a FULL DB   JSON serialize
-# (+ a full Mongo replace_one network round-trip) EACH time. Under bursty
-# traffic (e.g. 50 users tapping buttons in the same second), that meant
-# 50 separate full-DB writes queued back-to-back behind `data_lock`,
-# hammering disk I/O and the Mongo connection for no benefit   the last
-# write always wins anyway.
-# Now: any call just flags the DB "dirty". At most ONE flush task is ever
-# in flight; it waits SAVE_DEBOUNCE_SECONDS before actually writing, so
-# every call that arrives inside that window gets coalesced into that
-# single write. 100 calls in 3 seconds now costs exactly 1 write instead
-# of 100   this is the single biggest I/O reduction in this file.
-# =====================================================================
 SAVE_DEBOUNCE_SECONDS = 4
 _save_flush_task = None
 _db_is_dirty = False
@@ -238,33 +217,15 @@ async def _debounced_flush():
         logger.error(f"  Debounced Save Failed: {e}")
 
 async def save_data_async():
-    """
-    Marks the DB dirty and ensures exactly one debounced flush is pending.
-    Guarantees that state changes made DURING an active flush are caught 
-    and processed in a follow-up flush cycle.
-    """
     global _save_flush_task, _db_is_dirty
     _db_is_dirty = True
-    
-    # No `await` happens between this check and the create_task call, so
-    # there's no window for two coroutines to both see "no task running"
-    # and schedule two flushes.
     if _save_flush_task is None or _save_flush_task.done():
         _save_flush_task = asyncio.create_task(_debounced_flush())
 
-# =====================================================================
-# PERFORMANCE: SHARED MEMBERSHIP TTL CACHE
-# check_membership_pyro / is_already_in_channel_pyro (handlers.py) and
-# the per-batch membership loop in app.py's /api/user endpoint all called
-# client.get_chat_member() fresh, every single time   including cases
-# where the SAME (chat, user) pair gets checked multiple times within the
-# same page load (e.g. /api/user and /api/explore both re-check every
-# batch back-to-back) or across rapid repeated button taps. Each of those
-# is a real network round-trip to Telegram and counts against rate limits.
-# This cache shares one short-lived result across every caller.
-# =====================================================================
-_MEMBERSHIP_CACHE = {}  # {(chat_id, user_id): (is_member: bool, expiry_ts: float)}
-MEMBERSHIP_CACHE_TTL = 30  # seconds   short enough to stay accurate, long enough to kill duplicate bursts
+
+# --- MEMBERSHIP CACHE ---
+_MEMBERSHIP_CACHE = {} 
+MEMBERSHIP_CACHE_TTL = 30  
 
 async def get_membership_cached(client, chat_id, user_id, ttl=MEMBERSHIP_CACHE_TTL):
     key = (int(chat_id), int(user_id))
@@ -280,12 +241,11 @@ async def get_membership_cached(client, chat_id, user_id, ttl=MEMBERSHIP_CACHE_T
         ]
     except Exception:
         result = False
-    
+        
     _MEMBERSHIP_CACHE[key] = (result, now + ttl)
     return result
 
 def invalidate_membership_cache(user_id, chat_id=None):
-    """Call right after a ban/kick/approve so a stale cached result isn't served."""
     user_id = int(user_id)
     if chat_id is not None:
         _MEMBERSHIP_CACHE.pop((int(chat_id), user_id), None)
@@ -293,87 +253,61 @@ def invalidate_membership_cache(user_id, chat_id=None):
         for key in [k for k in _MEMBERSHIP_CACHE if k[1] == user_id]:
             del _MEMBERSHIP_CACHE[key]
 
-# --- CORE HELPERS (100% PYROGRAM CONVERTED) ---
+# --- CORE HELPERS ---
 async def execute_universal_kick(user_id, client, permanent_ban=False):
     from pyrogram.errors import FloodWait
     mod = False
-
-    async def _kick_free(bid):
-        try:
-            await client.ban_chat_member(int(bid), user_id)
-            if not permanent_ban:
-                await client.unban_chat_member(int(bid), user_id)
-        except FloodWait as e:
-            await asyncio.sleep(e.value + 1)
-            try:
-                await client.ban_chat_member(int(bid), user_id)
-                if not permanent_ban:
-                    await client.unban_chat_member(int(bid), user_id)
-            except Exception:
-                pass
-        except Exception:
-            pass
-
-    async def _kick_paid(bid):
+    async def _kick_batch(bid, is_paid=False):
         nonlocal mod
         try:
             bid_str = str(bid)
-            is_demo = bid_str in DB["USER_DATA"].get(user_id, {}).get("demos", {})
+            is_demo = is_paid and bid_str in DB.get("USER_DATA", {}).get(user_key, {}).get("demos", {})
             await client.ban_chat_member(int(bid), user_id)
             if not permanent_ban:
                 await client.unban_chat_member(int(bid), user_id)
             if is_demo:
-                del DB["USER_DATA"][user_id]["demos"][bid_str]
+                del DB["USER_DATA"][user_key]["demos"][bid_str]
                 mod = True
         except FloodWait as e:
             await asyncio.sleep(e.value + 1)
             try:
-                bid_str = str(bid)
-                is_demo = bid_str in DB["USER_DATA"].get(user_id, {}).get("demos", {})
                 await client.ban_chat_member(int(bid), user_id)
                 if not permanent_ban:
                     await client.unban_chat_member(int(bid), user_id)
                 if is_demo:
-                    del DB["USER_DATA"][user_id]["demos"][bid_str]
+                    del DB["USER_DATA"][user_key]["demos"][bid_str]
                     mod = True
             except Exception:
                 pass
         except Exception:
             pass
 
-    #   PERFORMANCE: this used to ban/unban across every free THEN every
-    # paid channel one at a time (2N sequential Telegram round-trips for a
-    # user in N+N channels). asyncio.gather fires them all concurrently 
-    # total wait drops from O(N * latency) to roughly O(latency).
+    user_key = user_id if user_id in DB.get("USER_DATA", {}) else (str(user_id) if str(user_id) in DB.get("USER_DATA", {}) else None)
+
     await asyncio.gather(
-        *[_kick_free(bid) for bid in list(DB["FREE_CHANNELS"].keys())],
-        *[_kick_paid(bid) for bid in list(DB["PAID_CHANNELS"].keys())],
+        *[_kick_batch(bid) for bid in list(DB.get("FREE_CHANNELS", {}).keys())],
+        *[_kick_batch(bid, is_paid=True) for bid in list(DB.get("PAID_CHANNELS", {}).keys())],
+        *[_kick_batch(bid) for bid in list(DB.get("SPECIAL_CHANNELS", {}).keys())],
     )
     
-    invalidate_membership_cache(user_id)  # drop any cached "still joined" entries
+    invalidate_membership_cache(user_id) 
     
     if permanent_ban:
-        if user_id not in DB["BLOCKED_USERS"]: 
-            DB["BLOCKED_USERS"].append(user_id)
+        if user_id not in DB.get("BLOCKED_USERS", []): 
+            DB.setdefault("BLOCKED_USERS", []).append(user_id)
             mod = True
     else:
-        user_key = user_id if user_id in DB["USER_DATA"] else (str(user_id) if str(user_id) in DB["USER_DATA"] else None)
-        if user_key and DB["USER_DATA"].get(user_key, {}).get("tnc_accepted", False):
+        if user_key and DB.get("USER_DATA", {}).get(user_key, {}).get("tnc_accepted", False):
             DB["USER_DATA"][user_key]["tnc_accepted"] = False
             mod = True
             
     if mod: await save_data_async()
 
 def is_admin(uid):
-    #   PERFORMANCE: previously did `uid in DB["ADMIN_IDS"]` (one O(n) pass)
-    # THEN a second O(n) loop doing str() comparisons as a fallback   i.e.
-    # up to 2 full passes over the admin list on every single call, and
-    # is_admin() is called on nearly every incoming message/command. Merged
-    # into one pass that checks both forms per element.
     if str(uid) == str(OWNER_ID):
         return True
     uid_str = str(uid)
-    for admin_id in DB["ADMIN_IDS"]:
+    for admin_id in DB.get("ADMIN_IDS", []):
         if admin_id == uid or str(admin_id) == uid_str:
             return True
     return False
@@ -391,28 +325,18 @@ async def check_membership(user_id, client):
 async def is_already_in_channel(client, chat_id, user_id):
     return await get_membership_cached(client, chat_id, user_id)
 
-# PYROGRAM ASYNC DELAYED DELETE FUNCTION
 async def _delayed_delete(client, chat_id, msg_id, delay):
     await asyncio.sleep(delay)
     try:
         await client.delete_messages(chat_id=int(chat_id), message_ids=int(msg_id))
-    except Exception: 
+    except Exception:
         pass
 
 async def schedule_delete(client, message, delay=1200):
     if message: 
         asyncio.create_task(_delayed_delete(client, message.chat.id, message.id, delay))
 
-# =====================================================================
-# NATIVE MTPROTO PEER CACHE WARM-UP (NO HTTP HACKS)
-# =====================================================================
 async def refresh_peer_cache(client, chat_id):
-    """
-    Forces Pyrogram to (re)learn a chat's access_hash purely over the
-    existing MTProto socket   no HTTP Bot API calls involved.
-    client.get_chat() internally resolves the peer and updates Pyrogram's
-    local peer storage (SQLite session) as a side effect.
-    """
     if not chat_id:
         return False
     try:
@@ -423,36 +347,30 @@ async def refresh_peer_cache(client, chat_id):
         logger.error(f"  Native peer refresh failed for {chat_id}: {e}")
         return False
 
-# =====================================================================
-# FORUM TOPIC ENGINE (NATIVE PYROGRAM 2.x API, WITH RAW-API FALLBACK)
-# =====================================================================
 async def get_or_create_topic(user, client, is_retry=False):
     if not SUPPORT_GROUP_ID:
         return None
-        
+            
     if user.id in DB.get("USER_TOPICS", {}):
         return DB["USER_TOPICS"][user.id]
-        
+            
     if user.id in TOPIC_CREATION_LOCK:
-        # Another task is already creating this user's topic   wait for it
         for _ in range(10):
             await asyncio.sleep(0.5)
             if user.id in DB.get("USER_TOPICS", {}):
                 return DB["USER_TOPICS"][user.id]
         return None
-        
+            
     TOPIC_CREATION_LOCK.add(user.id)
     
     try:
         title = f"{(user.first_name or 'User')[:20]} ({user.id})"
         topic_id = None
-        
-        # --- Preferred path: native Pyrogram 2.0.106 forum-topic method ---
+                
         try:
             topic = await client.create_forum_topic(chat_id=int(SUPPORT_GROUP_ID), title=title)
             topic_id = getattr(topic, "id", None) or getattr(topic, "message_thread_id", None)
         except AttributeError:
-            # Older Pyrogram build without create_forum_topic()   Raw API fallback
             from pyrogram.raw.functions.channels import CreateForumTopic
             peer = await client.resolve_peer(int(SUPPORT_GROUP_ID))
             r = await client.invoke(
@@ -462,19 +380,19 @@ async def get_or_create_topic(user, client, is_retry=False):
                 if hasattr(update, "message") and hasattr(update.message, "id"):
                     topic_id = update.message.id
                     break
-                    
+                            
         if not topic_id:
             raise Exception("Topic ID could not be resolved from Telegram's response.")
-            
+                    
         DB.setdefault("USER_TOPICS", {})[user.id] = topic_id
         await save_data_async()
-        
+                
         group_id_str = str(SUPPORT_GROUP_ID).replace("-100", "")
         text = (
-            f"  **NEW USER TICKET**\n  {user.first_name}\n  `{user.id}`\n"
-            f"  [Click to Check History](https://t.me/c/{group_id_str}?q={user.id})"
+            f"🚨 **NEW USER TICKET**\n👤 {user.first_name}\n🆔 `{user.id}`\n"
+            f"🔗 [Click to Check History](https://t.me/c/{group_id_str}?q={user.id})"
         )
-        
+                
         try:
             await client.send_message(
                 int(SUPPORT_GROUP_ID), text, message_thread_id=topic_id, parse_mode=ParseMode.MARKDOWN
@@ -483,9 +401,9 @@ async def get_or_create_topic(user, client, is_retry=False):
             await client.send_message(
                 int(SUPPORT_GROUP_ID), text, reply_to_message_id=topic_id, parse_mode=ParseMode.MARKDOWN
             )
-            
+                    
         return topic_id
-        
+            
     except (PeerIdInvalid, ChannelInvalid, ChannelPrivate) as e:
         if not is_retry:
             logger.warning(f"Peer cache miss for Support Group ({e}). Refreshing natively via get_chat()...")
