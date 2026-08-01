@@ -4,7 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#050509" />
-  <title>H4R - Current Affairs Extractor</title>
+  <title>H4R - CA Flash Arena</title>
+  
   <!-- Telegram Web App SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <!-- Tailwind CDN -->
@@ -15,14 +16,23 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  
+  <!-- MathJax for rendering Equations/Formulas -->
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)'], ['[tex]', '[/tex]']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
+      startup: { typeset: false }
+    };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
   <script>
     tailwind.config = {
       theme: {
         extend: {
           fontFamily: { sans: ['Outfit', 'system-ui', 'sans-serif'] },
           colors: {
-            ink: '#050509',
-            surface: '#0d0d16',
+            ink: '#050509', surface: '#0d0d16',
             indigo: { neon: '#6366f1', soft: '#818cf8' },
             emerald: { neon: '#10b981', soft: '#34d399' },
           },
@@ -30,105 +40,68 @@
       },
     };
   </script>
+  
   <style>
     :root {
-      --bg: #050509;
-      --surface: rgba(255, 255, 255, 0.04);
-      --surface-strong: rgba(255, 255, 255, 0.06);
-      --border: rgba(255, 255, 255, 0.08);
-      --text: #f4f4f7;
-      --muted: #8b8b9e;
-      --indigo: #6366f1;
-      --emerald: #10b981;
+      --bg: #050509; --surface: rgba(255, 255, 255, 0.04);
+      --border: rgba(255, 255, 255, 0.08); --text: #f4f4f7;
+      --muted: #8b8b9e; --indigo: #6366f1; --emerald: #10b981;
     }
     html.light {
-      --bg: #f3f4f8;
-      --surface: rgba(10, 10, 25, 0.03);
-      --surface-strong: rgba(10, 10, 25, 0.05);
-      --border: rgba(10, 10, 25, 0.08);
-      --text: #10101c;
-      --muted: #5b5b6b;
+      --bg: #f3f4f8; --surface: rgba(10, 10, 25, 0.03);
+      --border: rgba(10, 10, 25, 0.08); --text: #10101c; --muted: #5b5b6b;
     }
-    * {
-      -webkit-tap-highlight-color: transparent;
-      -webkit-touch-callout: none;
-      user-select: none;
-    }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Outfit', system-ui, sans-serif;
-      overflow-x: hidden;
-      transition: background 0.4s ease, color 0.4s ease;
-    }
-    .aurora::before {
-      content: '';
-      position: fixed;
-      top: -160px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 420px;
-      height: 420px;
-      background: radial-gradient(circle at center, rgba(99, 102, 241, 0.22), transparent 65%);
-      filter: blur(30px);
-      z-index: 0;
-      pointer-events: none;
-    }
-    .aurora::after {
-      content: '';
-      position: fixed;
-      bottom: -120px;
-      right: -80px;
-      width: 340px;
-      height: 340px;
-      background: radial-gradient(circle at center, rgba(16, 185, 129, 0.16), transparent 65%);
-      filter: blur(40px);
-      z-index: 0;
-      pointer-events: none;
-    }
-    .glass {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-    }
+    * { -webkit-tap-highlight-color: transparent; user-select: none; }
+    body { background: var(--bg); color: var(--text); font-family: 'Outfit', sans-serif; overflow-x: hidden; transition: 0.4s; }
+    
+    .aurora::before { content: ''; position: fixed; top: -160px; left: 50%; transform: translateX(-50%); width: 420px; height: 420px; background: radial-gradient(circle at center, rgba(99, 102, 241, 0.22), transparent 65%); filter: blur(30px); z-index: 0; pointer-events: none; }
+    .aurora::after { content: ''; position: fixed; bottom: -120px; right: -80px; width: 340px; height: 340px; background: radial-gradient(circle at center, rgba(16, 185, 129, 0.16), transparent 65%); filter: blur(40px); z-index: 0; pointer-events: none; }
+    
+    .glass { background: var(--surface); border: 1px solid var(--border); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
     .card-press { transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease; }
     .card-press:active { transform: scale(0.965); }
     .text-muted { color: var(--muted); }
-    .dock {
-      background: rgba(13, 13, 22, 0.72);
-      border: 1px solid var(--border);
-      backdrop-filter: blur(24px) saturate(160%);
-      -webkit-backdrop-filter: blur(24px) saturate(160%);
-      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
-    }
+    
+    .dock { background: rgba(13, 13, 22, 0.72); border: 1px solid var(--border); backdrop-filter: blur(24px) saturate(160%); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55); }
     html.light .dock { background: rgba(255, 255, 255, 0.78); }
-    .dock-item { transition: color 0.2s ease, transform 0.2s ease; }
+    .dock-item { transition: 0.2s; }
     .dock-item.active { color: var(--indigo); }
     .dock-item.active .dock-glow { opacity: 1; transform: scale(1); }
-    .dock-glow {
-      opacity: 0;
-      transform: scale(0.4);
-      transition: opacity 0.25s ease, transform 0.25s ease;
-      box-shadow: 0 0 18px 2px rgba(99, 102, 241, 0.55);
-    }
+    .dock-glow { opacity: 0; transform: scale(0.4); transition: 0.25s; box-shadow: 0 0 18px 2px rgba(99, 102, 241, 0.55); }
     .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    @keyframes floatUp {
-      from { opacity: 0; transform: translateY(14px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
+    
+    @keyframes floatUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
     .reveal { animation: floatUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+    
+    .seg { position: relative; display: grid; grid-template-columns: 1fr 1fr; padding: 4px; border-radius: 9999px; }
+    .seg-thumb { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); border-radius: 9999px; background: linear-gradient(130deg, #4f46e5, #6366f1); box-shadow: 0 8px 22px rgba(99, 102, 241, 0.4); transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1); z-index: 0; }
+    .seg[data-active="vault"] .seg-thumb { transform: translateX(100%); }
+    .seg-btn { position: relative; z-index: 1; padding: 0.6rem 0; font-size: 0.85rem; font-weight: 600; color: var(--muted); transition: 0.25s; }
+    .seg-btn.active { color: #fff; }
+    
+    .panel { transition: opacity 0.3s ease; }
+    .panel.hide { display: none; }
+    
+    /* Quiz Options Styles */
+    .opt-box { transition: 0.2s; border: 2px solid transparent; }
+    .opt-box.selected { border-color: var(--indigo); background: rgba(99, 102, 241, 0.15); }
+    .opt-radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--muted); transition: 0.2s; display: flex; align-items: center; justify-content: center; }
+    .opt-box.selected .opt-radio { border-color: var(--indigo); background: var(--indigo); }
+    .opt-box.selected .opt-radio::after { content: ''; width: 8px; height: 8px; background: white; border-radius: 50%; }
+    
+    /* Images inside MathJax/HTML */
+    .testbook-content img { max-width: 100%; border-radius: 12px; margin-top: 8px; }
   </style>
 </head>
 <body class="aurora min-h-screen pb-32">
   <div class="relative z-10 mx-auto w-full max-w-md px-5 pt-6">
+    
     <!-- Header -->
     <header class="flex items-center justify-between reveal">
       <div>
-        <p class="text-xs text-muted">Testbook Bypass Tools</p>
+        <p class="text-xs text-muted">Daily Brain Workout</p>
         <h1 class="-mt-0.5 flex items-center gap-2 text-xl font-bold leading-tight">
-          <i class="fa-solid fa-newspaper text-indigo-soft"></i> CA Extractor
+          <i class="fa-solid fa-bolt text-emerald-soft"></i> CA Flash Arena
         </h1>
       </div>
       <button id="themeToggle" aria-label="Toggle theme" class="glass card-press flex h-10 w-10 items-center justify-center rounded-full text-base">
@@ -136,80 +109,137 @@
       </button>
     </header>
 
-    <!-- URL Input Card -->
-    <section class="reveal mt-8" style="animation-delay:.1s">
-      <div class="glass rounded-3xl p-5">
-        <label id="inputLabel" class="text-xs font-bold uppercase tracking-wider text-indigo-soft block mb-2">
-          Enter Current Affairs Quiz URL
+    <!-- Segments -->
+    <div class="reveal mt-5" style="animation-delay:.05s">
+      <div id="seg" class="seg glass" data-active="today">
+        <span class="seg-thumb" aria-hidden="true"></span>
+        <button id="tabToday" class="seg-btn active" onclick="switchTab('today')">
+          <i class="fa-solid fa-fire mr-1"></i> Live CA Arena
+        </button>
+        <button id="tabVault" class="seg-btn" onclick="switchTab('vault')">
+          <i class="fa-solid fa-layer-group mr-1"></i> Mistake Vault
+        </button>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- PANEL 1: LIVE CA ARENA                     -->
+    <!-- ========================================== -->
+    <section id="panelToday" class="panel mt-6">
+      
+      <!-- Input Section -->
+      <div id="caInputSection" class="glass rounded-3xl p-5 reveal" style="animation-delay:.1s">
+        <label class="text-xs font-bold uppercase tracking-wider text-indigo-soft block mb-2">
+          Paste Current Affairs Link
         </label>
         <div class="relative flex items-center w-full">
           <i class="fa-solid fa-link absolute left-4 text-muted"></i>
-          <input type="url" id="targetUrlInput" placeholder="https://testbook.com/current-affairs-quiz/quizzes/..."
+          <input type="url" id="caUrl" placeholder="https://testbook.com/current-affairs..."
              class="glass w-full rounded-2xl py-3.5 pl-11 pr-4 text-sm text-text outline-none transition-all placeholder-muted bg-transparent border border-border focus:border-indigo-neon">
         </div>
-        <button id="extractBtn" onclick="processExtraction()" class="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-neon py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 card-press">
-          <i class="fa-solid fa-rocket"></i> <span id="btnText">Extract & Compile Quiz Engine</span>
+        <button onclick="fetchCA()" class="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-neon py-3.5 text-sm font-bold text-white shadow-lg card-press">
+          <i class="fa-solid fa-rocket"></i> Load Live CA Quiz
         </button>
       </div>
-    </section>
 
-    <!-- Loading State -->
-    <div id="loadingBlock" class="mt-6 hidden flex-col items-center text-center">
-      <i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-soft mb-2"></i>
-      <p class="text-sm font-semibold text-muted" id="loadingText">Scraping Current Affairs quiz payload...</p>
-    </div>
+      <!-- Loading Section -->
+      <div id="caLoader" class="hidden flex-col items-center text-center mt-10">
+        <i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-soft mb-3"></i>
+        <p class="text-sm font-bold">Extracting Quiz Data...</p>
+      </div>
 
-    <!-- Result Display Card -->
-    <section id="resultCard" class="reveal mt-6 hidden" style="animation-delay:.15s">
-      <div class="glass rounded-3xl p-5 border-l-4 border-emerald-soft">
-        <div class="flex items-center gap-2 text-emerald-soft mb-2">
-          <i class="fa-solid fa-circle-check text-base"></i>
-          <span class="text-xs font-bold uppercase tracking-wide">Extraction Successful</span>
+      <!-- Quiz Engine UI -->
+      <div id="quizSection" class="hidden mt-4">
+        <div class="flex items-center justify-between mb-4 px-2">
+          <span class="text-xs font-bold uppercase text-emerald-soft bg-emerald-neon/15 px-3 py-1.5 rounded-full"><i class="fa-solid fa-hourglass-half"></i> Live Test</span>
+          <span id="qCountDisplay" class="text-sm font-bold text-muted">Q 1 of 10</span>
         </div>
-        <h3 id="resultTitle" class="text-base font-bold leading-snug mb-3">Daily Current Affairs Interactive Quiz</h3>
         
-        <div id="caResultArea" class="space-y-2">
-          <button id="launchQuizBtn" onclick="launchCaQuiz()" class="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-neon py-3 text-xs font-bold text-white shadow-lg card-press">
-            <i class="fa-solid fa-play"></i> Launch Interactive Quiz Engine
+        <div class="glass rounded-3xl p-5 mb-4 border-l-4 border-indigo-neon">
+          <div id="qText" class="text-[15px] font-semibold leading-relaxed testbook-content">Question goes here</div>
+        </div>
+
+        <div id="optsBox" class="flex flex-col gap-3">
+          <!-- Options injected dynamically -->
+        </div>
+
+        <button id="btnNext" onclick="handleNext()" class="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-neon py-3.5 text-sm font-bold text-white shadow-lg card-press opacity-50 pointer-events-none transition-opacity">
+          Save & Next <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+
+      <!-- Results & Gamification Section -->
+      <div id="resultSection" class="hidden mt-4 text-center">
+        <div class="glass rounded-3xl p-6 relative overflow-hidden">
+          <div class="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-emerald-neon/10 blur-2xl"></div>
+          
+          <h2 class="text-2xl font-black mb-2">Quiz Completed!</h2>
+          <p class="text-sm font-medium text-muted mb-6">Your real-time score report</p>
+
+          <div class="grid grid-cols-2 gap-4 mb-6">
+            <div class="bg-surface border border-border p-4 rounded-2xl">
+              <i class="fa-solid fa-check-circle text-emerald-soft text-2xl mb-2"></i>
+              <p id="resCorrect" class="text-2xl font-bold">0</p>
+              <p class="text-xs text-muted uppercase font-bold tracking-wider">Correct</p>
+            </div>
+            <div class="bg-surface border border-border p-4 rounded-2xl">
+              <i class="fa-solid fa-times-circle text-red-400 text-2xl mb-2"></i>
+              <p id="resWrong" class="text-2xl font-bold">0</p>
+              <p class="text-xs text-muted uppercase font-bold tracking-wider">Incorrect</p>
+            </div>
+          </div>
+
+          <div class="bg-indigo-neon/10 border border-indigo-neon/30 p-4 rounded-2xl text-left flex items-center gap-4 mb-6">
+            <div class="h-12 w-12 rounded-full bg-indigo-neon flex items-center justify-center text-white text-xl shrink-0"><i class="fa-solid fa-star"></i></div>
+            <div>
+              <p class="text-sm font-bold text-indigo-soft">+50 Points Earned!</p>
+              <p class="text-xs text-muted">Your Firebase profile has been updated.</p>
+            </div>
+          </div>
+
+          <p id="mistakeNotice" class="text-sm font-semibold text-orange-400 mb-4 bg-orange-400/10 py-2 rounded-lg">
+            <i class="fa-solid fa-inbox"></i> <span id="mistakeCount"></span> mistakes sent to Past Vault as Flashcards.
+          </p>
+
+          <button onclick="switchTab('vault')" class="w-full flex items-center justify-center gap-2 rounded-2xl glass py-3.5 text-sm font-bold text-text card-press">
+            <i class="fa-solid fa-layer-group"></i> Review Mistakes Now
           </button>
         </div>
       </div>
+
     </section>
 
-    <!-- Error Banner -->
-    <div id="errorBanner" class="mt-6 hidden rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-center text-xs font-semibold text-red-400">
-      <i class="fa-solid fa-triangle-exclamation mr-1"></i> <span id="errorMsg">Failed to process resource.</span>
-    </div>
+    <!-- ========================================== -->
+    <!-- PANEL 2: MISTAKE VAULT (FLASHCARDS)        -->
+    <!-- ========================================== -->
+    <section id="panelVault" class="panel hide mt-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-bold"><i class="fa-solid fa-book-bookmark text-indigo-soft"></i> Saved Flashcards</h2>
+        <span id="vaultCountBadge" class="text-xs font-bold text-muted bg-surface border border-border px-2 py-1 rounded-md">0 Cards</span>
+      </div>
+
+      <div id="vaultList" class="flex flex-col gap-4 pb-4">
+        <!-- Flashcards injected dynamically -->
+      </div>
+
+      <div id="vaultEmpty" class="hidden flex-col items-center text-center mt-10">
+        <div class="glass flex h-16 w-16 items-center justify-center rounded-2xl text-2xl text-indigo-soft mb-3"><i class="fa-solid fa-box-open"></i></div>
+        <p class="font-bold">Vault is Empty</p>
+        <p class="text-sm text-muted mt-1 max-w-[240px]">Play Live CA quizzes. Your incorrect answers will automatically appear here as flashcards.</p>
+      </div>
+    </section>
 
   </div>
 
-  <!-- Bottom Navigation Dock -->
+  <!-- Bottom Dock -->
   <nav class="fixed bottom-4 left-1/2 z-30 -translate-x-1/2" oncontextmenu="return false;">
     <div class="dock flex items-center gap-1 rounded-full px-2 py-2">
-      <div onclick="window.location.href='/'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer">
-        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
-        <i class="fa-solid fa-house text-[17px]"></i><span class="text-[9px] font-medium">Home</span>
-      </div>
-      <div onclick="window.location.href='/explore'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer">
-        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
-        <i class="fa-solid fa-compass text-[17px]"></i><span class="text-[9px] font-medium">Explore</span>
-      </div>
-      <div onclick="window.location.href='/quiz'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer">
-        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
-        <i class="fa-solid fa-file-pen text-[17px]"></i><span class="text-[9px] font-medium">Quiz</span>
-      </div>
-      <div onclick="window.location.href='/flash'" class="dock-item active relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 cursor-pointer">
-        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
-        <i class="fa-solid fa-wand-magic-sparkles text-[17px]"></i><span class="text-[9px] font-medium">Tools</span>
-      </div>
-      <div onclick="window.location.href='/leaderboard'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer">
-        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
-        <i class="fa-solid fa-ranking-star text-[17px]"></i><span class="text-[9px] font-medium">Rank</span>
-      </div>
-      <div onclick="window.location.href='/profile'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer">
-        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
-        <i class="fa-solid fa-user text-[17px]"></i><span class="text-[9px] font-medium">Profile</span>
-      </div>
+      <div onclick="window.location.href='/'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer"><span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span><i class="fa-solid fa-house text-[17px]"></i><span class="text-[9px] font-medium">Home</span></div>
+      <div onclick="window.location.href='/explore'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer"><span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span><i class="fa-solid fa-compass text-[17px]"></i><span class="text-[9px] font-medium">Explore</span></div>
+      <div onclick="window.location.href='/quiz'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer"><span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span><i class="fa-solid fa-file-pen text-[17px]"></i><span class="text-[9px] font-medium">Quiz</span></div>
+      <div onclick="window.location.href='/flash'" class="dock-item active relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 cursor-pointer"><span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span><i class="fa-solid fa-bolt text-[17px]"></i><span class="text-[9px] font-medium">Flash</span></div>
+      <div onclick="window.location.href='/leaderboard'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer"><span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span><i class="fa-solid fa-ranking-star text-[17px]"></i><span class="text-[9px] font-medium">Rank</span></div>
+      <div onclick="window.location.href='/profile'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer"><span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span><i class="fa-solid fa-user text-[17px]"></i><span class="text-[9px] font-medium">Profile</span></div>
     </div>
   </nav>
 
@@ -219,7 +249,8 @@
     const $ = (id) => document.getElementById(id);
     const haptic = (t) => { if (tg && tg.HapticFeedback) { try { tg.HapticFeedback.impactOccurred(t); } catch (e) {} } };
 
-    let compiledQuizHtml = '';
+    const tgUser = tg && tg.initDataUnsafe ? tg.initDataUnsafe.user : null;
+    const UID = tgUser && tgUser.id ? tgUser.id : 123456789; 
 
     /* Theme Toggle */
     (function initTheme() {
@@ -230,8 +261,6 @@
     function syncThemeIcon() {
       const light = document.documentElement.classList.contains('light');
       $('themeToggle').innerHTML = light ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
-      const meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute('content', light ? '#f3f4f8' : '#050509');
     }
     $('themeToggle').addEventListener('click', () => {
       const root = document.documentElement;
@@ -241,54 +270,272 @@
       haptic('light');
     });
 
-    /* Core Extraction Logic for Current Affairs */
-    async function processExtraction() {
-      const targetUrl = $('targetUrlInput').value.trim();
-      if (!targetUrl) {
-        showError("Please paste a valid Testbook Current Affairs URL.");
-        return;
+    /* Tab Switcher */
+    function switchTab(which) {
+      haptic('sel');
+      $('seg').setAttribute('data-active', which);
+      $('tabToday').classList.toggle('active', which === 'today');
+      $('tabVault').classList.toggle('active', which === 'vault');
+      $('panelToday').classList.toggle('hide', which !== 'today');
+      $('panelVault').classList.toggle('hide', which !== 'vault');
+      
+      if(which === 'vault') renderVault();
+    }
+
+    /* Helper: Fix HTML image urls & MathJax */
+    function decodeHtml(htmlStr) {
+      if (!htmlStr) return "";
+      let txt = document.createElement("textarea");
+      txt.innerHTML = htmlStr;
+      let res = txt.value.replace(/src=(["'])\/\//g, 'src=$1https://').replace(/src=(["'])\/([^\/])/g, 'src=$1https://testbook.com/$2');
+      res = res.replace(/\[tex\]/g, '\\(').replace(/\[\/tex\]/g, '\\)').replace(/\\rm\s/g, '');
+      return res;
+    }
+
+    function triggerMathJax() {
+      if (window.MathJax && MathJax.typesetPromise) {
+        MathJax.typesetClear();
+        MathJax.typesetPromise().catch(err => console.error(err));
       }
+    }
+
+    /* ==================================
+       QUIZ ENGINE LOGIC
+       ================================== */
+    let currentQuizData = null;
+    let currentQIndex = 0;
+    let userAnswers = []; // stores indices of selected options
+
+    async function fetchCA() {
+      let url = $('caUrl').value.trim();
+      if(!url) return alert("Please enter a valid URL.");
+      
       haptic('medium');
-      $('errorBanner').classList.add('hidden');
-      $('resultCard').classList.add('hidden');
-      $('loadingBlock').classList.remove('hidden');
-      $('loadingBlock').classList.add('flex');
+      $('caInputSection').classList.add('hidden');
+      $('caLoader').classList.remove('hidden');
+      $('caLoader').classList.add('flex');
 
       try {
-        const res = await fetch('/api/tb/current-affairs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: targetUrl })
-        });
+        // Direct fetch from extractor backend to get RAW JSON (Not HTML)
+        const res = await fetch("https://itsh4r01-live-stream-engine.hf.space/api/extract/current-affairs?url=" + encodeURIComponent(url));
+        const json = await res.json();
         
-        if (!res.ok) {
-          const errData = await res.json();
-          $('loadingBlock').classList.add('hidden');
-          showError(errData.error || "Failed to compile Current Affairs quiz.");
-          return;
-        }
+        if(!res.ok || json.error || !json.quiz_data) throw new Error(json.error || "Failed to fetch CA.");
         
-        compiledQuizHtml = await res.text();
-        $('loadingBlock').classList.add('hidden');
-        $('resultCard').classList.remove('hidden');
-      } catch (e) {
-        $('loadingBlock').classList.add('hidden');
-        showError("Network error. Could not generate quiz engine.");
+        currentQuizData = json.quiz_data;
+        startQuizEngine();
+      } catch (err) {
+        alert("Error: " + err.message);
+        $('caLoader').classList.add('hidden');
+        $('caLoader').classList.remove('flex');
+        $('caInputSection').classList.remove('hidden');
       }
     }
 
-    function launchCaQuiz() {
-      haptic('heavy');
-      if (!compiledQuizHtml) return;
-      document.open();
-      document.write(compiledQuizHtml);
-      document.close();
+    function startQuizEngine() {
+      userAnswers = new Array(currentQuizData.questions.length).fill(null);
+      currentQIndex = 0;
+      
+      $('caLoader').classList.add('hidden');
+      $('caLoader').classList.remove('flex');
+      $('quizSection').classList.remove('hidden');
+      
+      loadQuestion();
     }
 
-    function showError(msg) {
+    function loadQuestion() {
+      let q = currentQuizData.questions[currentQIndex];
+      let content = q.content.en || Object.values(q.content)[0];
+      let options = q.options.en || Object.values(q.options)[0];
+
+      $('qCountDisplay').textContent = `Q ${currentQIndex + 1} of ${currentQuizData.questions.length}`;
+      $('qText').innerHTML = decodeHtml(content);
+
+      let optsHtml = '';
+      options.forEach((opt, idx) => {
+        let isSelected = userAnswers[currentQIndex] === idx;
+        optsHtml += `
+          <div onclick="selectOption(${idx})" class="opt-box glass card-press rounded-2xl p-4 flex items-start gap-3 cursor-pointer ${isSelected ? 'selected' : ''}">
+            <div class="opt-radio mt-0.5"></div>
+            <div class="text-[14px] font-medium flex-1 testbook-content">${decodeHtml(opt.text)}</div>
+          </div>
+        `;
+      });
+      $('optsBox').innerHTML = optsHtml;
+
+      // Update button state
+      let btn = $('btnNext');
+      if(userAnswers[currentQIndex] !== null) {
+        btn.classList.remove('opacity-50', 'pointer-events-none');
+      } else {
+        btn.classList.add('opacity-50', 'pointer-events-none');
+      }
+      
+      btn.innerHTML = (currentQIndex === currentQuizData.questions.length - 1) 
+        ? 'Submit Quiz <i class="fa-solid fa-check"></i>' 
+        : 'Save & Next <i class="fa-solid fa-arrow-right"></i>';
+
+      triggerMathJax();
+    }
+
+    function selectOption(idx) {
+      haptic('sel');
+      userAnswers[currentQIndex] = idx;
+      loadQuestion(); // Re-render to show selection
+    }
+
+    function handleNext() {
+      if(userAnswers[currentQIndex] === null) return; // Prevent empty submit
       haptic('light');
-      $('errorMsg').textContent = msg;
-      $('errorBanner').classList.remove('hidden');
+
+      if(currentQIndex < currentQuizData.questions.length - 1) {
+        currentQIndex++;
+        loadQuestion();
+      } else {
+        finishQuiz();
+      }
+    }
+
+    function finishQuiz() {
+      haptic('heavy');
+      let mistakes = [];
+      let correctCount = 0;
+
+      // Calculate score & filter mistakes
+      currentQuizData.questions.forEach((q, idx) => {
+        let userSelIdx = userAnswers[idx];
+        let options = q.options.en || Object.values(q.options)[0];
+        let solution = q.solution.en || Object.values(q.solution)[0];
+        let content = q.content.en || Object.values(q.content)[0];
+        
+        let correctIdx = options.findIndex(o => o.is_correct);
+
+        if(userSelIdx === correctIdx) {
+          correctCount++;
+        } else {
+          // Identify wrong answer & save as flashcard
+          mistakes.push({
+            id: q.id || Date.now() + idx,
+            question: content,
+            options: options,
+            correct_idx: correctIdx,
+            wrong_idx: userSelIdx,
+            solution: solution,
+            date: new Date().toLocaleDateString()
+          });
+        }
+      });
+
+      // Save Mistakes to Vault (Local Storage)
+      if(mistakes.length > 0) {
+        let vault = JSON.parse(localStorage.getItem('h4r_ca_vault') || '[]');
+        vault = [...mistakes, ...vault]; // Add new ones to top
+        // Optional: Keep only latest 100 to save memory
+        if(vault.length > 100) vault = vault.slice(0, 100); 
+        localStorage.setItem('h4r_ca_vault', JSON.stringify(vault));
+      }
+
+      // Update Points on Backend (Firebase gamification)
+      fetch('/api/submit_tb_test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: UID })
+      }).catch(e => console.log("Firebase sync silent fail"));
+
+      // Show Results Screen
+      $('quizSection').classList.add('hidden');
+      
+      $('resCorrect').textContent = correctCount;
+      $('resWrong').textContent = mistakes.length;
+      
+      let note = $('mistakeNotice');
+      if(mistakes.length === 0) {
+        note.className = "text-sm font-semibold text-emerald-soft mb-4 bg-emerald-neon/10 py-2 rounded-lg";
+        note.innerHTML = `<i class="fa-solid fa-trophy"></i> Perfect Score! 0 mistakes added.`;
+      } else {
+        note.className = "text-sm font-semibold text-orange-400 mb-4 bg-orange-400/10 py-2 rounded-lg";
+        note.innerHTML = `<i class="fa-solid fa-inbox"></i> ${mistakes.length} mistakes sent to Past Vault as Flashcards.`;
+      }
+
+      $('resultSection').classList.remove('hidden');
+    }
+
+
+    /* ==================================
+       MISTAKE VAULT LOGIC (FLASHCARDS)
+       ================================== */
+    function renderVault() {
+      let vault = JSON.parse(localStorage.getItem('h4r_ca_vault') || '[]');
+      
+      $('vaultCountBadge').textContent = `${vault.length} Cards`;
+
+      if(vault.length === 0) {
+        $('vaultEmpty').classList.remove('hidden');
+        $('vaultEmpty').classList.add('flex');
+        $('vaultList').innerHTML = '';
+        return;
+      }
+
+      $('vaultEmpty').classList.add('hidden');
+      $('vaultEmpty').classList.remove('flex');
+
+      let html = '';
+      vault.forEach((card, i) => {
+        let correctText = card.options[card.correct_idx].text;
+        let wrongText = card.wrong_idx !== null && card.options[card.wrong_idx] ? card.options[card.wrong_idx].text : "Skipped";
+
+        html += `
+          <div class="glass card-press rounded-3xl p-5 border-t-4 border-emerald-soft relative overflow-hidden">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-soft bg-emerald-neon/15 px-2 py-1 rounded-md"><i class="fa-solid fa-sync"></i> Revision</span>
+              <span class="text-[10px] text-muted font-medium">${card.date}</span>
+            </div>
+            
+            <div class="text-sm font-semibold mb-4 testbook-content">${decodeHtml(card.question)}</div>
+            
+            <div class="space-y-2 mb-4">
+              <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex gap-2">
+                <i class="fa-solid fa-xmark text-red-400 mt-0.5"></i>
+                <div class="text-[13px] font-medium text-text testbook-content">${decodeHtml(wrongText)}</div>
+              </div>
+              <div class="bg-emerald-neon/10 border border-emerald-neon/20 rounded-xl p-3 flex gap-2">
+                <i class="fa-solid fa-check text-emerald-soft mt-0.5"></i>
+                <div class="text-[13px] font-medium text-text testbook-content">${decodeHtml(correctText)}</div>
+              </div>
+            </div>
+
+            <!-- "Show More" Explanation Section -->
+            <div class="border-t border-border pt-3">
+              <button onclick="toggleExplanation(${i})" id="btn-exp-${i}" class="w-full flex items-center justify-between text-xs font-bold text-indigo-soft">
+                Show Detailed Explanation <i id="icon-exp-${i}" class="fa-solid fa-chevron-down transition-transform"></i>
+              </button>
+              <div id="exp-${i}" class="hidden mt-3 text-[13px] text-muted leading-relaxed testbook-content bg-surface p-4 rounded-xl border border-border">
+                ${decodeHtml(card.solution)}
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      $('vaultList').innerHTML = html;
+      triggerMathJax();
+    }
+
+    function toggleExplanation(idx) {
+      haptic('light');
+      let expDiv = $(`exp-${idx}`);
+      let icon = $(`icon-exp-${idx}`);
+      let btn = $(`btn-exp-${idx}`);
+      
+      if(expDiv.classList.contains('hidden')) {
+        expDiv.classList.remove('hidden');
+        icon.classList.replace('fa-chevron-down', 'fa-chevron-up');
+        btn.innerHTML = `Hide Explanation <i id="icon-exp-${idx}" class="fa-solid fa-chevron-up transition-transform"></i>`;
+      } else {
+        expDiv.classList.add('hidden');
+        icon.classList.replace('fa-chevron-up', 'fa-chevron-down');
+        btn.innerHTML = `Show Detailed Explanation <i id="icon-exp-${idx}" class="fa-solid fa-chevron-down transition-transform"></i>`;
+      }
     }
   </script>
 </body>
