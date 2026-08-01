@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#050509" />
-  <title>H4R - Study Note Extractor</title>
+  <title>H4R - Study Notes Explorer</title>
   <!-- Telegram Web App SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <!-- Tailwind CDN -->
@@ -119,16 +119,24 @@
       to { opacity: 1; transform: translateY(0); }
     }
     .reveal { animation: floatUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+    
+    .breadcrumb-text {
+      display: -webkit-box;
+      -webkit-line-clamp: 1;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
   </style>
 </head>
 <body class="aurora min-h-screen pb-32">
   <div class="relative z-10 mx-auto w-full max-w-md px-5 pt-6">
+    
     <!-- Header -->
     <header class="flex items-center justify-between reveal">
       <div>
         <p class="text-xs text-muted">Testbook Bypass Tools</p>
         <h1 class="-mt-0.5 flex items-center gap-2 text-xl font-bold leading-tight">
-          <i class="fa-solid fa-file-pdf text-indigo-soft"></i> Note Extractor
+          <i class="fa-solid fa-book-open text-indigo-soft"></i> Study Notes
         </h1>
       </div>
       <button id="themeToggle" aria-label="Toggle theme" class="glass card-press flex h-10 w-10 items-center justify-center rounded-full text-base">
@@ -136,54 +144,74 @@
       </button>
     </header>
 
-    <!-- URL Input Card -->
-    <section class="reveal mt-8" style="animation-delay:.1s">
-      <div class="glass rounded-3xl p-5">
-        <label id="inputLabel" class="text-xs font-bold uppercase tracking-wider text-indigo-soft block mb-2">
-          Enter Study Note ID
-        </label>
-        <div class="relative flex items-center w-full">
-          <i class="fa-solid fa-fingerprint absolute left-4 text-muted"></i>
-          <input type="text" id="targetUrlInput" placeholder="e.g. 6752f2df1f6a653d5bd24674"
-             class="glass w-full rounded-2xl py-3.5 pl-11 pr-4 text-sm text-text outline-none transition-all placeholder-muted bg-transparent border border-border focus:border-indigo-neon">
-        </div>
-        <button id="extractBtn" onclick="processExtraction()" class="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-neon py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 card-press">
-          <i class="fa-solid fa-bolt"></i> <span id="btnText">Extract Multi-Lingual PDF</span>
-        </button>
+    <!-- Navigation Breadcrumb -->
+    <div id="navBar" class="hidden mt-6 mb-4 flex items-center gap-3">
+      <button onclick="goBack()" class="glass flex h-9 w-9 items-center justify-center rounded-xl text-indigo-soft card-press shrink-0">
+        <i class="fa-solid fa-arrow-left"></i>
+      </button>
+      <div class="glass flex-1 rounded-xl px-4 py-2 flex flex-col justify-center">
+        <span class="text-[10px] uppercase font-bold text-muted tracking-wider" id="currentStepLabel">Exams</span>
+        <span class="text-sm font-bold breadcrumb-text" id="currentStepTitle">Select Category</span>
       </div>
-    </section>
-
-    <!-- Loading State -->
-    <div id="loadingBlock" class="mt-6 hidden flex-col items-center text-center">
-      <i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-soft mb-2"></i>
-      <p class="text-sm font-semibold text-muted" id="loadingText">Bypassing server and fetching PDF links...</p>
     </div>
 
-    <!-- Result Display Card -->
-    <section id="resultCard" class="reveal mt-6 hidden" style="animation-delay:.15s">
-      <div class="glass rounded-3xl p-5 border-l-4 border-emerald-soft">
-        <div class="flex items-center gap-2 text-emerald-soft mb-2">
-          <i class="fa-solid fa-circle-check text-base"></i>
-          <span class="text-xs font-bold uppercase tracking-wide">Extraction Successful</span>
+    <!-- Main Content Area -->
+    <section class="reveal mt-6" style="animation-delay:.1s">
+      
+      <!-- Loading State -->
+      <div id="loadingBlock" class="mt-10 hidden flex-col items-center text-center">
+        <div class="relative flex items-center justify-center h-16 w-16 mb-4">
+          <div class="absolute inset-0 rounded-full border-4 border-indigo-neon/20"></div>
+          <div class="absolute inset-0 rounded-full border-4 border-indigo-neon border-t-transparent animate-spin"></div>
+          <i class="fa-solid fa-cloud-arrow-down text-indigo-soft"></i>
         </div>
-        <h3 id="resultTitle" class="text-base font-bold leading-snug mb-3">Study Note Document</h3>
+        <p class="text-sm font-bold">Syncing Database...</p>
+        <p class="text-xs text-muted mt-1" id="loadingText">Fetching resources</p>
+      </div>
+
+      <!-- Dynamic Grid for Data (Groups/Subjects/Chapters/Notes) -->
+      <div id="dataGrid" class="grid gap-3"></div>
+
+      <!-- Empty State -->
+      <div id="emptyState" class="mt-10 hidden flex-col items-center text-center">
+        <div class="glass flex h-16 w-16 items-center justify-center rounded-2xl text-2xl text-indigo-soft mb-4">
+          <i class="fa-solid fa-folder-open"></i>
+        </div>
+        <p class="font-bold">No Data Found</p>
+        <p class="mt-1 text-sm text-muted">There are no notes available in this section.</p>
+      </div>
+
+      <!-- PDF Viewer Card (Final Step) -->
+      <div id="pdfViewerCard" class="hidden glass rounded-3xl p-5 border-t-4 border-indigo-neon flex-col gap-4">
         
-        <!-- PDF Result Container -->
-        <div id="pdfResultArea" class="space-y-2">
-          <a id="downloadPdfBtn" href="#" target="_blank" class="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-neon/20 border border-emerald-neon/40 py-3 text-xs font-bold text-emerald-soft card-press">
-            <i class="fa-solid fa-download"></i> Download High-Speed PDF
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2 text-emerald-soft">
+            <i class="fa-solid fa-circle-check"></i>
+            <span class="text-xs font-bold uppercase tracking-wide">Ready to View</span>
+          </div>
+        </div>
+        
+        <h3 id="pdfTitle" class="text-lg font-bold leading-snug">Document Title</h3>
+
+        <div id="languageSelector" class="hidden flex gap-2 overflow-x-auto no-scrollbar py-1">
+          <!-- Dynamic Lang Buttons Here -->
+        </div>
+
+        <div class="w-full h-80 rounded-2xl overflow-hidden glass border border-border relative">
+          <iframe id="pdfIframe" src="" class="w-full h-full border-none" style="background: white;"></iframe>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 mt-2">
+          <a id="downloadPdfBtn" href="#" target="_blank" class="flex items-center justify-center gap-2 rounded-xl bg-indigo-neon/15 border border-indigo-neon/30 py-3 text-xs font-bold text-indigo-soft card-press">
+            <i class="fa-solid fa-download"></i> Download
           </a>
-          <button id="copyLinkBtn" onclick="copyCdnUrl()" class="flex w-full items-center justify-center gap-2 rounded-xl glass py-3 text-xs font-bold text-muted card-press">
-            <i class="fa-solid fa-copy"></i> Copy CDN Link
+          <button onclick="copyPdfUrl()" class="flex items-center justify-center gap-2 rounded-xl glass py-3 text-xs font-bold text-text card-press">
+            <i class="fa-solid fa-copy"></i> Copy Link
           </button>
         </div>
       </div>
-    </section>
 
-    <!-- Error Banner -->
-    <div id="errorBanner" class="mt-6 hidden rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-center text-xs font-semibold text-red-400">
-      <i class="fa-solid fa-triangle-exclamation mr-1"></i> <span id="errorMsg">Failed to process resource.</span>
-    </div>
+    </section>
 
   </div>
 
@@ -223,20 +251,20 @@
     const $ = (id) => document.getElementById(id);
     const haptic = (t) => { if (tg && tg.HapticFeedback) { try { tg.HapticFeedback.impactOccurred(t); } catch (e) {} } };
 
-    let extractedCdnUrl = '';
-
-    /* Theme Toggle */
+    /* --- Theme Manager --- */
     (function initTheme() {
       const saved = localStorage.getItem('h4r_theme');
       if (saved === 'light') document.documentElement.classList.replace('dark', 'light');
       syncThemeIcon();
     })();
+    
     function syncThemeIcon() {
       const light = document.documentElement.classList.contains('light');
       $('themeToggle').innerHTML = light ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
       const meta = document.querySelector('meta[name="theme-color"]');
       if (meta) meta.setAttribute('content', light ? '#f3f4f8' : '#050509');
     }
+    
     $('themeToggle').addEventListener('click', () => {
       const root = document.documentElement;
       root.classList.contains('dark') ? root.classList.replace('dark', 'light') : root.classList.replace('light', 'dark');
@@ -245,58 +273,335 @@
       haptic('light');
     });
 
-    /* Core Extraction Logic for Study Note PDFs */
-    async function processExtraction() {
-      const targetId = $('targetUrlInput').value.trim();
-      if (!targetId) {
-        showError("Please enter a valid Study Note ID.");
-        return;
-      }
-      haptic('medium');
-      $('errorBanner').classList.add('hidden');
-      $('resultCard').classList.add('hidden');
+    /* --- State & Navigation Manager --- */
+    let navHistory = []; 
+    // State Object: { step: "groups"|"subjects"|"chapters"|"notes"|"pdf", id: "", title: "", label: "" }
+    
+    let currentPdfUrl = '';
+    let currentPdfUrlsDict = {};
+
+    function escapeHtml(str) {
+      return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function showLoading(msg) {
+      $('dataGrid').innerHTML = '';
+      $('emptyState').classList.add('hidden');
+      $('pdfViewerCard').classList.add('hidden');
+      $('loadingText').textContent = msg;
       $('loadingBlock').classList.remove('hidden');
       $('loadingBlock').classList.add('flex');
+    }
 
+    function hideLoading() {
+      $('loadingBlock').classList.add('hidden');
+      $('loadingBlock').classList.remove('flex');
+    }
+
+    function updateHeader(state) {
+      if(state.step === 'groups') {
+        $('navBar').classList.add('hidden');
+        $('navBar').classList.remove('flex');
+      } else {
+        $('navBar').classList.remove('hidden');
+        $('navBar').classList.add('flex');
+        $('currentStepLabel').textContent = state.label;
+        $('currentStepTitle').textContent = state.title;
+      }
+    }
+
+    /* --- Step 1: Load Groups --- */
+    async function fetchGroups() {
+      showLoading("Fetching Exam Categories...");
+      updateHeader({ step: 'groups' });
       try {
-        const res = await fetch(`/api/study/note-pdf?note_id=${encodeURIComponent(targetId)}`);
+        const res = await fetch('/api/study/groups');
         const data = await res.json();
+        hideLoading();
         
-        $('loadingBlock').classList.add('hidden');
+        if(!data.groups || data.groups.length === 0) {
+          $('emptyState').classList.remove('hidden');
+          $('emptyState').classList.add('flex');
+          return;
+        }
+
+        let html = '';
+        data.groups.forEach(g => {
+          let title = g.properties?.title || 'Unknown Group';
+          html += `
+            <button onclick="navigate('subjects', '${g._id}', '${escapeHtml(title)}')" class="glass card-press flex w-full items-center gap-4 rounded-2xl p-4 text-left">
+              <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-neon/10 text-indigo-soft text-xl">
+                <i class="fa-solid fa-graduation-cap"></i>
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-[15px] font-bold">${escapeHtml(title)}</p>
+                <p class="text-xs text-muted mt-0.5"><i class="fa-solid fa-list-ol mr-1"></i>${g.questionCount || 0} Assets</p>
+              </div>
+              <i class="fa-solid fa-chevron-right text-xs text-muted"></i>
+            </button>`;
+        });
+        $('dataGrid').innerHTML = html;
+      } catch (err) {
+        hideLoading();
+        $('dataGrid').innerHTML = `<p class="text-center text-red-400 font-bold mt-4">Error fetching groups.</p>`;
+      }
+    }
+
+    /* --- Step 2: Load Subjects --- */
+    async function fetchSubjects(groupId) {
+      showLoading("Fetching Subjects...");
+      try {
+        const res = await fetch(`/api/study/subjects?group_id=${groupId}`);
+        const data = await res.json();
+        hideLoading();
+
+        if(!data.subjects || data.subjects.length === 0) {
+          $('emptyState').classList.remove('hidden');
+          $('emptyState').classList.add('flex');
+          return;
+        }
+
+        let html = '';
+        data.subjects.forEach(s => {
+          let title = s.properties?.title || 'Subject';
+          let count = s.meta?.noteCount || 0;
+          html += `
+            <button onclick="navigate('chapters', '${s._id}', '${escapeHtml(title)}')" class="glass card-press flex w-full items-center gap-4 rounded-2xl p-4 text-left">
+              <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-neon/10 text-emerald-soft text-xl">
+                <i class="fa-solid fa-book"></i>
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-[15px] font-bold">${escapeHtml(title)}</p>
+                <p class="text-xs text-muted mt-0.5"><i class="fa-solid fa-file-pdf mr-1"></i>${count} Notes</p>
+              </div>
+              <i class="fa-solid fa-chevron-right text-xs text-muted"></i>
+            </button>`;
+        });
+        $('dataGrid').innerHTML = html;
+      } catch (err) {
+        hideLoading();
+        $('dataGrid').innerHTML = `<p class="text-center text-red-400 font-bold mt-4">Error fetching subjects.</p>`;
+      }
+    }
+
+    /* --- Step 3: Load Chapters --- */
+    async function fetchChapters(subjectId) {
+      showLoading("Fetching Chapters...");
+      try {
+        const res = await fetch(`/api/study/chapters?subject_id=${subjectId}`);
+        const data = await res.json();
+        hideLoading();
+
+        if(!data.chapters || data.chapters.length === 0) {
+          $('emptyState').classList.remove('hidden');
+          $('emptyState').classList.add('flex');
+          return;
+        }
+
+        let html = '';
+        data.chapters.forEach(c => {
+          let title = c.properties?.title || 'Chapter';
+          let count = c.meta?.noteCount || 0;
+          html += `
+            <button onclick="navigate('notes', '${c._id}', '${escapeHtml(title)}')" class="glass card-press flex w-full items-center gap-4 rounded-2xl p-4 text-left">
+              <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 text-orange-400 text-lg">
+                <i class="fa-solid fa-bookmark"></i>
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-[14px] font-bold">${escapeHtml(title)}</p>
+                <p class="text-[11px] text-muted mt-0.5">${count} PDF Notes Inside</p>
+              </div>
+              <i class="fa-solid fa-chevron-right text-xs text-muted"></i>
+            </button>`;
+        });
+        $('dataGrid').innerHTML = html;
+      } catch (err) {
+        hideLoading();
+        $('dataGrid').innerHTML = `<p class="text-center text-red-400 font-bold mt-4">Error fetching chapters.</p>`;
+      }
+    }
+
+    /* --- Step 4: Load Notes (Sections) --- */
+    async function fetchNotes(chapterId) {
+      showLoading("Fetching Notes...");
+      try {
+        const res = await fetch(`/api/study/notes?chapter_id=${chapterId}`);
+        const data = await res.json();
+        hideLoading();
+
+        if(!data.sections || data.sections.length === 0) {
+          $('emptyState').classList.remove('hidden');
+          $('emptyState').classList.add('flex');
+          return;
+        }
+
+        let html = '';
+        data.sections.forEach(sec => {
+          let secTitle = sec.properties?.title || '';
+          if(secTitle) {
+            html += `<h4 class="text-xs font-bold text-indigo-soft uppercase tracking-wider mt-4 mb-2 ml-1">${escapeHtml(secTitle)}</h4>`;
+          }
+          
+          if(sec.notes && sec.notes.length > 0) {
+            sec.notes.forEach(note => {
+              html += `
+              <button onclick="navigate('pdf', '${note._id}', '${escapeHtml(note.name)}')" class="glass card-press flex w-full items-center gap-3 rounded-2xl p-3.5 mb-2 text-left border-l-4 border-l-indigo-neon">
+                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-text text-sm">
+                  <i class="fa-solid fa-file-pdf"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-[14px] font-semibold">${escapeHtml(note.name)}</p>
+                </div>
+                <div class="text-[10px] font-bold bg-indigo-neon/20 text-indigo-soft px-2 py-1 rounded-md">VIEW</div>
+              </button>`;
+            });
+          }
+        });
+        $('dataGrid').innerHTML = html;
+      } catch (err) {
+        hideLoading();
+        $('dataGrid').innerHTML = `<p class="text-center text-red-400 font-bold mt-4">Error fetching notes.</p>`;
+      }
+    }
+
+    /* --- Step 5: Final PDF Extraction --- */
+    async function fetchPdf(noteId, title) {
+      showLoading("Extracting Multi-Lingual PDF...");
+      try {
+        const res = await fetch(`/api/study/note-pdf?note_id=${noteId}`);
+        const data = await res.json();
+        hideLoading();
+
         if (!res.ok || data.error || !data.pdf_data) {
-          showError(data.error || "Failed to extract PDF CDN link.");
+          $('dataGrid').innerHTML = `<p class="text-center text-red-400 font-bold mt-4">${escapeHtml(data.error || "Failed to extract PDF CDN link.")}</p>`;
           return;
         }
         
-        let pdfUrls = data.pdf_data.urls;
-        extractedCdnUrl = pdfUrls["Hindi"] || pdfUrls["English"] || Object.values(pdfUrls)[0];
-
-        $('resultTitle').textContent = data.pdf_data.title || "Study Note Document";
-        $('downloadPdfBtn').href = extractedCdnUrl;
+        currentPdfUrlsDict = data.pdf_data.urls;
         
-        $('resultCard').classList.remove('hidden');
-      } catch (e) {
-        $('loadingBlock').classList.add('hidden');
-        showError("Network error. Could not connect to proxy server.");
+        // Priority selection
+        let defaultLang = "English";
+        if(currentPdfUrlsDict["Hindi"]) defaultLang = "Hindi";
+        else if (currentPdfUrlsDict["English"]) defaultLang = "English";
+        else defaultLang = Object.keys(currentPdfUrlsDict)[0];
+
+        $('pdfTitle').textContent = data.pdf_data.title || title || "Study Note";
+        
+        renderLanguageButtons(defaultLang);
+        setPdfViewer(defaultLang);
+
+        $('pdfViewerCard').classList.remove('hidden');
+        $('pdfViewerCard').classList.add('flex');
+
+      } catch (err) {
+        hideLoading();
+        $('dataGrid').innerHTML = `<p class="text-center text-red-400 font-bold mt-4">Error generating PDF viewer.</p>`;
       }
     }
 
-    function copyCdnUrl() {
-      if (!extractedCdnUrl) return;
-      navigator.clipboard.writeText(extractedCdnUrl).then(() => {
+    function renderLanguageButtons(activeLang) {
+      const langBox = $('languageSelector');
+      let langs = Object.keys(currentPdfUrlsDict);
+      
+      if(langs.length <= 1) {
+        langBox.classList.add('hidden');
+        return;
+      }
+      
+      langBox.classList.remove('hidden');
+      let html = '';
+      langs.forEach(lang => {
+        let isActive = (lang === activeLang);
+        let btnClass = isActive 
+          ? 'bg-indigo-neon text-white shadow-md' 
+          : 'glass text-muted';
+        
+        html += `
+          <button onclick="setPdfViewer('${lang}')" class="px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all card-press ${btnClass}">
+            ${lang}
+          </button>
+        `;
+      });
+      langBox.innerHTML = html;
+    }
+
+    function setPdfViewer(lang) {
+      currentPdfUrl = currentPdfUrlsDict[lang];
+      $('pdfIframe').src = currentPdfUrl;
+      $('downloadPdfBtn').href = currentPdfUrl;
+      renderLanguageButtons(lang); // refresh buttons
+    }
+
+    function copyPdfUrl() {
+      if (!currentPdfUrl) return;
+      navigator.clipboard.writeText(currentPdfUrl).then(() => {
         haptic('light');
-        $('copyLinkBtn').innerHTML = '<i class="fa-solid fa-check text-emerald-soft"></i> Link Copied!';
-        setTimeout(() => {
-          $('copyLinkBtn').innerHTML = '<i class="fa-solid fa-copy"></i> Copy CDN Link';
-        }, 2000);
+        alert("CDN Link Copied!");
       });
     }
 
-    function showError(msg) {
-      haptic('light');
-      $('errorMsg').textContent = msg;
-      $('errorBanner').classList.remove('hidden');
+
+    /* --- Navigation Core Logic --- */
+    function navigate(step, id, title) {
+      haptic('sel');
+      
+      // Save current state to history before moving forward
+      if(navHistory.length === 0 || navHistory[navHistory.length-1].step !== step) {
+        // Push the target we are LEAVING to get back to it. Wait, it's easier to push the NEW state
+      }
+
+      let state = { step: step, id: id, title: title, label: "" };
+
+      if(step === 'groups') {
+        navHistory = [state];
+        fetchGroups();
+      } 
+      else if(step === 'subjects') {
+        state.label = "Exam Group";
+        navHistory.push(state);
+        updateHeader(state);
+        fetchSubjects(id);
+      }
+      else if(step === 'chapters') {
+        state.label = "Subject";
+        navHistory.push(state);
+        updateHeader(state);
+        fetchChapters(id);
+      }
+      else if(step === 'notes') {
+        state.label = "Chapter";
+        navHistory.push(state);
+        updateHeader(state);
+        fetchNotes(id);
+      }
+      else if(step === 'pdf') {
+        state.label = "Note";
+        navHistory.push(state);
+        updateHeader(state);
+        fetchPdf(id, title);
+      }
     }
+
+    function goBack() {
+      haptic('light');
+      if(navHistory.length <= 1) return;
+      
+      navHistory.pop(); // remove current
+      let previousState = navHistory.pop(); // pop previous to re-navigate to it
+      
+      // Clear specific UI
+      $('pdfViewerCard').classList.add('hidden');
+      $('pdfViewerCard').classList.remove('flex');
+      $('pdfIframe').src = "";
+      
+      navigate(previousState.step, previousState.id, previousState.title);
+    }
+
+    // Initialize the Explorer on load
+    navigate('groups', '', 'All Exams');
+
   </script>
 </body>
 </html>
