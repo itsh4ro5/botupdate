@@ -4,22 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#050509" />
-  <title>H4R — Flash Arena</title>
-
+  <title>H4R - Current Affairs Extractor</title>
   <!-- Telegram Web App SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
   <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-
   <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
-
   <!-- Google Fonts: Outfit -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-
   <script>
     tailwind.config = {
       theme: {
@@ -35,7 +30,6 @@
       },
     };
   </script>
-
   <style>
     :root {
       --bg: #050509;
@@ -47,7 +41,6 @@
       --indigo: #6366f1;
       --emerald: #10b981;
     }
-
     html.light {
       --bg: #f3f4f8;
       --surface: rgba(10, 10, 25, 0.03);
@@ -56,13 +49,11 @@
       --text: #10101c;
       --muted: #5b5b6b;
     }
-
-    * { 
-      -webkit-tap-highlight-color: transparent; 
-      -webkit-touch-callout: none; /* Long press popup hide karega iOS pe */
-      user-select: none; /* Text selection band karega */
+    * {
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      user-select: none;
     }
-
     body {
       background: var(--bg);
       color: var(--text);
@@ -70,8 +61,6 @@
       overflow-x: hidden;
       transition: background 0.4s ease, color 0.4s ease;
     }
-
-    /* ambient neon glow behind content */
     .aurora::before {
       content: '';
       position: fixed;
@@ -97,20 +86,15 @@
       z-index: 0;
       pointer-events: none;
     }
-
     .glass {
       background: var(--surface);
       border: 1px solid var(--border);
       backdrop-filter: blur(18px);
       -webkit-backdrop-filter: blur(18px);
     }
-
     .card-press { transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease; }
     .card-press:active { transform: scale(0.965); }
-
     .text-muted { color: var(--muted); }
-
-    /* dock */
     .dock {
       background: rgba(13, 13, 22, 0.72);
       border: 1px solid var(--border);
@@ -119,7 +103,6 @@
       box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
     }
     html.light .dock { background: rgba(255, 255, 255, 0.78); }
-
     .dock-item { transition: color 0.2s ease, transform 0.2s ease; }
     .dock-item.active { color: var(--indigo); }
     .dock-item.active .dock-glow { opacity: 1; transform: scale(1); }
@@ -129,336 +112,116 @@
       transition: opacity 0.25s ease, transform 0.25s ease;
       box-shadow: 0 0 18px 2px rgba(99, 102, 241, 0.55);
     }
-
-    /* scroll rows */
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-    /* shimmer skeletons */
-    .skel {
-      background: linear-gradient(100deg, rgba(255,255,255,0.04) 30%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.04) 70%);
-      background-size: 200% 100%;
-      animation: shimmer 1.3s infinite linear;
-    }
-    @keyframes shimmer { to { background-position: -200% 0; } }
-
     @keyframes floatUp {
       from { opacity: 0; transform: translateY(14px); }
       to { opacity: 1; transform: translateY(0); }
     }
     .reveal { animation: floatUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
-
-    /* ===== Segmented main tabs ===== */
-    .seg {
-      position: relative;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      padding: 4px;
-      border-radius: 9999px;
-    }
-    .seg-thumb {
-      position: absolute;
-      top: 4px;
-      bottom: 4px;
-      left: 4px;
-      width: calc(50% - 4px);
-      border-radius: 9999px;
-      background: linear-gradient(130deg, #4f46e5, #6366f1);
-      box-shadow: 0 8px 22px rgba(99, 102, 241, 0.4);
-      transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
-      z-index: 0;
-    }
-    .seg[data-active="vault"] .seg-thumb { transform: translateX(100%); }
-    .seg-btn {
-      position: relative;
-      z-index: 1;
-      padding: 0.6rem 0;
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: var(--muted);
-      transition: color 0.25s ease;
-    }
-    .seg-btn.active { color: #fff; }
-
-    /* ===== Panels (smooth toggle) ===== */
-    .panel { transition: opacity 0.3s ease; }
-    .panel.hide { display: none; }
-
-    /* ===== Quiz option states ===== */
-    .opt {
-      transition: transform 0.15s ease, border-color 0.2s ease, background 0.2s ease;
-    }
-    .opt:active { transform: scale(0.98); }
-    .opt.selected {
-      border-color: var(--indigo);
-      background: rgba(99, 102, 241, 0.14);
-    }
-    .opt.correct {
-      border-color: var(--emerald);
-      background: rgba(16, 185, 129, 0.16);
-    }
-    .opt.wrong {
-      border-color: #ef4444;
-      background: rgba(239, 68, 68, 0.14);
-    }
-    .opt .tick { opacity: 0; transition: opacity 0.2s ease; }
-    .opt.correct .tick, .opt.wrong .tick { opacity: 1; }
-
-    /* ===== Flashcard reveal ===== */
-    @keyframes cardIn {
-      from { opacity: 0; transform: translateY(18px) scale(0.98); }
-      to { opacity: 1; transform: translateY(0) scale(1); }
-    }
-    .flashcard { animation: cardIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
-    .flash-accent {
-      background:
-        radial-gradient(120% 140% at 100% 0%, rgba(99,102,241,0.22), transparent 55%),
-        radial-gradient(120% 140% at 0% 100%, rgba(16,185,129,0.18), transparent 55%),
-        var(--surface);
-    }
-
-    /* submit button pop-in */
-    @keyframes popIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .pop { animation: popIn 0.3s ease both; }
   </style>
 </head>
-
 <body class="aurora min-h-screen pb-32">
   <div class="relative z-10 mx-auto w-full max-w-md px-5 pt-6">
-
-    <!-- ===== Header ===== -->
+    <!-- Header -->
     <header class="flex items-center justify-between reveal">
       <div>
-        <p class="text-xs text-muted">Daily brain workout</p>
+        <p class="text-xs text-muted">Testbook Bypass Tools</p>
         <h1 class="-mt-0.5 flex items-center gap-2 text-xl font-bold leading-tight">
-          <i class="fa-solid fa-bolt text-emerald-soft"></i> Flash Arena
+          <i class="fa-solid fa-newspaper text-indigo-soft"></i> CA Extractor
         </h1>
       </div>
-      <button id="themeToggle" aria-label="Toggle theme"
-        class="glass card-press flex h-10 w-10 items-center justify-center rounded-full text-base">
+      <button id="themeToggle" aria-label="Toggle theme" class="glass card-press flex h-10 w-10 items-center justify-center rounded-full text-base">
         <i class="fa-solid fa-moon"></i>
       </button>
     </header>
 
-    <!-- ===== Main Tabs: Today's Arena / Past Vault ===== -->
-    <div class="reveal mt-5" style="animation-delay:.05s">
-      <div id="seg" class="seg glass" data-active="today" role="tablist" aria-label="Flash Arena tabs">
-        <span class="seg-thumb" aria-hidden="true"></span>
-        <button id="tabToday" class="seg-btn active" role="tab" aria-selected="true">
-          <i class="fa-solid fa-fire mr-1"></i> Today's Arena
-        </button>
-        <button id="tabVault" class="seg-btn" role="tab" aria-selected="false">
-          <i class="fa-solid fa-layer-group mr-1"></i> Past Vault
+    <!-- URL Input Card -->
+    <section class="reveal mt-8" style="animation-delay:.1s">
+      <div class="glass rounded-3xl p-5">
+        <label id="inputLabel" class="text-xs font-bold uppercase tracking-wider text-indigo-soft block mb-2">
+          Enter Current Affairs Quiz URL
+        </label>
+        <div class="relative flex items-center w-full">
+          <i class="fa-solid fa-link absolute left-4 text-muted"></i>
+          <input type="url" id="targetUrlInput" placeholder="https://testbook.com/current-affairs-quiz/quizzes/..."
+             class="glass w-full rounded-2xl py-3.5 pl-11 pr-4 text-sm text-text outline-none transition-all placeholder-muted bg-transparent border border-border focus:border-indigo-neon">
+        </div>
+        <button id="extractBtn" onclick="processExtraction()" class="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-neon py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 card-press">
+          <i class="fa-solid fa-rocket"></i> <span id="btnText">Extract & Compile Quiz Engine</span>
         </button>
       </div>
+    </section>
+
+    <!-- Loading State -->
+    <div id="loadingBlock" class="mt-6 hidden flex-col items-center text-center">
+      <i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-soft mb-2"></i>
+      <p class="text-sm font-semibold text-muted" id="loadingText">Scraping Current Affairs quiz payload...</p>
     </div>
 
-    <!-- ============================================================ -->
-    <!-- PANEL: TODAY'S ARENA                                         -->
-    <!-- ============================================================ -->
-    <section id="panelToday" class="panel mt-6" role="tabpanel" aria-label="Today's Arena">
-
-      <!-- loading -->
-      <div id="quizLoading" class="grid gap-3">
-        <div class="skel h-6 w-40 rounded-md"></div>
-        <div class="skel h-24 rounded-2xl"></div>
-        <div class="skel h-14 rounded-2xl"></div>
-        <div class="skel h-14 rounded-2xl"></div>
-        <div class="skel h-14 rounded-2xl"></div>
-      </div>
-
-      <!-- quiz card -->
-      <div id="quizCard" class="hidden">
-        <div class="mb-3 flex items-center justify-between">
-          <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-neon/12 px-2.5 py-1 text-[11px] font-semibold text-emerald-soft">
-            <i class="fa-regular fa-calendar-check"></i> <span id="quizDate">Today</span>
-          </span>
-          <span id="quizSubject" class="text-[11px] font-medium text-muted"></span>
+    <!-- Result Display Card -->
+    <section id="resultCard" class="reveal mt-6 hidden" style="animation-delay:.15s">
+      <div class="glass rounded-3xl p-5 border-l-4 border-emerald-soft">
+        <div class="flex items-center gap-2 text-emerald-soft mb-2">
+          <i class="fa-solid fa-circle-check text-base"></i>
+          <span class="text-xs font-bold uppercase tracking-wide">Extraction Successful</span>
         </div>
-
-        <div class="glass rounded-3xl p-5">
-          <p class="text-[11px] font-semibold uppercase tracking-wide text-indigo-soft">Question of the day</p>
-          <h2 id="quizQuestion" class="mt-2 text-base font-semibold leading-relaxed text-pretty"></h2>
-
-          <div id="optionsWrap" class="mt-4 grid gap-2.5"></div>
-        </div>
-
-        <!-- Submit (only visible after selection) -->
-        <button id="submitBtn"
-          class="mt-4 hidden w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-neon py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 card-press">
-          <i class="fa-solid fa-paper-plane"></i> Submit Answer
-        </button>
-      </div>
-
-      <!-- already attempted state -->
-      <div id="attemptedState" class="hidden">
-        <div class="glass flash-accent rounded-3xl p-6 text-center">
-          <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-neon/15 text-2xl text-emerald-soft">
-            <i class="fa-solid fa-circle-check"></i>
-          </div>
-          <p class="mt-3 font-semibold">You've cleared today's arena</p>
-          <p class="mt-1 text-sm text-muted">Come back tomorrow for a fresh question. Meanwhile, revise from the Past Vault.</p>
-          <button id="goVault" class="mt-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold card-press">
-            <i class="fa-solid fa-layer-group"></i> Open Past Vault
+        <h3 id="resultTitle" class="text-base font-bold leading-snug mb-3">Daily Current Affairs Interactive Quiz</h3>
+        
+        <div id="caResultArea" class="space-y-2">
+          <button id="launchQuizBtn" onclick="launchCaQuiz()" class="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-neon py-3 text-xs font-bold text-white shadow-lg card-press">
+            <i class="fa-solid fa-play"></i> Launch Interactive Quiz Engine
           </button>
         </div>
       </div>
-
-      <!-- Flashcard (explanation) + Share -->
-      <div id="flashWrap" class="hidden mt-5">
-        <div class="flashcard glass flash-accent rounded-3xl p-5">
-          <div class="flex items-center gap-2">
-            <span id="resultPill" class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold"></span>
-            <span class="text-[11px] text-muted">+<span id="xpGain">10</span> XP</span>
-          </div>
-
-          <div class="mt-4 flex items-center gap-2 text-indigo-soft">
-            <i class="fa-solid fa-lightbulb"></i>
-            <p class="text-[11px] font-semibold uppercase tracking-wide">Concept Flashcard</p>
-          </div>
-          <h3 id="flashTitle" class="mt-1.5 text-base font-bold text-pretty"></h3>
-          <p id="flashBody" class="mt-2 text-sm leading-relaxed text-muted"></p>
-
-          <div id="flashCorrect" class="mt-4 flex items-start gap-2 rounded-2xl border border-emerald-neon/20 bg-emerald-neon/10 px-3 py-2.5 text-sm">
-            <i class="fa-solid fa-check mt-0.5 text-emerald-soft"></i>
-            <span><span class="text-muted">Correct answer:</span> <span id="flashAnswer" class="font-semibold"></span></span>
-          </div>
-        </div>
-
-        <button id="shareBtn"
-          class="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-indigo-neon/30 bg-indigo-neon/10 py-3.5 text-sm font-bold text-indigo-soft card-press">
-          <i class="fa-solid fa-share-nodes"></i> Share Quiz
-        </button>
-      </div>
-
-      <!-- error / empty -->
-      <div id="quizEmpty" class="hidden mt-4 flex-col items-center text-center">
-        <div class="glass flex h-16 w-16 items-center justify-center rounded-2xl text-2xl text-indigo-soft">
-          <i class="fa-regular fa-face-smile"></i>
-        </div>
-        <p class="mt-4 font-semibold">No quiz available right now</p>
-        <p class="mt-1 max-w-[240px] text-sm text-muted">Today's question hasn't dropped yet. Check back shortly.</p>
-      </div>
     </section>
 
-    <!-- ============================================================ -->
-    <!-- PANEL: PAST VAULT                                            -->
-    <!-- ============================================================ -->
-    <section id="panelVault" class="panel hide mt-6" role="tabpanel" aria-label="Past Vault">
-      <div class="mb-3 flex items-center justify-between">
-        <h2 class="flex items-center gap-2 text-base font-semibold">
-          <i class="fa-solid fa-layer-group text-indigo-soft"></i> Revision Vault
-        </h2>
-        <span id="vaultCount" class="text-xs text-muted"></span>
-      </div>
+    <!-- Error Banner -->
+    <div id="errorBanner" class="mt-6 hidden rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-center text-xs font-semibold text-red-400">
+      <i class="fa-solid fa-triangle-exclamation mr-1"></i> <span id="errorMsg">Failed to process resource.</span>
+    </div>
 
-      <!-- loading -->
-      <div id="vaultLoading" class="grid gap-3">
-        <div class="skel h-28 rounded-2xl"></div>
-        <div class="skel h-28 rounded-2xl"></div>
-        <div class="skel h-28 rounded-2xl"></div>
-      </div>
-
-      <div id="vaultList" class="grid gap-3"></div>
-
-      <!-- empty -->
-      <div id="vaultEmpty" class="hidden mt-10 flex-col items-center text-center">
-        <div class="glass flex h-16 w-16 items-center justify-center rounded-2xl text-2xl text-indigo-soft">
-          <i class="fa-solid fa-box-open"></i>
-        </div>
-        <p class="mt-4 font-semibold">Your vault is empty</p>
-        <p class="mt-1 max-w-[240px] text-sm text-muted">Solve daily quizzes to collect flashcards for revision.</p>
-      </div>
-    </section>
   </div>
 
-  <!-- ===== Floating Bottom Dock ===== -->
+  <!-- Bottom Navigation Dock -->
   <nav class="fixed bottom-4 left-1/2 z-30 -translate-x-1/2" oncontextmenu="return false;">
     <div class="dock flex items-center gap-1 rounded-full px-2 py-2">
-      <div onclick="window.location.href='/'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 cursor-pointer">
+      <div onclick="window.location.href='/'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-house text-[17px]"></i><span class="text-[9px] font-medium">Home</span>
       </div>
-      
-      <div onclick="window.location.href='/explore'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 cursor-pointer">
+      <div onclick="window.location.href='/explore'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-compass text-[17px]"></i><span class="text-[9px] font-medium">Explore</span>
       </div>
-      
-      <div onclick="window.location.href='/quiz'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 cursor-pointer">
+      <div onclick="window.location.href='/quiz'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-file-pen text-[17px]"></i><span class="text-[9px] font-medium">Quiz</span>
       </div>
-      
       <div onclick="window.location.href='/flash'" class="dock-item active relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
-        <i class="fa-solid fa-bolt text-[17px]"></i><span class="text-[9px] font-medium">Flash</span>
+        <i class="fa-solid fa-wand-magic-sparkles text-[17px]"></i><span class="text-[9px] font-medium">Tools</span>
       </div>
-      
-      <div onclick="window.location.href='/leaderboard'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 cursor-pointer">
+      <div onclick="window.location.href='/leaderboard'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-ranking-star text-[17px]"></i><span class="text-[9px] font-medium">Rank</span>
       </div>
-      
-      <div onclick="window.location.href='/profile'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 cursor-pointer">
+      <div onclick="window.location.href='/profile'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-user text-[17px]"></i><span class="text-[9px] font-medium">Profile</span>
       </div>
     </div>
   </nav>
+
   <script>
-    /* ============================================================
-       H4R Flash Arena — Vanilla JS controller
-       APIs:
-         GET  /api/daily_quiz/{uid}
-         POST /api/submit_quiz  { uid, name, selected_option }
-         GET  /api/past_flashcards
-       ============================================================ */
     const tg = window.Telegram ? window.Telegram.WebApp : null;
     if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
-
-    const tgUser = tg && tg.initDataUnsafe ? tg.initDataUnsafe.user : null;
-    const UID = tgUser && tgUser.id ? tgUser.id : 123456789;         // demo fallback
-    const NAME = tgUser ? [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Guest' : 'Guest';
-    const BOT_USERNAME = 'H4R_Bot'; // used for the share deep link
-
     const $ = (id) => document.getElementById(id);
+    const haptic = (t) => { if (tg && tg.HapticFeedback) { try { tg.HapticFeedback.impactOccurred(t); } catch (e) {} } };
 
-    // --- NEW LOGIC: Server Bot Username & Mandatory Channel Middleware ---
-    const SERVER_BOT_USERNAME = "{{ bot_username }}";
+    let compiledQuizHtml = '';
 
-    async function checkResponseForMandatory(res) {
-        if (res.status === 403) {
-            const data = await res.json();
-            if (data.error === "must_join") {
-                document.body.innerHTML = `
-                    <div style="display:flex; height:100vh; align-items:center; justify-content:center; flex-direction:column; text-align:center; padding: 20px; background:var(--bg); color:var(--text); font-family:'Outfit', sans-serif;">
-                        <div class="glass flex h-20 w-20 items-center justify-center rounded-3xl text-3xl text-indigo-soft mb-6 shadow-lg">
-                            <i class="fa-solid fa-lock"></i>
-                        </div>
-                        <h2 class="text-2xl font-bold tracking-tight mb-2">Access Denied</h2>
-                        <p class="text-sm text-muted mb-8">You must join our main channel to unlock access to the App.</p>
-                        <a href="${data.channel_link}" target="_blank" class="rounded-full bg-indigo-neon px-8 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 card-press">Join Channel</a>
-                    </div>`;
-                throw new Error("must_join");
-            }
-        }
-        return res;
-    }
-    const haptic = (t) => { if (tg && tg.HapticFeedback) { try { t === 'sel' ? tg.HapticFeedback.selectionChanged() : tg.HapticFeedback.impactOccurred(t); } catch (e) {} } };
-
-    let QUIZ = null;            // current daily quiz object
-    let selectedOption = null;  // selected option value
-    let submitted = false;
-    let vaultLoaded = false;
-
-    function escapeHtml(str) {
-      return String(str == null ? '' : str)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
-
-    /* ---------- Theme toggle (shared behaviour) ---------- */
+    /* Theme Toggle */
     (function initTheme() {
       const saved = localStorage.getItem('h4r_theme');
       if (saved === 'light') document.documentElement.classList.replace('dark', 'light');
@@ -478,238 +241,55 @@
       haptic('light');
     });
 
-    /* ============================================================
-       Main tab toggling (smooth)
-       ============================================================ */
-    function switchTab(which) {
-      const seg = $('seg');
-      seg.setAttribute('data-active', which);
-      const isToday = which === 'today';
-      $('tabToday').classList.toggle('active', isToday);
-      $('tabVault').classList.toggle('active', !isToday);
-      $('tabToday').setAttribute('aria-selected', String(isToday));
-      $('tabVault').setAttribute('aria-selected', String(!isToday));
-      $('panelToday').classList.toggle('hide', !isToday);
-      $('panelVault').classList.toggle('hide', isToday);
-      haptic('sel');
-      if (!isToday && !vaultLoaded) loadVault();
-    }
-    $('tabToday').addEventListener('click', () => switchTab('today'));
-    $('tabVault').addEventListener('click', () => switchTab('vault'));
-    $('goVault').addEventListener('click', () => switchTab('vault'));
-
-    /* ============================================================
-       TODAY'S ARENA
-       ============================================================ */
-    function normalizeOptions(q) {
-      // Accept several possible shapes from the backend.
-      let opts = q.options || q.choices || q.opts || [];
-      if (!Array.isArray(opts) && typeof opts === 'object') {
-        // { A: '...', B: '...' } -> [{key,text}]
-        return Object.keys(opts).map((k) => ({ key: k, text: opts[k] }));
-      }
-      return opts.map((o, i) => {
-        if (typeof o === 'string') return { key: String.fromCharCode(65 + i), text: o };
-        return { key: o.key || o.id || String.fromCharCode(65 + i), text: o.text || o.label || o.value || String(o) };
-      });
-    }
-
-    function renderQuiz(q) {
-      QUIZ = q;
-      $('quizLoading').classList.add('hidden');
-
-      if (!q || (!q.question && !q.q)) { $('quizEmpty').classList.remove('hidden'); $('quizEmpty').classList.add('flex'); return; }
-
-      // Already attempted today?
-      if (q.attempted || q.already_attempted || q.status === 'attempted') {
-        $('attemptedState').classList.remove('hidden');
+    /* Core Extraction Logic for Current Affairs */
+    async function processExtraction() {
+      const targetUrl = $('targetUrlInput').value.trim();
+      if (!targetUrl) {
+        showError("Please paste a valid Testbook Current Affairs URL.");
         return;
       }
-
-      $('quizCard').classList.remove('hidden');
-      $('quizQuestion').textContent = q.question || q.q || '';
-      $('quizDate').textContent = q.date || 'Today';
-      $('quizSubject').textContent = q.subject || q.category || q.topic || '';
-
-      const options = normalizeOptions(q);
-      const wrap = $('optionsWrap');
-      wrap.innerHTML = options.map((o) => `
-        <button type="button" class="opt glass flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left"
-          data-key="${escapeHtml(o.key)}" data-text="${escapeHtml(o.text)}">
-          <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/8 text-xs font-bold">${escapeHtml(o.key)}</span>
-          <span class="flex-1 text-sm font-medium">${escapeHtml(o.text)}</span>
-          <i class="tick fa-solid fa-circle-check text-emerald-soft"></i>
-        </button>`).join('');
-
-      wrap.querySelectorAll('.opt').forEach((el) => {
-        el.addEventListener('click', () => {
-          if (submitted) return;
-          selectedOption = { key: el.getAttribute('data-key'), text: el.getAttribute('data-text') };
-          wrap.querySelectorAll('.opt').forEach((o) => o.classList.remove('selected'));
-          el.classList.add('selected');
-          const btn = $('submitBtn');
-          if (btn.classList.contains('hidden')) { btn.classList.remove('hidden'); btn.classList.add('flex', 'pop'); }
-          haptic('sel');
-        });
-      });
-    }
-
-    $('submitBtn').addEventListener('click', submitAnswer);
-
-    async function submitAnswer() {
-      if (!selectedOption || submitted) return;
-      submitted = true;
-      const btn = $('submitBtn');
-      btn.disabled = true;
-      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting...';
       haptic('medium');
+      $('errorBanner').classList.add('hidden');
+      $('resultCard').classList.add('hidden');
+      $('loadingBlock').classList.remove('hidden');
+      $('loadingBlock').classList.add('flex');
 
-      let result = null;
       try {
-        const res = await fetch('/api/submit_quiz', {
+        const res = await fetch('/api/tb/current-affairs', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify({ uid: UID, name: NAME, selected_option: selectedOption.key }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: targetUrl })
         });
-        if (res.ok) result = await res.json();
-      } catch (e) { /* fall through to local reveal */ }
-
-      revealResult(result);
-    }
-
-    function revealResult(result) {
-      // Determine correctness + explanation from response, with graceful fallbacks.
-      result = result || {};
-      const correctKey = result.correct_option || result.correct || result.answer_key || QUIZ.correct_option || QUIZ.answer || null;
-      const correctText = result.correct_answer || result.answer_text || QUIZ.correct_answer || '';
-      const isCorrect = (result.is_correct != null)
-        ? !!result.is_correct
-        : (correctKey != null && String(correctKey) === String(selectedOption.key));
-
-      // paint the options
-      $('optionsWrap').querySelectorAll('.opt').forEach((el) => {
-        const k = el.getAttribute('data-key');
-        if (correctKey != null && String(k) === String(correctKey)) el.classList.add('correct');
-        if (String(k) === String(selectedOption.key) && !isCorrect) el.classList.add('wrong');
-        el.classList.remove('selected');
-        el.style.pointerEvents = 'none';
-      });
-
-      // hide submit, show flashcard
-      $('submitBtn').classList.add('hidden');
-      const pill = $('resultPill');
-      if (isCorrect) {
-        pill.className = 'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-emerald-neon/15 text-emerald-soft';
-        pill.innerHTML = '<i class="fa-solid fa-check"></i> Correct!';
-      } else {
-        pill.className = 'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-red-500/15 text-red-400';
-        pill.innerHTML = '<i class="fa-solid fa-xmark"></i> Not quite';
+        
+        if (!res.ok) {
+          const errData = await res.json();
+          $('loadingBlock').classList.add('hidden');
+          showError(errData.error || "Failed to compile Current Affairs quiz.");
+          return;
+        }
+        
+        compiledQuizHtml = await res.text();
+        $('loadingBlock').classList.add('hidden');
+        $('resultCard').classList.remove('hidden');
+      } catch (e) {
+        $('loadingBlock').classList.add('hidden');
+        showError("Network error. Could not generate quiz engine.");
       }
-
-      $('xpGain').textContent = result.xp || result.points_gained || (isCorrect ? 10 : 2);
-      $('flashTitle').textContent = result.flash_title || QUIZ.flash_title || QUIZ.concept || QUIZ.question || QUIZ.q || 'Key Concept';
-      $('flashBody').textContent = result.explanation || result.flashcard || QUIZ.explanation || QUIZ.flashcard || 'Review the correct answer above and lock this concept into memory.';
-
-      const ansText = correctText || (correctKey ? ('Option ' + correctKey) : '');
-      if (ansText) { $('flashAnswer').textContent = ansText; }
-      else { $('flashCorrect').classList.add('hidden'); }
-
-      $('flashWrap').classList.remove('hidden');
-      $('flashWrap').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      haptic(isCorrect ? 'medium' : 'light');
-      if (tg && tg.HapticFeedback && result) { try { tg.HapticFeedback.notificationOccurred(isCorrect ? 'success' : 'error'); } catch (e) {} }
-
-      // vault will refresh next time it's opened
-      vaultLoaded = false;
     }
 
-    $('shareBtn').addEventListener('click', () => {
+    function launchCaQuiz() {
+      haptic('heavy');
+      if (!compiledQuizHtml) return;
+      document.open();
+      document.write(compiledQuizHtml);
+      document.close();
+    }
+
+    function showError(msg) {
       haptic('light');
-      const q = (QUIZ && (QUIZ.question || QUIZ.q)) ? (QUIZ.question || QUIZ.q) : 'Daily Flash Quiz';
-      const text = `🧠 H4R Flash Arena — Question of the day:\n\n${q}\n\nCan you crack it? Play daily quizzes & climb the leaderboard 👇`;
-      const botUser = SERVER_BOT_USERNAME || 'H4R_Bot';
-      const shareUrl = `https://t.me/${botUser}?start=flash`;
-      const url = 'https://t.me/share/url?url=' + encodeURIComponent(shareUrl) + '&text=' + encodeURIComponent(text);
-      if (tg && tg.openTelegramLink) tg.openTelegramLink(url);
-      else window.open(url, '_blank');
-    });
-
-    /* ============================================================
-       PAST VAULT
-       ============================================================ */
-    function flashcardItem(f, idx) {
-      const q = f.question || f.q || f.title || 'Flashcard';
-      const ans = f.answer || f.correct_answer || f.correct_option || '';
-      const exp = f.explanation || f.flashcard || f.concept || '';
-      const date = f.date || f.created_at || '';
-      return `
-        <article class="glass card-press reveal rounded-3xl p-5" style="animation-delay:${Math.min(idx * 0.04, 0.4)}s">
-          <div class="flex items-center justify-between">
-            <span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-neon/12 px-2.5 py-1 text-[10px] font-semibold text-indigo-soft">
-              <i class="fa-solid fa-lightbulb"></i> Concept
-            </span>
-            ${date ? `<span class="text-[10px] text-muted">${escapeHtml(date)}</span>` : ''}
-          </div>
-          <h3 class="mt-3 text-sm font-semibold leading-relaxed text-pretty">${escapeHtml(q)}</h3>
-          ${ans ? `<div class="mt-3 flex items-start gap-2 rounded-2xl border border-emerald-neon/20 bg-emerald-neon/10 px-3 py-2 text-sm">
-            <i class="fa-solid fa-check mt-0.5 text-emerald-soft"></i>
-            <span><span class="text-muted">Answer:</span> <span class="font-semibold">${escapeHtml(ans)}</span></span>
-          </div>` : ''}
-          ${exp ? `<p class="mt-2.5 text-[13px] leading-relaxed text-muted">${escapeHtml(exp)}</p>` : ''}
-        </article>`;
+      $('errorMsg').textContent = msg;
+      $('errorBanner').classList.remove('hidden');
     }
-
-    async function loadVault() {
-      vaultLoaded = true;
-      $('vaultLoading').classList.remove('hidden');
-      $('vaultEmpty').classList.add('hidden');
-      $('vaultList').innerHTML = '';
-      let items = [];
-      try {
-        const res = await fetch('/api/past_flashcards', { headers: { 'Accept': 'application/json' } });
-        if (res.ok) {
-          const json = await res.json();
-          items = Array.isArray(json) ? json : (json.flashcards || json.past_flashcards || json.data || []);
-        } else { throw new Error('HTTP ' + res.status); }
-      } catch (e) {
-        items = DEMO_VAULT;
-      }
-      $('vaultLoading').classList.add('hidden');
-      if (!items.length) { $('vaultEmpty').classList.remove('hidden'); $('vaultEmpty').classList.add('flex'); return; }
-      $('vaultCount').textContent = items.length + ' cards';
-      $('vaultList').innerHTML = items.map((f, i) => flashcardItem(f, i)).join('');
-    }
-
-    /* ============================================================
-       Boot: load today's quiz
-       ============================================================ */
-    async function loadQuiz() {
-      try {
-        const res = await checkResponseForMandatory(await fetch(`/api/daily_quiz/${UID}`, { headers: { 'Accept': 'application/json' } }));
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        renderQuiz(await res.json());
-      } catch (e) {
-        if (e.message !== "must_join") render(DEMO_QUIZ);
-      }
-    }
-    /* ---------- Demo data for browser preview ---------- */
-    const DEMO_QUIZ = {
-      date: 'Today',
-      subject: 'General Science',
-      question: 'Which gas is most abundant in the Earth\u2019s atmosphere?',
-      options: ['Oxygen', 'Nitrogen', 'Carbon Dioxide', 'Hydrogen'],
-      correct_option: 'B',
-      correct_answer: 'Nitrogen',
-      explanation: 'Nitrogen makes up about 78% of the Earth\u2019s atmosphere by volume, far more than oxygen (~21%). It is largely inert, which is why it dominates the air we breathe.',
-      flash_title: 'Composition of Air',
-    };
-    const DEMO_VAULT = [
-      { date: 'Yesterday', question: 'Who wrote the Indian National Anthem?', answer: 'Rabindranath Tagore', explanation: '\u201cJana Gana Mana\u201d was composed by Rabindranath Tagore and adopted as the national anthem in 1950.' },
-      { date: '2 days ago', question: 'The SI unit of electric current is?', answer: 'Ampere', explanation: 'The ampere (A) is the SI base unit of electric current, named after Andr\u00e9-Marie Amp\u00e8re.' },
-      { date: '3 days ago', question: 'Which is the longest river in India?', answer: 'The Ganga', explanation: 'The Ganga is the longest river flowing entirely within India, stretching over 2,500 km.' },
-    ];
-
-    loadQuiz();
   </script>
 </body>
 </html>
