@@ -197,8 +197,14 @@
           <!-- Dynamic Lang Buttons Here -->
         </div>
 
-        <div class="w-full h-80 rounded-2xl overflow-hidden glass border border-border relative">
-          <iframe id="pdfIframe" src="" class="w-full h-full border-none" style="background: white;"></iframe>
+        <!-- INBUILT PDF VIEWER (Google Docs Embed) -->
+        <div class="w-full h-[60vh] rounded-2xl overflow-hidden glass border border-border relative">
+          <!-- Added iframe loader animation/text as background -->
+          <div class="absolute inset-0 flex flex-col items-center justify-center z-0 text-muted">
+            <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i>
+            <span class="text-xs font-bold">Loading PDF Engine...</span>
+          </div>
+          <iframe id="pdfIframe" src="" class="w-full h-full border-none relative z-10" style="background: transparent;"></iframe>
         </div>
 
         <div class="grid grid-cols-2 gap-3 mt-2">
@@ -275,7 +281,6 @@
 
     /* --- State & Navigation Manager --- */
     let navHistory = []; 
-    // State Object: { step: "groups"|"subjects"|"chapters"|"notes"|"pdf", id: "", title: "", label: "" }
     
     let currentPdfUrl = '';
     let currentPdfUrlsDict = {};
@@ -466,7 +471,7 @@
       }
     }
 
-    /* --- Step 5: Final PDF Extraction --- */
+    /* --- Step 5: Final PDF Extraction & Viewer Render --- */
     async function fetchPdf(noteId, title) {
       showLoading("Extracting Multi-Lingual PDF...");
       try {
@@ -528,8 +533,13 @@
     }
 
     function setPdfViewer(lang) {
+      haptic('light');
       currentPdfUrl = currentPdfUrlsDict[lang];
-      $('pdfIframe').src = currentPdfUrl;
+      
+      // Inject PDF through Google Docs viewer for flawless mobile iframe rendering
+      const viewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(currentPdfUrl)}&embedded=true`;
+      
+      $('pdfIframe').src = viewerUrl;
       $('downloadPdfBtn').href = currentPdfUrl;
       renderLanguageButtons(lang); // refresh buttons
     }
@@ -542,16 +552,10 @@
       });
     }
 
-
     /* --- Navigation Core Logic --- */
     function navigate(step, id, title) {
       haptic('sel');
       
-      // Save current state to history before moving forward
-      if(navHistory.length === 0 || navHistory[navHistory.length-1].step !== step) {
-        // Push the target we are LEAVING to get back to it. Wait, it's easier to push the NEW state
-      }
-
       let state = { step: step, id: id, title: title, label: "" };
 
       if(step === 'groups') {
