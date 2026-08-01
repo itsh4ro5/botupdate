@@ -157,6 +157,13 @@
 
     <!-- Main Content Area -->
     <section class="reveal mt-6" style="animation-delay:.1s">
+
+      <!-- Live Search Box -->
+      <div id="searchContainer" class="hidden mb-4 relative reveal">
+        <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-muted"></i>
+        <input type="text" id="searchInput" oninput="filterItems()" placeholder="Search in this section..."
+               class="glass w-full rounded-2xl py-3.5 pl-11 pr-4 text-sm text-text outline-none transition-all placeholder-muted bg-transparent border border-border focus:border-indigo-neon">
+      </div>
       
       <!-- Loading State -->
       <div id="loadingBlock" class="mt-10 hidden flex-col items-center text-center">
@@ -178,51 +185,43 @@
           <i class="fa-solid fa-folder-open"></i>
         </div>
         <p class="font-bold">No Data Found</p>
-        <p class="mt-1 text-sm text-muted">There are no notes available in this section.</p>
-      </div>
-
-      <!-- PDF Viewer Card (Final Step) -->
-      <div id="pdfViewerCard" class="hidden glass rounded-3xl p-5 border-t-4 border-indigo-neon flex-col gap-4">
-        
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2 text-emerald-soft">
-            <i class="fa-solid fa-circle-check"></i>
-            <span class="text-xs font-bold uppercase tracking-wide">Ready to View</span>
-          </div>
-        </div>
-        
-        <h3 id="pdfTitle" class="text-lg font-bold leading-snug">Document Title</h3>
-
-        <div id="languageSelector" class="hidden flex gap-2 overflow-x-auto no-scrollbar py-1">
-          <!-- Dynamic Lang Buttons Here -->
-        </div>
-
-        <!-- INBUILT PDF VIEWER (Google Docs Embed) -->
-        <div class="w-full h-[60vh] rounded-2xl overflow-hidden glass border border-border relative">
-          <!-- Added iframe loader animation/text as background -->
-          <div class="absolute inset-0 flex flex-col items-center justify-center z-0 text-muted">
-            <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i>
-            <span class="text-xs font-bold">Loading PDF Engine...</span>
-          </div>
-          <iframe id="pdfIframe" src="" class="w-full h-full border-none relative z-10" style="background: transparent;"></iframe>
-        </div>
-
-        <div class="grid grid-cols-2 gap-3 mt-2">
-          <a id="downloadPdfBtn" href="#" target="_blank" class="flex items-center justify-center gap-2 rounded-xl bg-indigo-neon/15 border border-indigo-neon/30 py-3 text-xs font-bold text-indigo-soft card-press">
-            <i class="fa-solid fa-download"></i> Download
-          </a>
-          <button onclick="copyPdfUrl()" class="flex items-center justify-center gap-2 rounded-xl glass py-3 text-xs font-bold text-text card-press">
-            <i class="fa-solid fa-copy"></i> Copy Link
-          </button>
-        </div>
+        <p class="mt-1 text-sm text-muted" id="emptyStateText">There are no notes available in this section.</p>
       </div>
 
     </section>
+  </div>
 
+  <!-- FULL SCREEN PDF READER OVERLAY -->
+  <div id="pdfReaderScreen" class="hidden fixed inset-0 z-[50000] bg-bg flex-col transition-all duration-300">
+    <!-- Reader Header -->
+    <div class="flex items-center justify-between px-4 py-3 bg-surface border-b border-border shadow-md shrink-0">
+      <button onclick="closePdfReader()" class="flex h-10 w-10 items-center justify-center rounded-full glass text-text card-press shrink-0">
+        <i class="fa-solid fa-arrow-left"></i>
+      </button>
+      <h2 id="readerTitle" class="text-sm font-bold truncate flex-1 px-4 text-center">Document Title</h2>
+      <a id="readerDownloadBtn" href="#" target="_blank" class="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-neon/15 text-indigo-soft card-press shrink-0">
+        <i class="fa-solid fa-download"></i>
+      </a>
+    </div>
+
+    <!-- Reader Language Switcher -->
+    <div id="readerLangSelector" class="hidden flex gap-2 overflow-x-auto no-scrollbar py-2 px-4 bg-surface/80 border-b border-border shrink-0 backdrop-blur-md">
+      <!-- Buttons injected here -->
+    </div>
+
+    <!-- Iframe Container (Full remaining height) -->
+    <div class="flex-1 w-full relative bg-white">
+      <!-- Background loader while PDF renders -->
+      <div class="absolute inset-0 flex flex-col items-center justify-center z-0 text-gray-400 bg-white">
+        <i class="fa-solid fa-spinner fa-spin text-3xl mb-2"></i>
+        <span class="text-sm font-bold text-gray-500">Loading High-Speed PDF...</span>
+      </div>
+      <iframe id="readerIframe" src="" class="absolute inset-0 w-full h-full border-none z-10 bg-transparent"></iframe>
+    </div>
   </div>
 
   <!-- Bottom Navigation Dock -->
-  <nav class="fixed bottom-4 left-1/2 z-30 -translate-x-1/2" oncontextmenu="return false;">
+  <nav id="bottomDock" class="fixed bottom-4 left-1/2 z-30 -translate-x-1/2 transition-transform duration-300" oncontextmenu="return false;">
     <div class="dock flex items-center gap-1 rounded-full px-2 py-2">
       <div onclick="window.location.href='/'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
@@ -281,9 +280,8 @@
 
     /* --- State & Navigation Manager --- */
     let navHistory = []; 
-    
-    let currentPdfUrl = '';
     let currentPdfUrlsDict = {};
+    let activePdfUrl = '';
 
     function escapeHtml(str) {
       return String(str == null ? '' : str)
@@ -294,7 +292,8 @@
     function showLoading(msg) {
       $('dataGrid').innerHTML = '';
       $('emptyState').classList.add('hidden');
-      $('pdfViewerCard').classList.add('hidden');
+      $('searchContainer').classList.add('hidden');
+      $('searchInput').value = '';
       $('loadingText').textContent = msg;
       $('loadingBlock').classList.remove('hidden');
       $('loadingBlock').classList.add('flex');
@@ -317,6 +316,37 @@
       }
     }
 
+    /* --- Live Search Engine --- */
+    function filterItems() {
+      let query = $('searchInput').value.toLowerCase().trim();
+      let items = document.querySelectorAll('.searchable-item');
+      let headers = document.querySelectorAll('.section-header');
+      let hasVisible = false;
+
+      // Hide section headers if user is typing
+      headers.forEach(h => h.style.display = query.length > 0 ? 'none' : 'block');
+
+      items.forEach(item => {
+        let title = item.getAttribute('data-title') || '';
+        if (title.includes(query)) {
+          item.style.display = 'flex';
+          hasVisible = true;
+        } else {
+          item.style.display = 'none';
+        }
+      });
+
+      if (!hasVisible && items.length > 0) {
+        $('emptyState').classList.remove('hidden');
+        $('emptyState').classList.add('flex');
+        $('emptyStateText').textContent = `No results found for "${query}"`;
+      } else {
+        $('emptyState').classList.add('hidden');
+        $('emptyState').classList.remove('flex');
+        $('emptyStateText').textContent = "There are no notes available in this section.";
+      }
+    }
+
     /* --- Step 1: Load Groups --- */
     async function fetchGroups() {
       showLoading("Fetching Exam Categories...");
@@ -336,7 +366,7 @@
         data.groups.forEach(g => {
           let title = g.properties?.title || 'Unknown Group';
           html += `
-            <button onclick="navigate('subjects', '${g._id}', '${escapeHtml(title)}')" class="glass card-press flex w-full items-center gap-4 rounded-2xl p-4 text-left">
+            <button data-title="${escapeHtml(title).toLowerCase()}" onclick="navigate('subjects', '${g._id}', '${escapeHtml(title)}')" class="searchable-item glass card-press flex w-full items-center gap-4 rounded-2xl p-4 text-left">
               <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-neon/10 text-indigo-soft text-xl">
                 <i class="fa-solid fa-graduation-cap"></i>
               </div>
@@ -348,6 +378,7 @@
             </button>`;
         });
         $('dataGrid').innerHTML = html;
+        $('searchContainer').classList.remove('hidden');
       } catch (err) {
         hideLoading();
         $('dataGrid').innerHTML = `<p class="text-center text-red-400 font-bold mt-4">Error fetching groups.</p>`;
@@ -373,7 +404,7 @@
           let title = s.properties?.title || 'Subject';
           let count = s.meta?.noteCount || 0;
           html += `
-            <button onclick="navigate('chapters', '${s._id}', '${escapeHtml(title)}')" class="glass card-press flex w-full items-center gap-4 rounded-2xl p-4 text-left">
+            <button data-title="${escapeHtml(title).toLowerCase()}" onclick="navigate('chapters', '${s._id}', '${escapeHtml(title)}')" class="searchable-item glass card-press flex w-full items-center gap-4 rounded-2xl p-4 text-left">
               <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-neon/10 text-emerald-soft text-xl">
                 <i class="fa-solid fa-book"></i>
               </div>
@@ -385,6 +416,7 @@
             </button>`;
         });
         $('dataGrid').innerHTML = html;
+        $('searchContainer').classList.remove('hidden');
       } catch (err) {
         hideLoading();
         $('dataGrid').innerHTML = `<p class="text-center text-red-400 font-bold mt-4">Error fetching subjects.</p>`;
@@ -410,7 +442,7 @@
           let title = c.properties?.title || 'Chapter';
           let count = c.meta?.noteCount || 0;
           html += `
-            <button onclick="navigate('notes', '${c._id}', '${escapeHtml(title)}')" class="glass card-press flex w-full items-center gap-4 rounded-2xl p-4 text-left">
+            <button data-title="${escapeHtml(title).toLowerCase()}" onclick="navigate('notes', '${c._id}', '${escapeHtml(title)}')" class="searchable-item glass card-press flex w-full items-center gap-4 rounded-2xl p-4 text-left">
               <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 text-orange-400 text-lg">
                 <i class="fa-solid fa-bookmark"></i>
               </div>
@@ -422,6 +454,7 @@
             </button>`;
         });
         $('dataGrid').innerHTML = html;
+        $('searchContainer').classList.remove('hidden');
       } catch (err) {
         hideLoading();
         $('dataGrid').innerHTML = `<p class="text-center text-red-400 font-bold mt-4">Error fetching chapters.</p>`;
@@ -446,32 +479,36 @@
         data.sections.forEach(sec => {
           let secTitle = sec.properties?.title || '';
           if(secTitle) {
-            html += `<h4 class="text-xs font-bold text-indigo-soft uppercase tracking-wider mt-4 mb-2 ml-1">${escapeHtml(secTitle)}</h4>`;
+            html += `<h4 class="section-header text-xs font-bold text-indigo-soft uppercase tracking-wider mt-4 mb-2 ml-1">${escapeHtml(secTitle)}</h4>`;
           }
           
           if(sec.notes && sec.notes.length > 0) {
             sec.notes.forEach(note => {
+              let combinedTitle = (secTitle + " " + note.name).toLowerCase();
               html += `
-              <button onclick="navigate('pdf', '${note._id}', '${escapeHtml(note.name)}')" class="glass card-press flex w-full items-center gap-3 rounded-2xl p-3.5 mb-2 text-left border-l-4 border-l-indigo-neon">
+              <button data-title="${escapeHtml(combinedTitle)}" onclick="navigate('pdf', '${note._id}', '${escapeHtml(note.name)}')" class="searchable-item glass card-press flex w-full items-center gap-3 rounded-2xl p-3.5 mb-2 text-left border-l-4 border-l-indigo-neon">
                 <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-text text-sm">
                   <i class="fa-solid fa-file-pdf"></i>
                 </div>
                 <div class="min-w-0 flex-1">
                   <p class="truncate text-[14px] font-semibold">${escapeHtml(note.name)}</p>
                 </div>
-                <div class="text-[10px] font-bold bg-indigo-neon/20 text-indigo-soft px-2 py-1 rounded-md">VIEW</div>
+                <div class="flex items-center gap-1.5 text-[10px] font-bold bg-indigo-neon/15 text-indigo-soft px-3 py-1.5 rounded-lg">
+                  <i class="fa-solid fa-expand"></i> READ
+                </div>
               </button>`;
             });
           }
         });
         $('dataGrid').innerHTML = html;
+        $('searchContainer').classList.remove('hidden');
       } catch (err) {
         hideLoading();
         $('dataGrid').innerHTML = `<p class="text-center text-red-400 font-bold mt-4">Error fetching notes.</p>`;
       }
     }
 
-    /* --- Step 5: Final PDF Extraction & Viewer Render --- */
+    /* --- Step 5: Full Screen PDF Viewer Logic --- */
     async function fetchPdf(noteId, title) {
       showLoading("Extracting Multi-Lingual PDF...");
       try {
@@ -492,13 +529,12 @@
         else if (currentPdfUrlsDict["English"]) defaultLang = "English";
         else defaultLang = Object.keys(currentPdfUrlsDict)[0];
 
-        $('pdfTitle').textContent = data.pdf_data.title || title || "Study Note";
+        $('readerTitle').textContent = data.pdf_data.title || title || "Study Note";
         
-        renderLanguageButtons(defaultLang);
-        setPdfViewer(defaultLang);
-
-        $('pdfViewerCard').classList.remove('hidden');
-        $('pdfViewerCard').classList.add('flex');
+        // Return to notes view visually so back button works, but open overlay
+        $('dataGrid').innerHTML = `<button onclick="openPdfReader('${defaultLang}')" class="glass card-press flex w-full justify-center items-center gap-2 rounded-2xl bg-indigo-neon/10 py-4 text-sm font-bold text-indigo-soft mt-4"><i class="fa-solid fa-book-open"></i> Re-open Reader</button>`;
+        
+        openPdfReader(defaultLang);
 
       } catch (err) {
         hideLoading();
@@ -506,8 +542,8 @@
       }
     }
 
-    function renderLanguageButtons(activeLang) {
-      const langBox = $('languageSelector');
+    function renderReaderLanguages(activeLang) {
+      const langBox = $('readerLangSelector');
       let langs = Object.keys(currentPdfUrlsDict);
       
       if(langs.length <= 1) {
@@ -520,11 +556,11 @@
       langs.forEach(lang => {
         let isActive = (lang === activeLang);
         let btnClass = isActive 
-          ? 'bg-indigo-neon text-white shadow-md' 
-          : 'glass text-muted';
+          ? 'bg-indigo-neon text-white shadow-md border-indigo-neon' 
+          : 'bg-surface/50 text-muted border-border';
         
         html += `
-          <button onclick="setPdfViewer('${lang}')" class="px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all card-press ${btnClass}">
+          <button onclick="changeReaderLanguage('${lang}')" class="px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all card-press border ${btnClass}">
             ${lang}
           </button>
         `;
@@ -532,30 +568,46 @@
       langBox.innerHTML = html;
     }
 
-    function setPdfViewer(lang) {
+    function changeReaderLanguage(lang) {
       haptic('light');
-      currentPdfUrl = currentPdfUrlsDict[lang];
+      activePdfUrl = currentPdfUrlsDict[lang];
+      // Using Google Docs Viewer for flawless mobile iframe rendering
+      const viewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(activePdfUrl)}&embedded=true`;
       
-      // Inject PDF through Google Docs viewer for flawless mobile iframe rendering
-      const viewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(currentPdfUrl)}&embedded=true`;
-      
-      $('pdfIframe').src = viewerUrl;
-      $('downloadPdfBtn').href = currentPdfUrl;
-      renderLanguageButtons(lang); // refresh buttons
+      $('readerIframe').src = viewerUrl;
+      $('readerDownloadBtn').href = activePdfUrl;
+      renderReaderLanguages(lang); // update active button styling
     }
 
-    function copyPdfUrl() {
-      if (!currentPdfUrl) return;
-      navigator.clipboard.writeText(currentPdfUrl).then(() => {
-        haptic('light');
-        alert("CDN Link Copied!");
-      });
+    function openPdfReader(lang) {
+      haptic('heavy');
+      $('bottomDock').style.transform = 'translate(-50%, 150%)'; // Hide bottom dock
+      $('pdfReaderScreen').classList.remove('hidden');
+      $('pdfReaderScreen').classList.add('flex');
+      
+      changeReaderLanguage(lang);
+    }
+
+    function closePdfReader() {
+      haptic('light');
+      $('pdfReaderScreen').classList.add('hidden');
+      $('pdfReaderScreen').classList.remove('flex');
+      $('bottomDock').style.transform = 'translate(-50%, 0)'; // Show bottom dock
+      
+      // Stop iframe to save memory
+      $('readerIframe').src = "";
     }
 
     /* --- Navigation Core Logic --- */
     function navigate(step, id, title) {
       haptic('sel');
-      
+
+      if(step === 'pdf') {
+        // Don't push 'pdf' to history because it's a full-screen overlay
+        fetchPdf(id, title);
+        return;
+      }
+
       let state = { step: step, id: id, title: title, label: "" };
 
       if(step === 'groups') {
@@ -580,12 +632,6 @@
         updateHeader(state);
         fetchNotes(id);
       }
-      else if(step === 'pdf') {
-        state.label = "Note";
-        navHistory.push(state);
-        updateHeader(state);
-        fetchPdf(id, title);
-      }
     }
 
     function goBack() {
@@ -594,11 +640,6 @@
       
       navHistory.pop(); // remove current
       let previousState = navHistory.pop(); // pop previous to re-navigate to it
-      
-      // Clear specific UI
-      $('pdfViewerCard').classList.add('hidden');
-      $('pdfViewerCard').classList.remove('flex');
-      $('pdfIframe').src = "";
       
       navigate(previousState.step, previousState.id, previousState.title);
     }
