@@ -127,29 +127,39 @@
     <!-- ========================================== -->
     <section id="panelToday" class="panel mt-6">
       
-      <!-- Input Section -->
-      <div id="caInputSection" class="glass rounded-3xl p-5 reveal" style="animation-delay:.1s">
-        <label class="text-xs font-bold uppercase tracking-wider text-indigo-soft block mb-2">
-          Paste Current Affairs Link
-        </label>
-        <div class="relative flex items-center w-full">
-          <i class="fa-solid fa-link absolute left-4 text-muted"></i>
-          <input type="url" id="caUrl" placeholder="https://testbook.com/current-affairs..."
-             class="glass w-full rounded-2xl py-3.5 pl-11 pr-4 text-sm text-text outline-none transition-all placeholder-muted bg-transparent border border-border focus:border-indigo-neon">
+      <!-- Current Affairs List Section (Auto-Fetch) -->
+      <div id="caListSection" class="reveal" style="animation-delay:.1s">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-bold text-indigo-soft uppercase tracking-wider">Latest Quizzes</h2>
         </div>
-        <button onclick="fetchCA()" class="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-neon py-3.5 text-sm font-bold text-white shadow-lg card-press">
-          <i class="fa-solid fa-rocket"></i> Load Live CA Quiz
+        
+        <div id="caGrid" class="flex flex-col">
+          <!-- Quiz cards injected dynamically -->
+        </div>
+
+        <button id="loadMoreBtn" onclick="loadMoreCA()" class="hidden mt-4 flex w-full items-center justify-center gap-2 rounded-2xl glass py-3.5 text-sm font-bold text-text card-press">
+          <i class="fa-solid fa-chevron-down"></i> Show More Quizzes
         </button>
       </div>
 
       <!-- Loading Section -->
       <div id="caLoader" class="hidden flex-col items-center text-center mt-10">
-        <i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-soft mb-3"></i>
+        <div class="relative flex items-center justify-center h-16 w-16 mb-4">
+          <div class="absolute inset-0 rounded-full border-4 border-indigo-neon/20"></div>
+          <div class="absolute inset-0 rounded-full border-4 border-indigo-neon border-t-transparent animate-spin"></div>
+          <i class="fa-solid fa-cloud-arrow-down text-indigo-soft"></i>
+        </div>
         <p class="text-sm font-bold">Extracting Quiz Data...</p>
+        <p class="text-xs text-muted mt-1">Fetching live questions</p>
       </div>
 
       <!-- Quiz Engine UI -->
       <div id="quizSection" class="hidden mt-4">
+        <!-- Back Button -->
+        <button onclick="backToList()" class="mb-4 flex items-center gap-2 text-xs font-bold text-muted card-press w-max px-3 py-1.5 glass rounded-full">
+          <i class="fa-solid fa-arrow-left"></i> Back to Quizzes
+        </button>
+
         <div class="flex items-center justify-between mb-4 px-2">
           <span class="text-xs font-bold uppercase text-emerald-soft bg-emerald-neon/15 px-3 py-1.5 rounded-full"><i class="fa-solid fa-hourglass-half"></i> Live Test</span>
           <span id="qCountDisplay" class="text-sm font-bold text-muted">Q 1 of 10</span>
@@ -201,8 +211,12 @@
             <i class="fa-solid fa-inbox"></i> <span id="mistakeCount"></span> mistakes sent to Past Vault as Flashcards.
           </p>
 
-          <button onclick="switchTab('vault')" class="w-full flex items-center justify-center gap-2 rounded-2xl glass py-3.5 text-sm font-bold text-text card-press">
+          <button onclick="switchTab('vault')" class="w-full flex items-center justify-center gap-2 rounded-2xl glass py-3.5 text-sm font-bold text-text card-press mb-3">
             <i class="fa-solid fa-layer-group"></i> Review Mistakes Now
+          </button>
+          
+          <button onclick="backToList()" class="w-full flex items-center justify-center gap-2 rounded-2xl bg-indigo-neon/15 text-indigo-soft py-3.5 text-sm font-bold card-press">
+            <i class="fa-solid fa-rotate-left"></i> Take Another Quiz
           </button>
         </div>
       </div>
@@ -283,6 +297,10 @@
     }
 
     /* Helper: Fix HTML image urls & MathJax */
+    function escapeHtml(str) {
+      return String(str == null ? '' : str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    
     function decodeHtml(htmlStr) {
       if (!htmlStr) return "";
       let txt = document.createElement("textarea");
@@ -300,27 +318,105 @@
     }
 
     /* ==================================
+       AUTO-FETCH QUIZ LIST LOGIC
+       ================================== */
+    let currentSkip = 0;
+    const limitParams = 10;
+    
+    async function loadCAList(isLoadMore = false) {
+      if (!isLoadMore) {
+        $('caGrid').innerHTML = '';
+        currentSkip = 0;
+        $('caListSection').classList.add('hidden');
+        $('caLoader').classList.remove('hidden');
+        $('caLoader').classList.add('flex');
+        $('caLoader').querySelector('p').textContent = "Fetching Live Quizzes...";
+      }
+
+      try {
+        // Direct fetch from Original Extraction Engine Backend
+        const res = await fetch(`https://itsh4r01-live-stream-engine.hf.space/api/current-affairs/list?limit=${limitParams}&skip=${currentSkip}`);
+        const data = await res.json();
+        
+        $('caLoader').classList.add('hidden');
+        $('caLoader').classList.remove('flex');
+        $('caListSection').classList.remove('hidden');
+
+        if (data.current_affairs && data.current_affairs.length > 0) {
+          renderCAList(data.current_affairs);
+          if (data.current_affairs.length === limitParams) {
+            $('loadMoreBtn').classList.remove('hidden');
+          } else {
+            $('loadMoreBtn').classList.add('hidden');
+          }
+        } else {
+          if (!isLoadMore) {
+            $('caGrid').innerHTML = `<p class="text-center text-muted font-medium mt-4">No Current Affairs quizzes found.</p>`;
+          }
+          $('loadMoreBtn').classList.add('hidden');
+        }
+      } catch (e) {
+        $('caLoader').classList.add('hidden');
+        $('caLoader').classList.remove('flex');
+        $('caListSection').classList.remove('hidden');
+        $('caGrid').innerHTML = `<p class="text-center text-red-400 font-bold mt-4">Error connecting to server.</p>`;
+      }
+    }
+
+    function renderCAList(items) {
+      let html = '';
+      items.forEach(quiz => {
+        let title = quiz.title || "Daily Current Affairs Quiz";
+        let qCount = quiz.questionCount || "15";
+        let duration = quiz.duration || "10";
+        
+        html += `
+          <button onclick="launchQuiz('${quiz.id}')" class="glass card-press flex w-full items-center gap-3 rounded-2xl p-4 mb-3 text-left border-l-4 border-l-emerald-soft">
+            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-neon/10 text-emerald-soft text-lg">
+              <i class="fa-solid fa-newspaper"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-[14px] font-bold text-text">${escapeHtml(title)}</p>
+              <p class="text-[11px] font-medium text-muted mt-0.5"><i class="fa-solid fa-layer-group mr-1"></i>${qCount} Questions • <i class="fa-solid fa-clock ml-1 mr-1"></i>${duration} Mins</p>
+            </div>
+            <div class="flex items-center gap-1.5 text-[10px] font-bold bg-indigo-neon/15 text-indigo-soft px-3 py-1.5 rounded-lg shrink-0">
+               START
+            </div>
+          </button>`;
+      });
+      $('caGrid').insertAdjacentHTML('beforeend', html);
+    }
+
+    function loadMoreCA() {
+      haptic('light');
+      currentSkip += limitParams;
+      loadCAList(true);
+    }
+
+    /* Initialize List on Load */
+    window.onload = () => loadCAList();
+
+    /* ==================================
        QUIZ ENGINE LOGIC
        ================================== */
     let currentQuizData = null;
     let currentQIndex = 0;
     let userAnswers = []; // stores indices of selected options
 
-    async function fetchCA() {
-      let url = $('caUrl').value.trim();
-      if(!url) return alert("Please enter a valid URL.");
-      
-      haptic('medium');
-      $('caInputSection').classList.add('hidden');
+    async function launchQuiz(testId) {
+      haptic('heavy');
+      $('caListSection').classList.add('hidden');
+      $('resultSection').classList.add('hidden');
       $('caLoader').classList.remove('hidden');
       $('caLoader').classList.add('flex');
+      $('caLoader').querySelector('p').textContent = "Extracting Quiz Engine...";
 
       try {
-        // Direct fetch from extractor backend to get RAW JSON (Not HTML)
-        const res = await fetch("https://itsh4r01-live-stream-engine.hf.space/api/extract/current-affairs?url=" + encodeURIComponent(url));
+        // Direct fetch from extractor backend using ID
+        const res = await fetch(`https://itsh4r01-live-stream-engine.hf.space/api/extract/${testId}`);
         const json = await res.json();
         
-        if(!res.ok || json.error || !json.quiz_data) throw new Error(json.error || "Failed to fetch CA.");
+        if(!res.ok || json.error || !json.quiz_data) throw new Error(json.error || "Failed to compile Quiz.");
         
         currentQuizData = json.quiz_data;
         startQuizEngine();
@@ -328,7 +424,7 @@
         alert("Error: " + err.message);
         $('caLoader').classList.add('hidden');
         $('caLoader').classList.remove('flex');
-        $('caInputSection').classList.remove('hidden');
+        $('caListSection').classList.remove('hidden');
       }
     }
 
@@ -430,7 +526,7 @@
       if(mistakes.length > 0) {
         let vault = JSON.parse(localStorage.getItem('h4r_ca_vault') || '[]');
         vault = [...mistakes, ...vault]; // Add new ones to top
-        // Optional: Keep only latest 100 to save memory
+        // Keep only latest 100 to save memory
         if(vault.length > 100) vault = vault.slice(0, 100); 
         localStorage.setItem('h4r_ca_vault', JSON.stringify(vault));
       }
@@ -447,17 +543,25 @@
       
       $('resCorrect').textContent = correctCount;
       $('resWrong').textContent = mistakes.length;
+      $('mistakeCount').textContent = mistakes.length;
       
       let note = $('mistakeNotice');
       if(mistakes.length === 0) {
-        note.className = "text-sm font-semibold text-emerald-soft mb-4 bg-emerald-neon/10 py-2 rounded-lg";
+        note.className = "text-sm font-semibold text-emerald-soft mb-4 bg-emerald-neon/10 py-2 rounded-lg text-center";
         note.innerHTML = `<i class="fa-solid fa-trophy"></i> Perfect Score! 0 mistakes added.`;
       } else {
-        note.className = "text-sm font-semibold text-orange-400 mb-4 bg-orange-400/10 py-2 rounded-lg";
+        note.className = "text-sm font-semibold text-orange-400 mb-4 bg-orange-400/10 py-2 rounded-lg text-center";
         note.innerHTML = `<i class="fa-solid fa-inbox"></i> ${mistakes.length} mistakes sent to Past Vault as Flashcards.`;
       }
 
       $('resultSection').classList.remove('hidden');
+    }
+
+    function backToList() {
+      haptic('light');
+      $('quizSection').classList.add('hidden');
+      $('resultSection').classList.add('hidden');
+      $('caListSection').classList.remove('hidden');
     }
 
 
