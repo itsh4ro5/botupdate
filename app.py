@@ -625,6 +625,45 @@ async def api_owner_users(req_user_id):
         })
     return jsonify({"users": users_list})
 
+# =====================================================================
+# NEW: STUDY NOTES API PROXIES (For extractor.html)
+# =====================================================================
+@app.route('/api/study/groups', methods=['GET'])
+async def tb_study_groups_proxy():
+    async with httpx.AsyncClient(timeout=30) as client:
+        res = await client.get(f"{TESTBOOK_API_URL}/api/study/groups")
+        return jsonify(res.json()), res.status_code
+
+@app.route('/api/study/subjects', methods=['GET'])
+async def tb_study_subjects_proxy():
+    group_id = request.args.get('group_id')
+    async with httpx.AsyncClient(timeout=30) as client:
+        res = await client.get(f"{TESTBOOK_API_URL}/api/study/subjects?group_id={group_id}")
+        return jsonify(res.json()), res.status_code
+
+@app.route('/api/study/chapters', methods=['GET'])
+async def tb_study_chapters_proxy():
+    subject_id = request.args.get('subject_id')
+    async with httpx.AsyncClient(timeout=30) as client:
+        res = await client.get(f"{TESTBOOK_API_URL}/api/study/chapters?subject_id={subject_id}")
+        return jsonify(res.json()), res.status_code
+
+@app.route('/api/study/notes', methods=['GET'])
+async def tb_study_notes_proxy():
+    chapter_id = request.args.get('chapter_id')
+    async with httpx.AsyncClient(timeout=30) as client:
+        res = await client.get(f"{TESTBOOK_API_URL}/api/study/notes?chapter_id={chapter_id}")
+        return jsonify(res.json()), res.status_code
+
+@app.route('/api/study/note-pdf', methods=['GET'])
+async def tb_study_note_pdf_proxy():
+    note_id = request.args.get('note_id')
+    if not note_id:
+        return jsonify({"error": "Missing 'note_id' parameter"}), 400
+    async with httpx.AsyncClient(timeout=30) as client:
+        res = await client.get(f"{TESTBOOK_API_URL}/api/study/note-pdf?note_id={note_id}")
+    return jsonify(res.json()), res.status_code
+
 @app.route('/api/owner/action', methods=['POST'])
 async def api_owner_action():
     from quart import request
