@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#050509" />
-  <title>H4R   Resource Extractor</title>
+  <title>H4R - Study Note Extractor</title>
   <!-- Telegram Web App SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <!-- Tailwind CDN -->
@@ -119,36 +119,6 @@
       to { opacity: 1; transform: translateY(0); }
     }
     .reveal { animation: floatUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
-    .seg {
-      position: relative;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      padding: 4px;
-      border-radius: 9999px;
-    }
-    .seg-thumb {
-      position: absolute;
-      top: 4px;
-      bottom: 4px;
-      left: 4px;
-      width: calc(50% - 4px);
-      border-radius: 9999px;
-      background: linear-gradient(130deg, #4f46e5, #6366f1);
-      box-shadow: 0 8px 22px rgba(99, 102, 241, 0.4);
-      transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
-      z-index: 0;
-    }
-    .seg[data-active="ca"] .seg-thumb { transform: translateX(100%); }
-    .seg-btn {
-      position: relative;
-      z-index: 1;
-      padding: 0.6rem 0;
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: var(--muted);
-      transition: color 0.25s ease;
-    }
-    .seg-btn.active { color: #fff; }
   </style>
 </head>
 <body class="aurora min-h-screen pb-32">
@@ -158,7 +128,7 @@
       <div>
         <p class="text-xs text-muted">Testbook Bypass Tools</p>
         <h1 class="-mt-0.5 flex items-center gap-2 text-xl font-bold leading-tight">
-          <i class="fa-solid fa-wand-magic-sparkles text-indigo-soft"></i> Extractor Hub
+          <i class="fa-solid fa-file-pdf text-indigo-soft"></i> Note Extractor
         </h1>
       </div>
       <button id="themeToggle" aria-label="Toggle theme" class="glass card-press flex h-10 w-10 items-center justify-center rounded-full text-base">
@@ -166,32 +136,19 @@
       </button>
     </header>
 
-    <!-- Segmented Control Mode Tabs -->
-    <div class="reveal mt-5" style="animation-delay:.05s">
-      <div id="seg" class="seg glass" data-active="pdf">
-        <span class="seg-thumb" aria-hidden="true"></span>
-        <button id="tabPdf" class="seg-btn active" onclick="switchMode('pdf')">
-          <i class="fa-solid fa-file-pdf mr-1"></i> PDF Study Note
-        </button>
-        <button id="tabCa" class="seg-btn" onclick="switchMode('ca')">
-          <i class="fa-solid fa-newspaper mr-1"></i> Current Affairs
-        </button>
-      </div>
-    </div>
-
     <!-- URL Input Card -->
-    <section class="reveal mt-5" style="animation-delay:.1s">
+    <section class="reveal mt-8" style="animation-delay:.1s">
       <div class="glass rounded-3xl p-5">
         <label id="inputLabel" class="text-xs font-bold uppercase tracking-wider text-indigo-soft block mb-2">
-          Enter PDF Viewer or Study Note URL
+          Enter Study Note ID
         </label>
         <div class="relative flex items-center w-full">
-          <i class="fa-solid fa-link absolute left-4 text-muted"></i>
-          <input type="url" id="targetUrlInput" placeholder="https://testbook.com/pdf-viewer?id=..." 
-            class="glass w-full rounded-2xl py-3.5 pl-11 pr-4 text-sm text-text outline-none transition-all placeholder-muted bg-transparent border border-border focus:border-indigo-neon">
+          <i class="fa-solid fa-fingerprint absolute left-4 text-muted"></i>
+          <input type="text" id="targetUrlInput" placeholder="e.g. 6752f2df1f6a653d5bd24674"
+             class="glass w-full rounded-2xl py-3.5 pl-11 pr-4 text-sm text-text outline-none transition-all placeholder-muted bg-transparent border border-border focus:border-indigo-neon">
         </div>
         <button id="extractBtn" onclick="processExtraction()" class="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-neon py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 card-press">
-          <i class="fa-solid fa-bolt"></i> <span id="btnText">Extract Direct CDN Link</span>
+          <i class="fa-solid fa-bolt"></i> <span id="btnText">Extract Multi-Lingual PDF</span>
         </button>
       </div>
     </section>
@@ -199,7 +156,7 @@
     <!-- Loading State -->
     <div id="loadingBlock" class="mt-6 hidden flex-col items-center text-center">
       <i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-soft mb-2"></i>
-      <p class="text-sm font-semibold text-muted" id="loadingText">Processing source payload...</p>
+      <p class="text-sm font-semibold text-muted" id="loadingText">Bypassing server and fetching PDF links...</p>
     </div>
 
     <!-- Result Display Card -->
@@ -209,7 +166,7 @@
           <i class="fa-solid fa-circle-check text-base"></i>
           <span class="text-xs font-bold uppercase tracking-wide">Extraction Successful</span>
         </div>
-        <h3 id="resultTitle" class="text-base font-bold leading-snug mb-3">Document Title</h3>
+        <h3 id="resultTitle" class="text-base font-bold leading-snug mb-3">Study Note Document</h3>
         
         <!-- PDF Result Container -->
         <div id="pdfResultArea" class="space-y-2">
@@ -220,13 +177,6 @@
             <i class="fa-solid fa-copy"></i> Copy CDN Link
           </button>
         </div>
-
-        <!-- Current Affairs Result Container -->
-        <div id="caResultArea" class="hidden space-y-2">
-          <button id="launchQuizBtn" onclick="launchCaQuiz()" class="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-neon py-3 text-xs font-bold text-white shadow-lg card-press">
-            <i class="fa-solid fa-rocket"></i> Launch Interactive Quiz Engine
-          </button>
-        </div>
       </div>
     </section>
 
@@ -234,6 +184,7 @@
     <div id="errorBanner" class="mt-6 hidden rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-center text-xs font-semibold text-red-400">
       <i class="fa-solid fa-triangle-exclamation mr-1"></i> <span id="errorMsg">Failed to process resource.</span>
     </div>
+
   </div>
 
   <!-- Bottom Navigation Dock -->
@@ -270,11 +221,9 @@
     const tg = window.Telegram ? window.Telegram.WebApp : null;
     if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
     const $ = (id) => document.getElementById(id);
-    const haptic = (t) => { if (tg && tg.HapticFeedback) { try { t === 'sel' ? tg.HapticFeedback.selectionChanged() : tg.HapticFeedback.impactOccurred(t); } catch (e) {} } };
+    const haptic = (t) => { if (tg && tg.HapticFeedback) { try { tg.HapticFeedback.impactOccurred(t); } catch (e) {} } };
 
-    let currentMode = 'pdf';
     let extractedCdnUrl = '';
-    let compiledQuizHtml = '';
 
     /* Theme Toggle */
     (function initTheme() {
@@ -282,14 +231,12 @@
       if (saved === 'light') document.documentElement.classList.replace('dark', 'light');
       syncThemeIcon();
     })();
-
     function syncThemeIcon() {
       const light = document.documentElement.classList.contains('light');
       $('themeToggle').innerHTML = light ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
       const meta = document.querySelector('meta[name="theme-color"]');
       if (meta) meta.setAttribute('content', light ? '#f3f4f8' : '#050509');
     }
-
     $('themeToggle').addEventListener('click', () => {
       const root = document.documentElement;
       root.classList.contains('dark') ? root.classList.replace('dark', 'light') : root.classList.replace('light', 'dark');
@@ -298,102 +245,40 @@
       haptic('light');
     });
 
-    /* Mode Switcher */
-    function switchMode(mode) {
-      currentMode = mode;
-      haptic('sel');
-      $('seg').setAttribute('data-active', mode);
-      $('tabPdf').classList.toggle('active', mode === 'pdf');
-      $('tabCa').classList.toggle('active', mode === 'ca');
-      
-      $('errorBanner').classList.add('hidden');
-      $('resultCard').classList.add('hidden');
-      $('targetUrlInput').value = '';
-
-      if (mode === 'pdf') {
-        $('inputLabel').textContent = 'Enter PDF Viewer or Study Note URL';
-        $('targetUrlInput').placeholder = 'https://testbook.com/pdf-viewer?id=...';
-        $('btnText').textContent = 'Extract Direct CDN Link';
-      } else {
-        $('inputLabel').textContent = 'Enter Current Affairs Quiz URL';
-        $('targetUrlInput').placeholder = 'https://testbook.com/current-affairs-quiz/quizzes/...';
-        $('btnText').textContent = 'Extract & Compile Quiz Engine';
-      }
-    }
-
-    /* Core Extraction Logic */
+    /* Core Extraction Logic for Study Note PDFs */
     async function processExtraction() {
-      const targetUrl = $('targetUrlInput').value.trim();
-      if (!targetUrl) {
-        showError("Please paste a valid Testbook URL.");
+      const targetId = $('targetUrlInput').value.trim();
+      if (!targetId) {
+        showError("Please enter a valid Study Note ID.");
         return;
       }
-
       haptic('medium');
       $('errorBanner').classList.add('hidden');
       $('resultCard').classList.add('hidden');
       $('loadingBlock').classList.remove('hidden');
       $('loadingBlock').classList.add('flex');
 
-      if (currentMode === 'pdf') {
-        $('loadingText').textContent = "Bypassing PDF viewer and fetching CDN key...";
-        try {
-          const res = await fetch(`/api/tb/pdf-note?url=${encodeURIComponent(targetUrl)}`);
-          const data = await res.json();
-          $('loadingBlock').classList.add('hidden');
-
-          if (!res.ok || data.error || !data.pdf_data) {
-            showError(data.error || "Failed to extract PDF CDN link.");
-            return;
-          }
-
-          extractedCdnUrl = data.pdf_data.cdn_url;
-          $('resultTitle').textContent = data.pdf_data.title || "Study Note Document";
-          $('downloadPdfBtn').href = extractedCdnUrl;
-          $('pdfResultArea').classList.remove('hidden');
-          $('caResultArea').classList.add('hidden');
-          $('resultCard').classList.remove('hidden');
-
-        } catch (e) {
-          $('loadingBlock').classList.add('hidden');
-          showError("Network error. Could not connect to proxy server.");
+      try {
+        const res = await fetch(`/api/study/note-pdf?note_id=${encodeURIComponent(targetId)}`);
+        const data = await res.json();
+        
+        $('loadingBlock').classList.add('hidden');
+        if (!res.ok || data.error || !data.pdf_data) {
+          showError(data.error || "Failed to extract PDF CDN link.");
+          return;
         }
-      } else {
-        $('loadingText').textContent = "Scraping Current Affairs quiz payload...";
-        try {
-          const res = await fetch('/api/tb/current-affairs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: targetUrl })
-          });
+        
+        let pdfUrls = data.pdf_data.urls;
+        extractedCdnUrl = pdfUrls["Hindi"] || pdfUrls["English"] || Object.values(pdfUrls)[0];
 
-          if (!res.ok) {
-            const errData = await res.json();
-            $('loadingBlock').classList.add('hidden');
-            showError(errData.error || "Failed to compile Current Affairs quiz.");
-            return;
-          }
-
-          compiledQuizHtml = await res.text();
-          $('loadingBlock').classList.add('hidden');
-          $('resultTitle').textContent = "Daily Current Affairs Interactive Quiz";
-          $('pdfResultArea').classList.add('hidden');
-          $('caResultArea').classList.remove('hidden');
-          $('resultCard').classList.remove('hidden');
-
-        } catch (e) {
-          $('loadingBlock').classList.add('hidden');
-          showError("Network error. Could not generate quiz engine.");
-        }
+        $('resultTitle').textContent = data.pdf_data.title || "Study Note Document";
+        $('downloadPdfBtn').href = extractedCdnUrl;
+        
+        $('resultCard').classList.remove('hidden');
+      } catch (e) {
+        $('loadingBlock').classList.add('hidden');
+        showError("Network error. Could not connect to proxy server.");
       }
-    }
-
-    function launchCaQuiz() {
-      haptic('heavy');
-      if (!compiledQuizHtml) return;
-      document.open();
-      document.write(compiledQuizHtml);
-      document.close();
     }
 
     function copyCdnUrl() {
