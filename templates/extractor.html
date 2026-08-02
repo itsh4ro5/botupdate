@@ -123,6 +123,7 @@
     .breadcrumb-text {
       display: -webkit-box;
       -webkit-line-clamp: 1;
+      line-clamp: 1;
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
@@ -134,7 +135,7 @@
     <!-- Header -->
     <header class="flex items-center justify-between reveal">
       <div>
-        <p class="text-xs text-muted">Testbook Bypass Tools</p>
+        <p class="text-xs text-muted">H4R Study Notes</p>
         <h1 class="-mt-0.5 flex items-center gap-2 text-xl font-bold leading-tight">
           <i class="fa-solid fa-book-open text-indigo-soft"></i> Study Notes
         </h1>
@@ -231,21 +232,30 @@
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-compass text-[17px]"></i><span class="text-[9px] font-medium">Explore</span>
       </div>
-      <div onclick="window.location.href='/quiz'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer">
+    
+      <div onclick="window.location.href='/quiz'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-file-pen text-[17px]"></i><span class="text-[9px] font-medium">Quiz</span>
       </div>
-      <div onclick="window.location.href='/flash'" class="dock-item active relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 cursor-pointer">
+      
+      <div onclick="window.location.href='/flash'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
-        <i class="fa-solid fa-wand-magic-sparkles text-[17px]"></i><span class="text-[9px] font-medium">Tools</span>
+        <i class="fa-solid fa-bolt text-[17px]"></i><span class="text-[9px] font-medium">Flash</span>
       </div>
-      <div onclick="window.location.href='/leaderboard'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer">
+      
+      <div onclick="window.location.href='/leaderboard'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-ranking-star text-[17px]"></i><span class="text-[9px] font-medium">Rank</span>
       </div>
-      <div onclick="window.location.href='/profile'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 text-muted cursor-pointer">
+      
+      <div onclick="window.location.href='/profile'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-user text-[17px]"></i><span class="text-[9px] font-medium">Profile</span>
+      </div>
+
+      <div onclick="window.location.href='/extractor'" class="dock-item active relative flex flex-col items-center gap-0.5 rounded-full px-2 py-1.5 cursor-pointer">
+        <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
+        <i class="fa-solid fa-wand-magic-sparkles text-[17px]"></i><span class="text-[9px] font-medium">Notes</span>
       </div>
     </div>
   </nav>
