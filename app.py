@@ -14,7 +14,7 @@ from pyrogram.enums import ChatMemberStatus
 from pyrogram.errors import FloodWait
 
 # ==========================================
-# FIREBASE SETUP
+# FIREBASE SETUP (Secure Init)
 # ==========================================
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -22,7 +22,7 @@ from firebase_admin import credentials, firestore
 def init_firebase():
     cred_b64 = os.environ.get("FIREBASE_CRED_B64")
     if not cred_b64:
-        print("  FIREBASE ERROR: FIREBASE_CRED_B64 secret HF me nahi mila!")
+        print("🚨 FIREBASE ERROR: FIREBASE_CRED_B64 secret HF me nahi mila!")
         return None
         
     try:
@@ -33,10 +33,10 @@ def init_firebase():
         if not firebase_admin._apps:
             firebase_admin.initialize_app(cred, {'projectId': project_id})
             
-        print(f"  Firebase Firestore Connected Successfully! (Project: {project_id})")
+        print(f"✅ Firebase Firestore Connected Successfully! (Project: {project_id})")
         return firestore.client()
     except Exception as e:
-        print(f"  Firebase Init Error: {e}")
+        print(f"🚨 Firebase Init Error: {e}")
         return None
 
 db_fs = init_firebase()
@@ -52,6 +52,26 @@ def sync_fs_read(uid):
 
 TESTBOOK_API_URL = "https://itsh4r01-live-stream-engine.hf.space"
 app = Quart(__name__)
+
+# ==========================================
+# STABILITY FIX: HTTPX Connection Pooling & Error Handling
+# ==========================================
+@app.before_serving
+async def startup_http_client():
+    # Reuse single client for all requests to save RAM and avoid Timeout/502 errors
+    app.http_client = httpx.AsyncClient(
+        timeout=httpx.Timeout(60.0),
+        limits=httpx.Limits(max_keepalive_connections=100, max_connections=200)
+    )
+
+@app.after_serving
+async def shutdown_http_client():
+    await app.http_client.aclose()
+
+@app.errorhandler(Exception)
+async def handle_global_error(error):
+    print(f"🚨 Server Error: {error}")
+    return jsonify({"error": "Internal Server Error", "details": str(error)}), 500
 
 AVATAR_CACHE = {}
 AVATAR_CACHE_MAX_ENTRIES = 500
@@ -285,7 +305,6 @@ async def get_daily_quiz(user_id):
     
     today_str = datetime.datetime.now().strftime('%Y-%m-%d')
     
-    # Fallback/Dummy Logic
     if not os.path.exists(filename):
         question_data = {
             "id": "q_dummy",
@@ -453,31 +472,28 @@ async def api_explore_data(user_id):
 @app.route('/api/tb/search')
 async def tb_search_proxy():
     query = request.args.get('q')
-    async with httpx.AsyncClient(timeout=30) as client:
-        res = await client.get(f"{TESTBOOK_API_URL}/api/search?q={query}")
-        return jsonify(res.json().get('results', []))
+    res = await app.http_client.get(f"{TESTBOOK_API_URL}/api/search?q={query}")
+    return jsonify(res.json().get('results', []))
 
 @app.route('/api/tb/series/<slug>')
 async def tb_series_proxy(slug):
-    async with httpx.AsyncClient(timeout=30) as client:
-        res = await client.get(f"{TESTBOOK_API_URL}/api/series/{slug}")
-        return jsonify(res.json().get('details', {}))
+    res = await app.http_client.get(f"{TESTBOOK_API_URL}/api/series/{slug}")
+    return jsonify(res.json().get('details', {}))
 
 @app.route('/api/tb/tests/<series_id>/<section_id>/<sub_id>')
 async def tb_tests_proxy(series_id, section_id, sub_id):
-    async with httpx.AsyncClient(timeout=30) as client:
-        res = await client.get(f"{TESTBOOK_API_URL}/api/tests?series_id={series_id}&section_id={section_id}&sub_id={sub_id}")
-        return jsonify(res.json().get('tests', []))
+    res = await app.http_client.get(f"{TESTBOOK_API_URL}/api/tests?series_id={series_id}&section_id={section_id}&sub_id={sub_id}")
+    return jsonify(res.json().get('tests', []))
 
 @app.route('/api/tb/extract/<test_id>', methods=['POST'])
 async def tb_extract_proxy(test_id):
-    from quart import request
     data = await request.json
-    async with httpx.AsyncClient(timeout=60) as client:
-        res = await client.get(f"{TESTBOOK_API_URL}/api/extract/{test_id}")
-        q_data = res.json().get('quiz_data', {})
+    res = await app.http_client.get(f"{TESTBOOK_API_URL}/api/extract/{test_id}")
+    q_data = res.json().get('quiz_data', {})
+    
     if 'error' in q_data:
         return jsonify({"error": q_data['error']}), 400
+        
     from html_generator import generate_html
     details = {
         "Test Series": (data.get('series_details') or {}).get('name', 'N/A'),
@@ -491,42 +507,32 @@ async def tb_extract_proxy(test_id):
         "Incorrect": "-0.25" 
     }
     
-    # Offload the heavy CPU-bound string replacement & JSON dumping to a background thread
     html_content = await asyncio.to_thread(generate_html, q_data, details)
     return html_content, 200, {'Content-Type': 'text/html'}
 
-# NEW: PDF Note Extractor Proxy
 @app.route('/api/tb/pdf-note')
 async def tb_pdf_note_proxy():
-    """Proxy for extracting direct PDF links from Testbook"""
-    from quart import request
     target_url = request.args.get('url')
     if not target_url:
         return jsonify({"error": "Missing URL parameter"}), 400
         
-    async with httpx.AsyncClient(timeout=30) as client:
-        res = await client.get(f"{TESTBOOK_API_URL}/api/extract/pdf-note?url={target_url}")
+    res = await app.http_client.get(f"{TESTBOOK_API_URL}/api/extract/pdf-note?url={target_url}")
         
     if res.status_code != 200:
         return jsonify({"error": "Failed to extract PDF"}), res.status_code
         
     return jsonify(res.json()), 200
 
-# NEW: Current Affairs Quiz Extractor Proxy
 @app.route('/api/tb/current-affairs', methods=['POST'])
 async def tb_current_affairs_proxy():
-    """Proxy for extracting Current Affairs quizzes and generating the HTML Engine"""
-    from quart import request
-    
     data = await request.json
     target_url = data.get('url')
     if not target_url:
         return jsonify({"error": "Missing URL parameter"}), 400
         
-    async with httpx.AsyncClient(timeout=60) as client:
-        res = await client.get(f"{TESTBOOK_API_URL}/api/extract/current-affairs?url={target_url}")
-        res_data = res.json()
-        q_data = res_data.get('quiz_data', {})
+    res = await app.http_client.get(f"{TESTBOOK_API_URL}/api/extract/current-affairs?url={target_url}")
+    res_data = res.json()
+    q_data = res_data.get('quiz_data', {})
         
     if 'error' in q_data or 'error' in res_data:
         error_msg = q_data.get('error') or res_data.get('error')
@@ -546,10 +552,10 @@ async def tb_current_affairs_proxy():
         "Incorrect": "-0.25" 
     }
     
-    # Offload the heavy HTML compilation to prevent blocking Pyrogram
     html_content = await asyncio.to_thread(generate_html, q_data, details)
     return html_content, 200, {'Content-Type': 'text/html'}
 
+# FIX: SECURE RATE LIMITING FOR POINTS
 @app.route('/api/submit_tb_test', methods=['POST'])
 async def submit_tb_test():
     data = await request.json
@@ -560,20 +566,33 @@ async def submit_tb_test():
         
     fs_data = await asyncio.to_thread(sync_fs_read, user_id)
     
+    today_str = datetime.datetime.now().strftime('%Y-%m-%d')
+    last_played = fs_data.get("last_ca_played", "")
+    tests_today = fs_data.get("ca_tests_today", 0)
+
+    # Security check: User can only earn points for max 3 CA tests per day
+    if last_played == today_str and tests_today >= 3:
+        return jsonify({"success": True, "message": "Daily limit reached for points."})
+    
+    if last_played != today_str:
+        tests_today = 0
+        
     points = fs_data.get("points", 0) + 50 
     attempts = fs_data.get("flash_attempted", 0) + 1  
     
     new_fs_data = {
         "uid": user_id,
         "points": points,
-        "flash_attempted": attempts
+        "flash_attempted": attempts,
+        "last_ca_played": today_str,
+        "ca_tests_today": tests_today + 1
     }
     
     await asyncio.to_thread(sync_fs_write, user_id, new_fs_data)
-    return jsonify({"success": True})
+    return jsonify({"success": True, "points_added": 50})
 
 # =====================================================================
-# OWNER API LOGIC
+# OWNER API LOGIC (Secured Action)
 # =====================================================================
 @app.route('/api/owner/users/<int:req_user_id>')
 async def api_owner_users(req_user_id):
@@ -626,48 +645,42 @@ async def api_owner_users(req_user_id):
     return jsonify({"users": users_list})
 
 # =====================================================================
-# NEW: STUDY NOTES API PROXIES (For extractor.html)
+# STUDY NOTES API PROXIES (For extractor.html)
 # =====================================================================
 @app.route('/api/study/groups', methods=['GET'])
 async def tb_study_groups_proxy():
-    async with httpx.AsyncClient(timeout=30) as client:
-        res = await client.get(f"{TESTBOOK_API_URL}/api/study/groups")
-        return jsonify(res.json()), res.status_code
+    res = await app.http_client.get(f"{TESTBOOK_API_URL}/api/study/groups")
+    return jsonify(res.json()), res.status_code
 
 @app.route('/api/study/subjects', methods=['GET'])
 async def tb_study_subjects_proxy():
     group_id = request.args.get('group_id')
-    async with httpx.AsyncClient(timeout=30) as client:
-        res = await client.get(f"{TESTBOOK_API_URL}/api/study/subjects?group_id={group_id}")
-        return jsonify(res.json()), res.status_code
+    res = await app.http_client.get(f"{TESTBOOK_API_URL}/api/study/subjects?group_id={group_id}")
+    return jsonify(res.json()), res.status_code
 
 @app.route('/api/study/chapters', methods=['GET'])
 async def tb_study_chapters_proxy():
     subject_id = request.args.get('subject_id')
-    async with httpx.AsyncClient(timeout=30) as client:
-        res = await client.get(f"{TESTBOOK_API_URL}/api/study/chapters?subject_id={subject_id}")
-        return jsonify(res.json()), res.status_code
+    res = await app.http_client.get(f"{TESTBOOK_API_URL}/api/study/chapters?subject_id={subject_id}")
+    return jsonify(res.json()), res.status_code
 
 @app.route('/api/study/notes', methods=['GET'])
 async def tb_study_notes_proxy():
     chapter_id = request.args.get('chapter_id')
-    async with httpx.AsyncClient(timeout=30) as client:
-        res = await client.get(f"{TESTBOOK_API_URL}/api/study/notes?chapter_id={chapter_id}")
-        return jsonify(res.json()), res.status_code
+    res = await app.http_client.get(f"{TESTBOOK_API_URL}/api/study/notes?chapter_id={chapter_id}")
+    return jsonify(res.json()), res.status_code
 
 @app.route('/api/study/note-pdf', methods=['GET'])
 async def tb_study_note_pdf_proxy():
     note_id = request.args.get('note_id')
     if not note_id:
         return jsonify({"error": "Missing 'note_id' parameter"}), 400
-    async with httpx.AsyncClient(timeout=30) as client:
-        res = await client.get(f"{TESTBOOK_API_URL}/api/study/note-pdf?note_id={note_id}")
+    res = await app.http_client.get(f"{TESTBOOK_API_URL}/api/study/note-pdf?note_id={note_id}")
     return jsonify(res.json()), res.status_code
 
+# FIX: ASYNC TASK FOR KICK TO PREVENT FLOODWAIT HANGING
 @app.route('/api/owner/action', methods=['POST'])
 async def api_owner_action():
-    from quart import request
-    
     data = await request.json
     req_user_id = data.get('req_user_id')
     action = data.get('action')
@@ -684,35 +697,37 @@ async def api_owner_action():
         if target_uid not in DB.get("BLOCKED_USERS", []):
             DB.setdefault("BLOCKED_USERS", []).append(target_uid)
         asyncio.create_task(config.save_data_async())
-        try:
-            await config.execute_universal_kick(target_uid, bot, permanent_ban=True)
-        except Exception:
-            pass
+        # Prevent API hang by running kick in background task
+        asyncio.create_task(config.execute_universal_kick(target_uid, bot, permanent_ban=True))
         return jsonify({"success": True})
         
     elif action == "kick":
         batch_id = int(data.get('batch_id'))
-        try:
-            await bot.ban_chat_member(batch_id, target_uid)
-            await bot.unban_chat_member(batch_id, target_uid)
-            if target_uid in DB.get("USER_DATA", {}) and "demos" in DB["USER_DATA"][target_uid]:
-                if str(batch_id) in DB["USER_DATA"][target_uid]["demos"]:
-                    del DB["USER_DATA"][target_uid]["demos"][str(batch_id)]
-            asyncio.create_task(config.save_data_async())
-            return jsonify({"success": True})
-        except FloodWait as e:
-            await asyncio.sleep(e.value + 1)
+        
+        # Async background worker for single batch kick
+        async def _background_kick():
             try:
                 await bot.ban_chat_member(batch_id, target_uid)
                 await bot.unban_chat_member(batch_id, target_uid)
                 if target_uid in DB.get("USER_DATA", {}) and "demos" in DB["USER_DATA"][target_uid]:
                     if str(batch_id) in DB["USER_DATA"][target_uid]["demos"]:
                         del DB["USER_DATA"][target_uid]["demos"][str(batch_id)]
-                asyncio.create_task(config.save_data_async())
-                return jsonify({"success": True})
-            except Exception as final_e:
-                return jsonify({"error": f"Failed after retry: {str(final_e)}"}), 500
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
+                await config.save_data_async()
+            except FloodWait as e:
+                await asyncio.sleep(e.value + 1)
+                try:
+                    await bot.ban_chat_member(batch_id, target_uid)
+                    await bot.unban_chat_member(batch_id, target_uid)
+                    if target_uid in DB.get("USER_DATA", {}) and "demos" in DB["USER_DATA"][target_uid]:
+                        if str(batch_id) in DB["USER_DATA"][target_uid]["demos"]:
+                            del DB["USER_DATA"][target_uid]["demos"][str(batch_id)]
+                    await config.save_data_async()
+                except Exception:
+                    pass
+            except Exception:
+                pass
+                
+        asyncio.create_task(_background_kick())
+        return jsonify({"success": True, "message": "Kick action processing in background."})
             
     return jsonify({"error": "Invalid Action"}), 400
