@@ -255,51 +255,75 @@ def invalidate_membership_cache(user_id, chat_id=None):
 
 # --- CORE HELPERS ---
 async def execute_universal_kick(user_id, client, permanent_ban=False):
-    from pyrogram.errors import FloodWait
-    mod = False
+    from pyrogram.errors import FloodWait, UserNotParticipant
+    from pyrogram.enums import ChatMemberStatus
+    import asyncio
     
-    # BUG FIX 1: user_key ko upar move kiya gaya hai taaki _kick_batch usko properly access kar sake
-    user_key = user_id if user_id in DB.get("USER_DATA", {}) else (str(user_id) if str(user_id) in DB.get("USER_DATA", {}) else None)
+    mod = False
+    target_uid = int(user_id)
+    user_key = target_uid if target_uid in DB.get("USER_DATA", {}) else (str(target_uid) if str(target_uid) in DB.get("USER_DATA", {}) else None)
 
-    async def _kick_batch(bid, is_paid=False):
+    # Semaphore limit taaki API block na ho
+    sem = asyncio.Semaphore(4)
+
+    # Saare channels ki ek common list banalo
+    all_channels = set(
+        list(DB.get("FREE_CHANNELS", {}).keys()) +
+        list(DB.get("PAID_CHANNELS", {}).keys()) +
+        list(DB.get("SPECIAL_CHANNELS", {}).keys())
+    )
+
+    async def _smart_kick(bid):
         nonlocal mod
-        try:
-            bid_str = str(bid)
-            is_demo = is_paid and user_key and bid_str in DB.get("USER_DATA", {}).get(user_key, {}).get("demos", {})
-            
-            await client.ban_chat_member(int(bid), user_id)
-            if not permanent_ban:
-                await client.unban_chat_member(int(bid), user_id)
-                
-            if is_demo:
-                del DB["USER_DATA"][user_key]["demos"][bid_str]
-                mod = True
-        except FloodWait as e:
-            await asyncio.sleep(e.value + 1)
+        async with sem:
             try:
-                await client.ban_chat_member(int(bid), user_id)
+                target_bid = int(bid)
+                
+                # 🛠 STEP 1: Pehle check karo ki kya user sach me is channel me hai?
+                try:
+                    member = await client.get_chat_member(target_bid, target_uid)
+                    if member.status in [ChatMemberStatus.LEFT, ChatMemberStatus.BANNED]:
+                        # Agar user pehle se bahar hai, toh API call waste mat karo
+                        return 
+                except UserNotParticipant:
+                    # User is channel me join hi nahi hai, safely skip kardo
+                    return
+                except Exception:
+                    pass # Agar koi network error aaye, toh kick attempt kar lo safe side ke liye
+                
+                # 🚨 STEP 2: User andar hai! Ab usko Kick karo.
+                bid_str = str(bid)
+                is_demo = user_key and bid_str in DB.get("USER_DATA", {}).get(user_key, {}).get("demos", {})
+                
+                await client.ban_chat_member(target_bid, target_uid)
                 if not permanent_ban:
-                    await client.unban_chat_member(int(bid), user_id)
+                    await asyncio.sleep(0.5) # Proper delay taaki Telegram unban process kar sake
+                    await client.unban_chat_member(target_bid, target_uid)
+                    
                 if is_demo:
                     del DB["USER_DATA"][user_key]["demos"][bid_str]
                     mod = True
-            except Exception as ex:
-                logger.error(f"  [KICK ERROR] FloodWait ke baad Batch {bid} me error: {ex}")
-        except Exception as e:
-            # BUG FIX 2: Silent fail hata diya, ab agar kick nahi hoga toh exact reason terminal me likh kar aayega
-            logger.error(f"  [KICK ERROR] Batch {bid} se user {user_id} ko nikalne me fail hua: {type(e).__name__} - {e}")
+                    
+            except FloodWait as e:
+                await asyncio.sleep(e.value + 1)
+                try:
+                    await client.ban_chat_member(target_bid, target_uid)
+                    if not permanent_ban:
+                        await client.unban_chat_member(target_bid, target_uid)
+                except Exception:
+                    pass
+            except Exception as e:
+                logger.error(f"  [SMART KICK FAIL] Batch {target_bid}: {e}")
 
-    await asyncio.gather(
-        *[_kick_batch(bid) for bid in list(DB.get("FREE_CHANNELS", {}).keys())],
-        *[_kick_batch(bid, is_paid=True) for bid in list(DB.get("PAID_CHANNELS", {}).keys())],
-        *[_kick_batch(bid) for bid in list(DB.get("SPECIAL_CHANNELS", {}).keys())],
-    )
-    
-    invalidate_membership_cache(user_id)
+    # Saare channels ke liye smart kick chalayein
+    if all_channels:
+        await asyncio.gather(*[_smart_kick(bid) for bid in all_channels])
+        
+    invalidate_membership_cache(target_uid)
     
     if permanent_ban:
-        if user_id not in DB.get("BLOCKED_USERS", []): 
-            DB.setdefault("BLOCKED_USERS", []).append(user_id)
+        if target_uid not in DB.get("BLOCKED_USERS", []): 
+            DB.setdefault("BLOCKED_USERS", []).append(target_uid)
             mod = True
     else:
         if user_key and DB.get("USER_DATA", {}).get(user_key, {}).get("tnc_accepted", False):
