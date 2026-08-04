@@ -266,12 +266,20 @@ async def execute_universal_kick(user_id, client, permanent_ban=False):
     # Semaphore limit taaki API block na ho
     sem = asyncio.Semaphore(4)
 
-    # Saare channels ki ek common list banalo
-    all_channels = set(
-        list(DB.get("FREE_CHANNELS", {}).keys()) +
-        list(DB.get("PAID_CHANNELS", {}).keys()) +
-        list(DB.get("SPECIAL_CHANNELS", {}).keys())
-    )
+    # 💎 VIP FILTER LOGIC:
+    if permanent_ban:
+        # Agar Admin ne manually ban kiya hai, toh sab jagah se nikalo (Including Paid)
+        all_channels = set(
+            list(DB.get("FREE_CHANNELS", {}).keys()) +
+            list(DB.get("PAID_CHANNELS", {}).keys()) +
+            list(DB.get("SPECIAL_CHANNELS", {}).keys())
+        )
+    else:
+        # Agar user ne rule toda hai (Leave/Block), toh Paid channel ko safe rakho
+        all_channels = set(
+            list(DB.get("FREE_CHANNELS", {}).keys()) +
+            list(DB.get("SPECIAL_CHANNELS", {}).keys())
+        )
 
     async def _smart_kick(bid):
         nonlocal mod
@@ -279,25 +287,23 @@ async def execute_universal_kick(user_id, client, permanent_ban=False):
             try:
                 target_bid = int(bid)
                 
-                # 🛠 STEP 1: Pehle check karo ki kya user sach me is channel me hai?
+                # Check karo ki kya user sach me is channel me hai?
                 try:
                     member = await client.get_chat_member(target_bid, target_uid)
                     if member.status in [ChatMemberStatus.LEFT, ChatMemberStatus.BANNED]:
-                        # Agar user pehle se bahar hai, toh API call waste mat karo
                         return 
                 except UserNotParticipant:
-                    # User is channel me join hi nahi hai, safely skip kardo
                     return
                 except Exception:
-                    pass # Agar koi network error aaye, toh kick attempt kar lo safe side ke liye
+                    pass
                 
-                # 🚨 STEP 2: User andar hai! Ab usko Kick karo.
+                # User andar hai! Ab usko Kick karo.
                 bid_str = str(bid)
                 is_demo = user_key and bid_str in DB.get("USER_DATA", {}).get(user_key, {}).get("demos", {})
                 
                 await client.ban_chat_member(target_bid, target_uid)
                 if not permanent_ban:
-                    await asyncio.sleep(0.5) # Proper delay taaki Telegram unban process kar sake
+                    await asyncio.sleep(0.5) 
                     await client.unban_chat_member(target_bid, target_uid)
                     
                 if is_demo:
@@ -315,7 +321,7 @@ async def execute_universal_kick(user_id, client, permanent_ban=False):
             except Exception as e:
                 logger.error(f"  [SMART KICK FAIL] Batch {target_bid}: {e}")
 
-    # Saare channels ke liye smart kick chalayein
+    # Saare filtered channels ke liye smart kick chalayein
     if all_channels:
         await asyncio.gather(*[_smart_kick(bid) for bid in all_channels])
         
