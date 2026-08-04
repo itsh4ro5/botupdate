@@ -1440,6 +1440,8 @@ async def general_callback(client: Client, q: CallbackQuery):
                     InlineKeyboardButton("  Add Admin", callback_data="input_addadmin"),
                     InlineKeyboardButton("  Remove Admin", callback_data="input_deladmin"),
                 ],
+                # 👇 YEH NAYA BUTTON ADD KIYA GAYA HAI 👇
+                [InlineKeyboardButton("  Admin List", callback_data="act_adminlist")],
                 [InlineKeyboardButton("  Back", callback_data="dash_home")],
             ]
             await q.edit_message_text(
@@ -1576,6 +1578,41 @@ async def general_callback(client: Client, q: CallbackQuery):
                 "  **Access Approvals**",
                 reply_markup=InlineKeyboardMarkup(kb),
                 parse_mode=ParseMode.MARKDOWN,
+            )
+
+        elif data == "act_adminlist":
+            await q.answer("Fetching Admin List...")
+            
+            # Security check: Sirf owner ye list dekh sakta hai
+            if uid != OWNER_ID and str(uid) != str(OWNER_ID):
+                return await q.answer("  Access Denied! Owner Only.", show_alert=True)
+                
+            admin_ids = DB.get("ADMIN_IDS", [])
+            text = "  **BOT ADMINS LIST**\n" + "—" * 20 + "\n\n"
+            
+            if not admin_ids:
+                text += "  Koi admin assign nahi kiya gaya hai."
+            else:
+                # Har admin ki details Database se nikal kar print karega
+                for aid in admin_ids:
+                    user_key = aid if aid in DB.get("USER_DATA", {}) else (str(aid) if str(aid) in DB.get("USER_DATA", {}) else None)
+                    user_info = DB.get("USER_DATA", {}).get(user_key, {}) if user_key else {}
+                    
+                    name = user_info.get("name", "Unknown User")
+                    username = user_info.get("username", "N/A")
+                    
+                    # Owner aur Admin ko alag-alag dikhane ke liye
+                    role = "  **Owner**" if str(aid) == str(OWNER_ID) else "  **Admin**"
+                    
+                    text += f"{role}\n  **Name:** {name}\n  **ID:** `{aid}`\n  **Username:** @{username}\n\n"
+                    
+            # Back button wapas Staff menu me le jayega
+            kb = [[InlineKeyboardButton("  Back", callback_data="dash_staff")]]
+            
+            await q.edit_message_text(
+                text, 
+                reply_markup=InlineKeyboardMarkup(kb), 
+                parse_mode=ParseMode.MARKDOWN
             )
         elif data == "act_backup":
             await q.answer("Sending...")
