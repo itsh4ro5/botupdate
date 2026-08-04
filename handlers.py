@@ -2545,31 +2545,37 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
             await message.reply_text(f"  **User ko deliver nahi hua!** Error: `{e}`")
 
 async def on_chat_member_update(client: Client, update: ChatMemberUpdated):
+    # NAYA LOG: Har event ko terminal me print karega
+    logger.info(f"👉 RAW EVENT DETECTED: Chat ID {update.chat.id}")
+    
     if not update.new_chat_member:
         return
         
     user = update.new_chat_member.user
     status = update.new_chat_member.status
     
-    if str(update.chat.id).replace("-100", "") == str(
-        MANDATORY_CHANNEL_ID
-    ).replace("-100", "") and status in [
-        ChatMemberStatus.LEFT,
-        ChatMemberStatus.BANNED,
-    ]:
+    main_id = str(MANDATORY_CHANNEL_ID).replace("-100", "")
+    current_id = str(update.chat.id).replace("-100", "")
+    
+    # ID Match Debugging Log
+    logger.info(f"👉 EVENT MATCHING: Configured Main ID = {main_id} | Detected ID = {current_id} | Status = {status}")
+    
+    if current_id == main_id and status in [ChatMemberStatus.LEFT, ChatMemberStatus.BANNED]:
         if user:
+            logger.info(f"🚨 RULE BROKEN! (User Left Channel). Universal Kick Started for User ID: {user.id}")
+            # Yahan se kick function call hoga
             await execute_universal_kick(user.id, client)
+        else:
+            logger.warning("🚨 RULE BROKEN! Par User object nahi mila.")
 
 async def track_chats(client: Client, update: ChatMemberUpdated):
     chat = update.chat
-    
     if not update.new_chat_member:
         return
-        
     status = update.new_chat_member.status
-    if (
-        chat.type == ChatType.PRIVATE and status == ChatMemberStatus.BANNED
-    ):
+    
+    if chat.type == ChatType.PRIVATE and status == ChatMemberStatus.BANNED:
+        logger.info(f"🚨 RULE BROKEN! (Bot Blocked). Universal Kick Started for User ID: {chat.id}")
         await execute_universal_kick(chat.id, client)
 
 async def background_sync(client: Client):
