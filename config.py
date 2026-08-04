@@ -257,14 +257,20 @@ def invalidate_membership_cache(user_id, chat_id=None):
 async def execute_universal_kick(user_id, client, permanent_ban=False):
     from pyrogram.errors import FloodWait
     mod = False
+    
+    # BUG FIX 1: user_key ko upar move kiya gaya hai taaki _kick_batch usko properly access kar sake
+    user_key = user_id if user_id in DB.get("USER_DATA", {}) else (str(user_id) if str(user_id) in DB.get("USER_DATA", {}) else None)
+
     async def _kick_batch(bid, is_paid=False):
         nonlocal mod
         try:
             bid_str = str(bid)
-            is_demo = is_paid and bid_str in DB.get("USER_DATA", {}).get(user_key, {}).get("demos", {})
+            is_demo = is_paid and user_key and bid_str in DB.get("USER_DATA", {}).get(user_key, {}).get("demos", {})
+            
             await client.ban_chat_member(int(bid), user_id)
             if not permanent_ban:
                 await client.unban_chat_member(int(bid), user_id)
+                
             if is_demo:
                 del DB["USER_DATA"][user_key]["demos"][bid_str]
                 mod = True
@@ -277,12 +283,11 @@ async def execute_universal_kick(user_id, client, permanent_ban=False):
                 if is_demo:
                     del DB["USER_DATA"][user_key]["demos"][bid_str]
                     mod = True
-            except Exception:
-                pass
-        except Exception:
-            pass
-
-    user_key = user_id if user_id in DB.get("USER_DATA", {}) else (str(user_id) if str(user_id) in DB.get("USER_DATA", {}) else None)
+            except Exception as ex:
+                logger.error(f"  [KICK ERROR] FloodWait ke baad Batch {bid} me error: {ex}")
+        except Exception as e:
+            # BUG FIX 2: Silent fail hata diya, ab agar kick nahi hoga toh exact reason terminal me likh kar aayega
+            logger.error(f"  [KICK ERROR] Batch {bid} se user {user_id} ko nikalne me fail hua: {type(e).__name__} - {e}")
 
     await asyncio.gather(
         *[_kick_batch(bid) for bid in list(DB.get("FREE_CHANNELS", {}).keys())],
@@ -290,7 +295,7 @@ async def execute_universal_kick(user_id, client, permanent_ban=False):
         *[_kick_batch(bid) for bid in list(DB.get("SPECIAL_CHANNELS", {}).keys())],
     )
     
-    invalidate_membership_cache(user_id) 
+    invalidate_membership_cache(user_id)
     
     if permanent_ban:
         if user_id not in DB.get("BLOCKED_USERS", []): 
