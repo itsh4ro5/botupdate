@@ -2580,37 +2580,43 @@ async def track_chats(client: Client, update: ChatMemberUpdated):
 
 async def background_sync(client: Client):
     global SPAM_CACHE, _SYNC_IN_PROGRESS
+    from pyrogram.errors import UserNotParticipant
+    from pyrogram.enums import ChatMemberStatus
+    
     SPAM_CACHE = {k: v for k, v in SPAM_CACHE.items() if time.time() - v < 2.0}
     if len(MESSAGE_MAP) > 5000:
         MESSAGE_MAP.clear()
-
+        
     if _SYNC_IN_PROGRESS:
-        logger.warning("  Background sync already running. Skipping this cycle.")
         return
-
+        
     _SYNC_IN_PROGRESS = True
     try:
         user_ids = list(DB["USER_DATA"].keys())
         for idx, uid in enumerate(user_ids):
             user_id = int(uid)
-            if user_id in DB["BLOCKED_USERS"] or is_admin(user_id):
+            # Admin ya blocked users ko check mat karo
+            if user_id in DB.get("BLOCKED_USERS", []) or is_admin(user_id):
                 continue
-            try:
-                m = await client.get_chat_member(int(MANDATORY_CHANNEL_ID), user_id)
-                status = m.status
-                if status == ChatMemberStatus.BANNED:
+                
+            # Sirf unhi ko check karo jinhone pehle channel join kiya tha
+            if DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
+                try:
+                    m = await client.get_chat_member(int(MANDATORY_CHANNEL_ID), user_id)
+                    if m.status in [ChatMemberStatus.LEFT, ChatMemberStatus.BANNED]:
+                        logger.info(f"🚨 AUTO-SCANNER: User {user_id} has LEFT. Kicking now!")
+                        await execute_universal_kick(user_id, client)
+                except UserNotParticipant:
+                    # YEH SABSE ZAROORI THA: Agar user nahi mila, toh kick karo!
+                    logger.info(f"🚨 AUTO-SCANNER: User {user_id} is MISSING. Kicking now!")
                     await execute_universal_kick(user_id, client)
-                elif status == ChatMemberStatus.LEFT and DB["USER_DATA"].get(
-                    uid, {}
-                ).get("tnc_accepted", False):
-                    await execute_universal_kick(user_id, client)
-            except Exception:
-                pass
-
-            await asyncio.sleep(1.0)
-
+                except Exception:
+                    pass
+            
+            await asyncio.sleep(0.5)  # Safe speed limit
             if idx > 0 and idx % 100 == 0:
                 await save_data_async()
+                
     finally:
         _SYNC_IN_PROGRESS = False
 
