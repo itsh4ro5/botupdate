@@ -331,6 +331,9 @@ async def _run_pyrogram_engine():
                 await asyncio.sleep(60)
                 if hasattr(H, "check_demos"):
                     await H.check_demos(app)
+                # 👇 YEH NAYI LINE ADD KAREIN 👇
+                if hasattr(H, "background_sync"):
+                    await H.background_sync(app)
             except asyncio.CancelledError:
                 break
             except Exception as e:
