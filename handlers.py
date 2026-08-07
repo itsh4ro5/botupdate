@@ -208,6 +208,90 @@ async def cmd_del_admin(client: Client, message: Message):
     except Exception as e:
         await message.reply_text(f"  Error removing admin: {e}")
 
+async def cmd_storebatch(client: Client, message: Message):
+    if not is_owner_msg(message):
+        return
+    
+    args = get_args(message)
+    if not args:
+        return await message.reply_text("❌ Error: Valid Batch ID bhejein.")
+    
+    try:
+        chat_id = int(args[0])
+    except ValueError:
+        return await message.reply_text("❌ Error: ID numbers me honi chahiye.")
+
+    msg = await message.reply_text(f"⏳ **Scanning Batch `{chat_id}` started...**\nIsme kuch minute lag sakte hain, kripya wait karein...", parse_mode=ParseMode.MARKDOWN)
+    
+    video_count = 0
+    pdf_count = 0
+    batch_items = []
+
+    try:
+        # get_chat_history channel ke saare messages scan karta hai
+        async for m in client.get_chat_history(chat_id):
+            
+            # 1. Agar message mein VIDEO hai
+            if m.video:
+                video_count += 1
+                
+                # Thumbnail ID nikalne ka logic
+                thumb_id = None
+                if m.video.thumbs and len(m.video.thumbs) > 0:
+                    thumb_id = m.video.thumbs[0].file_id
+
+                batch_items.append({
+                    "msg_id": m.id,
+                    "type": "video",
+                    "title": m.video.file_name or m.caption or f"Video {m.id}",
+                    "duration": m.video.duration, # Seconds me
+                    "size": m.video.file_size, # Bytes me
+                    "thumb_id": thumb_id
+                })
+            
+            # 2. Agar message mein PDF (Document) hai
+            elif m.document and m.document.mime_type == "application/pdf":
+                pdf_count += 1
+                batch_items.append({
+                    "msg_id": m.id,
+                    "type": "pdf",
+                    "title": m.document.file_name or m.caption or f"PDF Note {m.id}",
+                    "size": m.document.file_size
+                })
+            
+            # Har 500 message ke baad bot status update karega taaki aapko pata rahe scan chal raha hai
+            if (video_count + pdf_count) > 0 and (video_count + pdf_count) % 500 == 0:
+                try:
+                    await msg.edit_text(f"⏳ **Scanning in progress...**\n\nFound so far:\n🎥 Videos: `{video_count}`\n📄 PDFs: `{pdf_count}`")
+                except:
+                    pass
+                await asyncio.sleep(1) # FloodWait se bachne ke liye
+
+        # --- YAHAN FIREBASE ME SAVE KARNE KA LOGIC AAYEGA ---
+        # (Hum isko Firebase array me push kar denge)
+        # Import app to access db_fs
+        from app import db_fs 
+        if db_fs:
+            await asyncio.to_thread(
+                db_fs.collection('batch_contents').document(str(chat_id)).set, 
+                {"items": batch_items}, 
+                merge=True
+            )
+            firebase_status = "✅ Successfully saved to Firebase!"
+        else:
+            firebase_status = "⚠️ Firebase is not connected!"
+
+        await msg.edit_text(
+            f"🎯 **Batch Scan Complete!**\n\n"
+            f"🎥 Total Videos: `{video_count}`\n"
+            f"📄 Total PDFs: `{pdf_count}`\n"
+            f"📝 {firebase_status}",
+            parse_mode=ParseMode.MARKDOWN
+        )
+
+    except Exception as e:
+        await msg.edit_text(f"❌ **Error during scan:** `{e}`", parse_mode=ParseMode.MARKDOWN)
+
 async def cmd_userbotphone(client: Client, message: Message):
     if not is_owner_msg(message):
         return
@@ -1399,14 +1483,15 @@ async def general_callback(client: Client, q: CallbackQuery):
             await q.answer()
             kb = [
                 [
-                    InlineKeyboardButton("  Download Backup", callback_data="act_backup"),
-                    InlineKeyboardButton("  Run Sync", callback_data="act_sync"),
+                    InlineKeyboardButton("📥 Download Backup", callback_data="act_backup"),
+                    InlineKeyboardButton("🔄 Run Sync", callback_data="act_sync"),
                 ],
-                [InlineKeyboardButton("  Download All Users List", callback_data="act_allusers")],
-                [InlineKeyboardButton("  Back", callback_data="dash_home")],
+                [InlineKeyboardButton("👥 Download All Users List", callback_data="act_allusers")],
+                [InlineKeyboardButton("🗄️ Store Batch Data (Scan)", callback_data="input_storebatch")],
+                [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
             ]
             await q.edit_message_text(
-                "  **Database Tools**",
+                "🛡️ **Database Tools**",
                 reply_markup=InlineKeyboardMarkup(kb),
                 parse_mode=ParseMode.MARKDOWN,
             )
@@ -1531,6 +1616,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                 "addcat": "Send Name for new Category:",
                 "setcat": "Send Batch ID(s) (comma ya space lagakar):\nFormat: `-100x, -100y`",
                 "emptybatch": "  **DHYAN DEIN!**\nSend Batch ID jisko poora khali (empty) karna hai:\nFormat: `-100123456789`",
+                "storebatch": "🗄️ **Store Batch Data**\n\nJis channel ka purana data (Videos/PDFs) Firebase me index karna hai, uska Chat ID bhejein:\nFormat: `-100123456789`",
                 "userbotphone": "  **Apna Phone Number bhejein**\nCountry code ke sath (Jaise: `+919876543210`):",
                 "userbototp": "  **OTP Bhejein**\n  *OTP spaces me bhejein!* Jaise: `1 2 3 4 5`:",
                 "userbotpass": "  **2FA Password bhejein:**",
