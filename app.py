@@ -105,6 +105,11 @@ async def enforce_mandatory(user_id):
 # ==========================================
 # PAGE ROUTES (Passing Bot Username)
 # ==========================================
+@app.route('/favicon.ico')
+async def favicon():
+    # Ignore browser logo requests silently
+    return "", 204
+
 @app.route('/health')
 async def health():
     is_active, remaining = config.get_flood_wait_status()
