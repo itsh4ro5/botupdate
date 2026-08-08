@@ -9,10 +9,10 @@ import os
 import base64
 import aiofiles
 from quart import Quart, jsonify, render_template, send_file, request
-import config
+import config 
 from config import DB, OWNER_ID, is_admin, get_membership_cached
 from pyrogram.enums import ChatMemberStatus
-from pyrogram.errors import FloodWait
+from pyrogram.errors import FloodWait, FileReferenceExpired
 
 # ==========================================
 # FIREBASE SETUP (Secure Init)
@@ -205,18 +205,33 @@ async def get_user_session(uid):
     except Exception as e:
         return jsonify({"success": False, "error": "Decryption failed"}), 500
 
-@app.route('/api/thumb/<file_id>')
-async def get_thumbnail(file_id):
+@app.route('/api/thumb/<chat_id>/<int:msg_id>/<file_id>')
+async def get_thumbnail(chat_id, msg_id, file_id):
     if not hasattr(config, 'bot_app') or not config.bot_app:
         return "Bot not ready", 503
     try:
         bot = config.bot_app
-        file_obj = await bot.download_media(file_id, in_memory=True)
+        target_chat = int(chat_id)
+        
+        try:
+            # 1. Pehle purane file_id se try karenge (Speed ke liye)
+            file_obj = await bot.download_media(file_id, in_memory=True)
+        except FileReferenceExpired:
+            # 2. Agar expire ho gaya, toh chupchaap fresh ID nikalenge
+            print(f"🔄 Thumb Expired for msg {msg_id}. Fetching fresh ID...")
+            msg = await bot.get_messages(target_chat, ids=msg_id)
+            if msg and msg.video and msg.video.thumbs:
+                fresh_file_id = msg.video.thumbs[0].file_id
+                file_obj = await bot.download_media(fresh_file_id, in_memory=True)
+            else:
+                return "Not found", 404
+
         img_bytes = file_obj.getvalue() if hasattr(file_obj, "getvalue") else file_obj
         if img_bytes:
             return await send_file(io.BytesIO(img_bytes), mimetype='image/jpeg')
     except Exception as e:
-        pass
+        print(f"Thumb error: {e}")
+        
     return "Not found", 404
 
 # ==========================================
