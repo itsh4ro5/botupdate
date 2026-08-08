@@ -51,6 +51,7 @@
           #050607;
       }
 
+      /* --- MAIN PLAYER CONTAINER --- */
       .player {
         position: relative; width: 100%; max-width: 1040px; height: 80vh;
         background: #000; border-radius: var(--radius-lg); overflow: hidden;
@@ -119,7 +120,7 @@
       <div class="player hidden" id="player">
         <div class="video-stage" id="video-stage">
           
-          <!-- NATIVE VIDEO PLAYER WITH CONTROLS (Security Removed) -->
+          <!-- NATIVE VIDEO PLAYER WITH CONTROLS -->
           <video id="video-player" playsinline controls controlsList="nodownload"></video>
 
           <!-- Loading Status -->
@@ -137,9 +138,11 @@
       
       const UID = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 7993892902;
 
+      // Extract APIs & URL Params
       const { Api, TelegramClient } = telegram;
       const { StringSession } = telegram.sessions;
-      const bigInt = window.bigInt; 
+      
+      // 🚨 FIX: Removed 'const bigInt = window.bigInt;' because it was crashing the page!
 
       const apiId = Number("{{ api_id }}"); 
       const apiHash = "{{ api_hash }}";
@@ -156,7 +159,7 @@
 
           if ('serviceWorker' in navigator) {
               try {
-                  const reg = await navigator.serviceWorker.register('/sw.js?v=11');
+                  const reg = await navigator.serviceWorker.register('/sw.js?v=12');
                   await navigator.serviceWorker.ready;
               } catch (err) { console.error('SW Error:', err); }
           }
@@ -170,7 +173,6 @@
                   document.getElementById('player').classList.remove('hidden');
                   await connectAndStream(data.session);
               } else {
-                  // Session nahi hai toh login par bhej do
                   window.location.href = '/login';
               }
           } catch (e) { 
@@ -246,7 +248,7 @@
                           try {
                               for await (const chunk of client.iterDownload({
                                   file: currentMedia, 
-                                  offset: bigInt(alignedStart), 
+                                  offset: bigInt(alignedStart), // bigInt is globally available here
                                   limit: bigInt(alignedLimit), 
                                   requestSize: ALIGNMENT
                               })) {
@@ -275,7 +277,7 @@
                               break; 
                           } catch (err) {
                               if (err.message && (err.message.includes('FILE_REFERENCE_EXPIRED') || err.message.includes('FILE_REFERENCE_EMPTY'))) {
-                                  console.warn("🔄 File Reference Expired Mid-Stream! Auto-refreshing...");
+                                  console.warn("🔄 File Reference Expired Mid-Stream! Auto-refreshing fresh link...");
                                   const freshMsgs = await client.getMessages(chatIdParam, { ids: msgIdParam });
                                   currentMedia = freshMsgs[0]?.media;
                                   if (!currentMedia) throw new Error("Could not refresh media link.");
@@ -302,10 +304,10 @@
           const videoElement = document.getElementById('video-player');
           videoElement.src = `/tg-stream/video_${msgIdParam}.mp4`;
           
-          // Hide Loader when video starts
+          // Hide Loader when video starts playing
           videoElement.addEventListener('canplay', () => {
               document.getElementById('player-status').classList.add('hidden');
-              videoElement.play(); // Auto-play start
+              videoElement.play(); 
           });
       }
 
