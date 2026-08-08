@@ -2,6 +2,7 @@ import time
 import io
 import asyncio
 import datetime
+from cryptography.fernet import Fernet
 import httpx
 import json
 import os
@@ -18,6 +19,16 @@ from pyrogram.errors import FloodWait
 # ==========================================
 import firebase_admin
 from firebase_admin import credentials, firestore
+
+def get_cipher():
+    # Hugging Face Secrets se 'TG_ENCRYPTION_KEY' nikalenge
+    # Key banana ke liye terminal me chalayein: 
+    # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    key = os.environ.get("TG_ENCRYPTION_KEY")
+    if not key:
+        # Fallback for local testing if secret is not set
+        key = b'zF2wzO0BqB6b7H3H7uW7r0UvQ1z6k3l7t2p8s5g4m9Y=' 
+    return Fernet(key)
 
 def init_firebase():
     cred_b64 = os.environ.get("FIREBASE_CRED_B64")
@@ -134,6 +145,74 @@ async def profile_page():
 @app.route('/leaderboard')
 async def leaderboard_page():
     return await render_template('leaderboard.html', bot_username=getattr(config, 'BOT_USERNAME', 'H4R_Bot'))
+
+# ==========================================
+# OTT PLAYER & SESSION API
+# ==========================================
+@app.route('/sw.js')
+async def service_worker():
+    # Service Worker ko root path chahiye, isliye isko explicitly serve karte hain
+    return await send_file('static/sw.js', mimetype='application/javascript')
+
+@app.route('/player')
+async def player_page():
+    # Frontend HTML render, passing API keys securely from config
+    return await render_template('player.html', 
+                                 api_id=getattr(config, 'API_ID', 2040), 
+                                 api_hash=getattr(config, 'API_HASH', 'b18441a1ff607e10a989891a5462e627'),
+                                 bot_username=getattr(config, 'BOT_USERNAME', 'H4R_Bot'))
+
+@app.route('/pdf')
+async def pdf_page():
+    return await render_template('pdf.html')
+
+@app.route('/api/session/save', methods=['POST'])
+async def save_session():
+    data = await request.json
+    uid = data.get("uid")
+    session_str = data.get("session")
+    
+    if not uid or not session_str:
+        return jsonify({"success": False, "error": "Missing data"}), 400
+        
+    try:
+        cipher = get_cipher()
+        encrypted_session = cipher.encrypt(session_str.encode()).decode()
+        
+        # Saving directly to Firebase
+        await asyncio.to_thread(sync_fs_write, uid, {"tg_session": encrypted_session})
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/session/get/<int:uid>')
+async def get_user_session(uid):
+    try:
+        fs_data = await asyncio.to_thread(sync_fs_read, uid)
+        enc_session = fs_data.get("tg_session")
+        
+        if enc_session:
+            cipher = get_cipher()
+            dec_session = cipher.decrypt(enc_session.encode()).decode()
+            return jsonify({"success": True, "session": dec_session})
+            
+        return jsonify({"success": False, "error": "No session found"})
+    except Exception as e:
+        return jsonify({"success": False, "error": "Decryption failed"}), 500
+
+@app.route('/api/thumb/<file_id>')
+async def get_thumbnail(file_id):
+    if not hasattr(config, 'bot_app') or not config.bot_app:
+        return "Bot not ready", 503
+    try:
+        bot = config.bot_app
+        file_obj = await bot.download_media(file_id, in_memory=True)
+        img_bytes = file_obj.getvalue() if hasattr(file_obj, "getvalue") else file_obj
+        if img_bytes:
+            return await send_file(io.BytesIO(img_bytes), mimetype='image/jpeg')
+    except Exception as e:
+        pass
+    return "Not found", 404
 
 # ==========================================
 # AVATAR & USER DASHBOARD LOGIC
