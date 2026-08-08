@@ -59,8 +59,8 @@
 
     * { 
       -webkit-tap-highlight-color: transparent; 
-      -webkit-touch-callout: none; /* Long press popup hide karega iOS pe */
-      user-select: none; /* Text selection band karega */
+      -webkit-touch-callout: none;
+      user-select: none;
     }
 
     body {
@@ -71,7 +71,6 @@
       transition: background 0.4s ease, color 0.4s ease;
     }
 
-    /* ambient neon glow behind content */
     .aurora::before {
       content: '';
       position: fixed;
@@ -110,7 +109,6 @@
 
     .text-muted { color: var(--muted); }
 
-    /* dock */
     .dock {
       background: rgba(13, 13, 22, 0.72);
       border: 1px solid var(--border);
@@ -130,11 +128,9 @@
       box-shadow: 0 0 18px 2px rgba(99, 102, 241, 0.55);
     }
 
-    /* scroll rows */
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-    /* shimmer skeletons */
     .skel {
       background: linear-gradient(100deg, rgba(255,255,255,0.04) 30%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.04) 70%);
       background-size: 200% 100%;
@@ -158,7 +154,7 @@
   <div class="relative z-10 mx-auto w-full max-w-md px-5 pt-6">
 
     <!-- ===== Header ===== -->
-    <header class="flex items-center justify-between reveal">
+    <header id="mainHeader" class="flex items-center justify-between reveal">
       <div class="flex items-center gap-3">
         <div class="relative h-12 w-12 shrink-0">
           <div class="ring-conic absolute inset-0 rounded-full opacity-90"></div>
@@ -186,7 +182,7 @@
     </header>
 
     <!-- ===== Invite Friends promo ===== -->
-    <section class="reveal mt-5" style="animation-delay:.05s">
+    <section id="promoSection" class="reveal mt-5" style="animation-delay:.05s">
       <div class="card-press relative overflow-hidden rounded-3xl p-5"
         style="background:linear-gradient(130deg,#4f46e5,#6366f1 55%,#10b981)">
         <div class="pointer-events-none absolute -right-6 -top-8 h-32 w-32 rounded-full bg-white/15 blur-xl"></div>
@@ -207,7 +203,7 @@
     </section>
 
     <!-- ===== Quick stats bento ===== -->
-    <section class="reveal mt-4 grid grid-cols-2 gap-3" style="animation-delay:.1s">
+    <section id="statsSection" class="reveal mt-4 grid grid-cols-2 gap-3" style="animation-delay:.1s">
       <div class="glass card-press rounded-2xl p-4">
         <div class="flex items-center gap-2 text-muted">
           <i class="fa-solid fa-layer-group text-indigo-soft"></i>
@@ -282,6 +278,33 @@
       <p class="mt-1 max-w-[240px] text-sm text-muted">Head to Explore to discover free and premium batches curated for you.</p>
       <a href="/explore" class="mt-4 rounded-full bg-indigo-neon px-5 py-2.5 text-sm font-semibold text-white card-press">Explore now</a>
     </div>
+
+    <!-- ===== NAYA: Batch Content View (OTT Style) ===== -->
+    <section id="batchContentSection" class="reveal mt-2 hidden pb-6">
+      <!-- Back Button & Title -->
+      <div class="mb-5 flex items-center gap-3">
+        <button onclick="closeBatchView()" class="glass flex h-10 w-10 items-center justify-center rounded-xl text-indigo-soft card-press shrink-0">
+          <i class="fa-solid fa-arrow-left"></i>
+        </button>
+        <div class="flex flex-col overflow-hidden">
+          <span class="text-[10px] uppercase font-bold text-muted tracking-wider" id="batchSubtitle">Subject Folders</span>
+          <h2 id="batchViewTitle" class="text-lg font-bold truncate text-text">Batch Name</h2>
+        </div>
+      </div>
+
+      <!-- Loader -->
+      <div id="batchLoader" class="hidden flex-col items-center justify-center mt-10">
+        <i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-neon mb-3"></i>
+        <p class="text-sm font-semibold text-muted">Fetching Library...</p>
+      </div>
+
+      <!-- View 1: Subject Folders Grid -->
+      <div id="subjectFoldersGrid" class="grid grid-cols-2 gap-3"></div>
+
+      <!-- View 2: Content List (Videos/PDFs) -->
+      <div id="contentListGrid" class="hidden flex-col gap-3 mt-2"></div>
+    </section>
+
   </div>
 
   <!-- ===== Floating Bottom Dock ===== -->
@@ -343,14 +366,12 @@
         }
     }
 
-    // Resolve the Telegram user id
     const tgUser = tg && tg.initDataUnsafe ? tg.initDataUnsafe.user : null;
-    const UID = tgUser && tgUser.id ? tgUser.id : 123456789; // demo fallback
+    const UID = tgUser && tgUser.id ? tgUser.id : 123456789;
     const IS_DEMO = !(tgUser && tgUser.id);
 
     const $ = (id) => document.getElementById(id);
 
-    // --- NEW LOGIC: Server Bot Username & Mandatory Channel Middleware ---
     const SERVER_BOT_USERNAME = "{{ bot_username }}";
 
     async function checkResponseForMandatory(res) {
@@ -373,12 +394,12 @@
     }
     let countdownTimer = null;
 
-    /* ---------- Theme toggle ---------- */
     (function initTheme() {
       const saved = localStorage.getItem('h4r_theme');
       if (saved === 'light') document.documentElement.classList.replace('dark', 'light');
       syncThemeIcon();
     })();
+
     function syncThemeIcon() {
       const light = document.documentElement.classList.contains('light');
       $('themeToggle').innerHTML = light
@@ -387,6 +408,7 @@
       const meta = document.querySelector('meta[name="theme-color"]');
       if (meta) meta.setAttribute('content', light ? '#f3f4f8' : '#050509');
     }
+
     $('themeToggle').addEventListener('click', () => {
       const root = document.documentElement;
       if (root.classList.contains('dark')) root.classList.replace('dark', 'light');
@@ -396,13 +418,11 @@
       if (tg) try { tg.HapticFeedback.impactOccurred('light'); } catch (e) {}
     });
 
-    /* ---------- Greeting by time ---------- */
     (function greet() {
       const h = new Date().getHours();
       $('greeting').textContent = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
     })();
 
-    /* ---------- Avatar ---------- */
     $('avatar').src = `/api/user/avatar/${UID}`;
     $('avatar').onerror = () => {
       $('avatar').src =
@@ -414,14 +434,12 @@
         );
     };
 
-    /* ---------- Invite button ---------- */
     $('inviteBtn').addEventListener('click', () => {
       const link = `https://t.me/share/url?url=https://t.me/&text=${encodeURIComponent('Join me on H4R — the smartest way to crack your exam!')}`;
       if (tg && tg.openTelegramLink) tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent('https://t.me/')}&text=${encodeURIComponent('Join me on H4R!')}`);
       else window.open(link, '_blank');
     });
 
-    /* ---------- Recently viewed (localStorage) ---------- */
     function getRecent() {
       try { return JSON.parse(localStorage.getItem('h4r_recent') || '[]'); } catch (e) { return []; }
     }
@@ -435,7 +453,7 @@
       wrap.innerHTML = items
         .map(
           (b) => {
-            const stat = b.status || 'Joined'; // Backward compatibility
+            const stat = b.status || 'Joined'; 
             const kind = b.kind || (b.type === 'Premium Core' ? 'paid' : 'free');
             return `
         <button type="button" data-id="${escapeHtml(b.id)}" data-name="${escapeHtml(b.name)}" data-kind="${escapeHtml(kind)}" data-status="${escapeHtml(stat)}" data-type="${escapeHtml(b.type || 'Batch')}"
@@ -458,7 +476,6 @@
       renderRecent();
     });
 
-    /* ---------- Route handling for Recently Viewed cards ---------- */
     function bindRecentActions() {
       document.querySelectorAll('.recent-batch-link').forEach((el) => {
         el.addEventListener('click', () => {
@@ -468,21 +485,17 @@
           const status = el.getAttribute('data-status');
           const type = el.getAttribute('data-type');
 
-          // Push to front of recently viewed to keep it fresh
           let list = getRecent().filter((x) => x.name !== name);
           list.unshift({ id, name, type, status, kind });
           localStorage.setItem('h4r_recent', JSON.stringify(list.slice(0, 8)));
           
-          renderRecent(); // IMMEDIATE UI UPDATE!
+          renderRecent(); 
 
           if (tg) try { tg.HapticFeedback.impactOccurred('medium'); } catch (e) {}
 
-          // EXACT SAME SMART ROUTING LOGIC
           if (status === 'Joined' || status === 'Owned' || status === 'Trial') {
-             const cleanId = String(id).replace('-100', '');
-             const channelLink = `https://t.me/c/${cleanId}/999999999`;
-             if (tg && tg.openTelegramLink) tg.openTelegramLink(channelLink);
-             else window.open(channelLink, '_blank');
+             // NAYA OTT LOGIC: In-App Folders
+             openBatchView(id, name);
           } else {
              const startParam = (kind === 'paid' ? 'buy_' : 'join_') + id;
              const botUser = (typeof SERVER_BOT_USERNAME !== 'undefined' && SERVER_BOT_USERNAME) ? SERVER_BOT_USERNAME : 'H4R_Bot';
@@ -508,7 +521,6 @@
       });
     }
 
-    /* ---------- Batch card template ---------- */
     function batchCard(b, premium) {
       const badge = premium
         ? '<span class="rounded-full bg-yellow-400/15 px-2 py-0.5 text-[10px] font-semibold text-yellow-400">CORE</span>'
@@ -530,7 +542,6 @@
         </button>`;
     }
 
-    /* ---------- Trial card ---------- */
     function trialCard(d) {
       return `
         <button type="button" data-id="${escapeHtml(d.id)}" data-name="${escapeHtml(d.name)}" data-type="Premium Core"
@@ -547,7 +558,6 @@
         </button>`;
     }
 
-    /* ---------- Countdown engine ---------- */
     function startCountdowns() {
       if (countdownTimer) clearInterval(countdownTimer);
       const nodes = Array.from(document.querySelectorAll('[data-countdown]'));
@@ -571,7 +581,6 @@
       countdownTimer = setInterval(tick, 1000);
     }
 
-    /* ---------- Render everything ---------- */
     function render(data) {
       $('loadingBlock').classList.add('hidden');
 
@@ -584,7 +593,6 @@
         $('streakChip').classList.add('flex');
       }
 
-      // Active trials (only non-expired demos)
       const trials = (data.demos || []).filter((d) => !d.is_expired);
       $('statTrials').textContent = trials.length;
       if (trials.length) {
@@ -593,7 +601,6 @@
         startCountdowns();
       }
 
-      // My batches -> split free / premium
       const batches = data.my_batches || [];
       $('statBatches').textContent = batches.length;
       const free = batches.filter((b) => b.type === 'Free Channel');
@@ -613,30 +620,24 @@
         $('emptyState').classList.add('flex');
       }
 
-      // Recently-viewed tracking & Open Telegram Channel
       document.querySelectorAll('.batch-link-joined').forEach((el) => {
         el.addEventListener('click', () => {
           const name = el.getAttribute('data-name');
           const type = el.getAttribute('data-type');
           const id = el.getAttribute('data-id');
           
-          // Save with full attributes
           let list = getRecent().filter((x) => x.name !== name);
           list.unshift({ id, name, type, status: 'Joined', kind: type === 'Premium Core' ? 'paid' : 'free' });
           localStorage.setItem('h4r_recent', JSON.stringify(list.slice(0, 8)));
           
-          renderRecent(); // IMMEDIATE UI UPDATE FOR DASHBOARD!
+          renderRecent(); 
 
           if (tg) try { tg.HapticFeedback.impactOccurred('medium'); } catch(e){}
 
-          // Direct jump to channel
-          const cleanId = String(id).replace('-100', '');
-          const channelLink = `https://t.me/c/${cleanId}/999999999`;
-
-          if (tg && tg.openTelegramLink) tg.openTelegramLink(channelLink);
-          else window.open(channelLink, '_blank');
+          // NAYA OTT LOGIC: In-App Folders
+          openBatchView(id, name);
         });
-      });;
+      });
 
       renderRecent();
     }
@@ -645,6 +646,156 @@
       return String(str == null ? '' : str)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;')
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    /* ============================================================
+       OTT FOLDER & CONTENT ENGINE
+       ============================================================ */
+    let currentBatchData = null;
+
+    async function openBatchView(chatId, batchName) {
+      if (tg) try { tg.HapticFeedback.impactOccurred('heavy'); } catch(e){}
+      
+      // Purane saare sections hide kar do
+      $('trialsSection')?.classList.add('hidden');
+      $('recentSection')?.classList.add('hidden');
+      $('freeSection')?.classList.add('hidden');
+      $('premiumSection')?.classList.add('hidden');
+      $('mainHeader')?.classList.add('hidden');
+      $('promoSection')?.classList.add('hidden'); 
+      $('statsSection')?.classList.add('hidden');
+      $('emptyState')?.classList.add('hidden');
+
+      // Naya View Show karo
+      $('batchViewTitle').textContent = batchName;
+      $('batchSubtitle').textContent = "Subject Folders";
+      $('batchContentSection').classList.remove('hidden');
+      $('subjectFoldersGrid').classList.add('hidden');
+      $('contentListGrid').classList.add('hidden');
+      $('batchLoader').classList.remove('hidden');
+      $('batchLoader').classList.add('flex');
+
+      try {
+        const res = await fetch(`/api/batch/${chatId}`);
+        const json = await res.json();
+
+        $('batchLoader').classList.add('hidden');
+        $('batchLoader').classList.remove('flex');
+
+        if (!json.success) {
+          $('subjectFoldersGrid').innerHTML = `<div class="col-span-2 text-center text-red-400 font-bold mt-4 bg-red-500/10 p-4 rounded-xl border border-red-500/20"><i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i><br>${json.error}</div>`;
+          $('subjectFoldersGrid').classList.remove('hidden');
+          return;
+        }
+
+        currentBatchData = json.data;
+        renderSubjects();
+
+      } catch (err) {
+        $('batchLoader').classList.add('hidden');
+        $('batchLoader').classList.remove('flex');
+        $('subjectFoldersGrid').innerHTML = `<div class="col-span-2 text-center text-red-400 font-bold mt-4">Failed to load content. Try again.</div>`;
+        $('subjectFoldersGrid').classList.remove('hidden');
+      }
+    }
+
+    function renderSubjects() {
+      const subjects = currentBatchData.subjects || {};
+      const grid = $('subjectFoldersGrid');
+      $('contentListGrid').classList.add('hidden');
+      $('batchSubtitle').textContent = "Subject Folders";
+      
+      let html = '';
+      for (const [subName, items] of Object.entries(subjects)) {
+        let vCount = items.filter(i => i.type === 'video').length;
+        let pCount = items.filter(i => i.type === 'pdf').length;
+        
+        html += `
+          <button onclick="openSubject('${escapeHtml(subName)}')" class="glass card-press rounded-2xl p-4 text-left border-b-4 border-b-indigo-neon flex flex-col justify-between h-28">
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-neon/15 text-indigo-soft text-lg mb-2">
+              <i class="fa-solid fa-folder-open"></i>
+            </div>
+            <div>
+              <p class="truncate text-[13px] font-bold text-text">${escapeHtml(subName)}</p>
+              <p class="text-[10px] text-muted font-medium mt-0.5">${vCount} Videos • ${pCount} PDFs</p>
+            </div>
+          </button>`;
+      }
+      
+      grid.innerHTML = html;
+      grid.classList.remove('hidden');
+    }
+
+    function openSubject(subName) {
+      if (tg) try { tg.HapticFeedback.selectionChanged(); } catch(e){}
+      $('subjectFoldersGrid').classList.add('hidden');
+      $('batchSubtitle').textContent = "Content List";
+      $('batchViewTitle').textContent = subName;
+      
+      const items = currentBatchData.subjects[subName] || [];
+      const list = $('contentListGrid');
+      
+      let html = '';
+      items.forEach(item => {
+        let isVid = item.type === 'video';
+        let icon = isVid ? 'fa-play' : 'fa-file-pdf';
+        let color = isVid ? 'text-emerald-soft bg-emerald-neon/15' : 'text-orange-400 bg-orange-500/15';
+        let meta = isVid ? `${item.duration ? Math.floor(item.duration/60)+' Mins' : 'Video'}` : `${Math.floor(item.size/1024/1024)} MB`;
+        
+        // Thumbnail URL Logic (Telegram bot token se banega baad me, abhi placeholder)
+        let thumbStyle = (isVid && item.thumb_id) 
+            ? `background-image: url('/api/thumb/${item.thumb_id}'); background-size: cover; background-position: center;` 
+            : '';
+
+        html += `
+          <button onclick="playContent('${item.type}', '${currentBatchData.chat_id}', '${item.msg_id}')" class="glass card-press flex w-full items-center gap-3 rounded-2xl p-3 text-left">
+            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${color} relative overflow-hidden" style="${thumbStyle}">
+              <div class="absolute inset-0 bg-black/40 ${isVid && item.thumb_id ? 'block' : 'hidden'}"></div>
+              <i class="fa-solid ${icon} z-10 ${isVid && item.thumb_id ? 'text-white drop-shadow-md' : ''}"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="text-[10px] font-bold text-indigo-soft mb-0.5 uppercase tracking-wider">Index: ${item.index}</p>
+              <p class="truncate text-[14px] font-semibold text-text">${escapeHtml(item.title)}</p>
+              <p class="text-[11px] font-medium text-muted mt-0.5"><i class="fa-solid fa-hard-drive mr-1"></i>${meta}</p>
+            </div>
+            <i class="fa-solid fa-angle-right text-muted text-xs"></i>
+          </button>`;
+      });
+      
+      // List ke upar Back Button for returning to Folders
+      list.innerHTML = `
+        <button onclick="renderSubjects()" class="mb-2 w-max px-3 py-1.5 glass rounded-full text-xs font-bold text-muted card-press flex items-center gap-2">
+          <i class="fa-solid fa-arrow-left"></i> Back to Folders
+        </button>
+      ` + html;
+      
+      list.classList.remove('hidden');
+      list.classList.add('flex');
+    }
+
+    function playContent(type, chatId, msgId) {
+      if (tg) try { tg.HapticFeedback.impactOccurred('heavy'); } catch(e){}
+      // Ye humein player.html ya pdf.html par bhejega
+      if (type === 'video') {
+         window.location.href = `/player?chat=${chatId}&msg=${msgId}`;
+      } else {
+         window.location.href = `/pdf?chat=${chatId}&msg=${msgId}`;
+      }
+    }
+
+    function closeBatchView() {
+      if (tg) try { tg.HapticFeedback.impactOccurred('light'); } catch(e){}
+      $('batchContentSection').classList.add('hidden');
+      $('subjectFoldersGrid').innerHTML = '';
+      $('contentListGrid').innerHTML = '';
+      
+      // Purane UI elements wapas show karo
+      $('mainHeader')?.classList.remove('hidden');
+      $('promoSection')?.classList.remove('hidden');
+      $('statsSection')?.classList.remove('hidden');
+      
+      // Render refresh
+      loadDashboard();
     }
 
     async function loadDashboard() {
