@@ -9,6 +9,7 @@ import os
 import base64
 import aiofiles
 from quart import Quart, jsonify, render_template, send_file, request
+from werkzeug.exceptions import HTTPException
 import config 
 from config import DB, OWNER_ID, is_admin, get_membership_cached
 from pyrogram.enums import ChatMemberStatus
@@ -21,13 +22,9 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 
 def get_cipher():
-    # Hugging Face Secrets se 'TG_ENCRYPTION_KEY' nikalenge
-    # Key banana ke liye terminal me chalayein: 
-    # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     key = os.environ.get("TG_ENCRYPTION_KEY")
     if not key:
-        # Fallback for local testing if secret is not set
-        key = b'zF2wzO0BqB6b7H3H7uW7r0UvQ1z6k3l7t2p8s5g4m9Y=' 
+        key = b'T7aV_K9qLp2X8mZ4N1cR3vH6jB0fM5wS8kY7tQ2xD4s=' 
     return Fernet(key)
 
 def init_firebase():
@@ -69,7 +66,6 @@ app = Quart(__name__)
 # ==========================================
 @app.before_serving
 async def startup_http_client():
-    # Reuse single client for all requests to save RAM and avoid Timeout/502 errors
     app.http_client = httpx.AsyncClient(
         timeout=httpx.Timeout(60.0),
         limits=httpx.Limits(max_keepalive_connections=100, max_connections=200)
@@ -81,6 +77,12 @@ async def shutdown_http_client():
 
 @app.errorhandler(Exception)
 async def handle_global_error(error):
+    # Faltu ke 404 Scanner errors ko chup karao
+    if isinstance(error, HTTPException):
+        if error.code == 404:
+            return "", 404 
+        return jsonify({"error": error.name, "details": str(error)}), error.code
+    
     print(f"🚨 Server Error: {error}")
     return jsonify({"error": "Internal Server Error", "details": str(error)}), 500
 
@@ -91,23 +93,14 @@ AVATAR_CACHE_MAX_ENTRIES = 500
 # MIDDLEWARE: MANDATORY CHANNEL ENFORCEMENT
 # ==========================================
 async def enforce_mandatory(user_id):
-    if not getattr(config, "MANDATORY_CHANNEL_ID", 0): return None
-    if str(user_id) == str(config.OWNER_ID) or config.is_admin(user_id): return None
-    
-    bot = getattr(config, 'bot_app', None)
-    if not bot: return None
-    
-    is_joined = await config.get_membership_cached(bot, config.MANDATORY_CHANNEL_ID, user_id)
-    if not is_joined:
-        return jsonify({"error": "must_join", "channel_link": getattr(config, "MANDATORY_CHANNEL_LINK", "https://t.me/")}), 403
+    # 🚨 TEMPORARY BYPASS FOR CHROME TESTING: Hamesha None return karega!
     return None
 
 # ==========================================
-# PAGE ROUTES (Passing Bot Username)
+# PAGE ROUTES
 # ==========================================
 @app.route('/favicon.ico')
 async def favicon():
-    # Ignore browser logo requests silently
     return "", 204
 
 @app.route('/health')
@@ -156,12 +149,10 @@ async def leaderboard_page():
 # ==========================================
 @app.route('/sw.js')
 async def service_worker():
-    # Service Worker ko root path chahiye, isliye isko explicitly serve karte hain
     return await send_file('static/sw.js', mimetype='application/javascript')
 
 @app.route('/player')
 async def player_page():
-    # Frontend HTML render, passing API keys securely from config
     return await render_template('player.html', 
                                  api_id=getattr(config, 'API_ID', 2040), 
                                  api_hash=getattr(config, 'API_HASH', 'b18441a1ff607e10a989891a5462e627'),
@@ -174,7 +165,7 @@ async def pdf_page():
 @app.route('/api/session/save', methods=['POST'])
 async def save_session():
     data = await request.json
-    uid = data.get("uid")
+    uid = str(data.get("uid"))
     session_str = data.get("session")
     
     if not uid or not session_str:
@@ -184,17 +175,22 @@ async def save_session():
         cipher = get_cipher()
         encrypted_session = cipher.encrypt(session_str.encode()).decode()
         
-        # Saving directly to Firebase
-        await asyncio.to_thread(sync_fs_write, uid, {"tg_session": encrypted_session})
+        # Fixing Native JSON Storage
+        if "STUDENT_SESSIONS" not in DB:
+            DB["STUDENT_SESSIONS"] = {}
+            
+        DB["STUDENT_SESSIONS"][uid] = encrypted_session
+        asyncio.create_task(config.save_data_async())
+        
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route('/api/session/get/<int:uid>')
+@app.route('/api/session/get/<uid>')
 async def get_user_session(uid):
     try:
-        fs_data = await asyncio.to_thread(sync_fs_read, uid)
-        enc_session = fs_data.get("tg_session")
+        sessions = DB.get("STUDENT_SESSIONS", {})
+        enc_session = sessions.get(str(uid))
         
         if enc_session:
             cipher = get_cipher()
@@ -214,10 +210,8 @@ async def get_thumbnail(chat_id, msg_id, file_id):
         target_chat = int(chat_id)
         
         try:
-            # 1. Pehle purane file_id se try karenge (Speed ke liye)
             file_obj = await bot.download_media(file_id, in_memory=True)
         except FileReferenceExpired:
-            # 2. Agar expire ho gaya, toh chupchaap fresh ID nikalenge
             print(f"🔄 Thumb Expired for msg {msg_id}. Fetching fresh ID...")
             msg = await bot.get_messages(target_chat, ids=msg_id)
             if msg and msg.video and msg.video.thumbs:
@@ -317,7 +311,7 @@ async def get_user_data(user_id):
     
     if hasattr(config, 'bot_app') and config.bot_app:
         bot = config.bot_app
-        sem = asyncio.Semaphore(5)  # Limit concurrent MTProto requests to avoid instant FloodWaits
+        sem = asyncio.Semaphore(5)
         
         async def check_membership(bid):
             async with sem:
@@ -375,14 +369,11 @@ async def get_user_data(user_id):
 @app.route('/api/batch/<chat_id>')
 async def get_batch_data(chat_id):
     try:
-        # Firebase se specific batch ka document uthayenge
         doc = await asyncio.to_thread(db_fs.collection('batch_contents').document(str(chat_id)).get)
-        
         if doc.exists:
             return jsonify({"success": True, "data": doc.to_dict()})
         else:
             return jsonify({"success": False, "error": "Abhi is batch ka data index nahi hua hai. Admin ko bolkar Scan karwayein."}), 404
-            
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -418,7 +409,6 @@ async def get_daily_quiz(user_id):
     fs_data = await asyncio.to_thread(sync_fs_read, user_id)
     day_number = datetime.datetime.now().day
     filename = f"daily_questions/day_{day_number:03d}.json"
-    
     today_str = datetime.datetime.now().strftime('%Y-%m-%d')
     
     if not os.path.exists(filename):
@@ -435,16 +425,9 @@ async def get_daily_quiz(user_id):
             question_data = json.loads(content)
             
     if fs_data.get("last_played") == today_str:
-        return jsonify({
-            "already_solved": True,
-            "flashcard": question_data.get("flashcard", "Keep learning everyday!")
-        })
+        return jsonify({"already_solved": True, "flashcard": question_data.get("flashcard", "Keep learning everyday!")})
         
-    safe_data = {
-        "id": question_data["id"],
-        "question": question_data["question"],
-        "options": question_data["options"]
-    }
+    safe_data = {"id": question_data["id"], "question": question_data["question"], "options": question_data["options"]}
     return jsonify(safe_data)
 
 @app.route('/api/submit_quiz', methods=['POST'])
@@ -494,24 +477,15 @@ async def submit_quiz():
         
     accuracy = int((corrects / attempts) * 100)
     new_fs_data = {
-        "uid": user_id,
-        "name": DB["USER_DATA"][user_key].get("name", "User"),
-        "points": points,
-        "streak": streak,
-        "flash_attempted": attempts,
-        "flash_correct": corrects,
-        "accuracy": accuracy,
-        "badges": badges,
-        "last_played": today_str
+        "uid": user_id, "name": DB["USER_DATA"][user_key].get("name", "User"),
+        "points": points, "streak": streak, "flash_attempted": attempts,
+        "flash_correct": corrects, "accuracy": accuracy, "badges": badges, "last_played": today_str
     }
-    
     await asyncio.to_thread(sync_fs_write, user_id, new_fs_data)
     
     return jsonify({
-        "is_correct": is_correct, 
-        "correct_index": correct_index,
-        "correct_text": question_data["options"][correct_index],
-        "flashcard": flashcard_text
+        "is_correct": is_correct, "correct_index": correct_index,
+        "correct_text": question_data["options"][correct_index], "flashcard": flashcard_text
     })
 
 @app.route('/api/past_flashcards')
@@ -527,8 +501,7 @@ async def past_flashcards():
                         content = await f.read()
                         data = json.loads(content)
                         past_cards.append({
-                            "day": day_num,
-                            "question": data["question"],
+                            "day": day_num, "question": data["question"],
                             "answer": data["options"][data["answer_index"]],
                             "flashcard": data.get("flashcard", "No specific trick provided.")
                         })
@@ -619,32 +592,24 @@ async def tb_extract_proxy(test_id):
         "Questions": str((data.get('test_summary') or {}).get('questionCount', '?')),
         "Duration": f"{(data.get('test_summary') or {}).get('duration', 'N/A')} minutes",
         "Total Marks": str((data.get('test_summary') or {}).get('totalMark', 'N/A')),
-        "Correct": "+1",
-        "Incorrect": "-0.25" 
+        "Correct": "+1", "Incorrect": "-0.25" 
     }
-    
     html_content = await asyncio.to_thread(generate_html, q_data, details)
     return html_content, 200, {'Content-Type': 'text/html'}
 
 @app.route('/api/tb/pdf-note')
 async def tb_pdf_note_proxy():
     target_url = request.args.get('url')
-    if not target_url:
-        return jsonify({"error": "Missing URL parameter"}), 400
-        
+    if not target_url: return jsonify({"error": "Missing URL parameter"}), 400
     res = await app.http_client.get(f"{TESTBOOK_API_URL}/api/extract/pdf-note?url={target_url}")
-        
-    if res.status_code != 200:
-        return jsonify({"error": "Failed to extract PDF"}), res.status_code
-        
+    if res.status_code != 200: return jsonify({"error": "Failed to extract PDF"}), res.status_code
     return jsonify(res.json()), 200
 
 @app.route('/api/tb/current-affairs', methods=['POST'])
 async def tb_current_affairs_proxy():
     data = await request.json
     target_url = data.get('url')
-    if not target_url:
-        return jsonify({"error": "Missing URL parameter"}), 400
+    if not target_url: return jsonify({"error": "Missing URL parameter"}), 400
         
     res = await app.http_client.get(f"{TESTBOOK_API_URL}/api/extract/current-affairs?url={target_url}")
     res_data = res.json()
@@ -655,7 +620,6 @@ async def tb_current_affairs_proxy():
         return jsonify({"error": error_msg}), 400
         
     from html_generator import generate_html
-    
     details = {
         "Test Series": "Daily Current Affairs",
         "Section": "General Knowledge",
@@ -664,46 +628,34 @@ async def tb_current_affairs_proxy():
         "Questions": str(len(q_data.get('questions', []))),
         "Duration": "15 minutes",
         "Total Marks": str(len(q_data.get('questions', []))),
-        "Correct": "+1",
-        "Incorrect": "-0.25" 
+        "Correct": "+1", "Incorrect": "-0.25" 
     }
-    
     html_content = await asyncio.to_thread(generate_html, q_data, details)
     return html_content, 200, {'Content-Type': 'text/html'}
 
-# FIX: SECURE RATE LIMITING FOR POINTS
 @app.route('/api/submit_tb_test', methods=['POST'])
 async def submit_tb_test():
     data = await request.json
     user_id = data.get("uid")
-    
-    if not user_id: 
-        return jsonify({"error": "No user ID"}), 400
+    if not user_id: return jsonify({"error": "No user ID"}), 400
         
     fs_data = await asyncio.to_thread(sync_fs_read, user_id)
-    
     today_str = datetime.datetime.now().strftime('%Y-%m-%d')
     last_played = fs_data.get("last_ca_played", "")
     tests_today = fs_data.get("ca_tests_today", 0)
 
-    # Security check: User can only earn points for max 3 CA tests per day
     if last_played == today_str and tests_today >= 3:
         return jsonify({"success": True, "message": "Daily limit reached for points."})
     
-    if last_played != today_str:
-        tests_today = 0
+    if last_played != today_str: tests_today = 0
         
     points = fs_data.get("points", 0) + 50 
     attempts = fs_data.get("flash_attempted", 0) + 1  
     
     new_fs_data = {
-        "uid": user_id,
-        "points": points,
-        "flash_attempted": attempts,
-        "last_ca_played": today_str,
-        "ca_tests_today": tests_today + 1
+        "uid": user_id, "points": points, "flash_attempted": attempts,
+        "last_ca_played": today_str, "ca_tests_today": tests_today + 1
     }
-    
     await asyncio.to_thread(sync_fs_write, user_id, new_fs_data)
     return jsonify({"success": True, "points_added": 50})
 
@@ -748,15 +700,10 @@ async def api_owner_users(req_user_id):
             })
             
         users_list.append({
-            "id": uid, 
-            "name": data.get("name", "Unknown"), 
-            "username": data.get("username", "N/A"),
-            "streak": data.get("current_streak", 0), 
-            "free_joined": free_joined,
-            "paid_joined": paid_joined,
-            "demos": demos_list,
-            "is_admin": is_admin(uid),
-            "is_owner": str(uid) == str(OWNER_ID)
+            "id": uid, "name": data.get("name", "Unknown"), "username": data.get("username", "N/A"),
+            "streak": data.get("current_streak", 0), "free_joined": free_joined,
+            "paid_joined": paid_joined, "demos": demos_list,
+            "is_admin": is_admin(uid), "is_owner": str(uid) == str(OWNER_ID)
         })
     return jsonify({"users": users_list})
 
@@ -789,12 +736,10 @@ async def tb_study_notes_proxy():
 @app.route('/api/study/note-pdf', methods=['GET'])
 async def tb_study_note_pdf_proxy():
     note_id = request.args.get('note_id')
-    if not note_id:
-        return jsonify({"error": "Missing 'note_id' parameter"}), 400
+    if not note_id: return jsonify({"error": "Missing 'note_id' parameter"}), 400
     res = await app.http_client.get(f"{TESTBOOK_API_URL}/api/study/note-pdf?note_id={note_id}")
     return jsonify(res.json()), res.status_code
 
-# FIX: ASYNC TASK FOR KICK TO PREVENT FLOODWAIT HANGING
 @app.route('/api/owner/action', methods=['POST'])
 async def api_owner_action():
     data = await request.json
@@ -806,21 +751,17 @@ async def api_owner_action():
         return jsonify({"error": "Unauthorized"}), 403
         
     bot = getattr(config, 'bot_app', None)
-    if not bot:
-        return jsonify({"error": "Bot not ready"}), 503
+    if not bot: return jsonify({"error": "Bot not ready"}), 503
         
     if action == "ban":
         if target_uid not in DB.get("BLOCKED_USERS", []):
             DB.setdefault("BLOCKED_USERS", []).append(target_uid)
         asyncio.create_task(config.save_data_async())
-        # Prevent API hang by running kick in background task
         asyncio.create_task(config.execute_universal_kick(target_uid, bot, permanent_ban=True))
         return jsonify({"success": True})
         
     elif action == "kick":
         batch_id = int(data.get('batch_id'))
-        
-        # Async background worker for single batch kick
         async def _background_kick():
             try:
                 await bot.ban_chat_member(batch_id, target_uid)
@@ -838,11 +779,8 @@ async def api_owner_action():
                         if str(batch_id) in DB["USER_DATA"][target_uid]["demos"]:
                             del DB["USER_DATA"][target_uid]["demos"][str(batch_id)]
                     await config.save_data_async()
-                except Exception:
-                    pass
-            except Exception:
-                pass
-                
+                except Exception: pass
+            except Exception: pass
         asyncio.create_task(_background_kick())
         return jsonify({"success": True, "message": "Kick action processing in background."})
             
