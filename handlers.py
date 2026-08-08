@@ -1355,6 +1355,7 @@ async def wizard_message(client: Client, message: Message):
                 "userbotphone": cmd_userbotphone,
                 "userbototp": cmd_userbototp,
                 "userbotpass": cmd_userbotpass,
+                "storebatch": cmd_storebatch,
             }
             if cmd_name in cmds:
                 await cmds[cmd_name](client, message)
