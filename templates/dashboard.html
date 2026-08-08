@@ -4,22 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#050509" />
-  <title>H4R — Dashboard</title>
-
-  <!-- Telegram Web App SDK -->
+  <title>H4R Dashboard</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-  <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-
-  <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
-
-  <!-- Google Fonts: Outfit -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-
   <script>
     tailwind.config = {
       theme: {
@@ -35,7 +26,6 @@
       },
     };
   </script>
-
   <style>
     :root {
       --bg: #050509;
@@ -47,7 +37,6 @@
       --indigo: #6366f1;
       --emerald: #10b981;
     }
-
     html.light {
       --bg: #f3f4f8;
       --surface: rgba(10, 10, 25, 0.03);
@@ -56,13 +45,11 @@
       --text: #10101c;
       --muted: #5b5b6b;
     }
-
     * { 
-      -webkit-tap-highlight-color: transparent; 
-      -webkit-touch-callout: none;
+       -webkit-tap-highlight-color: transparent; 
+       -webkit-touch-callout: none;
       user-select: none;
     }
-
     body {
       background: var(--bg);
       color: var(--text);
@@ -70,7 +57,6 @@
       overflow-x: hidden;
       transition: background 0.4s ease, color 0.4s ease;
     }
-
     .aurora::before {
       content: '';
       position: fixed;
@@ -96,19 +82,15 @@
       z-index: 0;
       pointer-events: none;
     }
-
     .glass {
       background: var(--surface);
       border: 1px solid var(--border);
       backdrop-filter: blur(18px);
       -webkit-backdrop-filter: blur(18px);
     }
-
     .card-press { transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease; }
     .card-press:active { transform: scale(0.965); }
-
     .text-muted { color: var(--muted); }
-
     .dock {
       background: rgba(13, 13, 22, 0.72);
       border: 1px solid var(--border);
@@ -117,7 +99,6 @@
       box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
     }
     html.light .dock { background: rgba(255, 255, 255, 0.78); }
-
     .dock-item { transition: color 0.2s ease, transform 0.2s ease; }
     .dock-item.active { color: var(--indigo); }
     .dock-item.active .dock-glow { opacity: 1; transform: scale(1); }
@@ -127,32 +108,26 @@
       transition: opacity 0.25s ease, transform 0.25s ease;
       box-shadow: 0 0 18px 2px rgba(99, 102, 241, 0.55);
     }
-
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
     .skel {
       background: linear-gradient(100deg, rgba(255,255,255,0.04) 30%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.04) 70%);
       background-size: 200% 100%;
       animation: shimmer 1.3s infinite linear;
     }
     @keyframes shimmer { to { background-position: -200% 0; } }
-
     @keyframes floatUp {
       from { opacity: 0; transform: translateY(14px); }
       to { opacity: 1; transform: translateY(0); }
     }
     .reveal { animation: floatUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
-
     .ring-conic {
       background: conic-gradient(from 180deg, var(--indigo), var(--emerald), var(--indigo));
     }
   </style>
 </head>
-
 <body class="aurora min-h-screen pb-32">
   <div class="relative z-10 mx-auto w-full max-w-md px-5 pt-6">
-
     <!-- ===== Header ===== -->
     <header id="mainHeader" class="flex items-center justify-between reveal">
       <div class="flex items-center gap-3">
@@ -169,7 +144,6 @@
           </h1>
         </div>
       </div>
-
       <div class="flex items-center gap-2">
         <button id="streakChip" class="glass card-press hidden items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold">
           <i class="fa-solid fa-fire text-orange-400"></i><span id="streakVal">0</span>
@@ -180,7 +154,6 @@
         </button>
       </div>
     </header>
-
     <!-- ===== Invite Friends promo ===== -->
     <section id="promoSection" class="reveal mt-5" style="animation-delay:.05s">
       <div class="card-press relative overflow-hidden rounded-3xl p-5"
@@ -201,7 +174,6 @@
         </div>
       </div>
     </section>
-
     <!-- ===== Quick stats bento ===== -->
     <section id="statsSection" class="reveal mt-4 grid grid-cols-2 gap-3" style="animation-delay:.1s">
       <div class="glass card-press rounded-2xl p-4">
@@ -219,7 +191,6 @@
         <p class="mt-2 text-2xl font-bold" id="statTrials">0</p>
       </div>
     </section>
-
     <!-- ===== Active Trials ===== -->
     <section id="trialsSection" class="reveal mt-6 hidden" style="animation-delay:.15s">
       <div class="mb-3 flex items-center justify-between">
@@ -230,7 +201,6 @@
       </div>
       <div id="trialsList" class="flex gap-3 overflow-x-auto no-scrollbar pb-1"></div>
     </section>
-
     <!-- ===== Recently Viewed ===== -->
     <section id="recentSection" class="mt-6 hidden">
       <div class="mb-3 flex items-center justify-between">
@@ -241,7 +211,6 @@
       </div>
       <div id="recentList" class="flex gap-3 overflow-x-auto no-scrollbar pb-1"></div>
     </section>
-
     <!-- ===== Free Batches ===== -->
     <section id="freeSection" class="mt-6 hidden">
       <div class="mb-3 flex items-center justify-between">
@@ -251,7 +220,6 @@
       </div>
       <div id="freeList" class="grid gap-3"></div>
     </section>
-
     <!-- ===== Premium Core Batches ===== -->
     <section id="premiumSection" class="mt-6 hidden">
       <div class="mb-3 flex items-center justify-between">
@@ -261,14 +229,12 @@
       </div>
       <div id="premiumList" class="grid gap-3"></div>
     </section>
-
     <!-- ===== Loading skeletons ===== -->
     <div id="loadingBlock" class="mt-6 grid gap-3">
       <div class="skel h-24 rounded-2xl"></div>
       <div class="skel h-24 rounded-2xl"></div>
       <div class="skel h-24 rounded-2xl"></div>
     </div>
-
     <!-- ===== Empty state ===== -->
     <div id="emptyState" class="mt-10 hidden flex-col items-center text-center">
       <div class="glass flex h-16 w-16 items-center justify-center rounded-2xl text-2xl text-indigo-soft">
@@ -278,7 +244,6 @@
       <p class="mt-1 max-w-[240px] text-sm text-muted">Head to Explore to discover free and premium batches curated for you.</p>
       <a href="/explore" class="mt-4 rounded-full bg-indigo-neon px-5 py-2.5 text-sm font-semibold text-white card-press">Explore now</a>
     </div>
-
     <!-- ===== NAYA: Batch Content View (OTT Style) ===== -->
     <section id="batchContentSection" class="reveal mt-2 hidden pb-6">
       <!-- Back Button & Title -->
@@ -291,22 +256,17 @@
           <h2 id="batchViewTitle" class="text-lg font-bold truncate text-text">Batch Name</h2>
         </div>
       </div>
-
       <!-- Loader -->
       <div id="batchLoader" class="hidden flex-col items-center justify-center mt-10">
         <i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-neon mb-3"></i>
         <p class="text-sm font-semibold text-muted">Fetching Library...</p>
       </div>
-
       <!-- View 1: Subject Folders Grid -->
       <div id="subjectFoldersGrid" class="grid grid-cols-2 gap-3"></div>
-
       <!-- View 2: Content List (Videos/PDFs) -->
       <div id="contentListGrid" class="hidden flex-col gap-3 mt-2"></div>
     </section>
-
   </div>
-
   <!-- ===== Floating Bottom Dock ===== -->
   <nav class="fixed bottom-4 left-1/2 z-30 -translate-x-1/2" oncontextmenu="return false;">
     <div class="dock flex items-center gap-1 rounded-full px-2 py-2">
@@ -314,32 +274,26 @@
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-house text-[17px]"></i><span class="text-[9px] font-medium">Home</span>
       </div>
-      
       <div onclick="window.location.href='/explore'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-compass text-[17px]"></i><span class="text-[9px] font-medium">Explore</span>
       </div>
-      
       <div onclick="window.location.href='/quiz'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-file-pen text-[17px]"></i><span class="text-[9px] font-medium">Quiz</span>
       </div>
-      
       <div onclick="window.location.href='/flash'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-newspaper text-[17px]"></i><span class="text-[9px] font-medium">CA</span>
       </div>
-
       <div onclick="window.location.href='/extractor'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-2 py-1.5 cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-book-open text-[17px]"></i><span class="text-[9px] font-medium">Notes</span>
       </div>
-      
       <div onclick="window.location.href='/leaderboard'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-ranking-star text-[17px]"></i><span class="text-[9px] font-medium">Rank</span>
       </div>
-      
       <div onclick="window.location.href='/profile'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 cursor-pointer">
         <span class="dock-glow absolute -top-1 h-1.5 w-1.5 rounded-full bg-indigo-neon"></span>
         <i class="fa-solid fa-user text-[17px]"></i><span class="text-[9px] font-medium">Profile</span>
@@ -348,31 +302,20 @@
   </nav>
 
   <script>
-    /* ============================================================
-       H4R Dashboard — Vanilla JS controller
-       ============================================================ */
+    const SERVER_BOT_USERNAME = "{{ bot_username }}";
+    
+    // 🚨 URL me agar ID hai, usko capture karo, warna default use karo
+    let URL_UID = "{{ url_user_id }}" !== "None" ? parseInt("{{ url_user_id }}") : null;
+    
     const tg = window.Telegram ? window.Telegram.WebApp : null;
     if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
-
-    // 🔥 DEEP LINKING ROUTER 🔥
-    const startParam = tg?.initDataUnsafe?.start_param;
-    if (startParam) {
-        if (startParam.startsWith('profile_')) {
-            window.location.href = `/profile?view=${startParam.replace('profile_', '')}`;
-        } else if (startParam === 'flash') {
-            window.location.href = '/flash';
-        } else if (startParam === 'leaderboard') {
-            window.location.href = '/leaderboard';
-        }
-    }
-
+    
+    // 🚨 BROWSER TESTING K LIYE AUTO-ID
     const tgUser = tg && tg.initDataUnsafe ? tg.initDataUnsafe.user : null;
-    const UID = tgUser && tgUser.id ? tgUser.id : 123456789;
-    const IS_DEMO = !(tgUser && tgUser.id);
-
+    const UID = URL_UID || (tgUser && tgUser.id ? tgUser.id : 7993892902);
+    
+    const IS_DEMO = !(tgUser && tgUser.id) && !URL_UID;
     const $ = (id) => document.getElementById(id);
-
-    const SERVER_BOT_USERNAME = "{{ bot_username }}";
 
     async function checkResponseForMandatory(res) {
         if (res.status === 403) {
@@ -393,13 +336,11 @@
         return res;
     }
     let countdownTimer = null;
-
     (function initTheme() {
       const saved = localStorage.getItem('h4r_theme');
       if (saved === 'light') document.documentElement.classList.replace('dark', 'light');
       syncThemeIcon();
     })();
-
     function syncThemeIcon() {
       const light = document.documentElement.classList.contains('light');
       $('themeToggle').innerHTML = light
@@ -408,7 +349,6 @@
       const meta = document.querySelector('meta[name="theme-color"]');
       if (meta) meta.setAttribute('content', light ? '#f3f4f8' : '#050509');
     }
-
     $('themeToggle').addEventListener('click', () => {
       const root = document.documentElement;
       if (root.classList.contains('dark')) root.classList.replace('dark', 'light');
@@ -417,12 +357,10 @@
       syncThemeIcon();
       if (tg) try { tg.HapticFeedback.impactOccurred('light'); } catch (e) {}
     });
-
     (function greet() {
       const h = new Date().getHours();
       $('greeting').textContent = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
     })();
-
     $('avatar').src = `/api/user/avatar/${UID}`;
     $('avatar').onerror = () => {
       $('avatar').src =
@@ -433,17 +371,14 @@
             '</text></svg>'
         );
     };
-
     $('inviteBtn').addEventListener('click', () => {
-      const link = `https://t.me/share/url?url=https://t.me/&text=${encodeURIComponent('Join me on H4R — the smartest way to crack your exam!')}`;
+      const link = `https://t.me/share/url?url=https://t.me/&text=${encodeURIComponent('Join me on H4R   the smartest way to crack your exam!')}`;
       if (tg && tg.openTelegramLink) tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent('https://t.me/')}&text=${encodeURIComponent('Join me on H4R!')}`);
       else window.open(link, '_blank');
     });
-
     function getRecent() {
       try { return JSON.parse(localStorage.getItem('h4r_recent') || '[]'); } catch (e) { return []; }
     }
-
     function renderRecent() {
       const items = getRecent();
       const wrap = $('recentList');
@@ -467,15 +402,13 @@
           }
         )
         .join('');
-        
+       
       bindRecentActions();
     }
-
     $('clearRecent').addEventListener('click', () => {
       localStorage.removeItem('h4r_recent');
       renderRecent();
     });
-
     function bindRecentActions() {
       document.querySelectorAll('.recent-batch-link').forEach((el) => {
         el.addEventListener('click', () => {
@@ -484,24 +417,19 @@
           const kind = el.getAttribute('data-kind');
           const status = el.getAttribute('data-status');
           const type = el.getAttribute('data-type');
-
           let list = getRecent().filter((x) => x.name !== name);
           list.unshift({ id, name, type, status, kind });
           localStorage.setItem('h4r_recent', JSON.stringify(list.slice(0, 8)));
           
           renderRecent(); 
-
           if (tg) try { tg.HapticFeedback.impactOccurred('medium'); } catch (e) {}
-
           if (status === 'Joined' || status === 'Owned' || status === 'Trial') {
-             // NAYA OTT LOGIC: In-App Folders
              openBatchView(id, name);
           } else {
              const startParam = (kind === 'paid' ? 'buy_' : 'join_') + id;
              const botUser = (typeof SERVER_BOT_USERNAME !== 'undefined' && SERVER_BOT_USERNAME) ? SERVER_BOT_USERNAME : 'H4R_Bot';
              const deepLink = `https://t.me/${botUser}?start=${startParam}`;
              const webLink = 'https://t.me/share/url?url=' + encodeURIComponent(deepLink);
-
              if (kind === 'paid') {
                  if(tg && tg.showAlert) {
                      tg.showAlert("Redirecting to bot. Please generate the link from the bot to request access.", () => {
@@ -513,14 +441,12 @@
                      alert("Redirecting to bot. Please generate the link from the bot to request access.");
                  }
              }
-
              if (tg && tg.openTelegramLink) tg.openTelegramLink(deepLink);
              else window.open(webLink, '_blank');
           }
         });
       });
     }
-
     function batchCard(b, premium) {
       const badge = premium
         ? '<span class="rounded-full bg-yellow-400/15 px-2 py-0.5 text-[10px] font-semibold text-yellow-400">CORE</span>'
@@ -528,7 +454,7 @@
       const icon = premium ? 'fa-crown text-yellow-400' : 'fa-bolt text-emerald-soft';
       const tint = premium ? 'bg-yellow-400/10' : 'bg-emerald-neon/12';
       return `
-        <button type="button" data-id="${escapeHtml(b.id)}" data-name="${escapeHtml(b.name)}" data-type="${escapeHtml(b.type || '')}"
+        <button type="button" data-id="${escapeHtml(b.id)}" data-name="${escapeHtml(b.name)}" data-type="${escapeHtml(b.type || '')}" 
            class="batch-link-joined glass card-press flex w-full items-center gap-3 rounded-2xl p-4 text-left">
           <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${tint} text-lg">
             <i class="fa-solid ${icon}"></i>
@@ -541,7 +467,6 @@
           <i class="fa-solid fa-chevron-right text-xs text-muted"></i>
         </button>`;
     }
-
     function trialCard(d) {
       return `
         <button type="button" data-id="${escapeHtml(d.id)}" data-name="${escapeHtml(d.name)}" data-type="Premium Core"
@@ -557,7 +482,6 @@
           <p class="text-[11px] text-muted">expires ${escapeHtml(d.expiry_date || '')}</p>
         </button>`;
     }
-
     function startCountdowns() {
       if (countdownTimer) clearInterval(countdownTimer);
       const nodes = Array.from(document.querySelectorAll('[data-countdown]'));
@@ -580,19 +504,15 @@
       tick();
       countdownTimer = setInterval(tick, 1000);
     }
-
     function render(data) {
       $('loadingBlock').classList.add('hidden');
-
       const info = data.user_info || {};
       $('userName').textContent = info.name || 'Premium Member';
-
       if (info.streak != null) {
         $('streakVal').textContent = info.streak;
         $('streakChip').classList.remove('hidden');
         $('streakChip').classList.add('flex');
       }
-
       const trials = (data.demos || []).filter((d) => !d.is_expired);
       $('statTrials').textContent = trials.length;
       if (trials.length) {
@@ -600,12 +520,10 @@
         $('trialsList').innerHTML = trials.map(trialCard).join('');
         startCountdowns();
       }
-
       const batches = data.my_batches || [];
       $('statBatches').textContent = batches.length;
       const free = batches.filter((b) => b.type === 'Free Channel');
       const premium = batches.filter((b) => b.type === 'Premium Core');
-
       if (free.length) {
         $('freeSection').classList.remove('hidden');
         $('freeList').innerHTML = free.map((b) => batchCard(b, false)).join('');
@@ -614,12 +532,10 @@
         $('premiumSection').classList.remove('hidden');
         $('premiumList').innerHTML = premium.map((b) => batchCard(b, true)).join('');
       }
-
       if (!free.length && !premium.length && !trials.length) {
         $('emptyState').classList.remove('hidden');
         $('emptyState').classList.add('flex');
       }
-
       document.querySelectorAll('.batch-link-joined').forEach((el) => {
         el.addEventListener('click', () => {
           const name = el.getAttribute('data-name');
@@ -631,32 +547,22 @@
           localStorage.setItem('h4r_recent', JSON.stringify(list.slice(0, 8)));
           
           renderRecent(); 
-
           if (tg) try { tg.HapticFeedback.impactOccurred('medium'); } catch(e){}
-
-          // NAYA OTT LOGIC: In-App Folders
           openBatchView(id, name);
         });
       });
-
       renderRecent();
     }
-
     function escapeHtml(str) {
       return String(str == null ? '' : str)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;')
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
-
-    /* ============================================================
-       OTT FOLDER & CONTENT ENGINE
-       ============================================================ */
+    
     let currentBatchData = null;
-
     async function openBatchView(chatId, batchName) {
       if (tg) try { tg.HapticFeedback.impactOccurred('heavy'); } catch(e){}
       
-      // Purane saare sections hide kar do
       $('trialsSection')?.classList.add('hidden');
       $('recentSection')?.classList.add('hidden');
       $('freeSection')?.classList.add('hidden');
@@ -666,7 +572,6 @@
       $('statsSection')?.classList.add('hidden');
       $('emptyState')?.classList.add('hidden');
 
-      // Naya View Show karo
       $('batchViewTitle').textContent = batchName;
       $('batchSubtitle').textContent = "Subject Folders";
       $('batchContentSection').classList.remove('hidden');
@@ -674,23 +579,18 @@
       $('contentListGrid').classList.add('hidden');
       $('batchLoader').classList.remove('hidden');
       $('batchLoader').classList.add('flex');
-
       try {
         const res = await fetch(`/api/batch/${chatId}`);
         const json = await res.json();
-
         $('batchLoader').classList.add('hidden');
         $('batchLoader').classList.remove('flex');
-
         if (!json.success) {
           $('subjectFoldersGrid').innerHTML = `<div class="col-span-2 text-center text-red-400 font-bold mt-4 bg-red-500/10 p-4 rounded-xl border border-red-500/20"><i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i><br>${json.error}</div>`;
           $('subjectFoldersGrid').classList.remove('hidden');
           return;
         }
-
         currentBatchData = json.data;
         renderSubjects();
-
       } catch (err) {
         $('batchLoader').classList.add('hidden');
         $('batchLoader').classList.remove('flex');
@@ -698,7 +598,6 @@
         $('subjectFoldersGrid').classList.remove('hidden');
       }
     }
-
     function renderSubjects() {
       const subjects = currentBatchData.subjects || {};
       const grid = $('subjectFoldersGrid');
@@ -725,7 +624,6 @@
       grid.innerHTML = html;
       grid.classList.remove('hidden');
     }
-
     function openSubject(subName) {
       if (tg) try { tg.HapticFeedback.selectionChanged(); } catch(e){}
       $('subjectFoldersGrid').classList.add('hidden');
@@ -742,16 +640,11 @@
         let color = isVid ? 'text-emerald-soft bg-emerald-neon/15' : 'text-orange-400 bg-orange-500/15';
         let meta = isVid ? `${item.duration ? Math.floor(item.duration/60)+' Mins' : 'Video'}` : `${Math.floor(item.size/1024/1024)} MB`;
         
-        // URL me chat_id, msg_id aur thumb_id teeno bhej rahe hain taaki expire hone par backend auto-fix kar le
-        let thumbStyle = (isVid && item.thumb_id) 
-            ? `background-image: url('/api/thumb/${currentBatchData.chat_id}/${item.msg_id}/${item.thumb_id}'); background-size: cover; background-position: center;` 
-            : '';
-
+        // 🚨 THE FIX: Thumbnail Fetching (background-image) REMOVED COMPLETELY
         html += `
           <button onclick="playContent('${item.type}', '${currentBatchData.chat_id}', '${item.msg_id}')" class="glass card-press flex w-full items-center gap-3 rounded-2xl p-3 text-left">
-            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${color} relative overflow-hidden" style="${thumbStyle}">
-              <div class="absolute inset-0 bg-black/40 ${isVid && item.thumb_id ? 'block' : 'hidden'}"></div>
-              <i class="fa-solid ${icon} z-10 ${isVid && item.thumb_id ? 'text-white drop-shadow-md' : ''}"></i>
+            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${color} relative overflow-hidden">
+              <i class="fa-solid ${icon} z-10"></i>
             </div>
             <div class="min-w-0 flex-1">
               <p class="text-[10px] font-bold text-indigo-soft mb-0.5 uppercase tracking-wider">Index: ${item.index}</p>
@@ -762,7 +655,6 @@
           </button>`;
       });
       
-      // List ke upar Back Button for returning to Folders
       list.innerHTML = `
         <button onclick="renderSubjects()" class="mb-2 w-max px-3 py-1.5 glass rounded-full text-xs font-bold text-muted card-press flex items-center gap-2">
           <i class="fa-solid fa-arrow-left"></i> Back to Folders
@@ -772,32 +664,26 @@
       list.classList.remove('hidden');
       list.classList.add('flex');
     }
-
     function playContent(type, chatId, msgId) {
       if (tg) try { tg.HapticFeedback.impactOccurred('heavy'); } catch(e){}
-      // Ye humein player.html ya pdf.html par bhejega
       if (type === 'video') {
          window.location.href = `/player?chat=${chatId}&msg=${msgId}`;
       } else {
          window.location.href = `/pdf?chat=${chatId}&msg=${msgId}`;
       }
     }
-
     function closeBatchView() {
       if (tg) try { tg.HapticFeedback.impactOccurred('light'); } catch(e){}
       $('batchContentSection').classList.add('hidden');
       $('subjectFoldersGrid').innerHTML = '';
       $('contentListGrid').innerHTML = '';
       
-      // Purane UI elements wapas show karo
       $('mainHeader')?.classList.remove('hidden');
       $('promoSection')?.classList.remove('hidden');
       $('statsSection')?.classList.remove('hidden');
       
-      // Render refresh
       loadDashboard();
     }
-
     async function loadDashboard() {
       try {
         const res = await checkResponseForMandatory(await fetch(`/api/user/${UID}`));
@@ -809,21 +695,11 @@
       }
     }
 
-    /* ---------- Demo data (browser preview only) ---------- */
     const DEMO_DATA = {
       user_info: { id: UID, name: 'Aarav Sharma', username: 'aarav', streak: 6 },
-      demos: [
-        { id: '1', name: 'SSC CGL Foundation 2025', is_expired: false, expiry_date: '28 Jul 2026, 09:00 PM', time_left_hours: 22.5 },
-        { id: '2', name: 'UPSC Prelims Sprint', is_expired: false, expiry_date: '26 Jul 2026, 06:00 PM', time_left_hours: 5.2 },
-      ],
-      my_batches: [
-        { id: '10', name: 'Daily Current Affairs Hub', type: 'Free Channel', status: 'Joined ✔️', category: 'SSC' },
-        { id: '11', name: 'Quant Shortcuts Free', type: 'Free Channel', status: 'Joined ✔️', category: 'SSC' },
-        { id: '20', name: 'SSC CGL Complete Mastery', type: 'Premium Core', status: 'Lifetime Access 👑', category: 'SSC' },
-        { id: '21', name: 'UPSC GS Foundation Pro', type: 'Premium Core', status: 'Demo Run ⏳', category: 'UPSC' },
-      ],
+      demos: [],
+      my_batches: [],
     };
-
     loadDashboard();
   </script>
 </body>
