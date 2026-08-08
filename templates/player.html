@@ -286,6 +286,89 @@
         document.getElementById('loadingUI').classList.add('hidden');
     }
 
+    // ==========================================
+    // 4. GRAMJS LOGIN UI LOGIC (UPDATED & FIXED)
+    // ==========================================
+    function setupLoginUI() {
+        const btnSend = document.getElementById('btn-send-code');
+        const btnVerifyOtp = document.getElementById('btn-verify-otp');
+        const btnVerifyPass = document.getElementById('btn-verify-pass');
+        const statusMsg = document.getElementById('login-status');
+    
+        // Naya client initialize karenge
+        client = new TelegramClient(new StringSession(''), apiId, apiHash, { connectionRetries: 5 });
+    
+        btnSend.onclick = async () => {
+            statusMsg.textContent = "Connecting to Telegram...";
+            btnSend.disabled = true; // Double click roko
+            
+            currentPhone = document.getElementById('inp-phone').value.replace(/\s/g, '');
+            // Agar user ne + lagana bhool gaya, toh auto add kar do
+            if (!currentPhone.startsWith('+')) currentPhone = '+' + currentPhone;
+    
+            try {
+                // 🚨 THE FIX: Pehle connection establish hone ka wait karo!
+                if (!client.connected) {
+                    await client.connect(); 
+                }
+                
+                statusMsg.textContent = "Requesting OTP...";
+                const result = await client.sendCode({ apiId: apiId, apiHash: apiHash }, currentPhone);
+                phoneCodeHash = result.phoneCodeHash;
+                
+                document.getElementById('step-phone').classList.add('hidden');
+                document.getElementById('step-otp').classList.remove('hidden');
+                statusMsg.textContent = "✅ OTP sent to your Telegram App!";
+            } catch (err) { 
+                statusMsg.textContent = "❌ Error: " + err.message; 
+                btnSend.disabled = false;
+            }
+        };
+    
+        btnVerifyOtp.onclick = async () => {
+            statusMsg.textContent = "Verifying Code...";
+            const code = document.getElementById('inp-otp').value.replace(/\s/g, '');
+            try {
+                await client.signIn(currentPhone, { phoneCodeHash: phoneCodeHash, phoneCode: code });
+                await finalizeLogin();
+            } catch (err) {
+                if (err.message.includes('SESSION_PASSWORD_NEEDED')) {
+                    document.getElementById('step-otp').classList.add('hidden');
+                    document.getElementById('step-pass').classList.remove('hidden');
+                    statusMsg.textContent = "🔒 2FA Password Required";
+                } else { 
+                    statusMsg.textContent = "❌ Error: " + err.message; 
+                }
+            }
+        };
+    
+        btnVerifyPass.onclick = async () => {
+            statusMsg.textContent = "Checking Password...";
+            const password = document.getElementById('inp-pass').value.trim();
+            try {
+                await client.signInWithPassword({ password: password, apiId: apiId, apiHash: apiHash });
+                await finalizeLogin();
+            } catch (err) { 
+                statusMsg.textContent = "❌ Error: " + err.message; 
+            }
+        };
+    
+        async function finalizeLogin() {
+            statusMsg.textContent = "Securing Session...";
+            const sessionString = client.session.save();
+            
+            // Save Encrypted Session to Firebase via backend
+            await fetch('/api/session/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ uid: UID, session: sessionString })
+            });
+    
+            document.getElementById('login-overlay').classList.add('hidden');
+            await connectAndStream(sessionString);
+        }
+    }
+
     startApp();
   </script>
 </body>
