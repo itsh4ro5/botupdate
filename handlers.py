@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 import io
 import os
 import re
+import traceback
+import re
 import time
 import urllib.parse
 import logging
@@ -219,70 +221,109 @@ async def cmd_storebatch(client: Client, message: Message):
     try:
         chat_id = int(args[0])
     except ValueError:
-        return await message.reply_text("❌ Error: ID numbers me honi chahiye.")
+        return await message.reply_text("❌ Error: ID numbers me honi chahiye (jaise -10012345678).")
 
-    msg = await message.reply_text(f"⏳ **Scanning Batch `{chat_id}` started...**\nIsme kuch minute lag sakte hain, kripya wait karein...", parse_mode=ParseMode.MARKDOWN)
+    msg = await message.reply_text(f"⏳ **Connecting to Batch `{chat_id}`...**", parse_mode=ParseMode.MARKDOWN)
+    
+    try:
+        # Channel ka asli naam yahan se milega
+        chat_info = await client.get_chat(chat_id)
+        channel_name = chat_info.title
+    except Exception as e:
+        return await msg.edit_text(f"❌ **Error:** Bot channel ko access nahi kar pa raha. Kya bot usme Admin hai?\nLog: `{e}`")
+
+    await msg.edit_text(f"⏳ **Scanning '{channel_name}'...**\nIsme thoda waqt lag sakta hai, kripya wait karein...", parse_mode=ParseMode.MARKDOWN)
     
     video_count = 0
     pdf_count = 0
-    batch_items = []
+    
+    # Structure: { "Subject Name": [ {video1}, {video2} ] }
+    # Is structure se Frontend me Netflix jaise Folders banenge
+    subjects_dict = {}
 
     try:
-        # get_chat_history channel ke saare messages scan karta hai
         async for m in client.get_chat_history(chat_id):
+            caption = m.caption or ""
             
-            # 1. Agar message mein VIDEO hai
+            # --- REGEX EXTRACTOR (Captions padhne ka logic) ---
+            idx_match = re.search(r"Index:\s*(.*)", caption, re.IGNORECASE)
+            title_match = re.search(r"Title:\s*(.*)", caption, re.IGNORECASE)
+            sub_match = re.search(r"Subject:\s*(.*)", caption, re.IGNORECASE)
+
+            # Agar purana format mila toh default values lagayega
+            vid_index = idx_match.group(1).strip() if idx_match else "999"
+            vid_title = title_match.group(1).strip() if title_match else "Unknown Media"
+            vid_subject = sub_match.group(1).strip() if sub_match else "Other Files"
+
+            if vid_subject not in subjects_dict:
+                subjects_dict[vid_subject] = []
+
+            # 1. VIDEO SAVING
             if m.video:
                 video_count += 1
+                if vid_title == "Unknown Media":
+                    vid_title = m.video.file_name or f"Video {m.id}"
                 
-                # Thumbnail ID nikalne ka logic
-                thumb_id = None
-                if m.video.thumbs and len(m.video.thumbs) > 0:
-                    thumb_id = m.video.thumbs[0].file_id
-
-                batch_items.append({
+                thumb_id = m.video.thumbs[0].file_id if m.video.thumbs else None
+                
+                subjects_dict[vid_subject].append({
+                    "index": vid_index,
                     "msg_id": m.id,
                     "type": "video",
-                    "title": m.video.file_name or m.caption or f"Video {m.id}",
-                    "duration": m.video.duration, # Seconds me
-                    "size": m.video.file_size, # Bytes me
+                    "title": str(vid_title),
+                    "duration": m.video.duration,
+                    "size": m.video.file_size,
                     "thumb_id": thumb_id
                 })
             
-            # 2. Agar message mein PDF (Document) hai
+            # 2. PDF SAVING
             elif m.document and m.document.mime_type == "application/pdf":
                 pdf_count += 1
-                batch_items.append({
+                if vid_title == "Unknown Media":
+                    vid_title = m.document.file_name or f"PDF Note {m.id}"
+                
+                subjects_dict[vid_subject].append({
+                    "index": vid_index,
                     "msg_id": m.id,
                     "type": "pdf",
-                    "title": m.document.file_name or m.caption or f"PDF Note {m.id}",
+                    "title": str(vid_title),
                     "size": m.document.file_size
                 })
             
-            # Har 500 message ke baad bot status update karega taaki aapko pata rahe scan chal raha hai
-            if (video_count + pdf_count) > 0 and (video_count + pdf_count) % 500 == 0:
+            # Update Live Status
+            if (video_count + pdf_count) > 0 and (video_count + pdf_count) % 300 == 0:
                 try:
-                    await msg.edit_text(f"⏳ **Scanning in progress...**\n\nFound so far:\n🎥 Videos: `{video_count}`\n📄 PDFs: `{pdf_count}`")
-                except:
-                    pass
-                await asyncio.sleep(1) # FloodWait se bachne ke liye
+                    await msg.edit_text(f"⏳ **Scanning '{channel_name}'...**\n\nFound so far:\n🎥 Videos: `{video_count}`\n📄 PDFs: `{pdf_count}`")
+                except: pass
+                await asyncio.sleep(1) # Ban hone se bachne ke liye
 
-        # --- YAHAN FIREBASE ME SAVE KARNE KA LOGIC AAYEGA ---
-        # (Hum isko Firebase array me push kar denge)
-        # Import app to access db_fs
-        from app import db_fs 
-        if db_fs:
+        # Indexing Sorting (001, 002 ke hisab se sequence theek karna)
+        for sub in subjects_dict:
+            subjects_dict[sub].sort(key=lambda x: x.get("index", "999"))
+
+        # --- FIREBASE SAVE LOGIC ---
+        import app as backend_app
+        if backend_app.db_fs:
+            final_data = {
+                "channel_name": channel_name,
+                "chat_id": str(chat_id),
+                "subjects": subjects_dict,
+                "total_videos": video_count,
+                "total_pdfs": pdf_count,
+                "last_updated": time.time()
+            }
             await asyncio.to_thread(
-                db_fs.collection('batch_contents').document(str(chat_id)).set, 
-                {"items": batch_items}, 
+                backend_app.db_fs.collection('batch_contents').document(str(chat_id)).set, 
+                final_data, 
                 merge=True
             )
-            firebase_status = "✅ Successfully saved to Firebase!"
+            firebase_status = "✅ Successfully saved to Firebase DB!"
         else:
-            firebase_status = "⚠️ Firebase is not connected!"
+            firebase_status = "⚠️ Firebase is NOT connected! Data lost."
 
         await msg.edit_text(
             f"🎯 **Batch Scan Complete!**\n\n"
+            f"📁 Channel: **{channel_name}**\n"
             f"🎥 Total Videos: `{video_count}`\n"
             f"📄 Total PDFs: `{pdf_count}`\n"
             f"📝 {firebase_status}",
@@ -290,6 +331,7 @@ async def cmd_storebatch(client: Client, message: Message):
         )
 
     except Exception as e:
+        traceback.print_exc()
         await msg.edit_text(f"❌ **Error during scan:** `{e}`", parse_mode=ParseMode.MARKDOWN)
 
 async def cmd_userbotphone(client: Client, message: Message):
