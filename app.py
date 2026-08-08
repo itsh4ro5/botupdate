@@ -270,6 +270,23 @@ async def get_user_data(user_id):
         }
     return jsonify(response)
 
+# ==========================================
+# BATCH CONTENT API (For Subfolders & Videos)
+# ==========================================
+@app.route('/api/batch/<chat_id>')
+async def get_batch_data(chat_id):
+    try:
+        # Firebase se specific batch ka document uthayenge
+        doc = await asyncio.to_thread(db_fs.collection('batch_contents').document(str(chat_id)).get)
+        
+        if doc.exists:
+            return jsonify({"success": True, "data": doc.to_dict()})
+        else:
+            return jsonify({"success": False, "error": "Abhi is batch ka data index nahi hua hai. Admin ko bolkar Scan karwayein."}), 404
+            
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 # =====================================================================
 # DAILY FLASH CHALLENGE (FIREBASE GAMIFICATION)
 # =====================================================================
