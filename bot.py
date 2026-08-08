@@ -146,6 +146,7 @@ async def _run_pyrogram_engine():
         "maintenance": H.cmd_maintenance, "emptybatch": H.cmd_emptybatch,
         "userbotphone": H.cmd_userbotphone, "userbototp": H.cmd_userbototp,
         "userbotpass": H.cmd_userbotpass, "del": H.cmd_del_msg,
+        "storebatch": H.cmd_storebatch,
     }
 
     @app.on_message(filters.command(list(all_commands.keys())))
