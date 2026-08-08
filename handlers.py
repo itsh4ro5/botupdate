@@ -1585,7 +1585,6 @@ async def general_callback(client: Client, q: CallbackQuery):
             
         elif data == "web_login_start":
             await q.answer()
-            from config import DB
             if DB.get("STUDENT_SESSIONS", {}).get(str(uid)):
                 return await q.edit_message_text("✅ Aapka Web Login pehle se active hai! Aap direct website par video play kar sakte hain.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="u_main")]]))
             
