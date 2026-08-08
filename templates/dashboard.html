@@ -742,9 +742,9 @@
         let color = isVid ? 'text-emerald-soft bg-emerald-neon/15' : 'text-orange-400 bg-orange-500/15';
         let meta = isVid ? `${item.duration ? Math.floor(item.duration/60)+' Mins' : 'Video'}` : `${Math.floor(item.size/1024/1024)} MB`;
         
-        // Thumbnail URL Logic (Telegram bot token se banega baad me, abhi placeholder)
+        // URL me chat_id, msg_id aur thumb_id teeno bhej rahe hain taaki expire hone par backend auto-fix kar le
         let thumbStyle = (isVid && item.thumb_id) 
-            ? `background-image: url('/api/thumb/${item.thumb_id}'); background-size: cover; background-position: center;` 
+            ? `background-image: url('/api/thumb/${currentBatchData.chat_id}/${item.msg_id}/${item.thumb_id}'); background-size: cover; background-position: center;` 
             : '';
 
         html += `
