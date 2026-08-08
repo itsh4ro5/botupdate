@@ -77,7 +77,6 @@ async def shutdown_http_client():
 
 @app.errorhandler(Exception)
 async def handle_global_error(error):
-    # Faltu ke 404 Scanner errors ko chup karao
     if isinstance(error, HTTPException):
         if error.code == 404:
             return "", 404 
@@ -93,7 +92,7 @@ AVATAR_CACHE_MAX_ENTRIES = 500
 # MIDDLEWARE: MANDATORY CHANNEL ENFORCEMENT
 # ==========================================
 async def enforce_mandatory(user_id):
-    # 🚨 TEMPORARY BYPASS FOR CHROME TESTING: Hamesha None return karega!
+    # BYPASS FOR CHROME TESTING: Hamesha None return karega!
     return None
 
 # ==========================================
@@ -151,18 +150,18 @@ async def leaderboard_page():
 async def service_worker():
     return await send_file('static/sw.js', mimetype='application/javascript')
 
+@app.route('/login')
+async def login_page():
+    return await render_template('login.html', 
+                                 api_id=getattr(config, 'API_ID', 2040), 
+                                 api_hash=getattr(config, 'API_HASH', 'b18441a1ff607e10a989891a5462e627'))
+
 @app.route('/player')
 async def player_page():
     return await render_template('player.html', 
                                  api_id=getattr(config, 'API_ID', 2040), 
                                  api_hash=getattr(config, 'API_HASH', 'b18441a1ff607e10a989891a5462e627'),
                                  bot_username=getattr(config, 'BOT_USERNAME', 'H4R_Bot'))
-
-@app.route('/login')
-async def login_page():
-    return await render_template('login.html', 
-                                 api_id=getattr(config, 'API_ID', 2040), 
-                                 api_hash=getattr(config, 'API_HASH', 'b18441a1ff607e10a989891a5462e627'))
 
 @app.route('/pdf')
 async def pdf_page():
@@ -181,7 +180,6 @@ async def save_session():
         cipher = get_cipher()
         encrypted_session = cipher.encrypt(session_str.encode()).decode()
         
-        # Fixing Native JSON Storage
         if "STUDENT_SESSIONS" not in DB:
             DB["STUDENT_SESSIONS"] = {}
             
@@ -207,6 +205,7 @@ async def get_user_session(uid):
     except Exception as e:
         return jsonify({"success": False, "error": "Decryption failed"}), 500
 
+# 🚨 THE FIX: Puraana ID use karna band kiya taaki crash na ho. Direct naya fetch!
 @app.route('/api/thumb/<chat_id>/<int:msg_id>/<file_id>')
 async def get_thumbnail(chat_id, msg_id, file_id):
     if not hasattr(config, 'bot_app') or not config.bot_app:
@@ -215,28 +214,22 @@ async def get_thumbnail(chat_id, msg_id, file_id):
         bot = config.bot_app
         target_chat = int(chat_id)
         
-        try:
-            # Puraana ID try karega
-            file_obj = await bot.download_media(file_id, in_memory=True)
-        except Exception as e: # 🚨 THE FIX: Catching ALL exceptions here so it doesn't crash the session
-            print(f"🔄 Thumb Refreshing for msg {msg_id} (Reason: {type(e).__name__})...")
-            msg = await bot.get_messages(target_chat, ids=msg_id)
-            if msg and msg.video and getattr(msg.video, 'thumbs', None):
-                fresh_file_id = msg.video.thumbs[0].file_id
-                file_obj = await bot.download_media(fresh_file_id, in_memory=True)
-            elif msg and msg.document and getattr(msg.document, 'thumbs', None):
-                fresh_file_id = msg.document.thumbs[0].file_id
-                file_obj = await bot.download_media(fresh_file_id, in_memory=True)
-            else:
-                return "Not found", 404
-
-        img_bytes = file_obj.getvalue() if hasattr(file_obj, "getvalue") else file_obj
-        if img_bytes:
+        # Hamesha fresh message fetch karega taaki FileReferenceExpired error aaye hi na
+        msg = await bot.get_messages(target_chat, ids=msg_id)
+        if msg and msg.video and getattr(msg.video, 'thumbs', None):
+            fresh_file_id = msg.video.thumbs[0].file_id
+            file_obj = await bot.download_media(fresh_file_id, in_memory=True)
+            img_bytes = file_obj.getvalue() if hasattr(file_obj, "getvalue") else file_obj
+            return await send_file(io.BytesIO(img_bytes), mimetype='image/jpeg')
+        elif msg and msg.document and getattr(msg.document, 'thumbs', None):
+            fresh_file_id = msg.document.thumbs[0].file_id
+            file_obj = await bot.download_media(fresh_file_id, in_memory=True)
+            img_bytes = file_obj.getvalue() if hasattr(file_obj, "getvalue") else file_obj
             return await send_file(io.BytesIO(img_bytes), mimetype='image/jpeg')
     except Exception as e:
-        print(f"Thumb error silent pass: {e}")
+        pass # Chupchaap ignore karo
         
-    return "Not found", 404
+    return "", 404
 
 # ==========================================
 # AVATAR & USER DASHBOARD LOGIC
