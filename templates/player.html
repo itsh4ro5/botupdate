@@ -3,29 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>H4R Premium Player</title>
+    <title>Premium Telegram Player</title>
     
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
     
-    <!-- FASTEST CDNS (No Fallback Loops) -->
+    <!-- 🚨 THE FIX: Only Primary Clean CDNs, NO document.write blockages! -->
     <script src="https://cdn.jsdelivr.net/npm/telegram@2.22.2/browser/bundle.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/big-integer@1.6.52/BigInteger.min.js"></script>
 
     <style>
       :root {
-        --bg: #060708;
-        --text: #f5f6f8;
-        --accent: #4fc3ff;
-        --accent-grad: linear-gradient(135deg, #4fc3ff 0%, #22e6c5 100%);
+        --bg: #060708; --text: #f5f6f8; --accent: #4fc3ff;
       }
-
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: 'Outfit', sans-serif; }
+      html, body {
+        margin: 0; padding: 0; background: var(--bg); color: var(--text);
+        font-family: 'Outfit', 'Inter', sans-serif;
+      }
       .hidden { display: none !important; }
-
       #app {
         min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; background: #050607;
       }
@@ -39,7 +37,6 @@
         display: block; width: 100%; height: 100%; background: #000;
         object-fit: contain; cursor: pointer;
       }
-
       .player-status {
         position: absolute; inset: 0; display: flex; flex-direction: column;
         align-items: center; justify-content: center; gap: 16px;
@@ -48,19 +45,12 @@
       .loader { position: relative; width: 56px; height: 56px; }
       .loader .ring { position: absolute; inset: 0; border-radius: 50%; border: 3px solid transparent; border-top-color: var(--accent); border-right-color: var(--accent); animation: spinCW 1s linear infinite; }
       @keyframes spinCW { to { transform: rotate(360deg); } }
-
       .player-status-text {
         font-size: 14px; font-weight: 600; color: var(--text); text-align: center;
         background: rgba(255,255,255,0.1); padding: 8px 18px; border-radius: 999px;
       }
       .back-top-btn { position: absolute; top: 16px; left: 16px; z-index: 100; display: flex; align-items: center; gap: 6px; padding: 8px 16px; background: rgba(0,0,0,0.6); color: white; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); font-size: 14px; font-weight: 600; cursor: pointer; }
-
-      .watermark {
-        position: absolute; z-index: 20; color: rgba(255, 255, 255, 0.15);
-        font-size: 18px; font-weight: 700; font-family: monospace; letter-spacing: 2px;
-        pointer-events: none; user-select: none;
-      }
-
+      
       @media (max-width: 640px) {
         #app { padding: 0; }
         .player { border-radius: 0; max-width: 100%; height: 100vh; }
@@ -77,17 +67,13 @@
     <div id="app">
       <div class="player" id="player">
         <div class="video-stage" id="video-stage">
-          
-          <div class="watermark" id="video-watermark">UID: Connecting...</div>
-
           <video id="video-player" playsinline controls controlsList="nodownload"></video>
-
+          
           <div class="player-status" id="player-status">
             <div id="spinner-box"><div class="loader"><div class="ring r1"></div></div></div>
             <span class="player-status-text" id="player-status-text">Starting Engine...</span>
             <div id="action-btn-container" class="mt-4"></div>
           </div>
-
         </div>
       </div>
     </div>
@@ -96,10 +82,8 @@
       const tg = window.Telegram ? window.Telegram.WebApp : null;
       if (tg) tg.expand();
       
-      // ✅ Fixed UID Extraction (No more NaN)
-      const UID = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) ? tg.initDataUnsafe.user.id : 7993892902;
-      document.getElementById('video-watermark').innerText = 'UID: ' + UID;
-
+      const UID = "{{ url_user_id }}" !== "None" ? parseInt("{{ url_user_id }}") : (window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 7993892902);
+      
       const urlParams = new URLSearchParams(window.location.search);
       const chatIdParam = urlParams.get('chat');
       const msgIdParam = Number(urlParams.get('msg'));
@@ -109,24 +93,26 @@
           if (isError) {
               document.getElementById('spinner-box').classList.add('hidden');
               document.getElementById('action-btn-container').innerHTML = `
-                  <button onclick="window.location.href='https://t.me/H4R_Bot'" style="background:var(--accent-grad); color:#000; font-weight:800; padding:12px 24px; border-radius:12px; border:none; cursor:pointer; box-shadow: 0 4px 15px rgba(34,230,197,0.25);">
+                  <button onclick="window.location.href='https://t.me/H4R_Bot'" style="background:linear-gradient(135deg, #4fc3ff, #22e6c5); color:#000; font-weight:800; padding:12px 24px; border-radius:12px; border:none; cursor:pointer;">
                       🔐 Open Bot to Login
                   </button>
               `;
           }
       }
 
-      // Dynamic Watermark Position
-      function moveWatermark() {
-        const stage = document.getElementById('video-stage');
-        if (!stage) return;
-        const rect = stage.getBoundingClientRect();
-        const mark = document.getElementById('video-watermark');
-        mark.style.left = Math.max(10, Math.floor(Math.random() * (rect.width - 150))) + 'px';
-        mark.style.top = Math.max(10, Math.floor(Math.random() * (rect.height - 30))) + 'px';
+      let checks = 0;
+      function checkDependenciesAndStart() {
+          if (typeof window.telegram !== 'undefined' && typeof window.bigInt !== 'undefined') {
+              startApp();
+          } else {
+              checks++;
+              // Fallback block hatne ki wajah se, agar 2-3 sec lage, toh wo wait karega
+              if (checks > 30) setPlayerStatus("Network Error: Could not load streaming libraries.", true);
+              else setTimeout(checkDependenciesAndStart, 200);
+          }
       }
-      setInterval(moveWatermark, 4000);
-      moveWatermark();
+
+      window.addEventListener('load', checkDependenciesAndStart);
 
       async function startApp() {
           if (!chatIdParam || !msgIdParam) {
@@ -136,7 +122,7 @@
 
           if ('serviceWorker' in navigator) {
               try {
-                  await navigator.serviceWorker.register('/sw.js?v=21');
+                  await navigator.serviceWorker.register('/sw.js?v=25');
                   await navigator.serviceWorker.ready;
               } catch (err) { console.error('SW Error:', err); }
           }
@@ -147,10 +133,10 @@
               const data = await res.json();
               
               if (data.success && data.session) {
-                  setPlayerStatus("Extracting Video...");
+                  setPlayerStatus("Connecting to Telegram...");
                   await connectAndStream(data.session);
               } else {
-                  setPlayerStatus("🔒 Access Denied.<br><br>Please open the Bot menu and click <b>'Login to Web Player'</b>.", true);
+                  setPlayerStatus("Telegram Session Required to Play Video.", true);
               }
           } catch (e) { 
               setPlayerStatus("Network Error. Please Login via Bot.", true);
@@ -170,7 +156,6 @@
               1: 'pluto.web.telegram.org', 2: 'venus.web.telegram.org',
               3: 'aurora.web.telegram.org', 4: 'vesta.web.telegram.org', 5: 'flora.web.telegram.org'
           };
-          
           const originalSetDC = session.setDC.bind(session);
           session.setDC = (dcId, serverAddress, port, downloadDC) => {
               return originalSetDC(dcId, DC_HOSTNAMES[dcId] || serverAddress, port, downloadDC);
@@ -182,9 +167,11 @@
           try {
               await client.connect();
           } catch (err) {
-              setPlayerStatus("Session Expired.<br>Please open the Bot menu and Login to Web Player again.", true);
+              setPlayerStatus("Session Expired or Invalid. Please Re-login via Bot.", true);
               return;
           }
+
+          setPlayerStatus("Extracting Video...");
           
           const messages = await client.getMessages(chatIdParam, { ids: msgIdParam });
           const media = messages[0]?.media;
@@ -308,19 +295,6 @@
               videoElement.play(); 
           });
       }
-
-      // Check if external scripts loaded, then start
-      let checks = 0;
-      function checkDeps() {
-          if (typeof window.telegram !== 'undefined' && typeof window.bigInt !== 'undefined') {
-              startApp();
-          } else {
-              checks++;
-              if (checks > 20) setPlayerStatus("Error: Scripts failed to load. Please check your internet.", true);
-              else setTimeout(checkDeps, 500);
-          }
-      }
-      window.addEventListener('load', checkDeps);
     </script>
   </body>
 </html>
