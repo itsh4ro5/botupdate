@@ -2,7 +2,6 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Premium Telegram Player</title>
     
@@ -548,7 +547,7 @@
           // Register Service Worker
           if ('serviceWorker' in navigator) {
               try {
-                  const reg = await navigator.serviceWorker.register('/sw.js?v=7');
+                  const reg = await navigator.serviceWorker.register('/sw.js?v=8');
                   await navigator.serviceWorker.ready;
                   if (!navigator.serviceWorker.controller) {
                       window.location.reload(); return;
@@ -572,7 +571,10 @@
                   setupLoginUI(); 
               }
           } catch (e) { 
-              setPlayerStatus("Network error checking session."); 
+              console.error("Network error checking session:", e);
+              // 🚨 THE FIX: Agar backend se error aaye, tab bhi Login Screen zaroor khulegi!
+              document.getElementById('loginOverlay').classList.remove('hidden');
+              setupLoginUI();
           }
       }
 
@@ -713,44 +715,79 @@
                   port.postMessage({ type: 'METADATA', start: reqStart, end: reqEnd, totalSize: fileSize });
 
                   try {
-                      let currentOffset = reqStart;
-                      let isFirstChunk = true;
+                    let currentOffset = reqStart;
+                    let isFirstChunk = true;
+                    let currentMedia = media; // Start with the initial media reference
 
-                      for await (const chunk of client.iterDownload({
-                          file: media, offset: bigInt(tgStart), limit: bigInt(tgLimit), requestSize: ALIGNMENT
-                      })) {
-                          if (!activeStreams.has(streamId)) break; 
+                    // WRAP IN A WHILE LOOP FOR AUTO-RETRY
+                    while (currentOffset <= reqEnd) {
+                        if (!activeStreams.has(streamId)) break;
 
-                          let bufferToSend = chunk;
-                          if (isFirstChunk) {
-                              const skipBytes = reqStart - tgStart;
-                              if (skipBytes > 0) bufferToSend = chunk.slice(skipBytes);
-                              isFirstChunk = false;
-                          }
+                        // Recalculate alignments dynamically in case we resume mid-way
+                        const tgStart = Math.floor(currentOffset / ALIGNMENT) * ALIGNMENT;
+                        const tgEnd = Math.ceil((reqEnd + 1) / ALIGNMENT) * ALIGNMENT - 1;
+                        const tgLimit = tgEnd - tgStart + 1;
 
-                          const maxRemaining = (reqEnd - currentOffset) + 1;
-                          if (bufferToSend.length > maxRemaining) {
-                              bufferToSend = bufferToSend.slice(0, maxRemaining);
-                          }
+                        try {
+                            for await (const chunk of client.iterDownload({
+                                file: currentMedia, 
+                                offset: bigInt(tgStart), 
+                                limit: bigInt(tgLimit), 
+                                requestSize: ALIGNMENT
+                            })) {
+                                if (!activeStreams.has(streamId)) break; 
 
-                          if (bufferToSend.length > 0) {
-                              const arrayBuffer = new Uint8Array(bufferToSend).buffer;
-                              port.postMessage({ type: 'CHUNK', buffer: arrayBuffer }, [arrayBuffer]);
-                              currentOffset += bufferToSend.length;
-                          }
+                                let bufferToSend = chunk;
+                                if (isFirstChunk) {
+                                    const skipBytes = currentOffset - tgStart;
+                                    if (skipBytes > 0) bufferToSend = chunk.slice(skipBytes);
+                                    isFirstChunk = false;
+                                }
 
-                          if (currentOffset > reqEnd) break;
-                      }
+                                const maxRemaining = (reqEnd - currentOffset) + 1;
+                                if (bufferToSend.length > maxRemaining) {
+                                    bufferToSend = bufferToSend.slice(0, maxRemaining);
+                                }
 
-                      if (activeStreams.has(streamId)) {
-                          port.postMessage({ type: 'DONE' });
-                          activeStreams.delete(streamId);
-                      }
-                  } catch (err) {
-                      if (err.message && !err.message.includes('LIMIT_INVALID')) console.error("Stream Error:", err.message);
-                      port.postMessage({ type: 'ERROR', error: err.message });
-                      activeStreams.delete(streamId);
-                  }
+                                if (bufferToSend.length > 0) {
+                                    const arrayBuffer = new Uint8Array(bufferToSend).buffer;
+                                    port.postMessage({ type: 'CHUNK', buffer: arrayBuffer }, [arrayBuffer]);
+                                    currentOffset += bufferToSend.length;
+                                }
+
+                                if (currentOffset > reqEnd) break;
+                            }
+                            break; // Success! Exit the retry loop.
+
+                        } catch (err) {
+                            // 🔥 THE MASTERSTROKE: Catching the Expiry Error
+                            if (err.message && (err.message.includes('FILE_REFERENCE_EXPIRED') || err.message.includes('FILE_REFERENCE_EMPTY'))) {
+                                console.warn("🔄 File Reference Expired Mid-Stream! Auto-refreshing fresh link...");
+                                
+                                // Fetch fresh message to get a valid file_reference
+                                const freshMsgs = await client.getMessages(chatIdParam, { ids: msgIdParam });
+                                currentMedia = freshMsgs[0]?.media;
+                                
+                                if (!currentMedia) throw new Error("Could not refresh media link.");
+                                
+                                // Reset first chunk flag so the slice logic runs again for the new currentOffset
+                                isFirstChunk = true; 
+                                continue; // Restart the while loop with the fresh media link
+                            } else {
+                                throw err; // If it's a different error, throw it normally
+                            }
+                        }
+                    } // End of while loop
+
+                    if (activeStreams.has(streamId)) {
+                        port.postMessage({ type: 'DONE' });
+                        activeStreams.delete(streamId);
+                    }
+                } catch (err) {
+                    if (err.message && !err.message.includes('LIMIT_INVALID')) console.error("Stream Error:", err.message);
+                    port.postMessage({ type: 'ERROR', error: err.message });
+                    activeStreams.delete(streamId);
+                }
               }
           });
 
