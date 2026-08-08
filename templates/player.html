@@ -10,55 +10,40 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
     
-    <script src="https://unpkg.com/telegram@2.22.2/browser/bundle.js"></script>
-    <script src="https://unpkg.com/big-integer@1.6.52/BigInteger.min.js"></script>
+    <!-- 🚨 THE FIX: JSDelivr for stability -->
+    <script src="https://cdn.jsdelivr.net/npm/telegram@2.22.2/browser/bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/big-integer@1.6.52/BigInteger.min.js"></script>
 
     <style>
       :root {
         --bg: #060708;
-        --surface: rgba(20, 22, 27, 0.72);
-        --surface-solid: #14161b;
-        --border: rgba(255, 255, 255, 0.08);
         --text: #f5f6f8;
-        --text-dim: #9aa1ac;
         --accent: #4fc3ff;
-        --accent-2: #22e6c5;
-        --accent-grad: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
       }
-
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-
       html, body {
         margin: 0; padding: 0; background: var(--bg); color: var(--text);
         font-family: 'Outfit', 'Inter', sans-serif;
       }
-
       .hidden { display: none !important; }
-
       #app {
-        min-height: 100vh; display: flex; align-items: center;
-        justify-content: center; padding: 24px; background: #050607;
+        min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; background: #050607;
       }
-
       .player {
         position: relative; width: 100%; max-width: 1040px; height: 80vh;
         background: #000; border-radius: 20px; overflow: hidden;
         box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.85);
       }
-
       .video-stage { position: relative; width: 100%; height: 100%; overflow: hidden; }
-
       .player video {
         display: block; width: 100%; height: 100%; background: #000;
         object-fit: contain; cursor: pointer;
       }
-
       .player-status {
         position: absolute; inset: 0; display: flex; flex-direction: column;
         align-items: center; justify-content: center; gap: 16px;
         background: rgba(6, 7, 8, 0.95); z-index: 10;
       }
-
       .loader { position: relative; width: 56px; height: 56px; }
       .loader .ring { position: absolute; inset: 0; border-radius: 50%; border: 2.5px solid transparent; }
       .loader .ring.r1 {
@@ -66,17 +51,11 @@
         animation: spinCW 1.1s linear infinite;
       }
       @keyframes spinCW { to { transform: rotate(360deg); } }
-
       .player-status-text {
         font-size: 14px; font-weight: 600; color: var(--text);
         background: rgba(255,255,255,0.1); padding: 8px 18px; border-radius: 999px;
       }
-
       .back-top-btn { position: absolute; top: 16px; left: 16px; z-index: 100; display: flex; align-items: center; gap: 6px; padding: 8px 16px; background: rgba(0,0,0,0.6); color: white; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); font-size: 14px; font-weight: 600; cursor: pointer; backdrop-filter: blur(8px); }
-      
-      .login-redirect-box {
-        text-align: center; max-width: 320px; padding: 20px;
-      }
     </style>
   </head>
   <body>
@@ -92,12 +71,11 @@
           
           <video id="video-player" playsinline controls controlsList="nodownload"></video>
 
-          <!-- Loading & Status Screen -->
           <div class="player-status" id="player-status">
             <div id="spinner-box">
               <div class="loader"><div class="ring r1"></div></div>
             </div>
-            <span class="player-status-text" id="player-status-text">Initializing Engine...</span>
+            <span class="player-status-text" id="player-status-text">Booting Engine...</span>
             <div id="action-btn-container" class="mt-4"></div>
           </div>
 
@@ -126,15 +104,25 @@
           }
       }
 
-      window.addEventListener('load', async () => {
+      // 🚨 THE FIX: Smart Wait in Player too
+      function checkDependenciesAndStart() {
+          if (typeof telegram === 'undefined' || typeof bigInt === 'undefined') {
+              setTimeout(checkDependenciesAndStart, 500); // Network slow hai, wait karega
+              return;
+          }
+
           if (!chatIdParam || !msgIdParam) {
               setPlayerStatus("Error: Missing video parameters.");
               return;
           }
 
+          startApp();
+      }
+
+      async function startApp() {
           if ('serviceWorker' in navigator) {
               try {
-                  await navigator.serviceWorker.register('/sw.js?v=15');
+                  await navigator.serviceWorker.register('/sw.js?v=16');
                   await navigator.serviceWorker.ready;
               } catch (err) { console.error('SW Error:', err); }
           }
@@ -148,18 +136,17 @@
                   setPlayerStatus("Connecting to Telegram...");
                   await connectAndStream(data.session);
               } else {
-                  // Session nahi mila, seedha login button dikhao (No infinite loop)
                   setPlayerStatus("Telegram Session Required to Play Video.", true);
               }
           } catch (e) { 
               setPlayerStatus("Network Error. Please Login.", true);
           }
-      });
+      }
 
       async function connectAndStream(sessionStr) {
-          const { TelegramClient } = window.telegram;
-          const { StringSession } = window.telegram.sessions;
-          const bigIntFn = window.bigInt; 
+          const { TelegramClient } = telegram;
+          const { StringSession } = telegram.sessions;
+          // Notice we don't declare bigInt here, it's global
 
           const apiId = Number("{{ api_id }}"); 
           const apiHash = "{{ api_hash }}";
@@ -234,8 +221,8 @@
                           try {
                               for await (const chunk of client.iterDownload({
                                   file: currentMedia, 
-                                  offset: bigIntFn(alignedStart), 
-                                  limit: bigIntFn(alignedLimit), 
+                                  offset: bigInt(alignedStart), 
+                                  limit: bigInt(alignedLimit), 
                                   requestSize: ALIGNMENT
                               })) {
                                   if (!activeStreams.has(streamId)) break; 
@@ -293,6 +280,8 @@
               videoElement.play(); 
           });
       }
+
+      window.addEventListener('load', checkDependenciesAndStart);
     </script>
   </body>
 </html>
