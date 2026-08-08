@@ -158,6 +158,12 @@ async def player_page():
                                  api_hash=getattr(config, 'API_HASH', 'b18441a1ff607e10a989891a5462e627'),
                                  bot_username=getattr(config, 'BOT_USERNAME', 'H4R_Bot'))
 
+@app.route('/login')
+async def login_page():
+    return await render_template('login.html', 
+                                 api_id=getattr(config, 'API_ID', 2040), 
+                                 api_hash=getattr(config, 'API_HASH', 'b18441a1ff607e10a989891a5462e627'))
+
 @app.route('/pdf')
 async def pdf_page():
     return await render_template('pdf.html')
@@ -210,12 +216,16 @@ async def get_thumbnail(chat_id, msg_id, file_id):
         target_chat = int(chat_id)
         
         try:
+            # Puraana ID try karega
             file_obj = await bot.download_media(file_id, in_memory=True)
-        except FileReferenceExpired:
-            print(f"🔄 Thumb Expired for msg {msg_id}. Fetching fresh ID...")
+        except Exception as e: # 🚨 THE FIX: Catching ALL exceptions here so it doesn't crash the session
+            print(f"🔄 Thumb Refreshing for msg {msg_id} (Reason: {type(e).__name__})...")
             msg = await bot.get_messages(target_chat, ids=msg_id)
-            if msg and msg.video and msg.video.thumbs:
+            if msg and msg.video and getattr(msg.video, 'thumbs', None):
                 fresh_file_id = msg.video.thumbs[0].file_id
+                file_obj = await bot.download_media(fresh_file_id, in_memory=True)
+            elif msg and msg.document and getattr(msg.document, 'thumbs', None):
+                fresh_file_id = msg.document.thumbs[0].file_id
                 file_obj = await bot.download_media(fresh_file_id, in_memory=True)
             else:
                 return "Not found", 404
@@ -224,7 +234,7 @@ async def get_thumbnail(chat_id, msg_id, file_id):
         if img_bytes:
             return await send_file(io.BytesIO(img_bytes), mimetype='image/jpeg')
     except Exception as e:
-        print(f"Thumb error: {e}")
+        print(f"Thumb error silent pass: {e}")
         
     return "Not found", 404
 
