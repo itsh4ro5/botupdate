@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Aurora · Document Viewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-void:#06070c;
+    --aurora-teal:#2dd4bf;
+    --aurora-violet:#8b5cf6;
+    --glass-border:rgba(255,255,255,0.08);
+    --glass-fill:rgba(255,255,255,0.04);
+    --text-primary:#f5f7fa;
+    --text-muted:#8b93a7;
+    --text-faint:#565e73;
+    --danger:#f87171;
+    --safe-top:env(safe-area-inset-top,0px);
+    --safe-bottom:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg-void); overflow:hidden;}
+  body{ font-family:'Inter',sans-serif; color:var(--text-primary); }
+  .mono{ font-family:'JetBrains Mono',monospace; }
+  button{ font-family:inherit; cursor:pointer; }
+
+  .aurora-field{ position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+  .aurora-field::before{
+    content:''; position:absolute; width:120vw; height:120vw; top:-50vw; left:-30vw; border-radius:50%;
+    background:radial-gradient(circle at 30% 30%, var(--aurora-violet), transparent 60%);
+    filter:blur(100px); opacity:.22; mix-blend-mode:screen;
+  }
+
+  .shell{
+    position:relative; z-index:1; height:100vh; display:flex; flex-direction:column;
+    padding-top:var(--safe-top); padding-bottom:var(--safe-bottom);
+  }
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    display:flex; align-items:center; gap:12px; padding:14px 18px;
+    border-bottom:1px solid var(--glass-border);
+    background:rgba(6,7,12,.7); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+    flex-shrink:0;
+  }
+  .back-btn{
+    display:flex; align-items:center; gap:7px; padding:8px 14px 8px 10px;
+    background:var(--glass-fill); border:1px solid var(--glass-border); border-radius:11px;
+    color:var(--text-primary); font-size:13.5px; font-weight:500; transition:border-color .2s ease;
+  }
+  .back-btn:hover{ border-color:rgba(255,255,255,.2); }
+  .doc-title{
+    flex:1; min-width:0; font-family:'Space Grotesk',sans-serif; font-size:14.5px; font-weight:600;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .doc-meta{ font-size:11.5px; color:var(--text-faint); }
+
+  /* ---------- Viewer container ---------- */
+  .viewer-wrap{ flex:1; position:relative; padding:14px; min-height:0; }
+  .viewer-panel{
+    height:100%; border-radius:18px; overflow:hidden; position:relative;
+    background:var(--glass-fill); border:1px solid var(--glass-border);
+    box-shadow:0 20px 60px rgba(0,0,0,.45);
+  }
+  #pdf-frame{ width:100%; height:100%; border:none; display:none; background:#1a1a1a; }
+
+  /* ---------- Loading state ---------- */
+  .loading-state{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+  }
+  .spinner{
+    width:38px; height:38px; border-radius:11px;
+    background:conic-gradient(from 0deg, var(--aurora-teal), var(--aurora-violet), var(--aurora-teal));
+    animation:spin 1.3s linear infinite;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .loading-state p{ margin:0; color:var(--text-muted); font-size:13.5px; }
+  .loading-state .sub{ color:var(--text-faint); font-size:11.5px; }
+
+  /* ---------- Error state ---------- */
+  .error-state{
+    position:absolute; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:24px; text-align:center;
+  }
+  .error-state .icon{
+    width:48px; height:48px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:20px;
+    background:linear-gradient(135deg, rgba(248,113,113,.18), rgba(248,113,113,.05)); border:1px solid rgba(248,113,113,.3);
+  }
+  .error-state h3{ margin:0; font-size:15px; font-family:'Space Grotesk',sans-serif; }
+  .error-state p{ margin:0; color:var(--text-muted); font-size:13px; max-width:280px; line-height:1.5; }
+  .retry-btn{
+    margin-top:6px; padding:9px 18px; border-radius:10px; border:1px solid var(--glass-border);
+    background:var(--glass-fill); color:var(--text-primary); font-size:13px; font-weight:500;
+  }
+
+  /* ---------- Watermark overlay (soft copy deterrent) ---------- */
+  .watermark{
+    position:absolute; bottom:14px; right:18px; font-size:10.5px; color:rgba(255,255,255,.18);
+    pointer-events:none; letter-spacing:.03em; z-index:2;
+  }
+</style>
+</head>
+<body>
+
+<div class="aurora-field"></div>
+<div class="shell">
+
+  <div class="topbar">
+    <button class="back-btn" id="back-btn">
+      <span>←</span><span>Dashboard</span>
+    </button>
+    <div style="flex:1; min-width:0;">
+      <div class="doc-title" id="doc-title">Loading document…</div>
+      <div class="doc-meta" id="doc-meta">&nbsp;</div>
+    </div>
+  </div>
+
+  <div class="viewer-wrap">
+    <div class="viewer-panel">
+
+      <div class="loading-state" id="loading-state">
+        <div class="spinner"></div>
+        <p>Fetching document…</p>
+        <p class="sub mono" id="loading-sub">preparing secure stream</p>
+      </div>
+
+      <div class="error-state" id="error-state">
+        <div class="icon">⚠️</div>
+        <h3>Couldn't load this document</h3>
+        <p id="error-msg">The file may have been removed, or the connection was interrupted.</p>
+        <button class="retry-btn" id="retry-btn">Try again</button>
+      </div>
+
+      <iframe id="pdf-frame" title="Document viewer"></iframe>
+      <div class="watermark" id="watermark"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+
+  const params = new URLSearchParams(window.location.search);
+  const chatId = params.get('chat');
+  const msgId = params.get('msg');
+
+  $('back-btn').addEventListener('click', () => {
+    window.location.href = '/index.html';
+  });
+
+  if (!chatId || !msgId) {
+    showError("Missing document reference.", "This link is missing the chat or message ID.");
+  } else {
+    $('doc-title').textContent = `Document #${msgId}`;
+    $('doc-meta').textContent = `Chat ${chatId} · Msg ${msgId}`;
+    loadDocument(chatId, msgId);
+  }
+
+  function showError(title, msg){
+    $('loading-state').style.display = 'none';
+    $('error-state').style.display = 'flex';
+    $('error-state').querySelector('h3').textContent = title;
+    $('error-msg').textContent = msg;
+  }
+
+  $('retry-btn').addEventListener('click', () => {
+    $('error-state').style.display = 'none';
+    $('loading-state').style.display = 'flex';
+    loadDocument(chatId, msgId);
+  });
+
+  // ============================================================
+  // renderPdfBlob(blobUrl, meta)
+  // ------------------------------------------------------------
+  // Call this from your GramJS engine once the PDF bytes have
+  // been downloaded from Telegram and turned into a Blob URL, e.g:
+  //
+  //   const buffer = await client.downloadMedia(media, {});
+  //   const blob = new Blob([buffer], { type: 'application/pdf' });
+  //   const blobUrl = URL.createObjectURL(blob);
+  //   window.renderPdfBlob(blobUrl, { title: 'Course Handbook.pdf', size: '2.1 MB' });
+  //
+  // The iframe (not <object>) is used because it sandboxes the PDF's
+  // own toolbar/context menu more consistently across mobile webviews.
+  // Revoke the blob URL when the user navigates away (see teardown below).
+  // ============================================================
+  let activeBlobUrl = null;
+
+  window.renderPdfBlob = function(blobUrl, meta){
+    activeBlobUrl = blobUrl;
+    const frame = $('pdf-frame');
+
+    frame.src = blobUrl;
+    frame.onload = () => {
+      $('loading-state').style.display = 'none';
+      frame.style.display = 'block';
+    };
+    frame.onerror = () => {
+      showError("Rendering failed", "The document couldn't be displayed in this view.");
+    };
+
+    if (meta) {
+      if (meta.title) $('doc-title').textContent = meta.title;
+      if (meta.size) $('doc-meta').textContent = `${meta.size} · Chat ${chatId} · Msg ${msgId}`;
+      $('watermark').textContent = meta.watermark || '';
+    }
+  };
+
+  window.setLoadingStatus = function(text){
+    const el = $('loading-sub');
+    if (el) el.textContent = text;
+  };
+
+  // ============================================================
+  // loadDocument — placeholder orchestration.
+  // Replace this stub with a call into your GramJS-backed engine
+  // (e.g. dynamically import a pdf-engine.js module that owns the
+  // TelegramClient, downloads the document by msgId, and calls
+  // window.renderPdfBlob(...) when ready).
+  // ============================================================
+  async function loadDocument(chat, msg){
+    $('loading-state').style.display = 'flex';
+    $('error-state').style.display = 'none';
+    $('pdf-frame').style.display = 'none';
+
+    try {
+      // TODO: replace with real engine call, e.g.:
+      //   const { fetchPdfBlob } = await import('/pdf-engine.js');
+      //   const { blobUrl, meta } = await fetchPdfBlob(chat, msg);
+      //   window.renderPdfBlob(blobUrl, meta);
+      console.log(`[pdf.html] Ready for engine hookup — chat=${chat} msg=${msg}`);
+    } catch (err) {
+      console.error('[pdf.html] load failed:', err);
+      showError("Couldn't load this document", err.message || "Unknown error");
+    }
+  }
+
+  // Release the blob URL when leaving, so memory doesn't leak on long sessions
+  window.addEventListener('pagehide', () => {
+    if (activeBlobUrl) URL.revokeObjectURL(activeBlobUrl);
+  });
+})();
+</script>
+</body>
+</html>
