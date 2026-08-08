@@ -5,13 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Premium Telegram Player</title>
     
-    <!-- Tailwind & Fonts & Icons -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
     
-    <!-- GramJS Library & BigInt for Browser Streaming -->
     <script src="https://cdn.jsdelivr.net/npm/telegram@2.22.2/browser/bundle.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/big-integer@1.6.52/BigInteger.min.js"></script>
 
@@ -53,14 +51,6 @@
           #050607;
       }
 
-      /* --- LOGIN OVERLAY STYLES --- */
-      .login-glass { background: rgba(20, 22, 27, 0.85); border: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(16px); }
-      .input-field { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: white; width: 100%; padding: 14px 16px; border-radius: 12px; outline: none; margin-bottom: 16px; text-align: center; font-size: 15px; }
-      .input-field:focus { border-color: var(--accent); box-shadow: 0 0 15px rgba(79,195,255,0.2); }
-      .auth-btn { background: var(--accent-grad); color: #000; width: 100%; padding: 14px; border-radius: 12px; font-weight: 800; cursor: pointer; transition: 0.2s; border: none; }
-      .auth-btn:active { transform: scale(0.96); }
-      .auth-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-
       /* --- MAIN PLAYER CONTAINER --- */
       .player {
         position: relative; width: 100%; max-width: 1040px;
@@ -76,7 +66,6 @@
         object-fit: contain; cursor: pointer; transition: opacity 0.25s ease;
       }
 
-      /* --- ANTI-PIRACY BLACKOUT SCREEN --- */
       .anti-piracy-screen {
         position: absolute; inset: 0; background: #000; z-index: 50;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -86,7 +75,6 @@
       .anti-piracy-screen p { color: #ff4c4c; font-weight: 600; font-size: 18px; margin-top: 10px; }
       .anti-piracy-screen svg { width: 50px; height: 50px; color: #ff4c4c; }
 
-      /* --- DYNAMIC WATERMARK --- */
       .watermark {
         position: absolute; z-index: 20; color: rgba(255, 255, 255, 0.15);
         font-size: 18px; font-weight: 700; font-family: monospace; letter-spacing: 2px;
@@ -94,7 +82,6 @@
         text-shadow: 0 0 4px rgba(0,0,0,0.8);
       }
 
-      /* --- LOADING STATUS --- */
       .player-status {
         position: absolute; inset: 0; display: flex; flex-direction: column;
         align-items: center; justify-content: center; gap: 16px;
@@ -128,7 +115,6 @@
         border: 1px solid rgba(255,255,255,0.08); font-variant-numeric: tabular-nums;
       }
 
-      /* --- CENTER PLAY/PAUSE MORPH BUTTON --- */
       .center-toggle {
         position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
         width: 76px; height: 76px; border-radius: 50%; border: none;
@@ -146,7 +132,6 @@
       .player:not(.is-playing) .center-toggle #cplay-icon { opacity: 1; transform: scale(1) rotate(0); }
       .player.is-playing .center-toggle #cpause-icon { opacity: 1; transform: scale(1) rotate(0); }
 
-      /* --- DOUBLE TAP RIPPLE --- */
       .tap-ripple {
         position: absolute; top: 0; bottom: 0; width: 38%; display: flex;
         align-items: center; justify-content: center; pointer-events: none; overflow: hidden; z-index: 3;
@@ -173,7 +158,6 @@
       @keyframes tapTextPop { 0% { opacity: 0; transform: scale(0.8); } 25% { opacity: 1; transform: scale(1.05); } 40% { transform: scale(1); } 75% { opacity: 1; } 100% { opacity: 0; } }
       .tap-text svg { width: 16px; height: 16px; }
 
-      /* --- AUDIO-ONLY MODE OVERLAY --- */
       .audio-overlay {
         position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
         background: radial-gradient(700px 400px at 50% 30%, rgba(79,195,255,0.14), transparent 60%), linear-gradient(180deg, #0a0c10 0%, #050607 100%);
@@ -201,7 +185,6 @@
       .player:not(.is-playing) .eq-bars span { animation-play-state: paused; transform: scaleY(0.3); }
       .audio-overlay-label { font-size: 13px; color: var(--text-dim); letter-spacing: 0.3px; }
 
-      /* --- CONTROLS OVERLAY --- */
       .controls {
         position: absolute; left: 0; right: 0; bottom: 0; padding: 44px 16px 14px;
         background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.5) 55%, transparent 100%);
@@ -209,7 +192,6 @@
       }
       .player.show-controls .controls, .player:not(.is-playing) .controls { opacity: 1; pointer-events: all; }
 
-      /* --- SEEK BAR --- */
       .seek-container { position: relative; height: 22px; display: flex; align-items: center; cursor: pointer; margin-bottom: 6px; }
       .seek-track { position: relative; width: 100%; height: 4px; border-radius: 3px; background: var(--track); transition: height 0.15s ease; }
       .seek-container:hover .seek-track, .seek-container.scrubbing .seek-track { height: 7px; }
@@ -226,7 +208,6 @@
       }
       .seek-container:hover .seek-thumb, .seek-container.scrubbing .seek-thumb { transform: translate(-50%, -50%) scale(1.35); }
 
-      /* --- BOTTOM ROW BUTTONS --- */
       .controls-row { display: flex; align-items: center; gap: 4px; }
       .spacer { flex: 1; }
       .ctrl-btn {
@@ -239,7 +220,6 @@
       .ctrl-btn svg { width: 20px; height: 20px; }
       .time { font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--text-dim); margin-left: 6px; font-weight: 500; white-space: nowrap; }
 
-      /* --- VOLUME SLIDER --- */
       .volume-wrapper { display: flex; align-items: center; }
       .volume-slider {
         width: 0; opacity: 0; height: 4px; background: var(--track); outline: none; -webkit-appearance: none; appearance: none;
@@ -250,7 +230,6 @@
       .volume-slider::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--track); }
       .volume-slider::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #fff; border: none; box-shadow: 0 0 0 2px rgba(79,195,255,0.5); }
 
-      /* --- SETTINGS MENU --- */
       .settings-menu {
         position: absolute; bottom: 64px; right: 14px; background: var(--surface); border-radius: var(--radius-md); padding: 6px; min-width: 220px;
         backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%); border: 1px solid var(--border);
@@ -282,7 +261,6 @@
       .menu-header:hover { background: rgba(255,255,255,0.05); }
       .menu-header svg { width: 16px; height: 16px; }
 
-      /* --- MOBILE OPTIMIZATION --- */
       @media (max-width: 640px) {
         #app { padding: 0; }
         .player { border-radius: 0; max-width: 100%; }
@@ -306,41 +284,6 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px;"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
         Back
     </button>
-
-    <!-- ==========================================
-         LOGIN OVERLAY (GRAMJS AUTHENTICATION) 
-         ========================================== -->
-    <div id="loginOverlay" class="hidden">
-      <div class="fixed inset-0 z-[60] flex items-center justify-center bg-black/95 backdrop-blur-xl">
-          <div class="login-glass w-full max-w-sm rounded-[24px] p-8 text-center shadow-[0_0_50px_rgba(79,195,255,0.15)] mx-4">
-            <div class="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-blue-500/20 text-[#4fc3ff] text-3xl shadow-[0_0_20px_rgba(79,195,255,0.2)]">
-              <i class="fa-brands fa-telegram"></i>
-            </div>
-            <h2 class="login-title">Stream Authorization</h2>
-            <p class="login-desc">Link your Telegram account to unlock ultra-fast, buffer-free streaming directly from the servers.</p>
-
-            <!-- Step 1: Phone -->
-            <div id="step-phone">
-              <input type="text" id="inp-phone" class="input-field" placeholder="Phone Number (+91...)">
-              <button id="btn-send-code" class="auth-btn">Send OTP Code</button>
-            </div>
-
-            <!-- Step 2: OTP -->
-            <div id="step-otp" class="hidden">
-              <input type="text" id="inp-otp" class="input-field tracking-[0.5em] font-mono" placeholder="12345">
-              <button id="btn-verify-otp" class="auth-btn">Verify Code</button>
-            </div>
-
-            <!-- Step 3: Password (2FA) -->
-            <div id="step-pass" class="hidden">
-              <input type="password" id="inp-pass" class="input-field" placeholder="2FA Password">
-              <button id="btn-verify-pass" class="auth-btn">Unlock Stream</button>
-            </div>
-            
-            <p id="statusMsg" class="mt-4 text-xs font-semibold text-[#4fc3ff]"></p>
-          </div>
-      </div>
-    </div>
 
     <!-- ==========================================
          PREMIUM PLAYER CONTAINER
@@ -394,7 +337,7 @@
           <!-- Loading Status (Integrated with GramJS) -->
           <div class="player-status" id="player-status">
             <div class="loader"><div class="ring r1"></div><div class="ring r2"></div><div class="core"></div></div>
-            <span class="player-status-text" id="player-status-text">Initializing Engine...</span>
+            <span class="player-status-text" id="player-status-text">Checking Session...</span>
           </div>
         </div>
 
@@ -488,159 +431,55 @@
       </div>
     </div>
 
-    <!-- ==========================================
-         GRAMJS STREAMING & AUTH ENGINE
-         ========================================== -->
     <script>
-      // Global Telemetry
       const tg = window.Telegram ? window.Telegram.WebApp : null;
       if (tg) tg.expand();
       
-      // 🚨 THE FIX: Aapki ID 7993892902 set kar di hai! 
       const UID = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 7993892902;
-      
-      // Setup Dynamic Watermark
       document.getElementById('video-watermark').innerText = 'UID: ' + UID;
 
-      // Extract APIs & URL Params
       const { Api, TelegramClient } = telegram;
       const { StringSession } = telegram.sessions;
       const bigInt = window.bigInt; 
 
       const apiId = Number("{{ api_id }}"); 
       const apiHash = "{{ api_hash }}";
-      
-      let client;
-      let phoneCodeHash = '';
-      let currentPhone = '';
 
       const urlParams = new URLSearchParams(window.location.search);
       const chatIdParam = urlParams.get('chat');
       const msgIdParam = Number(urlParams.get('msg'));
 
-      function setStatus(msg) { document.getElementById('statusMsg').innerText = msg; }
       function setPlayerStatus(msg) { document.getElementById('player-status-text').innerText = msg; }
 
       // Boot App
       async function startApp() {
           if (!chatIdParam || !msgIdParam) return;
 
-          // Register Service Worker
           if ('serviceWorker' in navigator) {
               try {
-                  const reg = await navigator.serviceWorker.register('/sw.js?v=9');
+                  const reg = await navigator.serviceWorker.register('/sw.js?v=10');
                   await navigator.serviceWorker.ready;
-                  // 🚨 THE FIX: Removed the infinite reload loop!
               } catch (err) { console.error('SW Error:', err); }
           }
 
-          // Check Session
           try {
               setPlayerStatus("Checking Secure Session...");
               const res = await fetch(`/api/session/get/${UID}`);
               const data = await res.json();
               
               if (data.success && data.session) {
-                  // Direct Play
                   document.getElementById('player').classList.remove('hidden');
                   await connectAndStream(data.session);
               } else {
-                  // Require Login
-                  document.getElementById('loginOverlay').classList.remove('hidden');
-                  setupLoginUI(); 
+                  // 🚨 SEPARATED LOGIN LOGIC: Redirect to /login
+                  window.location.href = '/login';
               }
           } catch (e) { 
-              console.error("Network error checking session:", e); 
-              // 🚨 THE FIX: Force login overlay if fetch fails!
-              document.getElementById('loginOverlay').classList.remove('hidden');
-              setupLoginUI(); 
+              window.location.href = '/login';
           }
       }
 
-      // ------------------------------------------
-      // LOGIN UI LOGIC
-      // ------------------------------------------
-      function setupLoginUI() {
-          const btnSend = document.getElementById('btn-send-code');
-          const btnVerifyOtp = document.getElementById('btn-verify-otp');
-          const btnVerifyPass = document.getElementById('btn-verify-pass');
-
-          client = new TelegramClient(new StringSession(''), apiId, apiHash, { connectionRetries: 5 });
-
-          btnSend.onclick = async () => {
-              btnSend.disabled = true;
-              setStatus("Connecting to Telegram Servers...");
-              
-              currentPhone = document.getElementById('inp-phone').value.replace(/\s/g, '');
-              if (!currentPhone.startsWith('+')) currentPhone = '+' + currentPhone;
-
-              try {
-                  if (!client.connected) await client.connect();
-                  setStatus("Requesting OTP...");
-                  const result = await client.sendCode({ apiId: apiId, apiHash: apiHash }, currentPhone);
-                  phoneCodeHash = result.phoneCodeHash;
-                  
-                  document.getElementById('step-phone').classList.add('hidden');
-                  document.getElementById('step-otp').classList.remove('hidden');
-                  setStatus("✅ OTP sent to your Telegram App!");
-              } catch (err) { 
-                  setStatus("❌ Error: " + err.message); 
-                  btnSend.disabled = false;
-              }
-          };
-
-          btnVerifyOtp.onclick = async () => {
-              btnVerifyOtp.disabled = true;
-              setStatus("Verifying Code...");
-              const code = document.getElementById('inp-otp').value.replace(/\s/g, '');
-              try {
-                  await client.signIn(currentPhone, { phoneCodeHash: phoneCodeHash, phoneCode: code });
-                  await finalizeLogin();
-              } catch (err) {
-                  if (err.message.includes('SESSION_PASSWORD_NEEDED')) {
-                      document.getElementById('step-otp').classList.add('hidden');
-                      document.getElementById('step-pass').classList.remove('hidden');
-                      setStatus("🔒 2FA Password Required");
-                  } else { 
-                      setStatus("❌ Error: " + err.message); 
-                      btnVerifyOtp.disabled = false;
-                  }
-              }
-          };
-
-          btnVerifyPass.onclick = async () => {
-              btnVerifyPass.disabled = true;
-              setStatus("Checking Password...");
-              const password = document.getElementById('inp-pass').value.trim();
-              try {
-                  await client.signInWithPassword({ password: password, apiId: apiId, apiHash: apiHash });
-                  await finalizeLogin();
-              } catch (err) { 
-                  setStatus("❌ Error: " + err.message); 
-                  btnVerifyPass.disabled = false;
-              }
-          };
-
-          async function finalizeLogin() {
-              setStatus("Securing Session...");
-              const sessionString = client.session.save();
-              
-              // Save to Database
-              await fetch('/api/session/save', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ uid: UID, session: sessionString })
-              });
-
-              document.getElementById('loginOverlay').classList.add('hidden');
-              document.getElementById('player').classList.remove('hidden');
-              await connectAndStream(sessionString);
-          }
-      }
-
-      // ------------------------------------------
       // STREAMING ENGINE (GramJS + SW)
-      // ------------------------------------------
       async function connectAndStream(sessionStr) {
           setPlayerStatus("Connecting to Secure DC...");
           const session = new StringSession(sessionStr);
@@ -655,7 +494,7 @@
           };
           if (session.dcId && DC_HOSTNAMES[session.dcId]) session.setDC(session.dcId, DC_HOSTNAMES[session.dcId], 443);
 
-          client = new TelegramClient(session, apiId, apiHash, { connectionRetries: 5, useWSS: true });
+          let client = new TelegramClient(session, apiId, apiHash, { connectionRetries: 5, useWSS: true });
           await client.connect();
 
           setPlayerStatus("Extracting Video Chunks...");
@@ -763,15 +602,12 @@
 
           const videoElement = document.getElementById('video-player');
           videoElement.src = `/tg-stream/video_${msgIdParam}.mp4`;
-          // Hide Loader when video gets source
           document.getElementById('player-status').classList.add('hidden');
       }
 
       startApp();
 
-      // ==========================================
-      // UI LOGIC (Play/Pause, Watermark, Double Tap, etc.)
-      // ==========================================
+      // UI LOGIC
       const video = document.getElementById('video-player');
       const player = document.getElementById('player');
       const status = document.getElementById('player-status');
