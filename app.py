@@ -107,9 +107,13 @@ async def health():
     is_active, remaining = config.get_flood_wait_status()
     return jsonify({"status": "OK", "flood_wait_active": is_active, "flood_wait_seconds": remaining}), 200
 
+# 🚨 THE FIX: Direct Browser ID Access Route
 @app.route('/')
-async def index():
-    return await render_template('dashboard.html', bot_username=getattr(config, 'BOT_USERNAME', 'H4R_Bot'))
+@app.route('/<int:user_id>')
+async def index(user_id=None):
+    return await render_template('dashboard.html', 
+                                 bot_username=getattr(config, 'BOT_USERNAME', 'H4R_Bot'),
+                                 url_user_id=str(user_id) if user_id else "None")
 
 @app.route('/explore')
 async def explore_page():
@@ -205,30 +209,9 @@ async def get_user_session(uid):
     except Exception as e:
         return jsonify({"success": False, "error": "Decryption failed"}), 500
 
-# 🚨 THE FIX: Puraana ID use karna band kiya taaki crash na ho. Direct naya fetch!
+# 🚨 THE FIX: Thumbnail Fetching Disabled to prevent Pyrogram Crash
 @app.route('/api/thumb/<chat_id>/<int:msg_id>/<file_id>')
 async def get_thumbnail(chat_id, msg_id, file_id):
-    if not hasattr(config, 'bot_app') or not config.bot_app:
-        return "Bot not ready", 503
-    try:
-        bot = config.bot_app
-        target_chat = int(chat_id)
-        
-        # Hamesha fresh message fetch karega taaki FileReferenceExpired error aaye hi na
-        msg = await bot.get_messages(target_chat, ids=msg_id)
-        if msg and msg.video and getattr(msg.video, 'thumbs', None):
-            fresh_file_id = msg.video.thumbs[0].file_id
-            file_obj = await bot.download_media(fresh_file_id, in_memory=True)
-            img_bytes = file_obj.getvalue() if hasattr(file_obj, "getvalue") else file_obj
-            return await send_file(io.BytesIO(img_bytes), mimetype='image/jpeg')
-        elif msg and msg.document and getattr(msg.document, 'thumbs', None):
-            fresh_file_id = msg.document.thumbs[0].file_id
-            file_obj = await bot.download_media(fresh_file_id, in_memory=True)
-            img_bytes = file_obj.getvalue() if hasattr(file_obj, "getvalue") else file_obj
-            return await send_file(io.BytesIO(img_bytes), mimetype='image/jpeg')
-    except Exception as e:
-        pass # Chupchaap ignore karo
-        
     return "", 404
 
 # ==========================================
