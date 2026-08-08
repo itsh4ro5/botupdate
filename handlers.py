@@ -4,7 +4,7 @@ import io
 import os
 import re
 import traceback
-import re
+import asyncio
 import time
 import urllib.parse
 import logging
@@ -223,26 +223,46 @@ async def cmd_storebatch(client: Client, message: Message):
     except ValueError:
         return await message.reply_text("❌ Error: ID numbers me honi chahiye (jaise -10012345678).")
 
-    msg = await message.reply_text(f"⏳ **Connecting to Batch `{chat_id}`...**", parse_mode=ParseMode.MARKDOWN)
+    # --- USERBOT SESSION FETCH KARNA ---
+    from config import DB, API_ID, API_HASH
+    session_string = DB.get("USERBOT_SESSION")
     
-    try:
-        # Channel ka asli naam yahan se milega
-        chat_info = await client.get_chat(chat_id)
-        channel_name = chat_info.title
-    except Exception as e:
-        return await msg.edit_text(f"❌ **Error:** Bot channel ko access nahi kar pa raha. Kya bot usme Admin hai?\nLog: `{e}`")
+    if not session_string or not API_ID:
+        return await message.reply_text(
+            "❌ **Userbot Not Logged In!**\nPehle Owner dashboard se login karein taaki bot history scan kar sake.", 
+            parse_mode=ParseMode.MARKDOWN
+        )
 
-    await msg.edit_text(f"⏳ **Scanning '{channel_name}'...**\nIsme thoda waqt lag sakta hai, kripya wait karein...", parse_mode=ParseMode.MARKDOWN)
+    msg = await message.reply_text(f"⏳ **Starting Userbot to scan Batch `{chat_id}`...**", parse_mode=ParseMode.MARKDOWN)
     
+    # --- USERBOT INITIALIZE KARNA ---
+    userbot = Client(
+        "store_bot",
+        api_id=API_ID,
+        api_hash=API_HASH,
+        session_string=session_string,
+        in_memory=True,
+    )
+
     video_count = 0
     pdf_count = 0
-    
-    # Structure: { "Subject Name": [ {video1}, {video2} ] }
-    # Is structure se Frontend me Netflix jaise Folders banenge
     subjects_dict = {}
+    channel_name = f"Batch {chat_id}"
 
     try:
-        async for m in client.get_chat_history(chat_id):
+        await userbot.start()
+        
+        # Channel ka asli naam Userbot se fetch karenge
+        try:
+            chat_info = await userbot.get_chat(chat_id)
+            channel_name = chat_info.title
+        except Exception:
+            pass 
+
+        await msg.edit_text(f"⏳ **Scanning '{channel_name}' via Userbot...**\nIsme thoda waqt lag sakta hai, kripya wait karein...", parse_mode=ParseMode.MARKDOWN)
+        
+        # Userbot ke through History scan karna
+        async for m in userbot.get_chat_history(chat_id):
             caption = m.caption or ""
             
             # --- REGEX EXTRACTOR (Captions padhne ka logic) ---
@@ -250,7 +270,6 @@ async def cmd_storebatch(client: Client, message: Message):
             title_match = re.search(r"Title:\s*(.*)", caption, re.IGNORECASE)
             sub_match = re.search(r"Subject:\s*(.*)", caption, re.IGNORECASE)
 
-            # Agar purana format mila toh default values lagayega
             vid_index = idx_match.group(1).strip() if idx_match else "999"
             vid_title = title_match.group(1).strip() if title_match else "Unknown Media"
             vid_subject = sub_match.group(1).strip() if sub_match else "Other Files"
@@ -293,16 +312,20 @@ async def cmd_storebatch(client: Client, message: Message):
             # Update Live Status
             if (video_count + pdf_count) > 0 and (video_count + pdf_count) % 300 == 0:
                 try:
-                    await msg.edit_text(f"⏳ **Scanning '{channel_name}'...**\n\nFound so far:\n🎥 Videos: `{video_count}`\n📄 PDFs: `{pdf_count}`")
+                    await msg.edit_text(f"⏳ **Scanning '{channel_name}' via Userbot...**\n\nFound so far:\n🎥 Videos: `{video_count}`\n📄 PDFs: `{pdf_count}`")
                 except: pass
-                await asyncio.sleep(1) # Ban hone se bachne ke liye
+                await asyncio.sleep(1.5)
 
-        # Indexing Sorting (001, 002 ke hisab se sequence theek karna)
+        # Stop Userbot immediately after scanning
+        await userbot.stop()
+
+        # Indexing Sorting
         for sub in subjects_dict:
             subjects_dict[sub].sort(key=lambda x: x.get("index", "999"))
 
         # --- FIREBASE SAVE LOGIC ---
         import app as backend_app
+        import time
         if backend_app.db_fs:
             final_data = {
                 "channel_name": channel_name,
@@ -322,7 +345,7 @@ async def cmd_storebatch(client: Client, message: Message):
             firebase_status = "⚠️ Firebase is NOT connected! Data lost."
 
         await msg.edit_text(
-            f"🎯 **Batch Scan Complete!**\n\n"
+            f"🎯 **Batch Scan Complete (Userbot)!**\n\n"
             f"📁 Channel: **{channel_name}**\n"
             f"🎥 Total Videos: `{video_count}`\n"
             f"📄 Total PDFs: `{pdf_count}`\n"
@@ -332,7 +355,11 @@ async def cmd_storebatch(client: Client, message: Message):
 
     except Exception as e:
         traceback.print_exc()
-        await msg.edit_text(f"❌ **Error during scan:** `{e}`", parse_mode=ParseMode.MARKDOWN)
+        await msg.edit_text(f"❌ **Userbot Error during scan:** `{e}`", parse_mode=ParseMode.MARKDOWN)
+        try:
+            await userbot.stop()
+        except:
+            pass
 
 async def cmd_userbotphone(client: Client, message: Message):
     if not is_owner_msg(message):
@@ -340,11 +367,16 @@ async def cmd_userbotphone(client: Client, message: Message):
     uid = message.from_user.id
     if not API_ID or API_ID == 0:
         return await message.reply_text(
-            "  **API_ID Missing!** Kripya Cloud Dashboard me API_ID theek karein.",
+            "⚠️ **API_ID Missing!** Kripya Cloud Dashboard me API_ID theek karein.",
             parse_mode=ParseMode.MARKDOWN,
         )
-    phone = message.text.split(" ", 1)[-1].replace(" ", "").strip()
-    msg = await message.reply_text("  OTP request bhej raha hu, kripya wait karein...")
+    
+    # FIX: Don't cut the first part if it's not a command
+    text = message.text or ""
+    raw_phone = text.split(" ", 1)[-1] if text.startswith("/") else text
+    phone = raw_phone.replace(" ", "").strip()
+    
+    msg = await message.reply_text("⏳ OTP request bhej raha hu, kripya wait karein...")
     temp_client = Client("temp_login", api_id=API_ID, api_hash=API_HASH, in_memory=True)
     await temp_client.connect()
     try:
@@ -356,28 +388,36 @@ async def cmd_userbotphone(client: Client, message: Message):
         client.user_data_store["phone_code_hash"] = sent_code.phone_code_hash
         ADMIN_WIZARD[uid] = {"step": "call_cmd_userbototp"}
         await msg.edit_text(
-            "  **OTP Bhej diya gaya hai!**\n\nKripya apna OTP yahan type karein.\n**DHYAN DEIN:** OTP space lagakar likhein (Example: `1 2 3 4 5`)",
+            "✅ **OTP Bhej diya gaya hai!**\n\nKripya apna OTP yahan type karein.\n**DHYAN DEIN:** OTP space lagakar likhein (Example: `1 2 3 4 5`)",
             parse_mode=ParseMode.MARKDOWN,
         )
     except Exception as e:
         await temp_client.disconnect()
-        await msg.edit_text(f"  Error: `{e}`", parse_mode=ParseMode.MARKDOWN)
+        await msg.edit_text(f"❌ Error: `{e}`", parse_mode=ParseMode.MARKDOWN)
 
 async def cmd_userbototp(client: Client, message: Message):
     if not is_owner_msg(message):
         return
     uid = message.from_user.id
-    otp = message.text.split(" ", 1)[-1].replace(" ", "").replace("-", "").strip()
+    
+    # FIX: Safely extract OTP without losing the first digit
+    text = message.text or ""
+    raw_otp = text.split(" ", 1)[-1] if text.startswith("/") else text
+    otp = raw_otp.replace(" ", "").replace("-", "").strip()
+    
     user_store = getattr(client, "user_data_store", {})
     phone = user_store.get("login_phone")
     phone_code_hash = user_store.get("phone_code_hash")
     temp_client = user_store.get("login_client")
+    
     if not phone or not phone_code_hash or not temp_client:
-        return await message.reply_text("  Session expire ho gaya. Kripya wapas login par click karein.")
-    msg = await message.reply_text("  OTP Verify kar raha hu...")
+        return await message.reply_text("⚠️ Session expire ho gaya. Kripya wapas login par click karein.")
+    
+    msg = await message.reply_text("⏳ OTP Verify kar raha hu...")
     try:
         await temp_client.sign_in(phone, phone_code_hash, otp)
         session_string = await temp_client.export_session_string()
+        from config import DB, save_data_async # Ensure safe import
         DB["USERBOT_SESSION"] = session_string
         DB["USERBOT_PHONE"] = phone
         await save_data_async()
@@ -386,34 +426,42 @@ async def cmd_userbototp(client: Client, message: Message):
         user_store.pop("login_phone", None)
         user_store.pop("phone_code_hash", None)
         await msg.edit_text(
-            "  **LOGIN SUCCESSFUL!**\n\nBina 2FA ke Session Database me save ho gaya hai.",
+            "🎉 **LOGIN SUCCESSFUL!**\n\nBina 2FA ke Session Database me save ho gaya hai.",
             parse_mode=ParseMode.MARKDOWN,
         )
     except SessionPasswordNeeded:
         ADMIN_WIZARD[uid] = {"step": "call_cmd_userbotpass"}
         await msg.edit_text(
-            "  **2-Step Verification Detected!**\n\nIs account me 2FA on hai. Kripya apna **2FA Password** type karein:",
+            "🔒 **2-Step Verification Detected!**\n\nIs account me 2FA on hai. Kripya apna **2FA Password** type karein:",
             parse_mode=ParseMode.MARKDOWN,
         )
     except Exception as e:
         await temp_client.disconnect()
         user_store.pop("login_client", None)
-        await msg.edit_text(f"  OTP Error: `{e}`", parse_mode=ParseMode.MARKDOWN)
+        await msg.edit_text(f"❌ OTP Error: `{e}`", parse_mode=ParseMode.MARKDOWN)
 
 async def cmd_userbotpass(client: Client, message: Message):
     if not is_owner_msg(message):
         return
     uid = message.from_user.id
-    password = message.text.split(" ", 1)[-1].strip()
+    
+    # FIX: Don't lose the first word of the password if it has spaces
+    text = message.text or ""
+    password = text.split(" ", 1)[-1] if text.startswith("/") else text
+    password = password.strip()
+    
     user_store = getattr(client, "user_data_store", {})
     phone = user_store.get("login_phone")
     temp_client = user_store.get("login_client")
+    
     if not phone or not temp_client:
-        return await message.reply_text("  Session expire ho gaya. Kripya wapas login par click karein.")
-    msg = await message.reply_text("  Password check kar raha hu...")
+        return await message.reply_text("⚠️ Session expire ho gaya. Kripya wapas login par click karein.")
+    
+    msg = await message.reply_text("⏳ Password check kar raha hu...")
     try:
         await temp_client.check_password(password)
         session_string = await temp_client.export_session_string()
+        from config import DB, save_data_async
         DB["USERBOT_SESSION"] = session_string
         DB["USERBOT_PHONE"] = phone
         await save_data_async()
@@ -421,14 +469,13 @@ async def cmd_userbotpass(client: Client, message: Message):
         user_store.pop("login_client", None)
         user_store.pop("login_phone", None)
         await msg.edit_text(
-            "  **LOGIN SUCCESSFUL!**\n\n2FA Password verified. Session save ho gaya hai.",
+            "🎉 **LOGIN SUCCESSFUL!**\n\n2FA Password verified. Session save ho gaya hai.",
             parse_mode=ParseMode.MARKDOWN,
         )
     except Exception as e:
         await temp_client.disconnect()
         user_store.pop("login_client", None)
-        await msg.edit_text(f"  Password Error: `{e}`", parse_mode=ParseMode.MARKDOWN)
-
+        await msg.edit_text(f"❌ Password Error: `{e}`", parse_mode=ParseMode.MARKDOWN)
 async def cmd_del_msg(client: Client, message: Message):
     if not is_admin_msg(message) or not message.reply_to_message:
         return
