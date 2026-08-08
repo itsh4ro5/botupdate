@@ -10,7 +10,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
     
-    <!-- 🚨 THE FIX: Switched to reliable UNPKG CDN to prevent blockages -->
     <script src="https://unpkg.com/telegram@2.22.2/browser/bundle.js"></script>
     <script src="https://unpkg.com/big-integer@1.6.52/BigInteger.min.js"></script>
 
@@ -22,16 +21,9 @@
         --border: rgba(255, 255, 255, 0.08);
         --text: #f5f6f8;
         --text-dim: #9aa1ac;
-        --text-faint: #656c78;
         --accent: #4fc3ff;
         --accent-2: #22e6c5;
         --accent-grad: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-        --track: rgba(255, 255, 255, 0.16);
-        --buffered: rgba(255, 255, 255, 0.34);
-        --glow: rgba(79, 195, 255, 0.45);
-        --radius-lg: 20px;
-        --radius-md: 14px;
-        --radius-sm: 9px;
       }
 
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -45,64 +37,45 @@
 
       #app {
         min-height: 100vh; display: flex; align-items: center;
-        justify-content: center; padding: 24px;
-        background:
-          radial-gradient(1200px 600px at 15% -10%, rgba(79,195,255,0.08), transparent 60%),
-          radial-gradient(1000px 500px at 110% 110%, rgba(34,230,197,0.06), transparent 60%),
-          #050607;
+        justify-content: center; padding: 24px; background: #050607;
       }
 
       .player {
         position: relative; width: 100%; max-width: 1040px; height: 80vh;
-        background: #000; border-radius: var(--radius-lg); overflow: hidden;
-        box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255,255,255,0.05);
+        background: #000; border-radius: 20px; overflow: hidden;
+        box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.85);
       }
 
       .video-stage { position: relative; width: 100%; height: 100%; overflow: hidden; }
 
       .player video {
         display: block; width: 100%; height: 100%; background: #000;
-        object-fit: contain; cursor: pointer; transition: opacity 0.25s ease;
+        object-fit: contain; cursor: pointer;
       }
 
       .player-status {
         position: absolute; inset: 0; display: flex; flex-direction: column;
         align-items: center; justify-content: center; gap: 16px;
-        background: rgba(6, 7, 8, 0.85); backdrop-filter: blur(6px);
-        transition: opacity 0.3s ease; pointer-events: none; z-index: 5;
+        background: rgba(6, 7, 8, 0.95); z-index: 10;
       }
 
       .loader { position: relative; width: 56px; height: 56px; }
       .loader .ring { position: absolute; inset: 0; border-radius: 50%; border: 2.5px solid transparent; }
       .loader .ring.r1 {
         border-top-color: var(--accent); border-right-color: var(--accent);
-        animation: spinCW 1.1s cubic-bezier(0.5, 0, 0.5, 1) infinite;
-      }
-      .loader .ring.r2 {
-        inset: 9px; border-bottom-color: var(--accent-2); border-left-color: var(--accent-2);
-        animation: spinCCW 0.9s cubic-bezier(0.5, 0, 0.5, 1) infinite;
-      }
-      .loader .core {
-        position: absolute; inset: 20px; border-radius: 50%;
-        background: var(--accent-grad); opacity: 0.85; box-shadow: 0 0 18px var(--glow);
-        animation: pulseCore 1.4s ease-in-out infinite;
+        animation: spinCW 1.1s linear infinite;
       }
       @keyframes spinCW { to { transform: rotate(360deg); } }
-      @keyframes spinCCW { to { transform: rotate(-360deg); } }
-      @keyframes pulseCore { 0%, 100% { transform: scale(0.85); opacity: 0.6; } 50% { transform: scale(1); opacity: 1; } }
 
       .player-status-text {
-        font-size: 13px; font-weight: 500; letter-spacing: 0.2px; color: var(--text);
-        background: rgba(0,0,0,0.35); padding: 6px 14px; border-radius: 999px;
-        border: 1px solid rgba(255,255,255,0.08); font-variant-numeric: tabular-nums;
+        font-size: 14px; font-weight: 600; color: var(--text);
+        background: rgba(255,255,255,0.1); padding: 8px 18px; border-radius: 999px;
       }
 
-      .back-top-btn { position: absolute; top: 16px; left: 16px; z-index: 100; display: flex; align-items: center; gap: 6px; padding: 8px 16px; background: rgba(0,0,0,0.6); color: white; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); font-size: 14px; font-weight: 600; cursor: pointer; backdrop-filter: blur(8px); transition: 0.2s; }
-      .back-top-btn:hover { background: rgba(255,255,255,0.1); }
+      .back-top-btn { position: absolute; top: 16px; left: 16px; z-index: 100; display: flex; align-items: center; gap: 6px; padding: 8px 16px; background: rgba(0,0,0,0.6); color: white; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); font-size: 14px; font-weight: 600; cursor: pointer; backdrop-filter: blur(8px); }
       
-      @media (max-width: 640px) {
-        #app { padding: 0; }
-        .player { border-radius: 0; max-width: 100%; height: 100vh; }
+      .login-redirect-box {
+        text-align: center; max-width: 320px; padding: 20px;
       }
     </style>
   </head>
@@ -114,15 +87,20 @@
     </button>
 
     <div id="app">
-      <div class="player hidden" id="player">
+      <div class="player" id="player">
         <div class="video-stage" id="video-stage">
-          <!-- NATIVE VIDEO PLAYER WITH CONTROLS -->
+          
           <video id="video-player" playsinline controls controlsList="nodownload"></video>
-          <!-- Loading Status -->
+
+          <!-- Loading & Status Screen -->
           <div class="player-status" id="player-status">
-            <div class="loader"><div class="ring r1"></div><div class="ring r2"></div><div class="core"></div></div>
-            <span class="player-status-text" id="player-status-text">Booting Engine...</span>
+            <div id="spinner-box">
+              <div class="loader"><div class="ring r1"></div></div>
+            </div>
+            <span class="player-status-text" id="player-status-text">Initializing Engine...</span>
+            <div id="action-btn-container" class="mt-4"></div>
           </div>
+
         </div>
       </div>
     </div>
@@ -136,21 +114,27 @@
       const chatIdParam = urlParams.get('chat');
       const msgIdParam = Number(urlParams.get('msg'));
 
-      function setPlayerStatus(msg) { document.getElementById('player-status-text').innerText = msg; }
+      function setPlayerStatus(msg, showLoginBtn = false) {
+          document.getElementById('player-status-text').innerText = msg;
+          if (showLoginBtn) {
+              document.getElementById('spinner-box').classList.add('hidden');
+              document.getElementById('action-btn-container').innerHTML = `
+                  <button onclick="window.location.href='/login'" style="background:linear-gradient(135deg, #4fc3ff, #22e6c5); color:#000; font-weight:800; padding:12px 24px; border-radius:12px; border:none; cursor:pointer;">
+                      🔐 Login with Telegram
+                  </button>
+              `;
+          }
+      }
 
-      // 🚨 THE FIX: Wait for the window to load completely before touching 'telegram' variable
       window.addEventListener('load', async () => {
-          if (typeof window.telegram === 'undefined' || typeof window.bigInt === 'undefined') {
-              setPlayerStatus("Network Error: GramJS CDN Blocked. Refreshing...");
-              setTimeout(() => window.location.reload(), 2000);
+          if (!chatIdParam || !msgIdParam) {
+              setPlayerStatus("Error: Missing video parameters.");
               return;
           }
 
-          if (!chatIdParam || !msgIdParam) return;
-
           if ('serviceWorker' in navigator) {
               try {
-                  await navigator.serviceWorker.register('/sw.js?v=14');
+                  await navigator.serviceWorker.register('/sw.js?v=15');
                   await navigator.serviceWorker.ready;
               } catch (err) { console.error('SW Error:', err); }
           }
@@ -161,21 +145,18 @@
               const data = await res.json();
               
               if (data.success && data.session) {
-                  document.getElementById('player').classList.remove('hidden');
+                  setPlayerStatus("Connecting to Telegram...");
                   await connectAndStream(data.session);
               } else {
-                  window.location.href = '/login';
+                  // Session nahi mila, seedha login button dikhao (No infinite loop)
+                  setPlayerStatus("Telegram Session Required to Play Video.", true);
               }
           } catch (e) { 
-              window.location.href = '/login';
+              setPlayerStatus("Network Error. Please Login.", true);
           }
       });
 
-      // STREAMING ENGINE (GramJS + SW)
       async function connectAndStream(sessionStr) {
-          setPlayerStatus("Connecting to Secure DC...");
-          
-          // Securely extracting APIs from loaded Window object
           const { TelegramClient } = window.telegram;
           const { StringSession } = window.telegram.sessions;
           const bigIntFn = window.bigInt; 
@@ -195,15 +176,21 @@
           if (session.dcId && DC_HOSTNAMES[session.dcId]) session.setDC(session.dcId, DC_HOSTNAMES[session.dcId], 443);
 
           let client = new TelegramClient(session, apiId, apiHash, { connectionRetries: 5, useWSS: true });
-          await client.connect();
+          
+          try {
+              await client.connect();
+          } catch (err) {
+              setPlayerStatus("Session Expired or Invalid. Please Re-login.", true);
+              return;
+          }
 
-          setPlayerStatus("Extracting Video...");
+          setPlayerStatus("Extracting Video Chunks...");
           
           const messages = await client.getMessages(chatIdParam, { ids: msgIdParam });
           const media = messages[0]?.media;
 
           if (!media || !media.document) {
-              setPlayerStatus("Error: Video not found or deleted.");
+              setPlayerStatus("Error: Video not found in Telegram Channel.");
               return;
           }
           
@@ -247,7 +234,7 @@
                           try {
                               for await (const chunk of client.iterDownload({
                                   file: currentMedia, 
-                                  offset: bigIntFn(alignedStart), // Used Safe Function Call
+                                  offset: bigIntFn(alignedStart), 
                                   limit: bigIntFn(alignedLimit), 
                                   requestSize: ALIGNMENT
                               })) {
@@ -276,7 +263,6 @@
                               break; 
                           } catch (err) {
                               if (err.message && (err.message.includes('FILE_REFERENCE_EXPIRED') || err.message.includes('FILE_REFERENCE_EMPTY'))) {
-                                  console.warn("🔄 File Reference Expired Mid-Stream! Auto-refreshing fresh link...");
                                   const freshMsgs = await client.getMessages(chatIdParam, { ids: msgIdParam });
                                   currentMedia = freshMsgs[0]?.media;
                                   if (!currentMedia) throw new Error("Could not refresh media link.");
@@ -293,7 +279,6 @@
                           activeStreams.delete(streamId);
                       }
                   } catch (err) {
-                      if (err.message && !err.message.includes('LIMIT_INVALID')) console.error("Stream Error:", err.message);
                       port.postMessage({ type: 'ERROR', error: err.message });
                       activeStreams.delete(streamId);
                   }
@@ -303,7 +288,6 @@
           const videoElement = document.getElementById('video-player');
           videoElement.src = `/tg-stream/video_${msgIdParam}.mp4`;
           
-          // Hide Loader when video starts playing
           videoElement.addEventListener('canplay', () => {
               document.getElementById('player-status').classList.add('hidden');
               videoElement.play(); 
