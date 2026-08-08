@@ -10,8 +10,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
     
-    <script src="https://cdn.jsdelivr.net/npm/telegram@2.22.2/browser/bundle.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/big-integer@1.6.52/BigInteger.min.js"></script>
+    <!-- 🚨 THE FIX: Switched to reliable UNPKG CDN to prevent blockages -->
+    <script src="https://unpkg.com/telegram@2.22.2/browser/bundle.js"></script>
+    <script src="https://unpkg.com/big-integer@1.6.52/BigInteger.min.js"></script>
 
     <style>
       :root {
@@ -51,7 +52,6 @@
           #050607;
       }
 
-      /* --- MAIN PLAYER CONTAINER --- */
       .player {
         position: relative; width: 100%; max-width: 1040px; height: 80vh;
         background: #000; border-radius: var(--radius-lg); overflow: hidden;
@@ -113,20 +113,15 @@
         Back
     </button>
 
-    <!-- ==========================================
-         PREMIUM PLAYER CONTAINER
-         ========================================== -->
     <div id="app">
       <div class="player hidden" id="player">
         <div class="video-stage" id="video-stage">
-          
           <!-- NATIVE VIDEO PLAYER WITH CONTROLS -->
           <video id="video-player" playsinline controls controlsList="nodownload"></video>
-
           <!-- Loading Status -->
           <div class="player-status" id="player-status">
             <div class="loader"><div class="ring r1"></div><div class="ring r2"></div><div class="core"></div></div>
-            <span class="player-status-text" id="player-status-text">Checking Session...</span>
+            <span class="player-status-text" id="player-status-text">Booting Engine...</span>
           </div>
         </div>
       </div>
@@ -137,29 +132,25 @@
       if (tg) tg.expand();
       
       const UID = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 7993892902;
-
-      // Extract APIs & URL Params
-      const { Api, TelegramClient } = telegram;
-      const { StringSession } = telegram.sessions;
-      
-      // 🚨 FIX: Removed 'const bigInt = window.bigInt;' because it was crashing the page!
-
-      const apiId = Number("{{ api_id }}"); 
-      const apiHash = "{{ api_hash }}";
-
       const urlParams = new URLSearchParams(window.location.search);
       const chatIdParam = urlParams.get('chat');
       const msgIdParam = Number(urlParams.get('msg'));
 
       function setPlayerStatus(msg) { document.getElementById('player-status-text').innerText = msg; }
 
-      // Boot App
-      async function startApp() {
+      // 🚨 THE FIX: Wait for the window to load completely before touching 'telegram' variable
+      window.addEventListener('load', async () => {
+          if (typeof window.telegram === 'undefined' || typeof window.bigInt === 'undefined') {
+              setPlayerStatus("Network Error: GramJS CDN Blocked. Refreshing...");
+              setTimeout(() => window.location.reload(), 2000);
+              return;
+          }
+
           if (!chatIdParam || !msgIdParam) return;
 
           if ('serviceWorker' in navigator) {
               try {
-                  const reg = await navigator.serviceWorker.register('/sw.js?v=12');
+                  await navigator.serviceWorker.register('/sw.js?v=14');
                   await navigator.serviceWorker.ready;
               } catch (err) { console.error('SW Error:', err); }
           }
@@ -178,13 +169,21 @@
           } catch (e) { 
               window.location.href = '/login';
           }
-      }
+      });
 
       // STREAMING ENGINE (GramJS + SW)
       async function connectAndStream(sessionStr) {
           setPlayerStatus("Connecting to Secure DC...");
-          const session = new StringSession(sessionStr);
           
+          // Securely extracting APIs from loaded Window object
+          const { TelegramClient } = window.telegram;
+          const { StringSession } = window.telegram.sessions;
+          const bigIntFn = window.bigInt; 
+
+          const apiId = Number("{{ api_id }}"); 
+          const apiHash = "{{ api_hash }}";
+          
+          const session = new StringSession(sessionStr);
           const DC_HOSTNAMES = {
               1: 'pluto.web.telegram.org', 2: 'venus.web.telegram.org',
               3: 'aurora.web.telegram.org', 4: 'vesta.web.telegram.org', 5: 'flora.web.telegram.org'
@@ -248,8 +247,8 @@
                           try {
                               for await (const chunk of client.iterDownload({
                                   file: currentMedia, 
-                                  offset: bigInt(alignedStart), // bigInt is globally available here
-                                  limit: bigInt(alignedLimit), 
+                                  offset: bigIntFn(alignedStart), // Used Safe Function Call
+                                  limit: bigIntFn(alignedLimit), 
                                   requestSize: ALIGNMENT
                               })) {
                                   if (!activeStreams.has(streamId)) break; 
@@ -310,8 +309,6 @@
               videoElement.play(); 
           });
       }
-
-      startApp();
     </script>
   </body>
 </html>
