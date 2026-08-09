@@ -8,22 +8,21 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- ONLY 1 CLEAN CDN FOR TELEGRAM ENGINE -->
-    <script src="https://cdn.jsdelivr.net/npm/telegram@2.22.2/browser/bundle.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/big-integer@1.6.52/BigInteger.min.js"></script>
+    <!-- 🚨 THE FIX: Unblockable Fastly CDNs (Bypasses Indian ISP & AdBlockers) -->
+    <script src="https://fastly.jsdelivr.net/npm/telegram@2.22.2/browser/bundle.js"></script>
+    <script src="https://fastly.jsdelivr.net/npm/big-integer@1.6.52/BigInteger.min.js"></script>
 
     <style>
       body { margin: 0; background: #050607; color: white; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; font-family: sans-serif; }
-      .player-container { width: 100%; max-width: 1000px; height: 100vh; background: black; position: relative; display: flex; align-items: center; justify-content: center;}
+      .player-container { width: 100%; max-width: 1000px; height: 100vh; background: black; position: relative; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 50px rgba(79,195,255,0.15);}
       video { width: 100%; height: 100%; object-fit: contain; }
       
-      /* Status Screen */
       .status-box { position: absolute; inset: 0; background: rgba(0,0,0,0.85); z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: 0.3s; }
       .status-box.hidden { opacity: 0; pointer-events: none; }
       .status-text { font-size: 15px; font-weight: bold; margin-top: 15px; text-align: center; }
       
-      /* Back Button */
-      .back-btn { position: absolute; top: 15px; left: 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 8px; color: white; cursor: pointer; z-index: 20; backdrop-filter: blur(5px); }
+      .back-btn { position: absolute; top: 15px; left: 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 8px; color: white; cursor: pointer; z-index: 20; backdrop-filter: blur(5px); transition: 0.2s;}
+      .back-btn:hover { background: rgba(255,255,255,0.2); }
     </style>
   </head>
   <body>
@@ -34,7 +33,6 @@
       <video id="video-player" playsinline controls controlsList="nodownload"></video>
       
       <div class="status-box" id="status-box">
-        <!-- Simple Spinner -->
         <svg class="animate-spin h-10 w-10 text-[#4fc3ff]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
         <div class="status-text" id="status-text">Starting Instant Engine...</div>
         <div id="login-btn-container" class="mt-4"></div>
@@ -56,29 +54,27 @@
           if (isError) {
               document.querySelector('.animate-spin').style.display = 'none';
               document.getElementById('login-btn-container').innerHTML = `
-                  <button onclick="window.location.href='https://t.me/H4R_Bot'" style="background: linear-gradient(135deg, #4fc3ff, #22e6c5); color: black; font-weight: bold; padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; margin-top: 10px;">
+                  <button onclick="window.location.href='https://t.me/H4R_Contact_bot'" style="background: linear-gradient(135deg, #4fc3ff, #22e6c5); color: black; font-weight: bold; padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; margin-top: 10px; box-shadow: 0 4px 15px rgba(79,195,255,0.3);">
                       🔐 Open Bot & Login
                   </button>
               `;
           }
       }
 
+      // Smart Poller: Waits for unblockable CDN to load
       let loadChecks = 0;
       function waitForEngine() {
-          // Agar file aa gayi hai, toh start karo
           if (typeof window.telegram !== 'undefined' && typeof window.bigInt !== 'undefined') {
               startApp();
           } else {
-              // Nahi aayi toh 10 second tak wait karo (0.2s * 50)
               loadChecks++;
-              if (loadChecks > 50) {
-                  setStatus("Brave Shields / Network is blocking the player. Please refresh or turn off shields.", true);
+              if (loadChecks > 50) { // 10 seconds timeout
+                  setStatus("Network Error: Chrome Extension or ISP blocked the player.<br><b>Try opening in Incognito Mode (Ctrl+Shift+N).</b>", true);
               } else {
                   setTimeout(waitForEngine, 200); 
               }
           }
       }
-
       window.addEventListener('load', waitForEngine);
 
       async function startApp() {
@@ -89,7 +85,7 @@
 
           if ('serviceWorker' in navigator) {
               try {
-                  await navigator.serviceWorker.register('/sw.js?v=100');
+                  await navigator.serviceWorker.register('/sw.js?v=105');
                   await navigator.serviceWorker.ready;
               } catch (err) { console.error('SW Error:', err); }
           }
@@ -101,16 +97,15 @@
               
               if (data.success && data.session) {
                   setStatus("Connecting to Server...");
-                  await connectAndStream(data.session); // THE CORE ENGINE CALL
+                  await connectAndStream(data.session);
               } else {
                   setStatus("Session not found. Please login from the Bot menu.", true);
               }
           } catch (e) { 
-              setStatus("Network Error. Please try again.", true);
+              setStatus("Network Error while checking session.", true);
           }
       }
 
-      // THE CORE ENGINE
       async function connectAndStream(sessionStr) {
           const { TelegramClient } = window.telegram;
           const { StringSession } = window.telegram.sessions;
@@ -131,7 +126,7 @@
           };
           if (session.dcId && DC_HOSTNAMES[session.dcId]) session.setDC(session.dcId, DC_HOSTNAMES[session.dcId], 443);
 
-          let client = new TelegramClient(session, apiId, apiHash, { connectionRetries: 3, useWSS: true });
+          let client = new TelegramClient(session, apiId, apiHash, { connectionRetries: 5, useWSS: true });
           
           try {
               await client.connect();
