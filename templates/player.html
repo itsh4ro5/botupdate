@@ -63,12 +63,25 @@
           }
       }
 
-      window.addEventListener('load', async () => {
-          if (typeof window.telegram === 'undefined' || typeof window.bigInt === 'undefined') {
-              setStatus("Network blocked Telegram script. Please disable Ad-blocker or VPN.", true);
-              return;
+      let loadChecks = 0;
+      function waitForEngine() {
+          // Agar file aa gayi hai, toh start karo
+          if (typeof window.telegram !== 'undefined' && typeof window.bigInt !== 'undefined') {
+              startApp();
+          } else {
+              // Nahi aayi toh 10 second tak wait karo (0.2s * 50)
+              loadChecks++;
+              if (loadChecks > 50) {
+                  setStatus("Brave Shields / Network is blocking the player. Please refresh or turn off shields.", true);
+              } else {
+                  setTimeout(waitForEngine, 200); 
+              }
           }
+      }
 
+      window.addEventListener('load', waitForEngine);
+
+      async function startApp() {
           if (!chatIdParam || !msgIdParam) {
               setStatus("Error: Video link is broken.", true);
               return;
@@ -76,7 +89,7 @@
 
           if ('serviceWorker' in navigator) {
               try {
-                  await navigator.serviceWorker.register('/sw.js?v=99');
+                  await navigator.serviceWorker.register('/sw.js?v=100');
                   await navigator.serviceWorker.ready;
               } catch (err) { console.error('SW Error:', err); }
           }
@@ -88,14 +101,14 @@
               
               if (data.success && data.session) {
                   setStatus("Connecting to Server...");
-                  await connectAndStream(data.session);
+                  await connectAndStream(data.session); // THE CORE ENGINE CALL
               } else {
                   setStatus("Session not found. Please login from the Bot menu.", true);
               }
           } catch (e) { 
               setStatus("Network Error. Please try again.", true);
           }
-      });
+      }
 
       // THE CORE ENGINE
       async function connectAndStream(sessionStr) {
