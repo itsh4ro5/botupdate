@@ -147,6 +147,7 @@ async def _run_pyrogram_engine():
         "userbotphone": H.cmd_userbotphone, "userbototp": H.cmd_userbototp,
         "userbotpass": H.cmd_userbotpass, "del": H.cmd_del_msg,
         "storebatch": H.cmd_storebatch,
+        "setvipmaterials": H.cmd_set_vip_materials, "setvipsticker": H.cmd_set_vip_sticker,
     }
 
     @app.on_message(filters.command(list(all_commands.keys())))
