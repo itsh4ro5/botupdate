@@ -40,44 +40,6 @@ from pyrogram.types import (
 
 logger = logging.getLogger(__name__)
 
-import base64
-import struct
-import ipaddress
-
-# --- NAYA: PYROGRAM TO GRAMJS SESSION CONVERTER ---
-def pyro_to_telethon(pyro_string: str) -> str:
-    padded = pyro_string + "=" * (-len(pyro_string) % 4)
-    decoded = base64.urlsafe_b64decode(padded)
-    dc_id = decoded[0]
-    auth_key = decoded[2:258]
-    ips = {1: '149.154.175.53', 2: '149.154.167.51', 3: '149.154.175.100', 4: '149.154.167.92', 5: '91.108.56.130'}
-    ip = ips.get(dc_id, '149.154.167.51')
-    ip_bytes = ipaddress.ip_address(ip).packed
-    telethon_data = struct.pack('>B 4s H 256s', dc_id, ip_bytes, 443, auth_key)
-    return "1" + base64.urlsafe_b64encode(telethon_data).decode('utf-8').rstrip('=')
-
-async def _finish_web_login(temp_client, uid, msg, main_client):
-    pyro_string = await temp_client.export_session_string()
-    await temp_client.disconnect()
-    telethon_string = pyro_to_telethon(pyro_string)
-    
-    import app as backend_app
-    cipher = backend_app.get_cipher()
-    encrypted = cipher.encrypt(telethon_string.encode()).decode()
-    
-    from config import DB, save_data_async
-    DB.setdefault("STUDENT_SESSIONS", {})[str(uid)] = encrypted
-    await save_data_async()
-    
-    if hasattr(main_client, "user_data_store"):
-        main_client.user_data_store.pop(f"web_client_{uid}", None)
-        main_client.user_data_store.pop(f"web_phone_{uid}", None)
-        main_client.user_data_store.pop(f"web_hash_{uid}", None)
-    if uid in ADMIN_WIZARD:
-        del ADMIN_WIZARD[uid]
-        
-    await msg.edit_text("✅ **WEB LOGIN SUCCESSFUL!**\n\nAb aap directly Website par jaakar videos play kar sakte hain bina wahan login kiye!", parse_mode=ParseMode.MARKDOWN)
-
 _SYNC_IN_PROGRESS = False
 _BOT_SELF_ID = None
 
@@ -1416,68 +1378,6 @@ async def wizard_message(client: Client, message: Message):
         except Exception as e:
             await message.reply_text(f"  Error: Ensure valid ID ({e}).")
         return True
-
-    elif state["step"].startswith("web_login_"):
-        try:
-            if state["step"] == "web_login_phone":
-                phone = message.text.replace(" ", "").strip()
-                if not phone.startswith("+"): phone = "+" + phone
-                msg = await message.reply_text("⏳ OTP request bhej raha hu...")
-                import config
-                temp_client = Client(f"web_{uid}", api_id=config.API_ID, api_hash=config.API_HASH, in_memory=True)
-                await temp_client.connect()
-                sent_code = await temp_client.send_code(phone)
-                if not hasattr(client, "user_data_store"): client.user_data_store = {}
-                client.user_data_store[f"web_client_{uid}"] = temp_client
-                client.user_data_store[f"web_phone_{uid}"] = phone
-                client.user_data_store[f"web_hash_{uid}"] = sent_code.phone_code_hash
-                ADMIN_WIZARD[uid]["step"] = "web_login_otp"
-                await msg.edit_text("✅ **OTP Bhej diya gaya hai!**\n\nKripya apna OTP yahan type karein.\n**DHYAN DEIN:** OTP space lagakar likhein (Example: `1 2 3 4 5`)", parse_mode=ParseMode.MARKDOWN)
-                return True
-
-            elif state["step"] == "web_login_otp":
-                otp = message.text.replace(" ", "").replace("-", "").strip()
-                user_store = getattr(client, "user_data_store", {})
-                temp_client = user_store.get(f"web_client_{uid}")
-                phone = user_store.get(f"web_phone_{uid}")
-                phone_hash = user_store.get(f"web_hash_{uid}")
-                
-                if not temp_client:
-                    await message.reply_text("❌ Session expired. Start again.")
-                    return True
-                    
-                msg = await message.reply_text("⏳ Verify kar raha hu...")
-                try:
-                    await temp_client.sign_in(phone, phone_hash, otp)
-                    await _finish_web_login(temp_client, uid, msg, client)
-                except Exception as e:
-                    if "SESSION_PASSWORD_NEEDED" in str(e):
-                        ADMIN_WIZARD[uid]["step"] = "web_login_pass"
-                        await msg.edit_text("🔒 **2FA Password Required!**\nKripya apna 2-Step Verification password bhejein:")
-                    else:
-                        await temp_client.disconnect()
-                        await msg.edit_text(f"❌ OTP Error: `{e}`")
-                return True
-
-            elif state["step"] == "web_login_pass":
-                password = message.text.strip()
-                user_store = getattr(client, "user_data_store", {})
-                temp_client = user_store.get(f"web_client_{uid}")
-                if not temp_client:
-                    await message.reply_text("❌ Session expired.")
-                    return True
-                msg = await message.reply_text("⏳ Password check kar raha hu...")
-                try:
-                    await temp_client.check_password(password)
-                    await _finish_web_login(temp_client, uid, msg, client)
-                except Exception as e:
-                    await temp_client.disconnect()
-                    await msg.edit_text(f"❌ Password Error: `{e}`")
-                return True
-        except Exception as e:
-            await message.reply_text(f"Error: {e}")
-            if uid in ADMIN_WIZARD: del ADMIN_WIZARD[uid]
-        return True
         
     elif state["step"].startswith("call_cmd_"):
         cmd_name = state["step"].replace("call_cmd_", "")
@@ -1583,13 +1483,6 @@ async def general_callback(client: Client, q: CallbackQuery):
             await q.answer()
             await start_from_cb(client, q)
             
-        elif data == "web_login_start":
-            await q.answer()
-            if DB.get("STUDENT_SESSIONS", {}).get(str(uid)):
-                return await q.edit_message_text("✅ Aapka Web Login pehle se active hai! Aap direct website par video play kar sakte hain.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="u_main")]]))
-            
-            ADMIN_WIZARD[uid] = {"step": "web_login_phone"}
-            await q.edit_message_text("📱 **Web Login Authorization**\n\nKripya apna Telegram number Country Code ke sath bhejein\n(Example: `+919876543210`)", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="u_main")]]))
         elif data == "dash_locks":
             await q.answer()
             kb = [
@@ -2507,7 +2400,6 @@ async def show_user_menu(client: Client, message: Message):
             InlineKeyboardButton("📚 My Batches", callback_data="my_batches_0"),
             InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0"),
         ],
-        [InlineKeyboardButton("💻 Login to Web Player", callback_data="web_login_start")],
         [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")],
         [InlineKeyboardButton("🎥 How to use the bot", url="https://t.me/c/2836314734/1244")],
         [InlineKeyboardButton("🎁 Refer & Earn", callback_data="menu_refer")],
