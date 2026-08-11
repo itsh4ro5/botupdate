@@ -62,7 +62,8 @@ DB = {
     "LINK_MAP": {}, "CUSTOM_WELCOMES": {}, "NEW_USERS_ALLOWED": True, 
     "FREE_LOCKED": False, "PAID_LOCKED": False, "TEST_BOT_LOCKED": False, 
     "SCHEDULED_DELETES": [], "TEST_BOT_LINK": "", "BATCH_CATEGORIES": {},
-    "CATEGORIES": DEFAULT_CATEGORIES.copy(), "MAINTENANCE_MODE": False
+    "CATEGORIES": DEFAULT_CATEGORIES.copy(), "MAINTENANCE_MODE": False,
+    "BATCH_COINS": {}
 }
 
 MESSAGE_MAP = {} 
@@ -109,7 +110,8 @@ def load_data():
     keys_to_load = [
         "LINK_MAP", "NEW_USERS_ALLOWED", "FREE_LOCKED", "PAID_LOCKED", "TEST_BOT_LOCKED", 
         "SCHEDULED_DELETES", "TEST_BOT_LINK", "MAINTENANCE_MODE", "CATEGORIES", "BATCH_CATEGORIES", 
-        "USERBOT_SESSION", "USERBOT_PHONE"
+        "USERBOT_SESSION", "USERBOT_PHONE",
+        "VIP_MATERIALS_LINK", "VIP_STICKER_ID", "VIP_STICKER_TYPE", "BATCH_COINS",
     ]
     
     if MONGO_URL and mongo_collection is not None:
@@ -174,6 +176,10 @@ def save_data_sync():
             "MAINTENANCE_MODE": DB.get("MAINTENANCE_MODE", False),
             "USERBOT_SESSION": DB.get("USERBOT_SESSION"), 
             "USERBOT_PHONE": DB.get("USERBOT_PHONE"),
+            "VIP_MATERIALS_LINK": DB.get("VIP_MATERIALS_LINK"),
+            "VIP_STICKER_ID": DB.get("VIP_STICKER_ID"),
+            "VIP_STICKER_TYPE": DB.get("VIP_STICKER_TYPE"),
+            "BATCH_COINS": {str(k): v for k, v in DB.get("BATCH_COINS", {}).items()},
             "CUSTOM_WELCOMES": {str(k): v for k, v in DB.get("CUSTOM_WELCOMES", {}).items()},
             "FREE_CHANNELS": {str(k): v for k, v in DB.get("FREE_CHANNELS", {}).items()},
             "PAID_CHANNELS": {str(k): v for k, v in DB.get("PAID_CHANNELS", {}).items()},
