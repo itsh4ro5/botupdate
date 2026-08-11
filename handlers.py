@@ -3101,7 +3101,7 @@ async def handle_delete(client: Client, messages):
         pass
 
 # =====================================================================
-# 2-WAY REACTION SYNC ENGINE
+# 2-WAY REACTION SYNC ENGINE (user DM <-> support topic, both directions)
 # =====================================================================
 async def handle_reaction(client: Client, update):
     try:
@@ -3116,13 +3116,30 @@ async def handle_reaction(client: Client, update):
         target_chat, target_msg = MESSAGE_MAP[key]
 
         new_reactions = getattr(update, "new_reaction", None) or []
-        emoji = None
-        if new_reactions:
-            emoji = getattr(new_reactions[0], "emoji", None)
-            if not emoji:
-                return
 
-        await client.send_reaction(target_chat, target_msg, emoji=emoji)
+        if not new_reactions:
+            # User/admin ne saari reactions hata di — dusri taraf bhi clear kar do
+            try:
+                await client.send_reaction(target_chat, target_msg)
+            except Exception:
+                pass
+            return
+
+        # Premium users ek se zyada reaction laga sakte hain — sabko map karo.
+        # Unicode emoji -> str, custom emoji -> uska numeric ID (send_reaction dono support karta hai).
+        emojis = []
+        for r in new_reactions:
+            emoji = getattr(r, "emoji", None)
+            custom_id = getattr(r, "custom_emoji_id", None)
+            if emoji:
+                emojis.append(emoji)
+            elif custom_id:
+                emojis.append(custom_id)
+
+        if not emojis:
+            return
+
+        await client.send_reaction(target_chat, target_msg, emoji=emojis)
     except Exception as e:
         logger.error(f"  Reaction sync failed: {e}")
 
@@ -3255,9 +3272,8 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
             await message.reply_text(f"  **User ko deliver nahi hua!** Error: `{e}`")
 
 async def on_chat_member_update(client: Client, update: ChatMemberUpdated):
-    # NAYA LOG: Har event ko terminal me print karega
-    logger.info(f"👉 RAW EVENT DETECTED: Chat ID {update.chat.id}")
-    
+    logger.debug(f"Raw member-update event: chat {update.chat.id}")
+
     if not update.new_chat_member:
         return
         
@@ -3266,10 +3282,7 @@ async def on_chat_member_update(client: Client, update: ChatMemberUpdated):
     
     main_id = str(MANDATORY_CHANNEL_ID).replace("-100", "")
     current_id = str(update.chat.id).replace("-100", "")
-    
-    # ID Match Debugging Log
-    logger.info(f"👉 EVENT MATCHING: Configured Main ID = {main_id} | Detected ID = {current_id} | Status = {status}")
-    
+
     if current_id == main_id and status in [ChatMemberStatus.LEFT, ChatMemberStatus.BANNED]:
         if user:
             logger.info(f"🚨 RULE BROKEN! (User Left Channel). Universal Kick Started for User ID: {user.id}")
@@ -3310,31 +3323,35 @@ async def background_sync(client: Client):
         
     _SYNC_IN_PROGRESS = True
     try:
-        user_ids = list(DB["USER_DATA"].keys())
-        for idx, uid in enumerate(user_ids):
-            user_id = int(uid)
-            # Admin ya blocked users ko check mat karo
-            if user_id in DB.get("BLOCKED_USERS", []) or is_admin(user_id):
-                continue
-                
-            # Sirf unhi ko check karo jinhone pehle channel join kiya tha
-            if DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False):
-                try:
-                    m = await client.get_chat_member(int(MANDATORY_CHANNEL_ID), user_id)
-                    if m.status in [ChatMemberStatus.LEFT, ChatMemberStatus.BANNED]:
-                        logger.info(f"🚨 AUTO-SCANNER: User {user_id} has LEFT. Kicking now!")
-                        await execute_universal_kick(user_id, client)
-                except UserNotParticipant:
-                    # YEH SABSE ZAROORI THA: Agar user nahi mila, toh kick karo!
-                    logger.info(f"🚨 AUTO-SCANNER: User {user_id} is MISSING. Kicking now!")
+        # Sirf un users ko check karo jo blocked/admin nahi hain aur pehle channel join kar chuke hain
+        user_ids = [
+            int(uid) for uid in DB["USER_DATA"].keys()
+            if int(uid) not in DB.get("BLOCKED_USERS", [])
+            and not is_admin(int(uid))
+            and DB["USER_DATA"].get(uid, {}).get("tnc_accepted", False)
+        ]
+
+        CHUNK_SIZE = 15   # ek saath kitne membership checks parallel chalein (flood-safe)
+        CHUNK_DELAY = 1.0 # har chunk ke beech gap (Telegram rate limits ke andar rehne ke liye)
+
+        async def _check_one(user_id: int):
+            try:
+                m = await client.get_chat_member(int(MANDATORY_CHANNEL_ID), user_id)
+                if m.status in [ChatMemberStatus.LEFT, ChatMemberStatus.BANNED]:
+                    logger.info(f"🚨 AUTO-SCANNER: User {user_id} has LEFT. Kicking now!")
                     await execute_universal_kick(user_id, client)
-                except Exception:
-                    pass
-            
-            await asyncio.sleep(0.5)  # Safe speed limit
-            if idx > 0 and idx % 100 == 0:
-                await save_data_async()
-                
+            except UserNotParticipant:
+                logger.info(f"🚨 AUTO-SCANNER: User {user_id} is MISSING. Kicking now!")
+                await execute_universal_kick(user_id, client)
+            except Exception:
+                pass
+
+        for i in range(0, len(user_ids), CHUNK_SIZE):
+            chunk = user_ids[i:i + CHUNK_SIZE]
+            await asyncio.gather(*[_check_one(uid) for uid in chunk])
+            await save_data_async()
+            await asyncio.sleep(CHUNK_DELAY)
+
     finally:
         _SYNC_IN_PROGRESS = False
 
