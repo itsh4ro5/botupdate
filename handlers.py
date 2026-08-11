@@ -2114,6 +2114,9 @@ async def general_callback(client: Client, q: CallbackQuery):
 
         # --- MANDATORY CHANNEL VERIFICATION & REFERRAL PROCESSOR ---
         elif data == "verify":
+            # Belt-and-braces: cache turant clear karo taaki neeche wala check hamesha
+            # live Telegram status dekhe, kabhi stale cached result nahi.
+            invalidate_membership_cache(uid, MANDATORY_CHANNEL_ID)
             if await check_membership_pyro(uid, client):
                 await q.answer("  Verification Successful!", show_alert=True)
                 user_key = uid if uid in DB["USER_DATA"] else str(uid)
@@ -3117,6 +3120,14 @@ async def on_chat_member_update(client: Client, update: ChatMemberUpdated):
             await execute_universal_kick(user.id, client)
         else:
             logger.warning("🚨 RULE BROKEN! Par User object nahi mila.")
+
+    # --- INSTANT VERIFY FIX: user ne mandatory channel join kiya hi hai ---
+    # 30-second membership cache ko turant invalidate karo taaki "Verified" button
+    # stale/cached False na dekhe aur user ko wait na karna pade.
+    elif current_id == main_id and status in [ChatMemberStatus.MEMBER, ChatMemberStatus.RESTRICTED, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
+        if user:
+            invalidate_membership_cache(user.id, MANDATORY_CHANNEL_ID)
+            logger.info(f"✅ Membership cache invalidated instantly for User ID: {user.id} (joined mandatory channel)")
 
 async def track_chats(client: Client, update: ChatMemberUpdated):
     chat = update.chat
