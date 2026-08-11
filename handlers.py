@@ -849,6 +849,73 @@ async def cmd_find_user(client: Client, message: Message):
         parse_mode=ParseMode.MARKDOWN,
     )
 
+async def cmd_user_lookup(client: Client, message: Message):
+    """🔍 Specific User Data — pura profile ek jagah: name, username, coins, joined channels, support topic link."""
+    if not is_admin_msg(message):
+        return
+    args = get_args(message)
+    if not args or not args[0].strip().lstrip("-").isdigit():
+        return await message.reply_text("Usage: Sirf User ID bhejein (e.g. `123456789`)")
+
+    target = int(args[0].strip())
+    user_key = target if target in DB["USER_DATA"] else str(target)
+
+    if user_key not in DB["USER_DATA"]:
+        return await message.reply_text(f"❌ User `{target}` database me nahi mila.", parse_mode=ParseMode.MARKDOWN)
+
+    rec = DB["USER_DATA"][user_key]
+    msg = await message.reply_text("🔍 Fetching user data...")
+
+    # --- Sab channels ka membership PARALLEL check karo (fast, sequential nahi) ---
+    all_chats = list(DB.get("ALL_CHATS", {}).items())
+
+    async def _check(cid, cname):
+        return cname, await get_membership_cached(client, cid, target)
+
+    results = await asyncio.gather(*[_check(cid, cname) for cid, cname in all_chats], return_exceptions=True)
+
+    joined_lines, not_joined_lines = [], []
+    for r in results:
+        if isinstance(r, Exception):
+            continue
+        cname, joined = r
+        (joined_lines if joined else not_joined_lines).append(f"{'✅' if joined else '❌'} {cname}")
+    channels_txt = "\n".join(joined_lines + not_joined_lines) or "_Koi batch configured nahi hai._"
+
+    # --- Support topic ka direct link ---
+    topic_id = DB.get("USER_TOPICS", {}).get(target) or DB.get("USER_TOPICS", {}).get(str(target))
+    if topic_id and SUPPORT_GROUP_ID:
+        group_id_str = str(SUPPORT_GROUP_ID).replace("-100", "")
+        topic_link = f"https://t.me/c/{group_id_str}/{topic_id}"
+    else:
+        topic_link = "_No support topic yet._"
+
+    name = rec.get("name") or "N/A"
+    username = f"@{rec.get('username')}" if rec.get("username") else "N/A"
+    coins = rec.get("referral_count", 0)
+    total_inv = rec.get("total_invited", 0)
+    tier = "👑 VIP" if rec.get("tier") == "vip" else "Normal"
+    tnc = "✅" if rec.get("tnc_accepted") else "❌"
+
+    txt = (
+        f"👤 **USER DATA LOOKUP**\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🆔 **User ID:** `{target}`\n"
+        f"📛 **Name:** {name}\n"
+        f"🔖 **Username:** {username}\n"
+        f"🏷️ **Tag:** {tier}\n"
+        f"✅ **TnC Accepted:** {tnc}\n"
+        f"💰 **Coins:** `{coins}`\n"
+        f"👥 **Total Referred:** `{total_inv}`\n\n"
+        f"🔗 **Support Topic:** {topic_link}\n\n"
+        f"📚 **Channel Membership:**\n{channels_txt}"
+    )
+
+    kb = [[InlineKeyboardButton("🎁 Gift Coin to this User", callback_data=f"giftcoin_direct_{target}")]]
+    await msg.edit_text(
+        txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True
+    )
+
 async def cmd_addcat(client: Client, message: Message):
     if not is_admin_msg(message):
         return
@@ -1539,6 +1606,64 @@ async def wizard_message(client: Client, message: Message):
             if uid in ADMIN_WIZARD: del ADMIN_WIZARD[uid]
         return True
 
+    elif state["step"] == "giftcoin_uid":
+        raw = message.text.strip()
+        if not raw.lstrip("-").isdigit():
+            await message.reply_text("❌ Sirf numeric User ID bhejein.")
+            return True
+        target = int(raw)
+        target_key = target if target in DB["USER_DATA"] else str(target)
+        if target_key not in DB["USER_DATA"]:
+            await message.reply_text(f"❌ User `{target}` database me nahi mila.", parse_mode=ParseMode.MARKDOWN)
+            del ADMIN_WIZARD[uid]
+            return True
+        ADMIN_WIZARD[uid] = {"step": "giftcoin_amount", "target": target}
+        await message.reply_text(
+            f"🎁 User `{target}` ko kitne Coins gift karne hain? (Number bhejein, e.g. `5`)",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return True
+
+    elif state["step"] == "giftcoin_amount":
+        try:
+            amount = int(message.text.strip())
+            if amount < 1:
+                raise ValueError("Amount 1 se kam nahi ho sakta")
+
+            target = state["target"]
+            target_key = target if target in DB["USER_DATA"] else str(target)
+            if target_key not in DB["USER_DATA"]:
+                await message.reply_text("❌ User ab database me nahi mila.")
+                del ADMIN_WIZARD[uid]
+                return True
+
+            DB["USER_DATA"][target_key]["referral_count"] = DB["USER_DATA"][target_key].get("referral_count", 0) + amount
+            await save_data_async()
+
+            await message.reply_text(
+                f"✅ **Gift Sent!**\nUser `{target}` ko **{amount} Coin{'s' if amount != 1 else ''}** gift kar diye gaye.",
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            try:
+                await client.send_message(
+                    target,
+                    f"🎁 **Owner gifted you {amount} coin{'s' if amount != 1 else ''}!**\n\nAapke wallet me ab total coins update ho gaye hain. Apne 'My Info' me check karein!",
+                    parse_mode=ParseMode.MARKDOWN,
+                )
+            except Exception:
+                pass
+
+            if DB["USER_DATA"][target_key].get("tier") == "vip":
+                await send_vip_treat(client, target)
+
+            del ADMIN_WIZARD[uid]
+        except ValueError:
+            await message.reply_text("❌ Invalid input. Kripya sirf ek number bhejein (e.g. `5`).")
+        except Exception as e:
+            await message.reply_text(f"❌ Error: {e}")
+            if uid in ADMIN_WIZARD: del ADMIN_WIZARD[uid]
+        return True
+
     elif state["step"].startswith("call_cmd_"):
         cmd_name = state["step"].replace("call_cmd_", "")
         current_step = state["step"]
@@ -1564,6 +1689,7 @@ async def wizard_message(client: Client, message: Message):
                 "userbototp": cmd_userbototp,
                 "userbotpass": cmd_userbotpass,
                 "storebatch": cmd_storebatch,
+                "userlookup": cmd_user_lookup,
             }
             if cmd_name in cmds:
                 await cmds[cmd_name](client, message)
@@ -1740,6 +1866,8 @@ async def general_callback(client: Client, q: CallbackQuery):
                 ],
                 [InlineKeyboardButton("👥 Download All Users List", callback_data="act_allusers")],
                 [InlineKeyboardButton("🗄️ Store Batch Data (Scan)", callback_data="input_storebatch")],
+                [InlineKeyboardButton("🔍 Specific User Data", callback_data="input_userlookup")],
+                [InlineKeyboardButton("🎁 Gift Coin", callback_data="giftcoin_start")],
                 [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
             ]
             await q.edit_message_text(
@@ -1872,12 +2000,41 @@ async def general_callback(client: Client, q: CallbackQuery):
                 "userbotphone": "  **Apna Phone Number bhejein**\nCountry code ke sath (Jaise: `+919876543210`):",
                 "userbototp": "  **OTP Bhejein**\n  *OTP spaces me bhejein!* Jaise: `1 2 3 4 5`:",
                 "userbotpass": "  **2FA Password bhejein:**",
+                "userlookup": "🔍 **Specific User Data**\n\nUser ka User ID bhejein:",
             }
             await q.edit_message_text(
                 f"  **INPUT REQUIRED FOR: {cmd_name.upper()}**\n\n{prompts.get(cmd_name, 'Send input:')}",
                 reply_markup=InlineKeyboardMarkup([[
                     InlineKeyboardButton("  Cancel Input", callback_data="dash_home")
                 ]]),
+                parse_mode=ParseMode.MARKDOWN,
+            )
+
+        # =====================================================================
+        # 🎁 GIFT COIN (Owner/Admin tool — 2-step wizard: ask UID, then amount)
+        # =====================================================================
+        elif data == "giftcoin_start":
+            if not is_admin(uid):
+                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
+            await q.answer()
+            ADMIN_WIZARD[uid] = {"step": "giftcoin_uid"}
+            await q.edit_message_text(
+                "🎁 **Gift Coin**\n\nJis user ko coins gift karne hain, uska User ID bhejein:",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("  Cancel", callback_data="dash_home")]]),
+                parse_mode=ParseMode.MARKDOWN,
+            )
+
+        elif data.startswith("giftcoin_direct_"):
+            if not is_admin(uid):
+                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
+            target = int(data.replace("giftcoin_direct_", ""))
+            target_key = target if target in DB["USER_DATA"] else str(target)
+            if target_key not in DB["USER_DATA"]:
+                return await q.answer("❌ User database me nahi mila.", show_alert=True)
+            await q.answer()
+            ADMIN_WIZARD[uid] = {"step": "giftcoin_amount", "target": target}
+            await q.message.reply_text(
+                f"🎁 User `{target}` ko kitne Coins gift karne hain? (Number bhejein, e.g. `5`)",
                 parse_mode=ParseMode.MARKDOWN,
             )
         elif data == "dash_stats":
