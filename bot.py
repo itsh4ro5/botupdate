@@ -52,19 +52,14 @@ async def _run_pyrogram_engine():
     from pyrogram.types import Message, CallbackQuery
     from pyrogram.errors import FloodWait
 
-    # 🔥 Reaction sync (best-effort): Pyrogram 2.0.106 has NO
-    # @app.on_message_reaction() decorator — that convenience wrapper only
-    # exists in newer forks/betas. We hook the raw MTProto update instead
-    # (see the on_raw_update handler registered further down). Imported
-    # defensively: if this frozen build's bundled TL schema doesn't have
-    # the raw type either, reaction sync just disables itself below
-    # instead of crashing the whole engine.
-    try:
-        from pyrogram.raw.types import UpdateBotMessageReaction
-        REACTION_RAW_TYPE_AVAILABLE = True
-    except ImportError:
-        UpdateBotMessageReaction = None
-        REACTION_RAW_TYPE_AVAILABLE = False
+    # 🔥 Reaction sync: stock PyPI "pyrogram" (2.0.106, its latest official
+    # release) has NO bot-message-reaction support anywhere in its schema —
+    # UpdateBotMessageReaction simply doesn't exist in it, so hooking it was
+    # dead code that always silently disabled itself. Kurigram (a maintained,
+    # drop-in-compatible fork — same `import pyrogram`, same API surface)
+    # ships real bot-reaction updates plus a clean on_message_reaction()
+    # decorator, so we use that when available and disable cleanly (with an
+    # actionable message) when the installed build doesn't have it.
 
     async def _start_with_floodwait_guard(client):
         """
@@ -225,21 +220,28 @@ async def _run_pyrogram_engine():
             await H.handle_delete(client, messages)
 
     # =====================================================================
-    # 4b. LIVE REACTION SYNCING (RAW UPDATES — no on_message_reaction in
-    # Pyrogram 2.0.106, so we hook the raw MTProto update directly)
+    # 4b. LIVE REACTION SYNCING (2-way: user DM <-> support topic)
     # =====================================================================
-    if REACTION_RAW_TYPE_AVAILABLE:
-        @app.on_raw_update()
-        async def _on_raw_update(client: Client, update, users, chats):
-            if isinstance(update, UpdateBotMessageReaction) and hasattr(H, "handle_reaction"):
+    if hasattr(app, "on_message_reaction"):
+        @app.on_message_reaction()
+        async def _on_reaction(client: Client, update):
+            if hasattr(H, "handle_reaction"):
                 try:
                     await H.handle_reaction(client, update)
                 except Exception:
                     print("⚠️ Reaction sync error:", flush=True)
                     traceback.print_exc()
-        print("🟢 Reaction sync ENABLED (raw updates).", flush=True)
+        print("🟢 Reaction sync ENABLED (on_message_reaction).", flush=True)
     else:
-        print("⚠️ Reaction sync DISABLED — this Pyrogram build's raw schema has no UpdateBotMessageReaction. Everything else (2-way text routing, edits, deletes) is unaffected.", flush=True)
+        print(
+            "⚠️ Reaction sync DISABLED — this installed 'pyrogram' build has no "
+            "bot-reaction support (stock PyPI pyrogram never gained it, in any "
+            "version). Run `pip uninstall pyrogram -y && pip install kurigram` "
+            "(same import name — drop-in, no code changes needed) to enable 2-way "
+            "reaction syncing. Everything else (2-way text routing, edits, "
+            "deletes) is unaffected.",
+            flush=True,
+        )
 
     # =====================================================================
     # 5. REGULAR MESSAGES & SUPPORT TICKETS (🔥 YAHAN SOLVE HUA AAPKA BUG 🔥)
