@@ -940,7 +940,7 @@ async def cmd_setcategory(client: Client, message: Message):
         client.user_data_store = {}
     client.user_data_store["setcat_ids"] = ids
     kb = [
-        [InlineKeyboardButton(c, callback_data=f"setextcat_{i}")]
+        [InlineKeyboardButton(f"📁 {c}", callback_data=f"setextcat_{i}")]
         for i, c in enumerate(DB.get("CATEGORIES", DEFAULT_CATEGORIES))
     ]
     await message.reply_text(
@@ -953,11 +953,11 @@ async def cmd_delcat(client: Client, message: Message):
     if not is_admin_msg(message):
         return
     kb = [
-        [InlineKeyboardButton(f"  Delete: {c}", callback_data=f"delcat_{i}")]
+        [InlineKeyboardButton(f"🗑️ Delete: {c}", callback_data=f"delcat_{i}")]
         for i, c in enumerate(DB.get("CATEGORIES", DEFAULT_CATEGORIES))
         if c != "Other Batches"
     ]
-    kb.append([InlineKeyboardButton("  Cancel", callback_data="dash_home")])
+    kb.append([InlineKeyboardButton("❌ Cancel", callback_data="dash_home")])
     await message.reply_text(
         "  **Delete Category:**",
         reply_markup=InlineKeyboardMarkup(kb),
@@ -1234,10 +1234,10 @@ async def cmd_addbatch_start(client: Client, message: Message):
     kb = []
     categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES)
     for i in range(0, len(categories), 2):
-        row = [InlineKeyboardButton(categories[i], callback_data=f"wcat_{i}")]
+        row = [InlineKeyboardButton(f"📁 {categories[i]}", callback_data=f"wcat_{i}")]
         if i + 1 < len(categories):
             row.append(
-                InlineKeyboardButton(categories[i + 1], callback_data=f"wcat_{i+1}")
+                InlineKeyboardButton(f"📁 {categories[i + 1]}", callback_data=f"wcat_{i+1}")
             )
         kb.append(row)
     await message.reply_text(
@@ -1472,9 +1472,9 @@ async def wizard_callback(client: Client, q: CallbackQuery):
         ADMIN_WIZARD[uid]["step"] = "ask_type"
         kb = [
             [
-                InlineKeyboardButton("Free", callback_data="wiz_free"),
-                InlineKeyboardButton("Paid", callback_data="wiz_paid"),
-                InlineKeyboardButton("Special", callback_data="wiz_special"),
+                InlineKeyboardButton("🆓 Free", callback_data="wiz_free"),
+                InlineKeyboardButton("💵 Paid", callback_data="wiz_paid"),
+                InlineKeyboardButton("✨ Special", callback_data="wiz_special"),
             ]
         ]
         return await q.edit_message_text(
@@ -1708,11 +1708,11 @@ async def handle_broadcast_flow(client: Client, message: Message):
         state["content"] = message
         state["step"] = "confirm"
         kb = [[
-            InlineKeyboardButton("  YES", callback_data="bc_yes"),
-            InlineKeyboardButton("  NO", callback_data="bc_no"),
+            InlineKeyboardButton("✅ YES", callback_data="bc_yes"),
+            InlineKeyboardButton("❌ NO", callback_data="bc_no"),
         ]]
         await message.reply_text(
-            "  **Confirm?**",
+            "❓ **Confirm?**",
             reply_markup=InlineKeyboardMarkup(kb),
             parse_mode=ParseMode.MARKDOWN,
         )
@@ -1811,10 +1811,10 @@ async def general_callback(client: Client, q: CallbackQuery):
                         callback_data="toggle_maintenance",
                     )
                 ],
-                [InlineKeyboardButton("  Back to Terminal", callback_data="dash_home")],
+                [InlineKeyboardButton("🔙 Back to Terminal", callback_data="dash_home")],
             ]
             await q.edit_message_text(
-                "  **Security & Access Control**",
+                "🔒 **Security & Access Control**",
                 reply_markup=InlineKeyboardMarkup(kb),
                 parse_mode=ParseMode.MARKDOWN,
             )
@@ -1861,10 +1861,10 @@ async def general_callback(client: Client, q: CallbackQuery):
                         callback_data="toggle_maintenance",
                     )
                 ],
-                [InlineKeyboardButton("  Back to Terminal", callback_data="dash_home")],
+                [InlineKeyboardButton("🔙 Back to Terminal", callback_data="dash_home")],
             ]
             await q.edit_message_text(
-                "  **Security & Access Control**",
+                "🔒 **Security & Access Control**",
                 reply_markup=InlineKeyboardMarkup(kb),
                 parse_mode=ParseMode.MARKDOWN,
             )
@@ -1890,22 +1890,22 @@ async def general_callback(client: Client, q: CallbackQuery):
             await q.answer()
             kb = [
                 [
-                    InlineKeyboardButton("  Add Batch", callback_data="act_addbatch"),
-                    InlineKeyboardButton("  Delete Batch", callback_data="input_delbatch"),
+                    InlineKeyboardButton("➕ Add Batch", callback_data="act_addbatch"),
+                    InlineKeyboardButton("🗑️ Delete Batch", callback_data="input_delbatch"),
                 ],
                 [
-                    InlineKeyboardButton("  Add Category", callback_data="input_addcat"),
-                    InlineKeyboardButton("  Delete Category", callback_data="act_delcat"),
+                    InlineKeyboardButton("📁➕ Add Category", callback_data="input_addcat"),
+                    InlineKeyboardButton("📁🗑️ Delete Category", callback_data="act_delcat"),
                 ],
                 [
-                    InlineKeyboardButton("  Set Batch Category", callback_data="input_setcat"),
-                    InlineKeyboardButton("  Empty Batch", callback_data="input_emptybatch"),
+                    InlineKeyboardButton("🏷️ Set Batch Category", callback_data="input_setcat"),
+                    InlineKeyboardButton("🧹 Empty Batch", callback_data="input_emptybatch"),
                 ],
-                [InlineKeyboardButton("  Batch Stats", callback_data="act_batchstats")],
-                [InlineKeyboardButton("  Back", callback_data="dash_home")],
+                [InlineKeyboardButton("📊 Batch Stats", callback_data="act_batchstats")],
+                [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
             ]
             await q.edit_message_text(
-                "  **Batches Management**",
+                "📦 **Batches Management**",
                 reply_markup=InlineKeyboardMarkup(kb),
                 parse_mode=ParseMode.MARKDOWN,
             )
@@ -1913,15 +1913,15 @@ async def general_callback(client: Client, q: CallbackQuery):
             await q.answer()
             kb = [
                 [
-                    InlineKeyboardButton("  Add Admin", callback_data="input_addadmin"),
-                    InlineKeyboardButton("  Remove Admin", callback_data="input_deladmin"),
+                    InlineKeyboardButton("➕ Add Admin", callback_data="input_addadmin"),
+                    InlineKeyboardButton("➖ Remove Admin", callback_data="input_deladmin"),
                 ],
                 # 👇 YEH NAYA BUTTON ADD KIYA GAYA HAI 👇
-                [InlineKeyboardButton("  Admin List", callback_data="act_adminlist")],
-                [InlineKeyboardButton("  Back", callback_data="dash_home")],
+                [InlineKeyboardButton("📋 Admin List", callback_data="act_adminlist")],
+                [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
             ]
             await q.edit_message_text(
-                "  **Staff Management**",
+                "🧑\u200d💼 **Staff Management**",
                 reply_markup=InlineKeyboardMarkup(kb),
                 parse_mode=ParseMode.MARKDOWN,
             )
@@ -1929,17 +1929,17 @@ async def general_callback(client: Client, q: CallbackQuery):
             await q.answer()
             kb = [
                 [
-                    InlineKeyboardButton("  Broadcast", callback_data="act_broadcast"),
-                    InlineKeyboardButton("  Post Message", callback_data="act_post"),
+                    InlineKeyboardButton("📢 Broadcast", callback_data="act_broadcast"),
+                    InlineKeyboardButton("📝 Post Message", callback_data="act_post"),
                 ],
                 [
-                    InlineKeyboardButton("  Set Test Bot", callback_data="input_settestbot"),
-                    InlineKeyboardButton("  Set Welcome", callback_data="input_setwelcome"),
+                    InlineKeyboardButton("🤖 Set Test Bot", callback_data="input_settestbot"),
+                    InlineKeyboardButton("👋 Set Welcome", callback_data="input_setwelcome"),
                 ],
-                [InlineKeyboardButton("  Back", callback_data="dash_home")],
+                [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
             ]
             await q.edit_message_text(
-                "  **Communications**",
+                "📢 **Communications**",
                 reply_markup=InlineKeyboardMarkup(kb),
                 parse_mode=ParseMode.MARKDOWN,
             )
@@ -1956,8 +1956,8 @@ async def general_callback(client: Client, q: CallbackQuery):
                     "*Userbot is fully linked and ready to execute /emptybatch, /clear, and /joinall commands.*"
                 )
                 kb = [
-                    [InlineKeyboardButton("  Logout (Delete Session)", callback_data="userbot_logout")],
-                    [InlineKeyboardButton("  Back", callback_data="dash_home")],
+                    [InlineKeyboardButton("🚪 Logout (Delete Session)", callback_data="userbot_logout")],
+                    [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
                 ]
             else:
                 text = (
@@ -1965,8 +1965,8 @@ async def general_callback(client: Client, q: CallbackQuery):
                     "*Koi active session nahi hai. Userbot features won't work. Kripya login karein.*"
                 )
                 kb = [
-                    [InlineKeyboardButton("  Login Now", callback_data="input_userbotphone")],
-                    [InlineKeyboardButton("  Back", callback_data="dash_home")],
+                    [InlineKeyboardButton("🔑 Login Now", callback_data="input_userbotphone")],
+                    [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
                 ]
             await q.edit_message_text(
                 text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN
@@ -1983,7 +1983,7 @@ async def general_callback(client: Client, q: CallbackQuery):
             await q.edit_message_text(
                 "  **Userbot is now LOGGED OUT.**",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("  Back", callback_data="dash_home")]
+                    [InlineKeyboardButton("🔙 Back", callback_data="dash_home")]
                 ]),
             )
         elif data.startswith("input_"):
@@ -2016,7 +2016,7 @@ async def general_callback(client: Client, q: CallbackQuery):
             await q.edit_message_text(
                 f"  **INPUT REQUIRED FOR: {cmd_name.upper()}**\n\n{prompts.get(cmd_name, 'Send input:')}",
                 reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("  Cancel Input", callback_data="dash_home")
+                    InlineKeyboardButton("❌ Cancel Input", callback_data="dash_home")
                 ]]),
                 parse_mode=ParseMode.MARKDOWN,
             )
@@ -2031,7 +2031,7 @@ async def general_callback(client: Client, q: CallbackQuery):
             ADMIN_WIZARD[uid] = {"step": "giftcoin_uid"}
             await q.edit_message_text(
                 "🎁 **Gift Coin**\n\nJis user ko coins gift karne hain, uska User ID bhejein:",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("  Cancel", callback_data="dash_home")]]),
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="dash_home")]]),
                 parse_mode=ParseMode.MARKDOWN,
             )
 
@@ -2055,18 +2055,18 @@ async def general_callback(client: Client, q: CallbackQuery):
             await q.answer()
             kb = [
                 [
-                    InlineKeyboardButton("  Ban", callback_data="input_ban"),
-                    InlineKeyboardButton("  Unban", callback_data="input_unban"),
+                    InlineKeyboardButton("🚫 Ban", callback_data="input_ban"),
+                    InlineKeyboardButton("✅ Unban", callback_data="input_unban"),
                 ],
                 [
-                    InlineKeyboardButton("  Kick", callback_data="input_kick"),
-                    InlineKeyboardButton("  Find", callback_data="input_find"),
+                    InlineKeyboardButton("👢 Kick", callback_data="input_kick"),
+                    InlineKeyboardButton("🔍 Find", callback_data="input_find"),
                 ],
-                [InlineKeyboardButton("  Reset User Data", callback_data="input_resetuser")],
-                [InlineKeyboardButton("  Back", callback_data="dash_home")],
+                [InlineKeyboardButton("♻️ Reset User Data", callback_data="input_resetuser")],
+                [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
             ]
             await q.edit_message_text(
-                "  **User Management**",
+                "👥 **User Management**",
                 reply_markup=InlineKeyboardMarkup(kb),
                 parse_mode=ParseMode.MARKDOWN,
             )
@@ -2074,14 +2074,14 @@ async def general_callback(client: Client, q: CallbackQuery):
             await q.answer()
             kb = [
                 [
-                    InlineKeyboardButton("  Approve Demo", callback_data="input_demo"),
-                    InlineKeyboardButton("  Approve Perm", callback_data="input_perm"),
+                    InlineKeyboardButton("🕐 Approve Demo", callback_data="input_demo"),
+                    InlineKeyboardButton("✅ Approve Perm", callback_data="input_perm"),
                 ],
-                [InlineKeyboardButton("  Extend Demo Time", callback_data="input_extend")],
-                [InlineKeyboardButton("  Back", callback_data="dash_home")],
+                [InlineKeyboardButton("⏳ Extend Demo Time", callback_data="input_extend")],
+                [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
             ]
             await q.edit_message_text(
-                "  **Access Approvals**",
+                "✅ **Access Approvals**",
                 reply_markup=InlineKeyboardMarkup(kb),
                 parse_mode=ParseMode.MARKDOWN,
             )
@@ -2094,7 +2094,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                 return await q.answer("  Access Denied! Owner Only.", show_alert=True)
                 
             admin_ids = DB.get("ADMIN_IDS", [])
-            text = "  **BOT ADMINS LIST**\n" + "—" * 20 + "\n\n"
+            text = "📋 **BOT ADMINS LIST**\n" + "—" * 20 + "\n\n"
             
             if not admin_ids:
                 text += "  Koi admin assign nahi kiya gaya hai."
@@ -2113,7 +2113,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                     text += f"{role}\n  **Name:** {name}\n  **ID:** `{aid}`\n  **Username:** @{username}\n\n"
                     
             # Back button wapas Staff menu me le jayega
-            kb = [[InlineKeyboardButton("  Back", callback_data="dash_staff")]]
+            kb = [[InlineKeyboardButton("🔙 Back", callback_data="dash_staff")]]
             
             await q.edit_message_text(
                 text, 
@@ -2310,7 +2310,7 @@ async def general_callback(client: Client, q: CallbackQuery):
             if not DB.get("TEST_BOT_LINK"):
                 return await q.answer("  Test Bot is not setup by Admin yet!", show_alert=True)
             await q.answer("Verifying & Generating Link...")
-            kb = [[InlineKeyboardButton("  Open Test Bot", url=DB.get("TEST_BOT_LINK"))]]
+            kb = [[InlineKeyboardButton("🤖 Open Test Bot", url=DB.get("TEST_BOT_LINK"))]]
             try:
                 sent_msg = await client.send_message(
                     uid,
@@ -2367,7 +2367,7 @@ async def general_callback(client: Client, q: CallbackQuery):
             if not joined_batches:
                 return await q.edit_message_text(
                     "  Aap abhi kisi bhi batch me join nahi hain.",
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("  Back to Menu", callback_data="u_main")]]),
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Menu", callback_data="u_main")]]),
                     parse_mode=ParseMode.MARKDOWN,
                 )
 
@@ -2388,13 +2388,13 @@ async def general_callback(client: Client, q: CallbackQuery):
 
             nav_buttons = []
             if page > 0:
-                nav_buttons.append(InlineKeyboardButton("  Back", callback_data=f"my_batches_{page-1}"))
+                nav_buttons.append(InlineKeyboardButton("🔙 Back", callback_data=f"my_batches_{page-1}"))
             if end_idx < total_batches:
-                nav_buttons.append(InlineKeyboardButton("Next  ", callback_data=f"my_batches_{page+1}"))
+                nav_buttons.append(InlineKeyboardButton("Next ➡️", callback_data=f"my_batches_{page+1}"))
 
             if nav_buttons:
                 kb.append(nav_buttons)
-            kb.append([InlineKeyboardButton("  Main Menu", callback_data="u_main")])
+            kb.append([InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")])
 
             await q.edit_message_text(
                 f"  **My Batches (Page {page+1})**\n\nYahan wo sabhi batches hain jisme aap join hain ya unlocked hain. Click karke access karein:",
@@ -2405,13 +2405,13 @@ async def general_callback(client: Client, q: CallbackQuery):
         elif data.startswith("all_batches_"):
             await q.answer()
             kb = [
-                [InlineKeyboardButton(cat, callback_data=f"showcat_{i}")]
+                [InlineKeyboardButton(f"📁 {cat}", callback_data=f"showcat_{i}")]
                 for i, cat in enumerate(DB.get("CATEGORIES", DEFAULT_CATEGORIES))
             ] + [
-                [InlineKeyboardButton("  Main Menu", callback_data="u_main")]
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]
             ]
             await q.edit_message_text(
-                "  **All Batches - Select Category:**",
+                "📂 **All Batches - Select Category:**",
                 reply_markup=InlineKeyboardMarkup(kb),
                 parse_mode=ParseMode.MARKDOWN,
             )
@@ -2422,14 +2422,14 @@ async def general_callback(client: Client, q: CallbackQuery):
             cat_idx = int(data.split("_")[1])
             kb = [
                 [
-                    InlineKeyboardButton("  Free Batches", callback_data=f"listcat_{cat_idx}_free_0"),
-                    InlineKeyboardButton("  Paid Batches", callback_data=f"listcat_{cat_idx}_paid_0"),
+                    InlineKeyboardButton("🆓 Free Batches", callback_data=f"listcat_{cat_idx}_free_0"),
+                    InlineKeyboardButton("💰 Paid Batches", callback_data=f"listcat_{cat_idx}_paid_0"),
                 ],
                 [
                     InlineKeyboardButton("✨ Special Batches", callback_data=f"listcat_{cat_idx}_special_0"),
                 ],
                 [
-                    InlineKeyboardButton("  Back to Categories", callback_data="all_batches_0")
+                    InlineKeyboardButton("🔙 Back to Categories", callback_data="all_batches_0")
                 ],
             ]
             await q.edit_message_text(
@@ -2491,7 +2491,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                 return await q.edit_message_text(
                     f"  Is category ({cat_name}) me abhi koi {b_type.title()} batch nahi hai.",
                     reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("  Back", callback_data=f"showcat_{cat_idx}")
+                        InlineKeyboardButton("🔙 Back", callback_data=f"showcat_{cat_idx}")
                     ]]),
                     parse_mode=ParseMode.MARKDOWN,
                 )
@@ -2518,15 +2518,15 @@ async def general_callback(client: Client, q: CallbackQuery):
             nav_buttons = []
             if page > 0:
                 nav_buttons.append(
-                    InlineKeyboardButton("  Back", callback_data=f"listcat_{cat_idx}_{b_type}_{page-1}")
+                    InlineKeyboardButton("🔙 Back", callback_data=f"listcat_{cat_idx}_{b_type}_{page-1}")
                 )
             if end_idx < total:
                 nav_buttons.append(
-                    InlineKeyboardButton("Next  ", callback_data=f"listcat_{cat_idx}_{b_type}_{page+1}")
+                    InlineKeyboardButton("Next ➡️", callback_data=f"listcat_{cat_idx}_{b_type}_{page+1}")
                 )
             if nav_buttons:
                 kb.append(nav_buttons)
-            kb.append([InlineKeyboardButton("  Category Menu", callback_data=f"showcat_{cat_idx}")])
+            kb.append([InlineKeyboardButton("📂 Category Menu", callback_data=f"showcat_{cat_idx}")])
 
             await q.edit_message_text(
                 f"  **{cat_name} ({b_type.title()})**\n\nNeeche diye gaye batches par click karein:",
@@ -2622,7 +2622,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                     joined_free.append(cid)
                     await save_data_async()
 
-                kb = [[InlineKeyboardButton("  Join Batch", url=l.invite_link)]]
+                kb = [[InlineKeyboardButton("🚀 Join Batch", url=l.invite_link)]]
                 sent_msg = await client.send_message(
                     uid,
                     f"  <b>Link Generated!</b>\n\n<b>{bname}</b>\n\n  <i>Request auto-approved.</i>\n  <i>(Expires in 1 min)</i>",
@@ -2672,8 +2672,8 @@ async def general_callback(client: Client, q: CallbackQuery):
                 return await q.answer("Sorry, but at this moment the paid batch is locked. When it will unlock I will inform you.", show_alert=True)
             await q.answer()
             kb = [
-                [InlineKeyboardButton("  Request Access", callback_data=f"req_access_{cid}")],
-                [InlineKeyboardButton("  Back", callback_data="u_main")],
+                [InlineKeyboardButton("🔑 Request Access", callback_data=f"req_access_{cid}")],
+                [InlineKeyboardButton("🔙 Back", callback_data="u_main")],
             ]
             try:
                 await q.edit_message_text(
@@ -2831,7 +2831,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                     except Exception as e:
                         logger.error(f"Admin notification failed: {e}")
 
-                kb = [[InlineKeyboardButton("  Request Access", url=l.invite_link)]]
+                kb = [[InlineKeyboardButton("🔑 Request Access", url=l.invite_link)]]
                 user_msg_obj = await client.send_message(
                     uid,
                     f"  <b>Access Link Generated!</b>\n\n<b>{bname}</b>\n\n  <b>Sent to Admin.</b> Wait for approval.\n  <i>(Expires in 1 min)</i>",
@@ -2846,7 +2846,7 @@ async def general_callback(client: Client, q: CallbackQuery):
 
 # --- START, MENUS & CORE EVENTS ---
 async def show_tnc_menu(client: Client, message: Message):
-    kb = [[InlineKeyboardButton("  I Read & Accept", callback_data="accept_tnc")]]
+    kb = [[InlineKeyboardButton("✅ I Read & Accept", callback_data="accept_tnc")]]
     txt = (
         "  **STRICT WARNING & TERMS OF SERVICE**  \n\n"
         "  **ENGLISH:**\n"
@@ -2858,7 +2858,7 @@ async def show_tnc_menu(client: Client, message: Message):
     await message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
 async def show_tnc_menu_cb(client: Client, q: CallbackQuery):
-    kb = [[InlineKeyboardButton("  I Read & Accept", callback_data="accept_tnc")]]
+    kb = [[InlineKeyboardButton("✅ I Read & Accept", callback_data="accept_tnc")]]
     txt = (
         "  **STRICT WARNING & TERMS OF SERVICE**  \n\n"
         "  **ENGLISH:**\n"
@@ -2926,36 +2926,36 @@ async def show_user_menu_cb(client: Client, q: CallbackQuery):
 def build_owner_panel_kb():
     kb = [
         [
-            InlineKeyboardButton("  Security", callback_data="dash_locks"),
-            InlineKeyboardButton("  Database", callback_data="dash_db"),
+            InlineKeyboardButton("🔒 Security", callback_data="dash_locks"),
+            InlineKeyboardButton("💾 Database", callback_data="dash_db"),
         ],
         [
-            InlineKeyboardButton("  Batches", callback_data="dash_batches"),
-            InlineKeyboardButton("  Staff", callback_data="dash_staff"),
+            InlineKeyboardButton("📦 Batches", callback_data="dash_batches"),
+            InlineKeyboardButton("🧑\u200d💼 Staff", callback_data="dash_staff"),
         ],
         [
-            InlineKeyboardButton("  Comms", callback_data="dash_comms"),
-            InlineKeyboardButton("  Analytics", callback_data="dash_stats"),
+            InlineKeyboardButton("📢 Comms", callback_data="dash_comms"),
+            InlineKeyboardButton("📊 Analytics", callback_data="dash_stats"),
         ],
-        [InlineKeyboardButton("  Userbot Login & Stats", callback_data="userbot_details")],
-        [InlineKeyboardButton("  🔄 Switch Panel", callback_data="role_selector")],
+        [InlineKeyboardButton("🤖 Userbot Login & Stats", callback_data="userbot_details")],
+        [InlineKeyboardButton("🔄 Switch Panel", callback_data="role_selector")],
     ]
-    text = "  **SYSTEM MASTER TERMINAL**\nSelect a module:"
+    text = "👑 **SYSTEM MASTER TERMINAL**\n\nSelect a module below:"
     return text, InlineKeyboardMarkup(kb)
 
 def build_admin_panel_kb():
     kb = [
         [
-            InlineKeyboardButton("  Users", callback_data="adash_users"),
-            InlineKeyboardButton("  Approvals", callback_data="adash_approvals"),
+            InlineKeyboardButton("👥 Users", callback_data="adash_users"),
+            InlineKeyboardButton("✅ Approvals", callback_data="adash_approvals"),
         ],
         [
-            InlineKeyboardButton("  Batches", callback_data="adash_batches"),
-            InlineKeyboardButton("  Comms", callback_data="adash_comms"),
+            InlineKeyboardButton("📦 Batches", callback_data="adash_batches"),
+            InlineKeyboardButton("📢 Comms", callback_data="adash_comms"),
         ],
-        [InlineKeyboardButton("  🔄 Switch Panel", callback_data="role_selector")],
+        [InlineKeyboardButton("🔄 Switch Panel", callback_data="role_selector")],
     ]
-    text = "  **ADMINISTRATOR DASHBOARD**\nSelect an action:"
+    text = "🛡 **ADMINISTRATOR DASHBOARD**\n\nSelect an action below:"
     return text, InlineKeyboardMarkup(kb)
 
 def build_role_selector_kb(user_id):
@@ -2965,7 +2965,7 @@ def build_role_selector_kb(user_id):
         kb.append([InlineKeyboardButton("👑 Owner Panel", callback_data="goto_owner_panel")])
     kb.append([InlineKeyboardButton("🛡 Admin Panel", callback_data="goto_admin_panel")])
     kb.append([InlineKeyboardButton("👤 User Panel", callback_data="goto_user_panel")])
-    text = "  **Select Panel**\nAap kis panel me jaana chahte hain?"
+    text = "🎛 **Select Panel**\n\nAap kis panel me jaana chahte hain?"
     return text, InlineKeyboardMarkup(kb)
 
 async def show_role_selector(client: Client, message: Message, user):
@@ -3034,28 +3034,43 @@ async def start(client: Client, message: Message):
 
     await get_or_create_topic(user, client)
 
+    # --- LOADING ANIMATION ---
+    loading_msg = await message.reply_text("⏳ **Loading, please wait...**", parse_mode=ParseMode.MARKDOWN)
+    await asyncio.sleep(0.7)
+
     if str(user.id) == str(OWNER_ID) or is_admin(user.id):
         # Owner ko 3 panel (Owner/Admin/User) aur Admin ko 2 panel (Admin/User) dikhega
-        await show_role_selector(client, message, user)
+        text, kb = build_role_selector_kb(user.id)
+        await loading_msg.edit_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
     elif await check_membership_pyro(user.id, client):
         if not DB["USER_DATA"].get(user_key, {}).get("tnc_accepted", False):
-            await show_tnc_menu(client, message)
+            tnc_kb = [[InlineKeyboardButton("✅ I Read & Accept", callback_data="accept_tnc")]]
+            tnc_txt = (
+                "⚠️ **STRICT WARNING & TERMS OF SERVICE**\n\n"
+                "🇬🇧 **ENGLISH:**\n"
+                "If you leave the Main Channel or block this bot, you will be **INSTANTLY REMOVED** from ALL joined groups and channels.\n\n"
+                "🇮🇳 **HINDI:**\n"
+                "Agar aapne Main Channel ko chhoda (leave kiya) ya is bot ko block kiya, toh aapko sabhi groups aur channels se **TURANT NIKAL** diya jayega.\n\n"
+                "✅ *Click 'I Read & Accept' only if you agree to these terms.*"
+            )
+            await loading_msg.edit_text(tnc_txt, reply_markup=InlineKeyboardMarkup(tnc_kb), parse_mode=ParseMode.MARKDOWN)
         else:
             if "pending_referral" in DB["USER_DATA"][user_key]:
                 referrer_id = DB["USER_DATA"][user_key].pop("pending_referral")
                 await save_data_async()
                 await process_successful_referral(client, user.id, referrer_id)
 
-            await show_user_menu(client, message)
+            txt, kb = build_home_menu(user_key, user)
+            await loading_msg.edit_text(txt, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
     else:
         if not DB.get("NEW_USERS_ALLOWED", True):
-            return await message.reply_text("  **Entry Closed!**", parse_mode=ParseMode.MARKDOWN)
+            return await loading_msg.edit_text("🚫 **Entry Closed!**", parse_mode=ParseMode.MARKDOWN)
         kb = [
-            [InlineKeyboardButton("  Join Channel", url=MANDATORY_CHANNEL_LINK)],
-            [InlineKeyboardButton("  Verified", callback_data="verify")],
+            [InlineKeyboardButton("📢 Join Channel", url=MANDATORY_CHANNEL_LINK)],
+            [InlineKeyboardButton("✅ I've Joined", callback_data="verify")],
         ]
-        await message.reply_text(
-            "  **Join Main Channel First**\n\nTo access batches and unlock referral rewards, please join our mandatory channel first.",
+        await loading_msg.edit_text(
+            "📢 **Join Main Channel First**\n\nTo access batches and unlock referral rewards, please join our mandatory channel first.",
             reply_markup=InlineKeyboardMarkup(kb),
             parse_mode=ParseMode.MARKDOWN,
         )
@@ -3082,13 +3097,13 @@ async def start_from_cb(client: Client, q: CallbackQuery):
             await show_user_menu_cb(client, q)
     else:
         if not DB.get("NEW_USERS_ALLOWED", True):
-            return await q.edit_message_text("  **Entry Closed!**", parse_mode=ParseMode.MARKDOWN)
+            return await q.edit_message_text("🚫 **Entry Closed!**", parse_mode=ParseMode.MARKDOWN)
         kb = [
-            [InlineKeyboardButton("  Join Channel", url=MANDATORY_CHANNEL_LINK)],
-            [InlineKeyboardButton("  Verified", callback_data="verify")],
+            [InlineKeyboardButton("📢 Join Channel", url=MANDATORY_CHANNEL_LINK)],
+            [InlineKeyboardButton("✅ I've Joined", callback_data="verify")],
         ]
         await q.edit_message_text(
-            "  **Join Main Channel First**",
+            "📢 **Join Main Channel First**",
             reply_markup=InlineKeyboardMarkup(kb),
             parse_mode=ParseMode.MARKDOWN,
         )
@@ -3195,7 +3210,7 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
     # 1. USER -> ADMIN
     if chat.type == ChatType.PRIVATE:
         if DB.get("MAINTENANCE_MODE", False) and not is_admin(user.id):
-            return await message.reply_text("  **Under Maintenance.**")
+            return await message.reply_text("🛠 **Under Maintenance.**")
         
         try:
             topic_id = await get_or_create_topic(user, client)
