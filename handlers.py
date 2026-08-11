@@ -1763,6 +1763,17 @@ async def general_callback(client: Client, q: CallbackQuery):
             return await wizard_callback(client, q)
         if data.startswith("bc_"):
             return await broadcast_callback(client, q)
+        if data == "role_selector":
+            if not is_admin(uid):
+                return await q.answer("  Access Denied!", show_alert=True)
+            await q.answer()
+            return await show_role_selector_cb(client, q)
+        if data == "goto_owner_panel":
+            return await goto_owner_panel_cb(client, q)
+        if data == "goto_admin_panel":
+            return await goto_admin_panel_cb(client, q)
+        if data == "goto_user_panel":
+            return await goto_user_panel_cb(client, q)
         if data == "dash_home":
             if uid in ADMIN_WIZARD:
                 del ADMIN_WIZARD[uid]
@@ -2909,6 +2920,80 @@ async def show_user_menu_cb(client: Client, q: CallbackQuery):
     txt, kb = build_home_menu(user_key, q.from_user)
     await q.edit_message_text(txt, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
 
+# =====================================================================
+# ROLE SWITCHER PANEL (Owner -> Owner/Admin/User, Admin -> Admin/User)
+# =====================================================================
+def build_owner_panel_kb():
+    kb = [
+        [
+            InlineKeyboardButton("  Security", callback_data="dash_locks"),
+            InlineKeyboardButton("  Database", callback_data="dash_db"),
+        ],
+        [
+            InlineKeyboardButton("  Batches", callback_data="dash_batches"),
+            InlineKeyboardButton("  Staff", callback_data="dash_staff"),
+        ],
+        [
+            InlineKeyboardButton("  Comms", callback_data="dash_comms"),
+            InlineKeyboardButton("  Analytics", callback_data="dash_stats"),
+        ],
+        [InlineKeyboardButton("  Userbot Login & Stats", callback_data="userbot_details")],
+        [InlineKeyboardButton("  🔄 Switch Panel", callback_data="role_selector")],
+    ]
+    text = "  **SYSTEM MASTER TERMINAL**\nSelect a module:"
+    return text, InlineKeyboardMarkup(kb)
+
+def build_admin_panel_kb():
+    kb = [
+        [
+            InlineKeyboardButton("  Users", callback_data="adash_users"),
+            InlineKeyboardButton("  Approvals", callback_data="adash_approvals"),
+        ],
+        [
+            InlineKeyboardButton("  Batches", callback_data="adash_batches"),
+            InlineKeyboardButton("  Comms", callback_data="adash_comms"),
+        ],
+        [InlineKeyboardButton("  🔄 Switch Panel", callback_data="role_selector")],
+    ]
+    text = "  **ADMINISTRATOR DASHBOARD**\nSelect an action:"
+    return text, InlineKeyboardMarkup(kb)
+
+def build_role_selector_kb(user_id):
+    is_owner = str(user_id) == str(OWNER_ID)
+    kb = []
+    if is_owner:
+        kb.append([InlineKeyboardButton("👑 Owner Panel", callback_data="goto_owner_panel")])
+    kb.append([InlineKeyboardButton("🛡 Admin Panel", callback_data="goto_admin_panel")])
+    kb.append([InlineKeyboardButton("👤 User Panel", callback_data="goto_user_panel")])
+    text = "  **Select Panel**\nAap kis panel me jaana chahte hain?"
+    return text, InlineKeyboardMarkup(kb)
+
+async def show_role_selector(client: Client, message: Message, user):
+    text, kb = build_role_selector_kb(user.id)
+    await message.reply_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+
+async def show_role_selector_cb(client: Client, q: CallbackQuery):
+    text, kb = build_role_selector_kb(q.from_user.id)
+    await q.edit_message_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+
+async def goto_owner_panel_cb(client: Client, q: CallbackQuery):
+    if str(q.from_user.id) != str(OWNER_ID):
+        return await q.answer("  Access Denied! Owner Only.", show_alert=True)
+    await q.answer()
+    text, kb = build_owner_panel_kb()
+    await q.edit_message_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+
+async def goto_admin_panel_cb(client: Client, q: CallbackQuery):
+    if not is_admin(q.from_user.id):
+        return await q.answer("  Access Denied! Admins Only.", show_alert=True)
+    await q.answer()
+    text, kb = build_admin_panel_kb()
+    await q.edit_message_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+
+async def goto_user_panel_cb(client: Client, q: CallbackQuery):
+    await q.answer()
+    await show_user_menu_cb(client, q)
+
 async def start(client: Client, message: Message):
     user = message.from_user
     await set_role_based_commands(user.id, client)
@@ -2949,37 +3034,9 @@ async def start(client: Client, message: Message):
 
     await get_or_create_topic(user, client)
 
-    if str(user.id) == str(OWNER_ID):
-        kb = [
-            [
-                InlineKeyboardButton("  Security", callback_data="dash_locks"),
-                InlineKeyboardButton("  Database", callback_data="dash_db"),
-            ],
-            [
-                InlineKeyboardButton("  Batches", callback_data="dash_batches"),
-                InlineKeyboardButton("  Staff", callback_data="dash_staff"),
-            ],
-            [
-                InlineKeyboardButton("  Comms", callback_data="dash_comms"),
-                InlineKeyboardButton("  Analytics", callback_data="dash_stats"),
-            ],
-            [InlineKeyboardButton("  Userbot Login & Stats", callback_data="userbot_details")],
-        ]
-        text = "  **SYSTEM MASTER TERMINAL**\nSelect a module:"
-        await message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-    elif is_admin(user.id):
-        kb = [
-            [
-                InlineKeyboardButton("  Users", callback_data="adash_users"),
-                InlineKeyboardButton("  Approvals", callback_data="adash_approvals"),
-            ],
-            [
-                InlineKeyboardButton("  Batches", callback_data="adash_batches"),
-                InlineKeyboardButton("  Comms", callback_data="adash_comms"),
-            ],
-        ]
-        text = "  **ADMINISTRATOR DASHBOARD**\nSelect an action:"
-        await message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+    if str(user.id) == str(OWNER_ID) or is_admin(user.id):
+        # Owner ko 3 panel (Owner/Admin/User) aur Admin ko 2 panel (Admin/User) dikhega
+        await show_role_selector(client, message, user)
     elif await check_membership_pyro(user.id, client):
         if not DB["USER_DATA"].get(user_key, {}).get("tnc_accepted", False):
             await show_tnc_menu(client, message)
@@ -3009,36 +3066,11 @@ async def start_from_cb(client: Client, q: CallbackQuery):
     await set_role_based_commands(user.id, client)
     
     if str(user.id) == str(OWNER_ID):
-        kb = [
-            [
-                InlineKeyboardButton("  Security", callback_data="dash_locks"),
-                InlineKeyboardButton("  Database", callback_data="dash_db"),
-            ],
-            [
-                InlineKeyboardButton("  Batches", callback_data="dash_batches"),
-                InlineKeyboardButton("  Staff", callback_data="dash_staff"),
-            ],
-            [
-                InlineKeyboardButton("  Comms", callback_data="dash_comms"),
-                InlineKeyboardButton("  Analytics", callback_data="dash_stats"),
-            ],
-            [InlineKeyboardButton("  Userbot Login & Stats", callback_data="userbot_details")],
-        ]
-        text = "  **SYSTEM MASTER TERMINAL**\nSelect a module:"
-        await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        text, kb = build_owner_panel_kb()
+        await q.edit_message_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
     elif is_admin(user.id):
-        kb = [
-            [
-                InlineKeyboardButton("  Users", callback_data="adash_users"),
-                InlineKeyboardButton("  Approvals", callback_data="adash_approvals"),
-            ],
-            [
-                InlineKeyboardButton("  Batches", callback_data="adash_batches"),
-                InlineKeyboardButton("  Comms", callback_data="adash_comms"),
-            ],
-        ]
-        text = "  **ADMINISTRATOR DASHBOARD**\nSelect an action:"
-        await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        text, kb = build_admin_panel_kb()
+        await q.edit_message_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
     elif await check_membership_pyro(user.id, client):
         if not DB["USER_DATA"].get(user_key, {}).get("tnc_accepted", False):
             await show_tnc_menu_cb(client, q)
