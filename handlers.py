@@ -47,8 +47,28 @@ _BOT_SELF_ID = None
 GLOBAL_LINK_COOLDOWN = 15 * 60   # Rule A: 15 minutes between ANY link generation
 ACTIVE_LINK_TTL = 60             # Rule B: matches the 60s invite-link expiry
 
+def is_vip_user(uid) -> bool:
+    """VIP = 25+ lifetime successful refers (tier flag set in process_successful_referral)."""
+    key = uid if uid in DB["USER_DATA"] else str(uid)
+    return DB["USER_DATA"].get(key, {}).get("tier") == "vip"
+
+async def send_vip_treat(client: Client, uid: int):
+    """VIPs ko action complete karne par ek premium sticker/GIF bhejta hai (agar admin ne /setvipsticker se set kiya hai)."""
+    sticker_id = DB.get("VIP_STICKER_ID")
+    if not sticker_id:
+        return
+    try:
+        if DB.get("VIP_STICKER_TYPE") == "animation":
+            await client.send_animation(uid, sticker_id)
+        else:
+            await client.send_sticker(uid, sticker_id)
+    except Exception:
+        pass
+
 def get_cooldown_remaining(uid: int) -> int:
-    """Rule A: returns remaining whole minutes of the global cooldown (0 = clear)."""
+    """Rule A: returns remaining whole minutes of the global cooldown (0 = clear). VIPs bypass this entirely."""
+    if is_vip_user(uid):
+        return 0
     entry = DB.get("PENDING_REQUESTS", {}).get(str(uid))
     if not entry:
         return 0
@@ -141,15 +161,44 @@ async def process_successful_referral(client: Client, referee_id: int, referrer_
     if referrer_key not in DB["USER_DATA"]:
         return
 
-    # Referrer ko 1 Point aur +1 Invites count dein
+    # Referrer ko 1 Point aur +1 Invites count dein (yeh hamesha turant milta hai)
     DB["USER_DATA"][referrer_key]["referral_count"] = DB["USER_DATA"][referrer_key].get("referral_count", 0) + 1
     DB["USER_DATA"][referrer_key]["total_invited"] = DB["USER_DATA"][referrer_key].get("total_invited", 0) + 1
-    
-    # Referee (Naye user) ko bhi 1 Point bonus dein
+
+    # --- TIERED MILESTONE BONUS: har 5 successful refers par 1 EXTRA bonus coin ---
+    milestone_hit = DB["USER_DATA"][referrer_key]["total_invited"] % 5 == 0
+    if milestone_hit:
+        DB["USER_DATA"][referrer_key]["referral_count"] += 1
+
+    # --- 25+ REFERS VIP TAG (bot-internal, koi webpage badge nahi) ---
+    total_now = DB["USER_DATA"][referrer_key]["total_invited"]
+    newly_vip = total_now >= 25 and DB["USER_DATA"][referrer_key].get("tier") != "vip"
+    if newly_vip:
+        DB["USER_DATA"][referrer_key]["tier"] = "vip"
+
+    # Referee ko ABHI point NAHI milega — sirf record hoga ki isse kisne refer kiya,
+    # welcome bonus tab tak "locked" rahega jab tak yeh khud kisi ko refer na kare
     if referee_key in DB["USER_DATA"]:
-        DB["USER_DATA"][referee_key]["referral_count"] = DB["USER_DATA"][referee_key].get("referral_count", 0) + 1
-    
+        DB["USER_DATA"][referee_key]["referred_by"] = referrer_id
+        DB["USER_DATA"][referee_key].setdefault("welcome_bonus_claimed", False)
+
     await save_data_async()
+
+    # Agar referrer khud kisi se refer hua tha aur uska welcome bonus abhi tak locked tha,
+    # to apna PEHLA successful refer karte hi wo bonus unlock ho jayega
+    if not DB["USER_DATA"][referrer_key].get("welcome_bonus_claimed", True) and DB["USER_DATA"][referrer_key].get("referred_by"):
+        DB["USER_DATA"][referrer_key]["referral_count"] = DB["USER_DATA"][referrer_key].get("referral_count", 0) + 1
+        DB["USER_DATA"][referrer_key]["welcome_bonus_claimed"] = True
+        await save_data_async()
+        try:
+            await client.send_message(
+                referrer_id,
+                "🔓 **WELCOME BONUS UNLOCKED!**\n\n"
+                "Aapne apna pehla successful refer kar diya, isliye aapka pending **1 Coin Welcome Bonus** bhi ab wallet me add ho gaya hai! 🎉",
+                parse_mode=ParseMode.MARKDOWN
+            )
+        except Exception:
+            pass
 
     # Referrer notification
     try:
@@ -163,13 +212,42 @@ async def process_successful_referral(client: Client, referee_id: int, referrer_
     except Exception:
         pass
 
-    # Referee notification
+    if milestone_hit:
+        try:
+            await client.send_message(
+                referrer_id,
+                f"🏆 **MILESTONE BONUS!**\n\n"
+                f"Aapne **{total_now} successful refers** poore kar liye hain — har 5 refers par 1 EXTRA Coin milta hai. "
+                f"Aapke wallet me **+1 Bonus Coin** add ho gaya hai! 🎁",
+                parse_mode=ParseMode.MARKDOWN
+            )
+        except Exception:
+            pass
+
+    if newly_vip:
+        try:
+            await client.send_message(
+                referrer_id,
+                "👑 **VIP REFERRER UNLOCKED!**\n\n"
+                "Aapne 25+ dosto ko refer kar diya hai! Aapko ab bot ke andar **👑 VIP Referrer** tag mil gaya hai — "
+                "yeh 'My Info' aur 'Refer & Earn' section me dikhega.",
+                parse_mode=ParseMode.MARKDOWN
+            )
+        except Exception:
+            pass
+
+    # VIPs ko har successful refer par ek premium sticker/GIF treat milta hai (agar set hai)
+    if DB["USER_DATA"][referrer_key].get("tier") == "vip":
+        await send_vip_treat(client, referrer_id)
+
+    # Referee notification — coin abhi nahi, sirf unlock karne ka raasta batao
     try:
         await client.send_message(
             referee_id,
-            "🎉 **WELCOME BONUS!**\n\n"
-            "Aapko referral link use karne ke liye **1 Coin bonus** mila hai! 🎁\n"
-            "Ab aap is coin ka use karke Special Batch unlock kar sakte hain.",
+            "👋 **WELCOME!**\n\n"
+            "Aapne referral link se join kiya hai. Apna **1 Coin Welcome Bonus** paane ke liye, "
+            "aapko bhi apna khud ka referral link kam se kam ek dost ko bhejna hoga aur unse join karwana hoga. 🎁\n"
+            "Apna link paane ke liye 'Refer & Earn' button dabayein.",
             parse_mode=ParseMode.MARKDOWN
         )
     except Exception:
@@ -859,6 +937,33 @@ async def cmd_set_testbot(client: Client, message: Message):
     await save_data_async()
     await message.reply_text("  Test bot link updated.")
 
+async def cmd_set_vip_materials(client: Client, message: Message):
+    """Usage: /setvipmaterials <link> — VIP-only 'VIP Course Materials' button ka target set karta hai."""
+    if not is_admin_msg(message):
+        return
+    args = get_args(message)
+    if not args:
+        return await message.reply_text("Usage: /setvipmaterials <link>")
+    DB["VIP_MATERIALS_LINK"] = args[0]
+    await save_data_async()
+    await message.reply_text("  👑 VIP Materials link updated.")
+
+async def cmd_set_vip_sticker(client: Client, message: Message):
+    """Reply to a sticker/animation with /setvipsticker — VIPs ko is par set treat milega har milestone/unlock par."""
+    if not is_admin_msg(message):
+        return
+    if not message.reply_to_message or not (message.reply_to_message.sticker or message.reply_to_message.animation):
+        return await message.reply_text("Kisi sticker ya GIF ko reply karke /setvipsticker bhejein.")
+    file_id = (
+        message.reply_to_message.sticker.file_id
+        if message.reply_to_message.sticker
+        else message.reply_to_message.animation.file_id
+    )
+    DB["VIP_STICKER_ID"] = file_id
+    DB["VIP_STICKER_TYPE"] = "sticker" if message.reply_to_message.sticker else "animation"
+    await save_data_async()
+    await message.reply_text("  👑 VIP treat sticker/GIF set ho gaya.")
+
 async def cmd_extend_demo(client: Client, message: Message):
     if not is_admin_msg(message):
         return
@@ -1340,16 +1445,24 @@ async def wizard_message(client: Client, message: Message):
             DB.setdefault("BATCH_CATEGORIES", {})[str(cid)] = state["category"]
             await save_data_async()
 
+            # Special batches: ab yahan ruk kar unlock-coin cost poochenge, baaki (free/paid) turant finish
+            if state["type"] == "special":
+                ADMIN_WIZARD[uid]["step"] = "ask_coin"
+                ADMIN_WIZARD[uid]["cid"] = cid
+                ADMIN_WIZARD[uid]["cname"] = cname
+                await message.reply_text(
+                    f"  **Step 4:** '{cname}' ko unlock karne ke liye kitne Coins chahiye?\nSirf number bhejein (e.g. `3`):",
+                    parse_mode=ParseMode.MARKDOWN,
+                )
+                return True
+
             await message.reply_text(
                 f"  **Added!**\nName: {cname} ({cid})\nType: {state['type'].upper()}\nCategory: {state['category']}",
                 parse_mode=ParseMode.MARKDOWN,
             )
 
-            if state["type"] in ["free", "special"]:
+            if state["type"] == "free":
                 b_count = 0
-                msg_header = "<b>NEW FREE BATCH ADDED!</b>" if state["type"] == "free" else "<b>NEW SPECIAL BATCH ADDED!</b>"
-                msg_body = "Join via Bot Menu!" if state["type"] == "free" else "Unlock via Referral in Bot Menu!"
-
                 await message.reply_text(
                     f"  Sending Auto-Broadcast for {state['type'].upper()} batch...", parse_mode=ParseMode.MARKDOWN
                 )
@@ -1358,7 +1471,7 @@ async def wizard_message(client: Client, message: Message):
                         try:
                             sent_msg = await client.send_message(
                                 int(t_cid),
-                                f"  {msg_header}\n  Name: {cname}\n  {msg_body}",
+                                f"  <b>NEW FREE BATCH ADDED!</b>\n  Name: {cname}\n  Join via Bot Menu!",
                                 parse_mode=ParseMode.HTML,
                             )
                             DB.setdefault("SCHEDULED_DELETES", []).append({
@@ -1378,7 +1491,54 @@ async def wizard_message(client: Client, message: Message):
         except Exception as e:
             await message.reply_text(f"  Error: Ensure valid ID ({e}).")
         return True
-        
+
+    elif state["step"] == "ask_coin":
+        try:
+            coin_cost = int(message.text.strip())
+            if coin_cost < 1:
+                raise ValueError("Coin cost 1 se kam nahi ho sakta")
+
+            cid = state["cid"]
+            cname = state["cname"]
+            DB.setdefault("BATCH_COINS", {})[str(cid)] = coin_cost
+            await save_data_async()
+
+            await message.reply_text(
+                f"  **Added!**\nName: {cname} ({cid})\nType: SPECIAL\nCategory: {state['category']}\nUnlock Cost: **{coin_cost} Coin{'s' if coin_cost != 1 else ''}**",
+                parse_mode=ParseMode.MARKDOWN,
+            )
+
+            b_count = 0
+            await message.reply_text("  Sending Auto-Broadcast for SPECIAL batch...", parse_mode=ParseMode.MARKDOWN)
+            for t_cid in list(DB.get("ALL_CHATS", {}).keys()):
+                if t_cid != cid:
+                    try:
+                        sent_msg = await client.send_message(
+                            int(t_cid),
+                            f"  <b>NEW SPECIAL BATCH ADDED!</b>\n  Name: {cname}\n  Unlock via Referral in Bot Menu! (Cost: {coin_cost} Coin{'s' if coin_cost != 1 else ''})",
+                            parse_mode=ParseMode.HTML,
+                        )
+                        DB.setdefault("SCHEDULED_DELETES", []).append({
+                            "c": int(t_cid),
+                            "m": sent_msg.id,
+                            "t": time.time() + 10800,
+                        })
+                        b_count += 1
+                        await asyncio.sleep(0.05)
+                    except FloodWait as e:
+                        await asyncio.sleep(e.value + 1)
+                    except Exception:
+                        pass
+            await message.reply_text(f"  Broadcast sent to {b_count} chats.")
+            await save_data_async()
+            del ADMIN_WIZARD[uid]
+        except ValueError:
+            await message.reply_text("  Invalid input. Kripya sirf ek number bhejein (e.g. `3`).")
+        except Exception as e:
+            await message.reply_text(f"  Error: {e}")
+            if uid in ADMIN_WIZARD: del ADMIN_WIZARD[uid]
+        return True
+
     elif state["step"].startswith("call_cmd_"):
         cmd_name = state["step"].replace("call_cmd_", "")
         current_step = state["step"]
@@ -1842,14 +2002,26 @@ async def general_callback(client: Client, q: CallbackQuery):
             user_key = uid if uid in DB["USER_DATA"] else str(uid)
             refer_points = DB["USER_DATA"].get(user_key, {}).get("referral_count", 0)
             total_invited = DB["USER_DATA"].get(user_key, {}).get("total_invited", 0)
+            is_vip = DB["USER_DATA"].get(user_key, {}).get("tier") == "vip"
 
-            txt = (
-                f"👤 **MY INFO**\n"
-                f"🆔 **ID:** `{uid}`\n"
-                f"👥 **Total Refers:** `{total_invited}`\n"
-                f"🎁 **Available Coins:** `{refer_points}`\n\n"
-                f"💡 *In coins ka use karke aap koi bhi Special Batch unlock kar sakte hain.*"
-            )
+            if is_vip:
+                txt = (
+                    "👑 **[Elite Referrer] — MY INFO** 👑\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🆔 **User ID:** `{uid}`\n"
+                    f"🏷️ **Tag:** `👑 VIP Referrer`\n"
+                    f"👥 **Total Refers:** `{total_invited}`\n"
+                    f"💰 **Wallet:** `{refer_points}` Coins\n\n"
+                    "💎 *Enjoy zero cooldowns, exclusive materials, and monthly bonuses — thank you for being Elite.*"
+                )
+            else:
+                txt = (
+                    f"👤 **MY INFO**\n"
+                    f"🆔 **ID:** `{uid}`\n"
+                    f"👥 **Total Refers:** `{total_invited}`\n"
+                    f"🎁 **Available Coins:** `{refer_points}`\n\n"
+                    f"💡 *In coins ka use karke aap koi bhi Special Batch ya saari Free Batches unlock kar sakte hain.*"
+                )
             kb = [[InlineKeyboardButton("🔙 Back", callback_data="u_main")]]
             await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
@@ -1869,13 +2041,17 @@ async def general_callback(client: Client, q: CallbackQuery):
             user_key = uid if uid in DB["USER_DATA"] else str(uid)
             pts = DB["USER_DATA"].get(user_key, {}).get("referral_count", 0)
             total_inv = DB["USER_DATA"].get(user_key, {}).get("total_invited", 0)
+            is_vip = DB["USER_DATA"].get(user_key, {}).get("tier") == "vip"
 
             text = (
                 "🎁 **Refer & Earn Program**\n"
                 "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                "Invite your friends and earn a 1 coin on every successful refer they make!\n\n"
-                "Your friend also get 1 coin as a refer bonus will be instantly added to your wallet, which you can use to access special batch\n\n"
-                f"👥 Total Referred Users: {total_inv}\n"
+                "Invite your friends and earn 1 coin on every successful refer!\n\n"
+                "New users don't get a coin instantly — they unlock their own 1 coin welcome bonus only after THEY successfully refer someone too. Keep the chain going! 🔗\n\n"
+                "🏆 **Milestone Bonus:** Every 5 successful refers = **+1 EXTRA Coin!**\n"
+                "👑 **VIP Tag:** Cross 25 total refers to unlock the VIP Referrer tag!\n\n"
+                + (f"👑 Your Tag: **VIP Referrer**\n" if is_vip else "")
+                + f"👥 Total Referred Users: {total_inv}\n"
                 f"💰 Total Earnings: {pts}\n\n"
                 "🔗 Your Referral Link:\n"
                 f"`{ref_link}`\n\n"
@@ -1888,6 +2064,53 @@ async def general_callback(client: Client, q: CallbackQuery):
                 parse_mode=ParseMode.MARKDOWN,
                 disable_web_page_preview=True
             )
+
+        # =====================================================================
+        # 💎 VIP-ONLY: EXCLUSIVE COURSE MATERIALS
+        # =====================================================================
+        elif data == "vip_materials":
+            await q.answer()
+            user_key = uid if uid in DB["USER_DATA"] else str(uid)
+            if DB["USER_DATA"].get(user_key, {}).get("tier") != "vip":
+                return await q.answer("👑 Yeh sirf VIP Referrers ke liye hai!", show_alert=True)
+
+            materials_link = DB.get("VIP_MATERIALS_LINK")
+            kb = [[InlineKeyboardButton("🔙 Back", callback_data="u_main")]]
+            if materials_link:
+                kb.insert(0, [InlineKeyboardButton("📂 Open Materials", url=materials_link)])
+                txt = "💎 **VIP Course Materials**\n\nYeh sirf Elite Referrers ke liye hai. Neeche button se access karein."
+            else:
+                txt = "💎 **VIP Course Materials**\n\nAdmin abhi materials link update kar rahe hain. Jald hi yahan se access milega!"
+
+            await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
+        # =====================================================================
+        # 🎁 VIP-ONLY: CLAIM MONTHLY BONUS
+        # =====================================================================
+        elif data == "vip_monthly_bonus":
+            user_key = uid if uid in DB["USER_DATA"] else str(uid)
+            if DB["USER_DATA"].get(user_key, {}).get("tier") != "vip":
+                return await q.answer("👑 Yeh sirf VIP Referrers ke liye hai!", show_alert=True)
+
+            last_claim = DB["USER_DATA"][user_key].get("last_monthly_bonus", 0)
+            elapsed = time.time() - last_claim
+            THIRTY_DAYS = 30 * 24 * 60 * 60
+
+            if elapsed < THIRTY_DAYS:
+                days_left = int((THIRTY_DAYS - elapsed) // 86400) + 1
+                return await q.answer(f"⏳ Agla bonus {days_left} din me claim kar sakte hain!", show_alert=True)
+
+            DB["USER_DATA"][user_key]["referral_count"] = DB["USER_DATA"][user_key].get("referral_count", 0) + 2
+            DB["USER_DATA"][user_key]["last_monthly_bonus"] = time.time()
+            await save_data_async()
+
+            await q.answer("🎉 +2 Coins Claimed!", show_alert=True)
+            await q.edit_message_text(
+                "🎉 **MONTHLY BONUS CLAIMED!**\n\n💎 **+2 Coins** aapke wallet me add ho gaye hain, sirf VIP hone ke naate!",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")]]),
+                parse_mode=ParseMode.MARKDOWN
+            )
+            await send_vip_treat(client, uid)
 
         # --- MANDATORY CHANNEL VERIFICATION & REFERRAL PROCESSOR ---
         elif data == "verify":
@@ -2168,6 +2391,43 @@ async def general_callback(client: Client, q: CallbackQuery):
 
         elif data.startswith("get_f_"):
             cid = int(data.split("_")[2])
+            user_key = uid if uid in DB["USER_DATA"] else str(uid)
+            user_rec = DB["USER_DATA"].setdefault(user_key, {})
+            joined_free = user_rec.setdefault("free_batches_joined", [])
+            FREE_LIMIT = 3
+
+            already_used_slot = cid in joined_free or str(cid) in joined_free
+            needs_unlock = (
+                not is_vip_user(uid)
+                and not user_rec.get("free_unlocked", False)
+                and not already_used_slot
+                and len(joined_free) >= FREE_LIMIT
+            )
+
+            if needs_unlock:
+                pts = user_rec.get("referral_count", 0)
+                await q.answer()
+                if pts >= 1:
+                    kb = [
+                        [InlineKeyboardButton("🔓 Unlock All Free Batches (Cost: 1 Coin)", callback_data="unlock_all_free")],
+                        [InlineKeyboardButton("🔙 Back", callback_data="u_main")],
+                    ]
+                    return await q.edit_message_text(
+                        f"🔒 **Free Batches Locked**\n\nAapne apni **{FREE_LIMIT} free** batches use kar li hain.\nAapke paas **{pts} Coins** hain. **1 Coin** use karke saari (baaki) Free Batches hamesha ke liye unlock karein — dobara coin nahi lagega.",
+                        reply_markup=InlineKeyboardMarkup(kb),
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+                else:
+                    kb = [
+                        [InlineKeyboardButton("🎁 Get Refer Link", callback_data="menu_refer")],
+                        [InlineKeyboardButton("🔙 Back", callback_data="u_main")],
+                    ]
+                    return await q.edit_message_text(
+                        f"🔒 **Free Batches Locked**\n\nAapne apni **{FREE_LIMIT} free** batches use kar li hain. Aage ke liye **1 Coin** chahiye.\nApne dosto ko refer karke coins earn karein!",
+                        reply_markup=InlineKeyboardMarkup(kb),
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+
             if await is_already_in_channel_pyro(client, cid, uid):
                 return await q.answer("  Already Joined!", show_alert=True)
             cooldown_left = get_cooldown_remaining(uid)
@@ -2185,6 +2445,12 @@ async def general_callback(client: Client, q: CallbackQuery):
                     expire_date=datetime.now() + timedelta(seconds=60),
                 )
                 register_link_request(uid, cid)
+
+                # Sirf pehli baar is batch ke liye slot count hota hai (free_unlocked hone ke baad tracking ki zaroorat nahi)
+                if not user_rec.get("free_unlocked", False) and not already_used_slot:
+                    joined_free.append(cid)
+                    await save_data_async()
+
                 kb = [[InlineKeyboardButton("  Join Batch", url=l.invite_link)]]
                 sent_msg = await client.send_message(
                     uid,
@@ -2196,6 +2462,38 @@ async def general_callback(client: Client, q: CallbackQuery):
                 await q.answer("Sent to DM")
             except Exception as e:
                 await q.answer(f"Bot Error: {e}", show_alert=True)
+
+        # =====================================================================
+        # 🔓 UNLOCK ALL FREE BATCHES (ONE-TIME, DEDUCT 1 COIN — from batch 4 onward)
+        # =====================================================================
+        elif data == "unlock_all_free":
+            user_key = uid if uid in DB["USER_DATA"] else str(uid)
+            pts = DB["USER_DATA"].get(user_key, {}).get("referral_count", 0)
+
+            if DB["USER_DATA"].get(user_key, {}).get("free_unlocked", False):
+                await q.answer()
+                return await q.edit_message_text(
+                    "✅ Free Batches pehle se unlocked hain!",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")]]),
+                    parse_mode=ParseMode.MARKDOWN
+                )
+
+            if pts < 1:
+                return await q.answer("❌ Aapke paas enough coins nahi hain!", show_alert=True)
+
+            DB["USER_DATA"][user_key]["referral_count"] -= 1
+            DB["USER_DATA"][user_key]["free_unlocked"] = True
+            await save_data_async()
+
+            await q.answer("🎉 Free Batches Unlocked!", show_alert=True)
+            await q.edit_message_text(
+                "🎉 **Free Batches Unlocked!**\n\nAb aap kisi bhi Free Batch par click karke turant join kar sakte hain — dobara coin nahi lagega.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0")],
+                    [InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")]
+                ]),
+                parse_mode=ParseMode.MARKDOWN
+            )
 
         elif data.startswith("view_p_"):
             cid = int(data.split("_")[2])
@@ -2222,11 +2520,13 @@ async def general_callback(client: Client, q: CallbackQuery):
             cid = int(data.split("_")[2])
             await q.answer()
             bname = DB.get("ALL_CHATS", {}).get(cid) or DB.get("SPECIAL_CHANNELS", {}).get(cid) or f"Special Batch {cid}"
+            cost = DB.get("BATCH_COINS", {}).get(str(cid), 1)
             
             user_key = uid if uid in DB["USER_DATA"] else str(uid)
             unlocked_list = DB["USER_DATA"].get(user_key, {}).get("unlocked_batches", [])
             is_unlocked = cid in unlocked_list or str(cid) in unlocked_list
             pts = DB["USER_DATA"].get(user_key, {}).get("referral_count", 0)
+            coin_word = "Coin" if cost == 1 else "Coins"
 
             kb = []
             if is_unlocked:
@@ -2235,14 +2535,14 @@ async def general_callback(client: Client, q: CallbackQuery):
                 status_str = "🎉 Unlocked!"
                 desc = "Aapne is batch ko successfully unlock kar liya hai."
             else:
-                if pts >= 1:
-                    kb.append([InlineKeyboardButton("🔓 Unlock Batch (Cost: 1 Coin)", callback_data=f"unlock_s_{cid}")])
+                if pts >= cost:
+                    kb.append([InlineKeyboardButton(f"🔓 Unlock Batch (Cost: {cost} {coin_word})", callback_data=f"unlock_s_{cid}")])
                     status_str = "🔒 Locked"
-                    desc = f"Aapke paas **{pts} Coins** hain. Aap 1 Coin use karke is batch ko unlock kar sakte hain."
+                    desc = f"Aapke paas **{pts} Coins** hain. Aap {cost} {coin_word} use karke is batch ko unlock kar sakte hain."
                 else:
                     kb.append([InlineKeyboardButton("🎁 Get Refer Link", callback_data="menu_refer")])
                     status_str = "🔒 Locked (Not Enough Coins)"
-                    desc = "Aapke paas enough coins nahi hain. Is batch ko unlock karne ke liye aapko **1 Coin** chahiye.\nApne dosto ko refer karke coins earn karein!"
+                    desc = f"Aapke paas enough coins nahi hain. Is batch ko unlock karne ke liye aapko **{cost} {coin_word}** chahiye.\nApne dosto ko refer karke coins earn karein!"
 
             kb.append([InlineKeyboardButton("🔙 Back", callback_data="u_main")])
 
@@ -2254,22 +2554,24 @@ async def general_callback(client: Client, q: CallbackQuery):
             )
 
         # =====================================================================
-        # 🔓 UNLOCK SPECIAL BATCH (DEDUCT 1 POINT)
+        # 🔓 UNLOCK SPECIAL BATCH (DEDUCT PER-BATCH COIN COST)
         # =====================================================================
         elif data.startswith("unlock_s_"):
             cid = int(data.split("_")[2])
             user_key = uid if uid in DB["USER_DATA"] else str(uid)
+            cost = DB.get("BATCH_COINS", {}).get(str(cid), 1)
             pts = DB["USER_DATA"].get(user_key, {}).get("referral_count", 0)
 
-            if pts < 1:
+            if pts < cost:
                 return await q.answer("❌ Aapke paas enough coins nahi hain!", show_alert=True)
 
-            # Deduct 1 point and add to unlocked list
-            DB["USER_DATA"][user_key]["referral_count"] -= 1
+            # Deduct the batch's coin cost and add to unlocked list
+            DB["USER_DATA"][user_key]["referral_count"] -= cost
             DB["USER_DATA"][user_key].setdefault("unlocked_batches", []).append(cid)
             await save_data_async()
             
             bname = DB.get("ALL_CHATS", {}).get(cid) or DB.get("SPECIAL_CHANNELS", {}).get(cid) or f"Special Batch {cid}"
+            coin_word = "Coin" if cost == 1 else "Coins"
 
             try:
                 # Generate unique 1-time invite link
@@ -2284,10 +2586,12 @@ async def general_callback(client: Client, q: CallbackQuery):
                     [InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")]
                 ]
                 await q.edit_message_text(
-                    f"🎉 **SUCCESS!**\n\nAapne **1 Coin** use karke **{bname}** successfully unlock kar liya hai.\nNeeche diye gaye button par click karke direct join karein.",
+                    f"🎉 **SUCCESS!**\n\nAapne **{cost} {coin_word}** use karke **{bname}** successfully unlock kar liya hai.\nNeeche diye gaye button par click karke direct join karein.",
                     reply_markup=InlineKeyboardMarkup(kb),
                     parse_mode=ParseMode.MARKDOWN
                 )
+                if DB["USER_DATA"].get(user_key, {}).get("tier") == "vip":
+                    await send_vip_treat(client, uid)
             except Exception as e:
                 logger.error(f"Unlock Special Batch Error: {e}")
                 clean_id = str(cid).replace('-100', '')
@@ -2394,37 +2698,56 @@ async def show_tnc_menu_cb(client: Client, q: CallbackQuery):
     )
     await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
+def build_home_menu(user_key, user):
+    """Normal users: standard half-width layout. VIPs: personalized greeting + exclusive full-width buttons."""
+    vip = DB["USER_DATA"].get(user_key, {}).get("tier") == "vip"
+    first_name = (user.first_name if user and user.first_name else "there")
+
+    if vip:
+        total_inv = DB["USER_DATA"].get(user_key, {}).get("total_invited", 0)
+        pts = DB["USER_DATA"].get(user_key, {}).get("referral_count", 0)
+        txt = (
+            f"👑 **[Elite Referrer] {first_name}**\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Welcome back! You have successfully referred `{total_inv}` students so far.\n"
+            f"💰 **Wallet Balance:** `{pts}` Coins\n\n"
+            "✨ *Your VIP dashboard is ready:*"
+        )
+        kb = [
+            [InlineKeyboardButton("👑 My Batches (Elite Access)", callback_data="my_batches_0")],
+            [InlineKeyboardButton("🌟 All Batches", callback_data="all_batches_0")],
+            [InlineKeyboardButton("💎 VIP Course Materials", callback_data="vip_materials")],
+            [InlineKeyboardButton("🎁 Claim Monthly Bonus", callback_data="vip_monthly_bonus")],
+            [InlineKeyboardButton("🚀 Refer & Earn", callback_data="menu_refer")],
+            [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")],
+            [InlineKeyboardButton("🎥 How to use the bot", url="https://t.me/c/2836314734/1244")],
+            [InlineKeyboardButton("💎 My Info", callback_data="my_info")],
+        ]
+    else:
+        txt = (
+            "🌟 **Welcome to the Premium Hub!** 🌟\nYour centralized portal for exclusive communities.\n\n👇 *Select an option below:*"
+        )
+        kb = [
+            [
+                InlineKeyboardButton("📚 My Batches", callback_data="my_batches_0"),
+                InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0"),
+            ],
+            [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")],
+            [InlineKeyboardButton("🎥 How to use the bot", url="https://t.me/c/2836314734/1244")],
+            [InlineKeyboardButton("🎁 Refer & Earn", callback_data="menu_refer")],
+            [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")],
+        ]
+    return txt, InlineKeyboardMarkup(kb)
+
 async def show_user_menu(client: Client, message: Message):
-    kb = [
-        [
-            InlineKeyboardButton("📚 My Batches", callback_data="my_batches_0"),
-            InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0"),
-        ],
-        [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")],
-        [InlineKeyboardButton("🎥 How to use the bot", url="https://t.me/c/2836314734/1244")],
-        [InlineKeyboardButton("🎁 Refer & Earn", callback_data="menu_refer")],
-        [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")],
-    ]
-    txt = (
-        "🌟 **Welcome to the Premium Hub!** 🌟\nYour centralized portal for exclusive communities.\n\n👇 *Select an option below:*"
-    )
-    await message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+    user_key = message.from_user.id if message.from_user.id in DB["USER_DATA"] else str(message.from_user.id)
+    txt, kb = build_home_menu(user_key, message.from_user)
+    await message.reply_text(txt, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
 
 async def show_user_menu_cb(client: Client, q: CallbackQuery):
-    kb = [
-        [
-            InlineKeyboardButton("📚 My Batches", callback_data="my_batches_0"),
-            InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0"),
-        ],
-        [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")],
-        [InlineKeyboardButton("🎥 How to use the bot", url="https://t.me/c/2836314734/1244")],
-        [InlineKeyboardButton("🎁 Refer & Earn", callback_data="menu_refer")],
-        [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")],
-    ]
-    txt = (
-        "🌟 **Welcome to the Premium Hub!** 🌟\nYour centralized portal for exclusive communities.\n\n👇 *Select an option below:*"
-    )
-    await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+    user_key = q.from_user.id if q.from_user.id in DB["USER_DATA"] else str(q.from_user.id)
+    txt, kb = build_home_menu(user_key, q.from_user)
+    await q.edit_message_text(txt, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
 
 async def start(client: Client, message: Message):
     user = message.from_user
@@ -2687,6 +3010,18 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
                 sent = await message.copy(int(SUPPORT_GROUP_ID), reply_to_message_id=target_reply_id)
             MESSAGE_MAP[(chat.id, message.id)] = (int(SUPPORT_GROUP_ID), sent.id)
             MESSAGE_MAP[(int(SUPPORT_GROUP_ID), sent.id)] = (chat.id, message.id)
+
+            # --- PRIORITY SUPPORT: VIP messages seedha owner ke personal DM me #URGENT_VIP tag ke saath ---
+            if is_vip_user(user.id):
+                try:
+                    uname = f"@{user.username}" if user.username else "no username"
+                    await client.send_message(
+                        int(OWNER_ID),
+                        f"#URGENT_VIP\n👑 **VIP Referrer Message**\n👤 {user.first_name or ''} ({uname})\n🆔 `{user.id}`"
+                    )
+                    await message.copy(int(OWNER_ID))
+                except Exception:
+                    pass
         except Exception as e:
             err_str = str(e).lower()
             
