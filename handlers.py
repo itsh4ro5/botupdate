@@ -895,25 +895,36 @@ async def cmd_user_lookup(client: Client, message: Message):
     coins = rec.get("referral_count", 0)
     total_inv = rec.get("total_invited", 0)
     tier = "👑 VIP" if rec.get("tier") == "vip" else "Normal"
-    tnc = "✅" if rec.get("tnc_accepted") else "❌"
+    tnc = "✅ Yes" if rec.get("tnc_accepted") else "❌ No"
 
-    txt = (
-        f"👤 **USER DATA LOOKUP**\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🆔 **User ID:** `{target}`\n"
-        f"📛 **Name:** {name}\n"
-        f"🔖 **Username:** {username}\n"
-        f"🏷️ **Tag:** {tier}\n"
-        f"✅ **TnC Accepted:** {tnc}\n"
-        f"💰 **Coins:** `{coins}`\n"
-        f"👥 **Total Referred:** `{total_inv}`\n\n"
-        f"🔗 **Support Topic:** {topic_link}\n\n"
-        f"📚 **Channel Membership:**\n{channels_txt}"
+    file_txt = (
+        f"USER DATA LOOKUP\n"
+        f"========================================\n"
+        f"User ID        : {target}\n"
+        f"Name            : {name}\n"
+        f"Username        : {username}\n"
+        f"Tag             : {tier}\n"
+        f"TnC Accepted    : {tnc}\n"
+        f"Coins           : {coins}\n"
+        f"Total Referred  : {total_inv}\n"
+        f"Support Topic   : {topic_link}\n"
+        f"========================================\n"
+        f"Channel Membership:\n{channels_txt}\n"
+        f"========================================\n"
+        f"Generated: {datetime.now()}\n"
     )
 
+    f = io.BytesIO(file_txt.encode("utf-8"))
+    f.name = f"user_{target}_data.txt"
+    f.seek(0)
+
     kb = [[InlineKeyboardButton("🎁 Gift Coin to this User", callback_data=f"giftcoin_direct_{target}")]]
-    await msg.edit_text(
-        txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True
+    await msg.delete()
+    await message.reply_document(
+        document=f,
+        caption=f"🔍 **USER DATA — `{target}`**\n📛 {name} | {username}",
+        reply_markup=InlineKeyboardMarkup(kb),
+        parse_mode=ParseMode.MARKDOWN,
     )
 
 async def cmd_addcat(client: Client, message: Message):
@@ -1524,21 +1535,21 @@ async def wizard_message(client: Client, message: Message):
                 return True
 
             await message.reply_text(
-                f"  **Added!**\nName: {cname} ({cid})\nType: {state['type'].upper()}\nCategory: {state['category']}",
+                f"✅ **Added!**\n📛 Name: {cname} ({cid})\n🏷️ Type: {state['type'].upper()}\n📂 Category: {state['category']}",
                 parse_mode=ParseMode.MARKDOWN,
             )
 
             if state["type"] == "free":
                 b_count = 0
                 await message.reply_text(
-                    f"  Sending Auto-Broadcast for {state['type'].upper()} batch...", parse_mode=ParseMode.MARKDOWN
+                    f"📡 Sending Auto-Broadcast for {state['type'].upper()} batch...", parse_mode=ParseMode.MARKDOWN
                 )
                 for t_cid in list(DB.get("ALL_CHATS", {}).keys()):
                     if t_cid != cid:
                         try:
                             sent_msg = await client.send_message(
                                 int(t_cid),
-                                f"  <b>NEW FREE BATCH ADDED!</b>\n  Name: {cname}\n  Join via Bot Menu!",
+                                f"🎉 <b>NEW FREE BATCH ADDED!</b>\n🆓 Name: {cname}\n📲 Join via Bot Menu!",
                                 parse_mode=ParseMode.HTML,
                             )
                             DB.setdefault("SCHEDULED_DELETES", []).append({
@@ -1552,7 +1563,7 @@ async def wizard_message(client: Client, message: Message):
                             await asyncio.sleep(e.value + 1)
                         except Exception:
                             pass
-                await message.reply_text(f"  Broadcast sent to {b_count} chats.")
+                await message.reply_text(f"✅ Broadcast sent to {b_count} chats.")
                 await save_data_async()
             del ADMIN_WIZARD[uid]
         except Exception as e:
@@ -1571,18 +1582,18 @@ async def wizard_message(client: Client, message: Message):
             await save_data_async()
 
             await message.reply_text(
-                f"  **Added!**\nName: {cname} ({cid})\nType: SPECIAL\nCategory: {state['category']}\nUnlock Cost: **{coin_cost} Coin{'s' if coin_cost != 1 else ''}**",
+                f"✅ **Added!**\n📛 Name: {cname} ({cid})\n🏷️ Type: SPECIAL\n📂 Category: {state['category']}\n💰 Unlock Cost: **{coin_cost} Coin{'s' if coin_cost != 1 else ''}**",
                 parse_mode=ParseMode.MARKDOWN,
             )
 
             b_count = 0
-            await message.reply_text("  Sending Auto-Broadcast for SPECIAL batch...", parse_mode=ParseMode.MARKDOWN)
+            await message.reply_text("📡 Sending Auto-Broadcast for SPECIAL batch...", parse_mode=ParseMode.MARKDOWN)
             for t_cid in list(DB.get("ALL_CHATS", {}).keys()):
                 if t_cid != cid:
                     try:
                         sent_msg = await client.send_message(
                             int(t_cid),
-                            f"  <b>NEW SPECIAL BATCH ADDED!</b>\n  Name: {cname}\n  Unlock via Referral in Bot Menu! (Cost: {coin_cost} Coin{'s' if coin_cost != 1 else ''})",
+                            f"✨ <b>NEW SPECIAL BATCH ADDED!</b>\n🌟 Name: {cname}\n🔓 Unlock via Referral in Bot Menu! (Cost: 💰 {coin_cost} Coin{'s' if coin_cost != 1 else ''})",
                             parse_mode=ParseMode.HTML,
                         )
                         DB.setdefault("SCHEDULED_DELETES", []).append({
@@ -1596,7 +1607,7 @@ async def wizard_message(client: Client, message: Message):
                         await asyncio.sleep(e.value + 1)
                     except Exception:
                         pass
-            await message.reply_text(f"  Broadcast sent to {b_count} chats.")
+            await message.reply_text(f"✅ Broadcast sent to {b_count} chats.")
             await save_data_async()
             del ADMIN_WIZARD[uid]
         except ValueError:
@@ -1785,29 +1796,29 @@ async def general_callback(client: Client, q: CallbackQuery):
             kb = [
                 [
                     InlineKeyboardButton(
-                        f"System Lockdown: {'  ON' if not DB.get('NEW_USERS_ALLOWED', True) else '  OFF'}",
+                        f"🔐 System Lockdown: {'🔴 ON' if not DB.get('NEW_USERS_ALLOWED', True) else '🟢 OFF'}",
                         callback_data="toggle_lockdown",
                     )
                 ],
                 [
                     InlineKeyboardButton(
-                        f"Free Batches: {'  LOCKED' if DB.get('FREE_LOCKED', False) else '  OPEN'}",
+                        f"🆓 Free Batches: {'🔒 LOCKED' if DB.get('FREE_LOCKED', False) else '🔓 OPEN'}",
                         callback_data="toggle_free",
                     ),
                     InlineKeyboardButton(
-                        f"Paid Batches: {'  LOCKED' if DB.get('PAID_LOCKED', False) else '  OPEN'}",
+                        f"💰 Paid Batches: {'🔒 LOCKED' if DB.get('PAID_LOCKED', False) else '🔓 OPEN'}",
                         callback_data="toggle_paid",
                     ),
                 ],
                 [
                     InlineKeyboardButton(
-                        f"Test Bot: {'  LOCKED' if DB.get('TEST_BOT_LOCKED', False) else '  OPEN'}",
+                        f"🤖 Test Bot: {'🔒 LOCKED' if DB.get('TEST_BOT_LOCKED', False) else '🔓 OPEN'}",
                         callback_data="toggle_testbot",
                     )
                 ],
                 [
                     InlineKeyboardButton(
-                        f"Maintenance Mode: {'  ON' if DB.get('MAINTENANCE_MODE', False) else '  OFF'}",
+                        f"🛠️ Maintenance Mode: {'🔴 ON' if DB.get('MAINTENANCE_MODE', False) else '🟢 OFF'}",
                         callback_data="toggle_maintenance",
                     )
                 ],
@@ -1835,29 +1846,29 @@ async def general_callback(client: Client, q: CallbackQuery):
             kb = [
                 [
                     InlineKeyboardButton(
-                        f"System Lockdown: {'  ON' if not DB.get('NEW_USERS_ALLOWED', True) else '  OFF'}",
+                        f"🔐 System Lockdown: {'🔴 ON' if not DB.get('NEW_USERS_ALLOWED', True) else '🟢 OFF'}",
                         callback_data="toggle_lockdown",
                     )
                 ],
                 [
                     InlineKeyboardButton(
-                        f"Free Batches: {'  LOCKED' if DB.get('FREE_LOCKED', False) else '  OPEN'}",
+                        f"🆓 Free Batches: {'🔒 LOCKED' if DB.get('FREE_LOCKED', False) else '🔓 OPEN'}",
                         callback_data="toggle_free",
                     ),
                     InlineKeyboardButton(
-                        f"Paid Batches: {'  LOCKED' if DB.get('PAID_LOCKED', False) else '  OPEN'}",
+                        f"💰 Paid Batches: {'🔒 LOCKED' if DB.get('PAID_LOCKED', False) else '🔓 OPEN'}",
                         callback_data="toggle_paid",
                     ),
                 ],
                 [
                     InlineKeyboardButton(
-                        f"Test Bot: {'  LOCKED' if DB.get('TEST_BOT_LOCKED', False) else '  OPEN'}",
+                        f"🤖 Test Bot: {'🔒 LOCKED' if DB.get('TEST_BOT_LOCKED', False) else '🔓 OPEN'}",
                         callback_data="toggle_testbot",
                     )
                 ],
                 [
                     InlineKeyboardButton(
-                        f"Maintenance Mode: {'  ON' if DB.get('MAINTENANCE_MODE', False) else '  OFF'}",
+                        f"🛠️ Maintenance Mode: {'🔴 ON' if DB.get('MAINTENANCE_MODE', False) else '🟢 OFF'}",
                         callback_data="toggle_maintenance",
                     )
                 ],
@@ -1878,6 +1889,10 @@ async def general_callback(client: Client, q: CallbackQuery):
                 [InlineKeyboardButton("👥 Download All Users List", callback_data="act_allusers")],
                 [InlineKeyboardButton("🗄️ Store Batch Data (Scan)", callback_data="input_storebatch")],
                 [InlineKeyboardButton("🔍 Specific User Data", callback_data="input_userlookup")],
+                [
+                    InlineKeyboardButton("🚫 Ban User", callback_data="input_ban"),
+                    InlineKeyboardButton("✅ Unban User", callback_data="input_unban"),
+                ],
                 [InlineKeyboardButton("🎁 Gift Coin", callback_data="giftcoin_start")],
                 [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
             ]
@@ -2805,12 +2820,13 @@ async def general_callback(client: Client, q: CallbackQuery):
 
                 topic_id = await get_or_create_topic(q.from_user, client)
                 if topic_id:
+                    user_link = f'<a href="tg://user?id={q.from_user.id}">{q.from_user.first_name or "User"}</a>'
                     notification_text = (
-                        f"  <b>NEW REQUEST</b>\n"
-                        f"  User: {q.from_user.mention}\n"
-                        f"  Batch: <b>{bname}</b>\n"
-                        f"  Link: {l.invite_link}\n\n"
-                        f"  <b>Action:</b>\n"
+                        f"📩 <b>NEW REQUEST</b>\n"
+                        f"👤 User: {user_link}\n"
+                        f"📦 Batch: <b>{bname}</b>\n"
+                        f"🔗 Link: {l.invite_link}\n\n"
+                        f"⚡ <b>Action:</b>\n"
                         f"/demo {l.invite_link}\n"
                         f"/per {l.invite_link}"
                     )
