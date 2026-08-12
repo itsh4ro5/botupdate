@@ -1482,7 +1482,7 @@ async def cmd_topicforward_start(client: Client, message: Message):
         parse_mode=ParseMode.MARKDOWN
     )
 
-async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str: str, channel_id_str: str):
+async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str: str, channel_id_str: str, keyword: str):
     try:
         group_id = int(group_id_str)
         channel_id = int(channel_id_str)
@@ -1512,12 +1512,16 @@ async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str
         forwarded_count = 0
         checked_count = 0
 
+        # Dynamic Regex Format (Jaise Subject:, Chapter:, ya Topic:)
+        import re
+        pattern = fr"{re.escape(keyword)}\s*:\s*(.*?)(?=\s+Batch:|\n|$)"
+
         for m in all_messages:
             checked_count += 1
             cap = m.caption or ""
             
-            # Caption me Topic search karo
-            t_match = re.search(r"Topic:\s*(.*?)(?=\s+Batch:|\n|$)", cap, re.IGNORECASE)
+            # Dynamic Keyword se search karega
+            t_match = re.search(pattern, cap, re.IGNORECASE)
             
             if t_match and (m.video or m.document):
                 raw_topic_name = t_match.group(1).strip()
@@ -1561,7 +1565,8 @@ async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str
                     topics_made = len(created_topics)
                     await msg.edit_text(
                         f"⏳ **Auto-Extractor Running...**\n\n"
-                        f"📁 **New Topics Created:** `{topics_made}`\n"
+                        f"🔑 **Keyword Used:** `{keyword}`\n"
+                        f"📁 **New Folders Created:** `{topics_made}`\n"
                         f"🔍 **Messages Scanned:** `{checked_count}/{total_msgs}`\n"
                         f"✅ **Files Forwarded:** `{forwarded_count}`"
                     )
@@ -1572,6 +1577,7 @@ async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str
         final_topics_count = len(created_topics)
         await msg.edit_text(
             f"🎯 **Operation Successful Master!**\n\n"
+            f"🔑 **Keyword Used:** `{keyword}`\n"
             f"✨ Group me **{final_topics_count}** naye Topics automatically ban gaye hain.\n"
             f"📦 Total **{forwarded_count}** files proper category me sequence se forward ho gaye hain.",
             parse_mode=ParseMode.MARKDOWN
@@ -1789,16 +1795,31 @@ async def wizard_message(client: Client, message: Message):
 
     elif state["step"] == "topicforward_channel":
         channel_id = message.text.strip()
-        group_id = ADMIN_WIZARD[uid]["group_id"]
+        ADMIN_WIZARD[uid]["step"] = "topicforward_keyword"
+        ADMIN_WIZARD[uid]["channel_id"] = channel_id
         
         await message.reply_text(
             f"✅ Channel ID `{channel_id}` saved.\n\n"
+            "**Step 3/3:** Ab us **Keyword** ko bhejein jiske aage naam likha hai.\n"
+            "Jaise agar caption me `Subject: Steel` hai, toh sirf **Subject** likh kar bhejein.\n"
+            "Agar `Topic: Current Affairs` hai, toh **Topic** bhejein.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return True
+
+    elif state["step"] == "topicforward_keyword":
+        keyword = message.text.strip()
+        group_id = ADMIN_WIZARD[uid]["group_id"]
+        channel_id = ADMIN_WIZARD[uid]["channel_id"]
+        
+        await message.reply_text(
+            f"✅ Keyword `{keyword}` saved.\n\n"
             "🚀 **Auto-Extractor Started!**\nBot ab khud messages check karega, naye Topics banayega aur saari files sequence me forward karega.",
             parse_mode=ParseMode.MARKDOWN
         )
         
-        # Seedha Task Start (Ab Topic Name nahi mangenge)
-        asyncio.create_task(run_topic_forwarder(client, message, group_id, channel_id))
+        # Ab keyword ko bhi function me pass kar rahe hain
+        asyncio.create_task(run_topic_forwarder(client, message, group_id, channel_id, keyword))
         del ADMIN_WIZARD[uid]
         return True
 
