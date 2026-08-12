@@ -1482,7 +1482,7 @@ async def cmd_topicforward_start(client: Client, message: Message):
         parse_mode=ParseMode.MARKDOWN
     )
 
-async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str: str, channel_id_str: str, keyword: str):
+async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str: str, channel_id_str: str, keyword: str, start_msg_id: int, end_msg_id: int):
     try:
         group_id = int(group_id_str)
         channel_id = int(channel_id_str)
@@ -1493,26 +1493,39 @@ async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str
     if not session_string or not API_ID:
         return await message.reply_text("❌ **Userbot Not Logged In!** Dashboard se login karein.", parse_mode=ParseMode.MARKDOWN)
 
-    msg = await message.reply_text(f"⏳ **Step 1:** Channel history fetch kar raha hu taaki files sequence me upload hon...")
+    msg = await message.reply_text(f"⏳ **Step 1:** Message `{start_msg_id}` se `{end_msg_id}` tak history fetch kar raha hu...")
 
     userbot = Client("topic_forward_bot", api_id=API_ID, api_hash=API_HASH, session_string=session_string, in_memory=True)
     try:
         await userbot.start()
         
-        # Pura history memory me load karke reverse karna taaki oldest (Index 1) pehle forward ho
+        # Start aur End ID ko chhota/bada sort kar liya taaki aage peeche enter ho toh bhi chal jaye
+        min_id = min(start_msg_id, end_msg_id)
+        max_id = max(start_msg_id, end_msg_id)
+
         all_messages = []
-        async for m in userbot.get_chat_history(channel_id):
-            all_messages.append(m)
         
+        # offset_id=max_id + 1 (Sirf target range wale msgs hi uthayega, baaki lakhon msgs ko ignore karega)
+        async for m in userbot.get_chat_history(channel_id, offset_id=max_id + 1):
+            if m.id < min_id:
+                break
+            if m.id <= max_id:
+                all_messages.append(m)
+        
+        # Sequence sahi karne ke liye list ko ulat diya (Index 1 pehle aayega)
         all_messages.reverse()
         total_msgs = len(all_messages)
-        await msg.edit_text(f"✅ Total `{total_msgs}` messages load ho gaye!\n⏳ **Step 2:** Auto-Topic Creation & Forwarding chalu hai...")
         
-        created_topics = {}  # Format: {"current affairs": topic_id}
+        if total_msgs == 0:
+            await userbot.stop()
+            return await msg.edit_text(f"❌ Error: Message ID `{min_id}` se `{max_id}` ke beech koi file nahi mili.")
+            
+        await msg.edit_text(f"✅ Total `{total_msgs}` messages uthaye gaye!\n⏳ **Step 2:** Auto-Topic Creation & Forwarding chalu hai...")
+        
+        created_topics = {} 
         forwarded_count = 0
         checked_count = 0
 
-        # Dynamic Regex Format (Jaise Subject:, Chapter:, ya Topic:)
         import re
         pattern = fr"{re.escape(keyword)}\s*:\s*(.*?)(?=\s+Batch:|\n|$)"
 
@@ -1520,28 +1533,23 @@ async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str
             checked_count += 1
             cap = m.caption or ""
             
-            # Dynamic Keyword se search karega
             t_match = re.search(pattern, cap, re.IGNORECASE)
             
             if t_match and (m.video or m.document):
                 raw_topic_name = t_match.group(1).strip()
-                topic_key = raw_topic_name.lower() # Case-insensitive check ke liye
+                topic_key = raw_topic_name.lower() 
                 
-                # Agar ye topic pehli baar mila hai, toh Naya Forum Topic banao
                 if topic_key not in created_topics:
                     try:
-                        # Pehle main bot se try karega
                         new_topic = await bot_client.create_forum_topic(chat_id=group_id, title=raw_topic_name)
                         created_topics[topic_key] = new_topic.id
                     except Exception:
                         try:
-                            # Agar bot fail hua toh userbot se banayega
                             new_topic = await userbot.create_forum_topic(chat_id=group_id, title=raw_topic_name)
                             created_topics[topic_key] = new_topic.id
-                        except Exception as e2:
-                            continue # Agar permission nahi hai toh skip karke aage badho
+                        except Exception:
+                            continue 
                 
-                # Ab us file ko banaye gaye (ya existing) topic me forward karo
                 target_topic_id = created_topics[topic_key]
                 try:
                     await userbot.copy_message(
@@ -1551,7 +1559,7 @@ async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str
                         message_thread_id=target_topic_id
                     )
                     forwarded_count += 1
-                    await asyncio.sleep(1.5) # Telegram flood control bypass
+                    await asyncio.sleep(1.5) 
                 except FloodWait as fw:
                     await asyncio.sleep(fw.value + 1)
                     await userbot.copy_message(chat_id=group_id, from_chat_id=channel_id, message_id=m.id, message_thread_id=target_topic_id)
@@ -1559,7 +1567,6 @@ async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str
                 except Exception:
                     pass
             
-            # Har 50 messages pe live status update karo
             if checked_count % 50 == 0:
                 try:
                     topics_made = len(created_topics)
@@ -1578,8 +1585,9 @@ async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str
         await msg.edit_text(
             f"🎯 **Operation Successful Master!**\n\n"
             f"🔑 **Keyword Used:** `{keyword}`\n"
-            f"✨ Group me **{final_topics_count}** naye Topics automatically ban gaye hain.\n"
-            f"📦 Total **{forwarded_count}** files proper category me sequence se forward ho gaye hain.",
+            f"📈 **Range Scanned:** ID `{min_id}` to `{max_id}`\n"
+            f"✨ Group me **{final_topics_count}** naye Topics ban gaye hain.\n"
+            f"📦 Total **{forwarded_count}** files proper sequence me forward ho gaye hain.",
             parse_mode=ParseMode.MARKDOWN
         )
     except Exception as err:
@@ -1809,17 +1817,55 @@ async def wizard_message(client: Client, message: Message):
 
     elif state["step"] == "topicforward_keyword":
         keyword = message.text.strip()
-        group_id = ADMIN_WIZARD[uid]["group_id"]
-        channel_id = ADMIN_WIZARD[uid]["channel_id"]
+        ADMIN_WIZARD[uid]["step"] = "topicforward_start_msg"
+        ADMIN_WIZARD[uid]["keyword"] = keyword
         
         await message.reply_text(
             f"✅ Keyword `{keyword}` saved.\n\n"
-            "🚀 **Auto-Extractor Started!**\nBot ab khud messages check karega, naye Topics banayega aur saari files sequence me forward karega.",
+            "**Step 4/5:** Ab batayein kahan se **START** karna hai?\n"
+            "Pehli message ka **Message ID** bhejein (Jaise: `1005`):",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return True
+
+    elif state["step"] == "topicforward_start_msg":
+        try:
+            start_msg_id = int(message.text.strip())
+        except ValueError:
+            await message.reply_text("❌ Error: Kripya sirf number bhejein (Message ID).")
+            return True
+            
+        ADMIN_WIZARD[uid]["step"] = "topicforward_end_msg"
+        ADMIN_WIZARD[uid]["start_msg_id"] = start_msg_id
+        
+        await message.reply_text(
+            f"✅ Start ID `{start_msg_id}` saved.\n\n"
+            "**Step 5/5:** Ab batayein kahan tak **END** karna hai?\n"
+            "Aakhiri message ka **Message ID** bhejein (Jaise: `2050`):",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return True
+
+    elif state["step"] == "topicforward_end_msg":
+        try:
+            end_msg_id = int(message.text.strip())
+        except ValueError:
+            await message.reply_text("❌ Error: Kripya sirf number bhejein (Message ID).")
+            return True
+            
+        group_id = ADMIN_WIZARD[uid]["group_id"]
+        channel_id = ADMIN_WIZARD[uid]["channel_id"]
+        keyword = ADMIN_WIZARD[uid]["keyword"]
+        start_msg_id = ADMIN_WIZARD[uid]["start_msg_id"]
+        
+        await message.reply_text(
+            f"✅ End ID `{end_msg_id}` saved.\n\n"
+            f"🚀 **Auto-Extractor Started!**\nBot ab message `{start_msg_id}` se `{end_msg_id}` tak check karega, naye Topics banayega aur files sequence me forward karega.",
             parse_mode=ParseMode.MARKDOWN
         )
         
-        # Ab keyword ko bhi function me pass kar rahe hain
-        asyncio.create_task(run_topic_forwarder(client, message, group_id, channel_id, keyword))
+        # Task start karo parameters ke sath
+        asyncio.create_task(run_topic_forwarder(client, message, group_id, channel_id, keyword, start_msg_id, end_msg_id))
         del ADMIN_WIZARD[uid]
         return True
 
