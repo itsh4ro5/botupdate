@@ -1472,6 +1472,95 @@ async def cmd_maintenance(client: Client, message: Message):
     )
     await schedule_delete(client, msg)
 
+async def cmd_topicforward_start(client: Client, message: Message):
+    group_id = message.text.strip()
+    uid = message.from_user.id
+    ADMIN_WIZARD[uid] = {"step": "topicforward_channel", "group_id": group_id}
+    await message.reply_text(
+        f"✅ Group ID `{group_id}` saved.\n\n"
+        "**Step 2/3:** Ab us **Channel ID** ko bhejein jaha se saare videos aur PDF uthane hain (e.g. `-10087654321`):",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str: str, channel_id_str: str, topic_name: str):
+    try:
+        group_id = int(group_id_str)
+        channel_id = int(channel_id_str)
+    except ValueError:
+        return await message.reply_text("❌ Error: Group ID ya Channel ID numbers me nahi hai.")
+
+    session_string = DB.get("USERBOT_SESSION")
+    if not session_string or not API_ID:
+        return await message.reply_text("❌ **Userbot Not Logged In!** Dashboard se login karein.", parse_mode=ParseMode.MARKDOWN)
+
+    msg = await message.reply_text(f"⏳ **Starting Task...**\nCreating Topic `{topic_name}` in Group...")
+
+    userbot = Client("topic_forward_bot", api_id=API_ID, api_hash=API_HASH, session_string=session_string, in_memory=True)
+    try:
+        await userbot.start()
+        
+        topic_id = None
+        try:
+            topic = await bot_client.create_forum_topic(chat_id=group_id, title=topic_name)
+            topic_id = topic.id
+        except Exception:
+            try:
+                topic = await userbot.create_forum_topic(chat_id=group_id, title=topic_name)
+                topic_id = topic.id
+            except Exception as e2:
+                await userbot.stop()
+                return await msg.edit_text(f"❌ Topic create error (Check if Forum is enabled in group):\n`{e2}`")
+
+        await msg.edit_text(f"✅ Topic `{topic_name}` created! Scanning channel `{channel_id}`...")
+        
+        forwarded_count = 0
+        checked_count = 0
+
+        async for m in userbot.get_chat_history(channel_id):
+            checked_count += 1
+            cap = m.caption or ""
+            
+            if topic_name.lower() in cap.lower():
+                t_match = re.search(r"Topic:\s*(.*?)(?=\s+Batch:|\n|$)", cap, re.IGNORECASE)
+                if t_match and t_match.group(1).strip().lower() == topic_name.lower():
+                    if m.video or m.document:
+                        try:
+                            await userbot.copy_message(
+                                chat_id=group_id,
+                                from_chat_id=channel_id,
+                                message_id=m.id,
+                                message_thread_id=topic_id
+                            )
+                            forwarded_count += 1
+                            await asyncio.sleep(1.5) 
+                        except FloodWait as fw:
+                            await asyncio.sleep(fw.value + 1)
+                            await userbot.copy_message(chat_id=group_id, from_chat_id=channel_id, message_id=m.id, message_thread_id=topic_id)
+                            forwarded_count += 1
+                        except Exception:
+                            pass
+            
+            if checked_count % 100 == 0:
+                try:
+                    await msg.edit_text(f"⏳ **Scanning In Progress...**\n\n📁 Topic: `{topic_name}`\n🔍 Checked: `{checked_count}`\n✅ Forwarded: `{forwarded_count}`")
+                except:
+                    pass
+
+        await userbot.stop()
+        await msg.edit_text(
+            f"🎯 **Operation Successful!**\n\n"
+            f"✨ Group me **{topic_name}** ka Topic ban gaya hai.\n"
+            f"📦 Total **{forwarded_count}** files wahan bhej diye gaye hain.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+    except Exception as err:
+        traceback.print_exc()
+        await msg.edit_text(f"❌ **Userbot Error:** `{err}`")
+        try:
+            await userbot.stop()
+        except:
+            pass
+
 # --- WIZARDS, MENUS & CALLBACKS ---
 async def wizard_callback(client: Client, q: CallbackQuery):
     uid = q.from_user.id
@@ -1675,6 +1764,35 @@ async def wizard_message(client: Client, message: Message):
             if uid in ADMIN_WIZARD: del ADMIN_WIZARD[uid]
         return True
 
+    elif state["step"] == "topicforward_channel":
+        channel_id = message.text.strip()
+        ADMIN_WIZARD[uid]["step"] = "topicforward_caption"
+        ADMIN_WIZARD[uid]["channel_id"] = channel_id
+        await message.reply_text(
+            f"✅ Channel ID `{channel_id}` saved.\n\n"
+            "**Step 3/3:** Ab ek reference **Caption** paste karein jisme 'Topic:' mention ho.\n"
+            "Bot usme se topic ka naam nikal kar khud ek naya Forum bana lega aur sabhi match hone wale files wahan bhej dega.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return True
+
+    elif state["step"] == "topicforward_caption":
+        caption = message.text
+        
+        # Ye regex "Topic:" ke aage ka text extract karega, jab tak line break ya "Batch:" na aaye
+        match = re.search(r"Topic:\s*(.*?)(?=\s+Batch:|\n|$)", caption, re.IGNORECASE)
+        if not match:
+            await message.reply_text("❌ Error: Is caption me `Topic:` format nahi mila. Kripya dhyan se phir se paste karein.")
+            return True
+        
+        topic_name = match.group(1).strip()
+        group_id = ADMIN_WIZARD[uid]["group_id"]
+        channel_id = ADMIN_WIZARD[uid]["channel_id"]
+        
+        asyncio.create_task(run_topic_forwarder(client, message, group_id, channel_id, topic_name))
+        del ADMIN_WIZARD[uid]
+        return True
+
     elif state["step"].startswith("call_cmd_"):
         cmd_name = state["step"].replace("call_cmd_", "")
         current_step = state["step"]
@@ -1701,6 +1819,7 @@ async def wizard_message(client: Client, message: Message):
                 "userbotpass": cmd_userbotpass,
                 "storebatch": cmd_storebatch,
                 "userlookup": cmd_user_lookup,
+                "topicforward": cmd_topicforward_start,
             }
             if cmd_name in cmds:
                 await cmds[cmd_name](client, message)
@@ -1916,6 +2035,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                     InlineKeyboardButton("🏷️ Set Batch Category", callback_data="input_setcat"),
                     InlineKeyboardButton("🧹 Empty Batch", callback_data="input_emptybatch"),
                 ],
+                [InlineKeyboardButton("🚀 Forward to Topic", callback_data="input_topicforward")],
                 [InlineKeyboardButton("📊 Batch Stats", callback_data="act_batchstats")],
                 [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
             ]
@@ -2023,6 +2143,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                 "setcat": "Send Batch ID(s) (comma ya space lagakar):\nFormat: `-100x, -100y`",
                 "emptybatch": "  **DHYAN DEIN!**\nSend Batch ID jisko poora khali (empty) karna hai:\nFormat: `-100123456789`",
                 "storebatch": "🗄️ **Store Batch Data**\n\nJis channel ka purana data (Videos/PDFs) Firebase me index karna hai, uska Chat ID bhejein:\nFormat: `-100123456789`",
+                "topicforward": "🚀 **Topic Forwarder (Step 1/3)**\n\nKripya us **Group Chat ID** ko bhejein jaha naya topic banana hai (e.g. `-10012345678`):",
                 "userbotphone": "  **Apna Phone Number bhejein**\nCountry code ke sath (Jaise: `+919876543210`):",
                 "userbototp": "  **OTP Bhejein**\n  *OTP spaces me bhejein!* Jaise: `1 2 3 4 5`:",
                 "userbotpass": "  **2FA Password bhejein:**",
