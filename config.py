@@ -429,9 +429,14 @@ async def get_or_create_topic(user, client, is_retry=False):
         await save_data_async()
                 
         group_id_str = str(SUPPORT_GROUP_ID).replace("-100", "")
+        
+        # Name ko clickable link banaya (tg://user format use karke)
+        safe_name = user.first_name or "User"
+        
         text = (
-            f"🚨 **NEW USER TICKET**\n👤 {user.first_name}\n🆔 `{user.id}`\n"
-            f"🔗 [Click to Check History](https://t.me/c/{group_id_str}?q={user.id})"
+            f"🚨 **NEW USER TICKET**\n"
+            f"👤 [{safe_name}](tg://user?id={user.id})\n"
+            f"🆔 `{user.id}`\n"
         )
                 
         try:
