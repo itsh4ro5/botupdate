@@ -1482,6 +1482,115 @@ async def cmd_topicforward_start(client: Client, message: Message):
         parse_mode=ParseMode.MARKDOWN
     )
 
+async def cmd_cleanbatch(client: Client, message: Message):
+    batch_id_str = message.text.strip()
+    try:
+        batch_id = int(batch_id_str)
+    except ValueError:
+        return await message.reply_text("❌ Error: Invalid Batch ID. Kripya numbers me ID bhejein.")
+
+    await message.reply_text("🚀 **Anti-Leech Cleaner Started!**\nBackground process shuru ho gaya hai. Kripya wait karein...", parse_mode=ParseMode.MARKDOWN)
+    asyncio.create_task(run_clean_unverified(client, message, batch_id))
+
+
+async def run_clean_unverified(bot_client: Client, message: Message, batch_id: int):
+    session_string = DB.get("USERBOT_SESSION")
+    if not session_string or not API_ID:
+        return await message.reply_text("❌ **Userbot Not Logged In!** Dashboard se login karein.", parse_mode=ParseMode.MARKDOWN)
+
+    msg = await message.reply_text(f"⏳ **Anti-Leech Scanner Started** on Batch `{batch_id}`...")
+
+    userbot = Client("clean_bot", api_id=API_ID, api_hash=API_HASH, session_string=session_string, in_memory=True)
+    try:
+        await userbot.start()
+        
+        mandatory_id = int(MANDATORY_CHANNEL_ID) if MANDATORY_CHANNEL_ID else None
+        if not mandatory_id:
+            await userbot.stop()
+            return await msg.edit_text("❌ Error: `MANDATORY_CHANNEL_ID` set nahi hai. Bot verification check nahi kar sakta.")
+
+        await msg.edit_text("✅ Userbot started! Scanning members... (Isme time lag sakta hai)")
+
+        removed_count = 0
+        safe_count = 0
+        scanned_count = 0
+
+        async for member in userbot.get_chat_members(batch_id):
+            scanned_count += 1
+            uid = member.user.id
+
+            # Skip Bots, Admins, and Owner
+            if member.user.is_bot or uid == OWNER_ID or is_admin(uid) or member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
+                safe_count += 1
+                continue
+
+            # Check 1: User ne bot start kiya hai kya?
+            has_started_bot = str(uid) in DB.get("USER_DATA", {}) or int(uid) in DB.get("USER_DATA", {})
+
+            # Check 2: User Mandatory Channel me hai ya nahi?
+            is_in_mandatory = False
+            try:
+                check_m = await bot_client.get_chat_member(mandatory_id, uid)
+                if check_m.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER, ChatMemberStatus.RESTRICTED]:
+                    is_in_mandatory = True
+            except Exception:
+                pass 
+
+            # Agar bot start nahi kiya YA mandatory me nahi hai -> KICK
+            if not has_started_bot or not is_in_mandatory:
+                try:
+                    await bot_client.ban_chat_member(batch_id, uid)
+                    await bot_client.unban_chat_member(batch_id, uid)
+                    
+                    # Agar demos wagaira the toh clear kar do
+                    if has_started_bot:
+                        user_key = str(uid) if str(uid) in DB["USER_DATA"] else uid
+                        if "demos" in DB["USER_DATA"][user_key] and str(batch_id) in DB["USER_DATA"][user_key]["demos"]:
+                            del DB["USER_DATA"][user_key]["demos"][str(batch_id)]
+                            
+                    removed_count += 1
+                    await asyncio.sleep(1.2) # Flood protection limit
+                except FloodWait as fw:
+                    await asyncio.sleep(fw.value + 1)
+                    await bot_client.ban_chat_member(batch_id, uid)
+                    await bot_client.unban_chat_member(batch_id, uid)
+                    removed_count += 1
+                except Exception:
+                    pass
+            else:
+                safe_count += 1
+
+            if scanned_count % 30 == 0:
+                try:
+                    await msg.edit_text(
+                        f"⏳ **Scanning In Progress...**\n\n"
+                        f"🔍 **Total Scanned:** `{scanned_count}`\n"
+                        f"🛡️ **Safe Users:** `{safe_count}`\n"
+                        f"👢 **Removed Leeches:** `{removed_count}`"
+                    )
+                except:
+                    pass
+
+        await save_data_async()
+        await userbot.stop()
+        
+        await msg.edit_text(
+            f"🎯 **Cleanup Successful!**\n\n"
+            f"🔍 Total Scanned: `{scanned_count}`\n"
+            f"🛡️ Safe Users: `{safe_count}`\n"
+            f"👢 **Total Removed:** `{removed_count}`\n\n"
+            f"Un sabhi users ko nikal diya gaya hai jo mandatory channel me nahi the ya jinhone bot register nahi kiya tha.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        await msg.edit_text(f"❌ **Error:** `{e}`")
+        try:
+            await userbot.stop()
+        except:
+            pass
+
 async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str: str, channel_id_str: str, keyword: str, start_msg_id: int, end_msg_id: int):
     try:
         group_id = int(group_id_str)
@@ -1907,6 +2016,7 @@ async def wizard_message(client: Client, message: Message):
                 "addcat": cmd_addcat,
                 "setcat": cmd_setcategory,
                 "emptybatch": cmd_emptybatch,
+                "cleanbatch": cmd_cleanbatch,
                 "userbotphone": cmd_userbotphone,
                 "userbototp": cmd_userbototp,
                 "userbotpass": cmd_userbotpass,
@@ -2128,7 +2238,10 @@ async def general_callback(client: Client, q: CallbackQuery):
                     InlineKeyboardButton("🏷️ Set Batch Category", callback_data="input_setcat"),
                     InlineKeyboardButton("🧹 Empty Batch", callback_data="input_emptybatch"),
                 ],
-                [InlineKeyboardButton("🚀 Forward to Topic", callback_data="input_topicforward")],
+                [
+                    InlineKeyboardButton("🚀 Forward to Topic", callback_data="input_topicforward"),
+                    InlineKeyboardButton("🛡️ Clean Unverified", callback_data="input_cleanbatch")
+                ],
                 [InlineKeyboardButton("📊 Batch Stats", callback_data="act_batchstats")],
                 [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
             ]
@@ -2235,6 +2348,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                 "addcat": "Send Name for new Category:",
                 "setcat": "Send Batch ID(s) (comma ya space lagakar):\nFormat: `-100x, -100y`",
                 "emptybatch": "  **DHYAN DEIN!**\nSend Batch ID jisko poora khali (empty) karna hai:\nFormat: `-100123456789`",
+                "cleanbatch": "🛡️ **Clean Unverified Users (Anti-Leech)**\n\nUs **Batch/Channel ID** ko bhejein jise clean karna hai (e.g. `-100123456789`).\n\n*Note: Ye un sabhi users ko nikal dega jo Mandatory Channel me nahi hain ya jinhone bot start nahi kiya hai.*",
                 "storebatch": "🗄️ **Store Batch Data**\n\nJis channel ka purana data (Videos/PDFs) Firebase me index karna hai, uska Chat ID bhejein:\nFormat: `-100123456789`",
                 "topicforward": "🚀 **Topic Forwarder (Step 1/3)**\n\nKripya us **Group Chat ID** ko bhejein jaha naya topic banana hai (e.g. `-10012345678`):",
                 "userbotphone": "  **Apna Phone Number bhejein**\nCountry code ke sath (Jaise: `+919876543210`):",
