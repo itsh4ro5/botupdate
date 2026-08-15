@@ -1707,6 +1707,155 @@ async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str
         except:
             pass
 
+async def cmd_advcap_start(client: Client, message: Message):
+    channel_id = message.text.strip()
+    uid = message.from_user.id
+    ADMIN_WIZARD[uid] = {"step": "advcap_start_msg", "channel_id": channel_id}
+    await message.reply_text(
+        f"✅ Channel ID `{channel_id}` saved.\n\n"
+        "**Step 2/5:** Ab batayein kahan se **START** karna hai?\n"
+        "Pehli message ka **Message ID** bhejein (Jaise: `1005`):",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+def smart_format_caption(text):
+    if not text: return text
+    import re
+    
+    # 1. Clean _enc and unwanted spaces
+    text = text.replace("_enc", "").replace("  ", " ")
+    
+    # 2. Remove tags like @Team_JeeX
+    text = re.sub(r"@[a-zA-Z0-9_]+", "", text)
+    
+    # 3. Remove Extracted By line completely
+    text = re.sub(r"Extracted By\s*[➤:]\s*.*", "", text, flags=re.IGNORECASE)
+    
+    # 4. Smart Extraction & Reordering
+    if ("File Title :" in text or "Video Title :" in text) and "Batch Name :" in text:
+        lines = text.split('\n')
+        data_map = {}
+        
+        for line in lines:
+            l_str = line.strip()
+            if not l_str: continue
+            if l_str.startswith("["): data_map['id'] = l_str
+            elif "Title :" in l_str: data_map['title'] = l_str
+            elif l_str.startswith("Batch Name"): data_map['batch'] = l_str
+            elif l_str.startswith("Topic Name"): data_map['topic'] = l_str
+        
+        # Extract Subject (Reasoning By Sandeep Sir -> Reasoning)
+        subject = ""
+        title_val = data_map.get('title', '')
+        sub_match = re.search(r":\s*(.*?)\s+By\s+", title_val, re.IGNORECASE)
+        if sub_match:
+            subject = f"Subject : {sub_match.group(1).strip()}"
+            
+        if all(k in data_map for k in ['id', 'title', 'batch', 'topic']):
+            new_cap = f"{data_map['id']}\n{data_map['title']}\n{data_map['topic']}\n"
+            if subject:
+                new_cap += f"{subject}\n"
+            new_cap += f"{data_map['batch']}"
+            return new_cap.strip()
+            
+    return text.strip()
+
+async def run_advanced_caption_changer(bot_client: Client, message: Message, channel_id_str: str, start_msg_id: int, end_msg_id: int, mode: str, data_text: str):
+    try:
+        channel_id = int(channel_id_str)
+    except ValueError:
+        return await message.reply_text("❌ Error: Channel ID number me nahi hai.")
+
+    session_string = DB.get("USERBOT_SESSION")
+    if not session_string or not API_ID:
+        return await message.reply_text("❌ **Userbot Not Logged In!** Dashboard se login karein.", parse_mode=ParseMode.MARKDOWN)
+
+    msg = await message.reply_text(f"⏳ **Step 1:** Fetching messages from `{start_msg_id}` to `{end_msg_id}`...")
+    userbot = Client("advcap_bot", api_id=API_ID, api_hash=API_HASH, session_string=session_string, in_memory=True)
+    
+    try:
+        await userbot.start()
+        min_id = min(start_msg_id, end_msg_id)
+        max_id = max(start_msg_id, end_msg_id)
+
+        all_messages = []
+        async for m in userbot.get_chat_history(channel_id, offset_id=max_id + 1):
+            if m.id < min_id: break
+            if m.id <= max_id: all_messages.append(m)
+        
+        total_msgs = len(all_messages)
+        if total_msgs == 0:
+            await userbot.stop()
+            return await msg.edit_text(f"❌ Error: Range `{min_id}` - `{max_id}` me koi message nahi mila.")
+            
+        await msg.edit_text(f"✅ Total `{total_msgs}` messages loaded!\n⏳ **Step 2:** Advanced Changer Running...")
+        
+        edited_count = 0
+        checked_count = 0
+
+        for m in all_messages:
+            checked_count += 1
+            if m.caption or mode == "1":
+                old_cap = m.caption or ""
+                new_cap = old_cap
+                
+                if mode == "1":   # Full Replace
+                    new_cap = data_text
+                elif mode == "2": # Word Replace
+                    if "|" in data_text:
+                        old_word, new_word = data_text.split("|", 1)
+                        new_cap = old_cap.replace(old_word.strip(), new_word.strip())
+                elif mode == "3": # Remove Word
+                    new_cap = old_cap.replace(data_text, "").strip()
+                elif mode == "4": # Add Prefix (Upar)
+                    new_cap = f"{data_text}\n\n{old_cap}"
+                elif mode == "5": # Add Suffix (Niche)
+                    new_cap = f"{old_cap}\n\n{data_text}"
+                elif mode == "6": # Smart Auto Format
+                    new_cap = smart_format_caption(old_cap)
+                
+                if new_cap != old_cap:
+                    try:
+                        await userbot.edit_message_caption(
+                            chat_id=channel_id,
+                            message_id=m.id,
+                            caption=new_cap
+                        )
+                        edited_count += 1
+                        await asyncio.sleep(2)  # API flood se bachne ke liye
+                    except FloodWait as fw:
+                        await asyncio.sleep(fw.value + 1)
+                        await userbot.edit_message_caption(chat_id=channel_id, message_id=m.id, caption=new_cap)
+                        edited_count += 1
+                    except Exception:
+                        pass
+                        
+            if checked_count % 30 == 0:
+                try:
+                    await msg.edit_text(
+                        f"⏳ **Advanced Changer Running...**\n\n"
+                        f"⚙️ **Mode Selected:** `{mode}`\n"
+                        f"🔍 **Scanned:** `{checked_count}/{total_msgs}`\n"
+                        f"✏️ **Successfully Edited:** `{edited_count}`"
+                    )
+                except: pass
+
+        await userbot.stop()
+        await msg.edit_text(
+            f"🎯 **Caption Changer Successful!**\n\n"
+            f"📈 **Range:** `{min_id}` to `{max_id}`\n"
+            f"✨ Total **{edited_count}** captions change ho gaye hain!",
+            parse_mode=ParseMode.MARKDOWN
+        )
+    except Exception as err:
+        import traceback
+        traceback.print_exc()
+        await msg.edit_text(f"❌ **Userbot Error:** `{err}`")
+        try:
+            await userbot.stop()
+        except:
+            pass
+
 # --- WIZARDS, MENUS & CALLBACKS ---
 async def wizard_callback(client: Client, q: CallbackQuery):
     uid = q.from_user.id
@@ -1991,7 +2140,91 @@ async def wizard_message(client: Client, message: Message):
         group_id = ADMIN_WIZARD[uid]["group_id"]
         channel_id = ADMIN_WIZARD[uid]["channel_id"]
         
-        asyncio.create_task(run_topic_forwarder(client, message, group_id, channel_id, topic_name))
+        # Task start karo parameters ke sath
+        asyncio.create_task(run_topic_forwarder(client, message, group_id, channel_id, keyword, start_msg_id, end_msg_id))
+        del ADMIN_WIZARD[uid]
+        return True
+
+    elif state["step"] == "advcap_start_msg":
+        try:
+            start_msg_id = int(message.text.strip())
+        except ValueError:
+            await message.reply_text("❌ Error: Kripya sirf number bhejein (Message ID).")
+            return True
+            
+        ADMIN_WIZARD[uid]["step"] = "advcap_end_msg"
+        ADMIN_WIZARD[uid]["start_msg_id"] = start_msg_id
+        
+        await message.reply_text(
+            f"✅ Start ID `{start_msg_id}` saved.\n\n"
+            "**Step 3/5:** Ab kahan tak **END** karna hai?\n"
+            "Aakhiri message ka **Message ID** bhejein (Jaise: `2050`):",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return True
+
+    elif state["step"] == "advcap_end_msg":
+        try:
+            end_msg_id = int(message.text.strip())
+        except ValueError:
+            await message.reply_text("❌ Error: Kripya sirf number bhejein (Message ID).")
+            return True
+            
+        ADMIN_WIZARD[uid]["step"] = "advcap_mode"
+        ADMIN_WIZARD[uid]["end_msg_id"] = end_msg_id
+        
+        menu_text = (
+            f"✅ End ID `{end_msg_id}` saved.\n\n"
+            "**Step 4/5:** Kya Action perform karna hai?\n"
+            "Neeche diye gaye options me se ek **Number (1 se 6)** type karke bhejein:\n\n"
+            "**1** ➡️ Pura Caption Naya Lagana hai (Full Replace)\n"
+            "**2** ➡️ Koi specific Word/Line badalna hai (Word Replace)\n"
+            "**3** ➡️ Koi specific Word/Link Delete karna hai (Remove Word)\n"
+            "**4** ➡️ Caption ke Upar kuch add karna hai (Add Prefix)\n"
+            "**5** ➡️ Caption ke Niche kuch add karna hai (Add Suffix)\n"
+            "**6** ➡️ 🧠 **Smart Auto-Format** (Extract Subject, Clean Tags & Reorder)"
+        )
+        await message.reply_text(menu_text, parse_mode=ParseMode.MARKDOWN)
+        return True
+
+    elif state["step"] == "advcap_mode":
+        mode = message.text.strip()
+        if mode not in ["1", "2", "3", "4", "5", "6"]:
+            await message.reply_text("❌ Error: Sirf 1 se 6 ke beech ka number bhejein.")
+            return True
+            
+        ADMIN_WIZARD[uid]["step"] = "advcap_data"
+        ADMIN_WIZARD[uid]["mode"] = mode
+        
+        if mode == "1":
+            prompt = "**Step 5/5:** Naya Pura Caption text bhejein:"
+        elif mode == "2":
+            prompt = "**Step 5/5:** Purana Word aur Naya Word bhejein `|` laga kar.\n*(Example: Extracted By Testbook | Extracted By: Kamal)*:"
+        elif mode == "3":
+            prompt = "**Step 5/5:** Wo Word/Link bhejein jise poori tarah Delete karna hai:"
+        elif mode == "4":
+            prompt = "**Step 5/5:** Wo Text bhejein jise caption ke sabse **Upar** (Top) lagana hai:"
+        elif mode == "5":
+            prompt = "**Step 5/5:** Wo Text bhejein jise caption ke sabse **Niche** (Bottom) lagana hai:"
+        elif mode == "6":
+            prompt = "**Step 5/5:** Smart Auto-Format select kiya gaya hai. Iske liye input ki zarurat nahi, bas **'START'** likh kar bhej dein:"
+            
+        await message.reply_text(prompt, parse_mode=ParseMode.MARKDOWN)
+        return True
+
+    elif state["step"] == "advcap_data":
+        data_text = message.text
+        mode = ADMIN_WIZARD[uid]["mode"]
+        channel_id = ADMIN_WIZARD[uid]["channel_id"]
+        start_msg_id = ADMIN_WIZARD[uid]["start_msg_id"]
+        end_msg_id = ADMIN_WIZARD[uid]["end_msg_id"]
+        
+        await message.reply_text(
+            "🚀 **Advanced Caption Changer Started!**\nBot ab apna kaam kar raha hai...",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        
+        asyncio.create_task(run_advanced_caption_changer(client, message, channel_id, start_msg_id, end_msg_id, mode, data_text))
         del ADMIN_WIZARD[uid]
         return True
 
@@ -2016,13 +2249,13 @@ async def wizard_message(client: Client, message: Message):
                 "addcat": cmd_addcat,
                 "setcat": cmd_setcategory,
                 "emptybatch": cmd_emptybatch,
-                "cleanbatch": cmd_cleanbatch,
                 "userbotphone": cmd_userbotphone,
                 "userbototp": cmd_userbototp,
                 "userbotpass": cmd_userbotpass,
                 "storebatch": cmd_storebatch,
                 "userlookup": cmd_user_lookup,
                 "topicforward": cmd_topicforward_start,
+                "advcap": cmd_advcap_start,
             }
             if cmd_name in cmds:
                 await cmds[cmd_name](client, message)
@@ -2242,6 +2475,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                     InlineKeyboardButton("🚀 Forward to Topic", callback_data="input_topicforward"),
                     InlineKeyboardButton("🛡️ Clean Unverified", callback_data="input_cleanbatch")
                 ],
+                [InlineKeyboardButton("📝 Advanced Caption Changer", callback_data="input_advcap")],
                 [InlineKeyboardButton("📊 Batch Stats", callback_data="act_batchstats")],
                 [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
             ]
@@ -2348,6 +2582,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                 "addcat": "Send Name for new Category:",
                 "setcat": "Send Batch ID(s) (comma ya space lagakar):\nFormat: `-100x, -100y`",
                 "emptybatch": "  **DHYAN DEIN!**\nSend Batch ID jisko poora khali (empty) karna hai:\nFormat: `-100123456789`",
+                "advcap": "📝 **Advanced Caption Changer (Step 1/5)**\n\nUs **Channel ID** ko bhejein jiske captions edit karne hain (e.g. `-10012345678`):",
                 "cleanbatch": "🛡️ **Clean Unverified Users (Anti-Leech)**\n\nUs **Batch/Channel ID** ko bhejein jise clean karna hai (e.g. `-100123456789`).\n\n*Note: Ye un sabhi users ko nikal dega jo Mandatory Channel me nahi hain ya jinhone bot start nahi kiya hai.*",
                 "storebatch": "🗄️ **Store Batch Data**\n\nJis channel ka purana data (Videos/PDFs) Firebase me index karna hai, uska Chat ID bhejein:\nFormat: `-100123456789`",
                 "topicforward": "🚀 **Topic Forwarder (Step 1/3)**\n\nKripya us **Group Chat ID** ko bhejein jaha naya topic banana hai (e.g. `-10012345678`):",
