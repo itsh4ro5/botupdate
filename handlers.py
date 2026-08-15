@@ -1591,121 +1591,128 @@ async def run_clean_unverified(bot_client: Client, message: Message, batch_id: i
         except:
             pass
 
-async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str: str, channel_id_str: str, keyword: str, start_msg_id: int, end_msg_id: int):
+async def run_advanced_caption_changer(bot_client: Client, message: Message, channel_id_str: str, start_msg_id: int, end_msg_id: int, mode: str, data_text: str):
+    uid = message.from_user.id
+    if not hasattr(bot_client, "cancel_tasks"): bot_client.cancel_tasks = set()
+    bot_client.cancel_tasks.discard(uid)
+    
+    cancel_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🛑 Cancel Task", callback_data=f"cancel_task_{uid}")]])
+
     try:
-        group_id = int(group_id_str)
         channel_id = int(channel_id_str)
     except ValueError:
-        return await message.reply_text("❌ Error: Group ID ya Channel ID numbers me nahi hai.")
+        return await message.reply_text("❌ Error: Channel ID number me nahi hai.")
 
     session_string = DB.get("USERBOT_SESSION")
     if not session_string or not API_ID:
         return await message.reply_text("❌ **Userbot Not Logged In!** Dashboard se login karein.", parse_mode=ParseMode.MARKDOWN)
 
-    msg = await message.reply_text(f"⏳ **Step 1:** Message `{start_msg_id}` se `{end_msg_id}` tak history fetch kar raha hu...")
-
-    userbot = Client("topic_forward_bot", api_id=API_ID, api_hash=API_HASH, session_string=session_string, in_memory=True)
+    msg = await message.reply_text(f"⏳ **Step 1:** Fetching messages super-fast from `{start_msg_id}` to `{end_msg_id}`...", reply_markup=cancel_kb)
+    userbot = Client("advcap_bot", api_id=API_ID, api_hash=API_HASH, session_string=session_string, in_memory=True)
+    
     try:
         await userbot.start()
-        
-        # Start aur End ID ko chhota/bada sort kar liya taaki aage peeche enter ho toh bhi chal jaye
         min_id = min(start_msg_id, end_msg_id)
         max_id = max(start_msg_id, end_msg_id)
-
+        message_ids = list(range(min_id, max_id + 1))
         all_messages = []
+
+        # Super-Fast Chunking (Avoids GetHistory FloodWait completely)
+        for i in range(0, len(message_ids), 200):
+            if uid in bot_client.cancel_tasks: break
+            chunk = message_ids[i:i+200]
+            try:
+                msgs = await userbot.get_messages(channel_id, chunk)
+                for m in msgs:
+                    if m and not getattr(m, "empty", False):
+                        all_messages.append(m)
+                await asyncio.sleep(0.5)
+            except Exception:
+                pass
         
-        # offset_id=max_id + 1 (Sirf target range wale msgs hi uthayega, baaki lakhon msgs ko ignore karega)
-        async for m in userbot.get_chat_history(channel_id, offset_id=max_id + 1):
-            if m.id < min_id:
-                break
-            if m.id <= max_id:
-                all_messages.append(m)
-        
-        # Sequence sahi karne ke liye list ko ulat diya (Index 1 pehle aayega)
-        all_messages.reverse()
+        if uid in bot_client.cancel_tasks:
+            await userbot.stop()
+            return await msg.edit_text("🛑 **Task Cancelled by User!** (Stopped during fetch)")
+
         total_msgs = len(all_messages)
-        
         if total_msgs == 0:
             await userbot.stop()
-            return await msg.edit_text(f"❌ Error: Message ID `{min_id}` se `{max_id}` ke beech koi file nahi mili.")
+            return await msg.edit_text(f"❌ Error: Range `{min_id}` - `{max_id}` me koi message nahi mila.")
             
-        await msg.edit_text(f"✅ Total `{total_msgs}` messages uthaye gaye!\n⏳ **Step 2:** Auto-Topic Creation & Forwarding chalu hai...")
+        await msg.edit_text(f"✅ Total `{total_msgs}` messages loaded!\n⏳ **Step 2:** Advanced Changer Running...", reply_markup=cancel_kb)
         
-        created_topics = {} 
-        forwarded_count = 0
+        edited_count = 0
         checked_count = 0
 
-        import re
-        pattern = fr"{re.escape(keyword)}\s*:\s*(.*?)(?=\s+Batch:|\n|$)"
-
         for m in all_messages:
+            if uid in bot_client.cancel_tasks:
+                await msg.edit_text("🛑 **Task Cancelled by User!** (Stopped in middle)")
+                break
+
             checked_count += 1
-            cap = m.caption or ""
-            
-            t_match = re.search(pattern, cap, re.IGNORECASE)
-            
-            if t_match and (m.video or m.document):
-                raw_topic_name = t_match.group(1).strip()
-                topic_key = raw_topic_name.lower() 
+            if m.caption or mode == "1":
+                old_cap = m.caption or ""
+                new_cap = old_cap
                 
-                if topic_key not in created_topics:
+                if mode == "1":   # Full Replace
+                    new_cap = data_text
+                elif mode == "2": # Word Replace
+                    if "|" in data_text:
+                        old_word, new_word = data_text.split("|", 1)
+                        new_cap = old_cap.replace(old_word.strip(), new_word.strip())
+                elif mode == "3": # Remove Word
+                    new_cap = old_cap.replace(data_text, "").strip()
+                elif mode == "4": # Add Prefix
+                    new_cap = f"{data_text}\n\n{old_cap}"
+                elif mode == "5": # Add Suffix
+                    new_cap = f"{old_cap}\n\n{data_text}"
+                elif mode == "6": # Smart Auto Format
+                    new_cap = smart_format_caption(old_cap)
+                elif mode == "7": # Multi Replace & Delete
+                    rules = data_text.split(",")
+                    for rule in rules:
+                        if "|" in rule:
+                            old_w, new_w = rule.split("|", 1)
+                            new_cap = new_cap.replace(old_w.strip(), new_w.strip())
+                    new_cap = new_cap.strip()
+                
+                if new_cap != old_cap:
                     try:
-                        new_topic = await bot_client.create_forum_topic(chat_id=group_id, title=raw_topic_name)
-                        created_topics[topic_key] = new_topic.id
+                        await userbot.edit_message_caption(chat_id=channel_id, message_id=m.id, caption=new_cap)
+                        edited_count += 1
+                        await asyncio.sleep(2) 
+                    except FloodWait as fw:
+                        await asyncio.sleep(fw.value + 1)
+                        await userbot.edit_message_caption(chat_id=channel_id, message_id=m.id, caption=new_cap)
+                        edited_count += 1
                     except Exception:
-                        try:
-                            new_topic = await userbot.create_forum_topic(chat_id=group_id, title=raw_topic_name)
-                            created_topics[topic_key] = new_topic.id
-                        except Exception:
-                            continue 
-                
-                target_topic_id = created_topics[topic_key]
+                        pass
+                        
+            if checked_count % 30 == 0:
                 try:
-                    await userbot.copy_message(
-                        chat_id=group_id,
-                        from_chat_id=channel_id,
-                        message_id=m.id,
-                        message_thread_id=target_topic_id
-                    )
-                    forwarded_count += 1
-                    await asyncio.sleep(1.5) 
-                except FloodWait as fw:
-                    await asyncio.sleep(fw.value + 1)
-                    await userbot.copy_message(chat_id=group_id, from_chat_id=channel_id, message_id=m.id, message_thread_id=target_topic_id)
-                    forwarded_count += 1
-                except Exception:
-                    pass
-            
-            if checked_count % 50 == 0:
-                try:
-                    topics_made = len(created_topics)
                     await msg.edit_text(
-                        f"⏳ **Auto-Extractor Running...**\n\n"
-                        f"🔑 **Keyword Used:** `{keyword}`\n"
-                        f"📁 **New Folders Created:** `{topics_made}`\n"
-                        f"🔍 **Messages Scanned:** `{checked_count}/{total_msgs}`\n"
-                        f"✅ **Files Forwarded:** `{forwarded_count}`"
+                        f"⏳ **Advanced Changer Running...**\n\n"
+                        f"⚙️ **Mode Selected:** `{mode}`\n"
+                        f"🔍 **Scanned:** `{checked_count}/{total_msgs}`\n"
+                        f"✏️ **Successfully Edited:** `{edited_count}`",
+                        reply_markup=cancel_kb
                     )
-                except:
-                    pass
+                except: pass
 
         await userbot.stop()
-        final_topics_count = len(created_topics)
-        await msg.edit_text(
-            f"🎯 **Operation Successful Master!**\n\n"
-            f"🔑 **Keyword Used:** `{keyword}`\n"
-            f"📈 **Range Scanned:** ID `{min_id}` to `{max_id}`\n"
-            f"✨ Group me **{final_topics_count}** naye Topics ban gaye hain.\n"
-            f"📦 Total **{forwarded_count}** files proper sequence me forward ho gaye hain.",
-            parse_mode=ParseMode.MARKDOWN
-        )
+        if uid not in bot_client.cancel_tasks:
+            await msg.edit_text(
+                f"🎯 **Caption Changer Successful!**\n\n"
+                f"📈 **Range:** `{min_id}` to `{max_id}`\n"
+                f"✨ Total **{edited_count}** captions change ho gaye hain!",
+                parse_mode=ParseMode.MARKDOWN
+            )
     except Exception as err:
+        import traceback
         traceback.print_exc()
         await msg.edit_text(f"❌ **Userbot Error:** `{err}`")
-        try:
-            await userbot.stop()
-        except:
-            pass
+        try: await userbot.stop()
+        except: pass
 
 async def cmd_advcap_start(client: Client, message: Message):
     channel_id = message.text.strip()
@@ -2182,15 +2189,16 @@ async def wizard_message(client: Client, message: Message):
             "**3** ➡️ Koi specific Word/Link Delete karna hai (Remove Word)\n"
             "**4** ➡️ Caption ke Upar kuch add karna hai (Add Prefix)\n"
             "**5** ➡️ Caption ke Niche kuch add karna hai (Add Suffix)\n"
-            "**6** ➡️ 🧠 **Smart Auto-Format** (Extract Subject, Clean Tags & Reorder)"
+            "**6** ➡️ 🧠 **Smart Auto-Format** (Extract Subject, Clean Tags & Reorder)\n"
+            "**7** ➡️ ⚡ **Multi-Task** (Replace & Delete ek sath karein)"
         )
         await message.reply_text(menu_text, parse_mode=ParseMode.MARKDOWN)
         return True
 
     elif state["step"] == "advcap_mode":
         mode = message.text.strip()
-        if mode not in ["1", "2", "3", "4", "5", "6"]:
-            await message.reply_text("❌ Error: Sirf 1 se 6 ke beech ka number bhejein.")
+        if mode not in ["1", "2", "3", "4", "5", "6", "7"]:
+            await message.reply_text("❌ Error: Sirf 1 se 7 ke beech ka number bhejein.")
             return True
             
         ADMIN_WIZARD[uid]["step"] = "advcap_data"
@@ -2199,7 +2207,7 @@ async def wizard_message(client: Client, message: Message):
         if mode == "1":
             prompt = "**Step 5/5:** Naya Pura Caption text bhejein:"
         elif mode == "2":
-            prompt = "**Step 5/5:** Purana Word aur Naya Word bhejein `|` laga kar.\n*(Example: Extracted By Testbook | Extracted By: Kamal)*:"
+            prompt = "**Step 5/5:** Purana Word aur Naya Word bhejein `|` laga kar.\n*(Example: Purana | Naya)*:"
         elif mode == "3":
             prompt = "**Step 5/5:** Wo Word/Link bhejein jise poori tarah Delete karna hai:"
         elif mode == "4":
@@ -2208,6 +2216,8 @@ async def wizard_message(client: Client, message: Message):
             prompt = "**Step 5/5:** Wo Text bhejein jise caption ke sabse **Niche** (Bottom) lagana hai:"
         elif mode == "6":
             prompt = "**Step 5/5:** Smart Auto-Format select kiya gaya hai. Iske liye input ki zarurat nahi, bas **'START'** likh kar bhej dein:"
+        elif mode == "7":
+            prompt = "**Step 5/5:** Replace aur Delete ek sath karne ke liye comma `,` lagakar bhejein.\n*(Agar sirf Delete karna hai toh `|` ke baad khali chhod dein)*\n\n**Format:** `Purana|Naya, HataoWord|, DeleteThis|`\n**Example:** `Testbook|Kamal, _enc|, @Team_JeeX|`"
             
         await message.reply_text(prompt, parse_mode=ParseMode.MARKDOWN)
         return True
@@ -3137,6 +3147,18 @@ async def general_callback(client: Client, q: CallbackQuery):
         elif data == "cancel_delcat":
             await q.answer()
             await q.edit_message_text("  Category deletion cancelled.")
+
+        # NAYA CANCEL TASK HANDLER
+        elif data.startswith("cancel_task_"):
+            target_uid = int(data.split("_")[2])
+            if not hasattr(client, "cancel_tasks"):
+                client.cancel_tasks = set()
+            client.cancel_tasks.add(target_uid)
+            await q.answer("🛑 Cancelling Task... (Process ruk raha hai)", show_alert=True)
+            try:
+                await q.message.edit_reply_markup(reply_markup=None)
+            except Exception:
+                pass
 
         elif data.startswith("get_f_"):
             cid = int(data.split("_")[2])
