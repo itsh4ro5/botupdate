@@ -1767,6 +1767,144 @@ def smart_format_caption(text):
             
     return text.strip()
 
+# --- MISSING TOPIC FORWARDER FUNCTION RESTORED ---
+async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str: str, channel_id_str: str, keyword: str, start_msg_id: int, end_msg_id: int):
+    uid = message.from_user.id
+    if not hasattr(bot_client, "cancel_tasks"): bot_client.cancel_tasks = set()
+    bot_client.cancel_tasks.discard(uid)
+
+    from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    from pyrogram.errors import FloodWait
+    import asyncio
+    import re
+    
+    cancel_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🛑 Cancel Task", callback_data=f"cancel_task_{uid}")]])
+
+    try:
+        group_id = int(group_id_str)
+        channel_id = int(channel_id_str)
+    except ValueError:
+        return await message.reply_text("❌ Error: Group ID ya Channel ID numbers me nahi hai.")
+
+    from config import DB, API_ID, API_HASH
+    session_string = DB.get("USERBOT_SESSION")
+    if not session_string or not API_ID:
+        return await message.reply_text("❌ **Userbot Not Logged In!** Dashboard se login karein.", parse_mode=ParseMode.MARKDOWN)
+
+    msg = await message.reply_text(f"⏳ **Step 1:** Fetching messages super-fast without flood wait...", reply_markup=cancel_kb)
+
+    from pyrogram import Client as PyroClient
+    userbot = PyroClient("topic_forward_bot", api_id=API_ID, api_hash=API_HASH, session_string=session_string, in_memory=True)
+    try:
+        await userbot.start()
+        
+        min_id = min(start_msg_id, end_msg_id)
+        max_id = max(start_msg_id, end_msg_id)
+        message_ids = list(range(min_id, max_id + 1))
+        all_messages = []
+        
+        # Super-Fast Chunking (Avoids GetHistory FloodWait completely)
+        for i in range(0, len(message_ids), 200):
+            if uid in bot_client.cancel_tasks: break
+            chunk = message_ids[i:i+200]
+            try:
+                msgs = await userbot.get_messages(channel_id, chunk)
+                for m in msgs:
+                    if m and not getattr(m, "empty", False):
+                        all_messages.append(m)
+                await asyncio.sleep(0.5)
+            except Exception:
+                pass
+
+        if uid in bot_client.cancel_tasks:
+            await userbot.stop()
+            return await msg.edit_text("🛑 **Task Cancelled by User!** (Stopped during fetch)")
+
+        total_msgs = len(all_messages)
+        if total_msgs == 0:
+            await userbot.stop()
+            return await msg.edit_text(f"❌ Error: Message ID `{min_id}` se `{max_id}` ke beech koi file nahi mili.")
+            
+        await msg.edit_text(f"✅ Total `{total_msgs}` messages loaded!\n⏳ **Step 2:** Auto-Topic Creation & Forwarding chalu hai...", reply_markup=cancel_kb)
+        
+        created_topics = {} 
+        forwarded_count = 0
+        checked_count = 0
+
+        pattern = fr"{re.escape(keyword)}\s*:\s*(.*?)(?=\s+Batch:|\n|$)"
+
+        for m in all_messages:
+            if uid in bot_client.cancel_tasks:
+                await msg.edit_text("🛑 **Task Cancelled by User!** (Stopped in middle)")
+                break
+
+            checked_count += 1
+            cap = m.caption or ""
+            t_match = re.search(pattern, cap, re.IGNORECASE)
+            
+            if t_match and (m.video or m.document):
+                raw_topic_name = t_match.group(1).strip()
+                topic_key = raw_topic_name.lower() 
+                
+                if topic_key not in created_topics:
+                    try:
+                        new_topic = await bot_client.create_forum_topic(chat_id=group_id, title=raw_topic_name)
+                        created_topics[topic_key] = new_topic.id
+                    except Exception:
+                        try:
+                            new_topic = await userbot.create_forum_topic(chat_id=group_id, title=raw_topic_name)
+                            created_topics[topic_key] = new_topic.id
+                        except Exception:
+                            continue 
+                
+                target_topic_id = created_topics[topic_key]
+                try:
+                    await userbot.copy_message(chat_id=group_id, from_chat_id=channel_id, message_id=m.id, message_thread_id=target_topic_id)
+                    forwarded_count += 1
+                    await asyncio.sleep(1.5) 
+                except FloodWait as fw:
+                    await asyncio.sleep(fw.value + 1)
+                    await userbot.copy_message(chat_id=group_id, from_chat_id=channel_id, message_id=m.id, message_thread_id=target_topic_id)
+                    forwarded_count += 1
+                except Exception:
+                    pass
+            
+            if checked_count % 30 == 0:
+                try:
+                    topics_made = len(created_topics)
+                    await msg.edit_text(
+                        f"⏳ **Auto-Extractor Running...**\n\n"
+                        f"🔑 **Keyword Used:** `{keyword}`\n"
+                        f"📁 **New Folders Created:** `{topics_made}`\n"
+                        f"🔍 **Messages Scanned:** `{checked_count}/{total_msgs}`\n"
+                        f"✅ **Files Forwarded:** `{forwarded_count}`",
+                        reply_markup=cancel_kb
+                    )
+                except:
+                    pass
+
+        await userbot.stop()
+        if uid not in bot_client.cancel_tasks:
+            final_topics_count = len(created_topics)
+            await msg.edit_text(
+                f"🎯 **Operation Successful Master!**\n\n"
+                f"🔑 **Keyword Used:** `{keyword}`\n"
+                f"📈 **Range Scanned:** ID `{min_id}` to `{max_id}`\n"
+                f"✨ Group me **{final_topics_count}** naye Topics ban gaye hain.\n"
+                f"📦 Total **{forwarded_count}** files proper sequence me forward ho gaye hain.",
+                parse_mode=ParseMode.MARKDOWN
+            )
+    except Exception as err:
+        import traceback
+        traceback.print_exc()
+        await msg.edit_text(f"❌ **Userbot Error:** `{err}`")
+        try: await userbot.stop()
+        except: pass
+
+async def cmd_advcap_start(client: Client, message: Message):
+    channel_id = message.text.strip()
+    uid = message.from_user.id
+
 async def run_advanced_caption_changer(bot_client: Client, message: Message, channel_id_str: str, start_msg_id: int, end_msg_id: int, mode: str, data_text: str):
     try:
         channel_id = int(channel_id_str)
