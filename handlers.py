@@ -1472,13 +1472,13 @@ async def cmd_maintenance(client: Client, message: Message):
     )
     await schedule_delete(client, msg)
 
-async def cmd_topicforward_start(client: Client, message: Message):
-    group_id = message.text.strip()
+async def cmd_superfwd_start(client: Client, message: Message):
+    source_id = message.text.strip()
     uid = message.from_user.id
-    ADMIN_WIZARD[uid] = {"step": "topicforward_channel", "group_id": group_id}
+    ADMIN_WIZARD[uid] = {"step": "superfwd_start_msg", "source": source_id}
     await message.reply_text(
-        f"✅ Group ID `{group_id}` saved.\n\n"
-        "**Step 2/3:** Ab us **Channel ID** ko bhejein jaha se saare videos aur PDF uthane hain (e.g. `-10087654321`):",
+        f"✅ Source ID `{source_id}` saved.\n\n"
+        "**Step 2/7:** Kahan forward karna hai? Us **Target Group/Channel ID** ko bhejein (e.g. `-10087654321`):",
         parse_mode=ParseMode.MARKDOWN
     )
 
@@ -1767,8 +1767,7 @@ def smart_format_caption(text):
             
     return text.strip()
 
-# --- MISSING TOPIC FORWARDER FUNCTION RESTORED ---
-async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str: str, channel_id_str: str, keyword: str, start_msg_id: int, end_msg_id: int):
+async def run_super_forwarder(bot_client: Client, message: Message, source_str: str, dest_str: str, start_msg_id: int, end_msg_id: int, topic_kw: str, remove_words: str, replace_words: str):
     uid = message.from_user.id
     if not hasattr(bot_client, "cancel_tasks"): bot_client.cancel_tasks = set()
     bot_client.cancel_tasks.discard(uid)
@@ -1777,38 +1776,37 @@ async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str
     from pyrogram.errors import FloodWait
     import asyncio
     import re
-    
     cancel_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🛑 Cancel Task", callback_data=f"cancel_task_{uid}")]])
 
     try:
-        group_id = int(group_id_str)
-        channel_id = int(channel_id_str)
+        source_id = int(source_str)
+        dest_id = int(dest_str)
     except ValueError:
-        return await message.reply_text("❌ Error: Group ID ya Channel ID numbers me nahi hai.")
+        return await message.reply_text("❌ Error: IDs numbers me honi chahiye.")
 
     from config import DB, API_ID, API_HASH
     session_string = DB.get("USERBOT_SESSION")
     if not session_string or not API_ID:
-        return await message.reply_text("❌ **Userbot Not Logged In!** Dashboard se login karein.", parse_mode=ParseMode.MARKDOWN)
+        return await message.reply_text("❌ **Userbot Not Logged In!** Dashboard se login karein.")
 
-    msg = await message.reply_text(f"⏳ **Step 1:** Fetching messages super-fast without flood wait...", reply_markup=cancel_kb)
+    msg = await message.reply_text(f"⏳ **Step 1:** Fetching messages super-fast...", reply_markup=cancel_kb)
 
     from pyrogram import Client as PyroClient
-    userbot = PyroClient("topic_forward_bot", api_id=API_ID, api_hash=API_HASH, session_string=session_string, in_memory=True)
+    userbot = PyroClient("superfwd_bot", api_id=API_ID, api_hash=API_HASH, session_string=session_string, in_memory=True)
+    
     try:
         await userbot.start()
-        
         min_id = min(start_msg_id, end_msg_id)
         max_id = max(start_msg_id, end_msg_id)
         message_ids = list(range(min_id, max_id + 1))
         all_messages = []
         
-        # Super-Fast Chunking (Avoids GetHistory FloodWait completely)
+        # Super-Fast Fetching
         for i in range(0, len(message_ids), 200):
             if uid in bot_client.cancel_tasks: break
             chunk = message_ids[i:i+200]
             try:
-                msgs = await userbot.get_messages(channel_id, chunk)
+                msgs = await userbot.get_messages(source_id, chunk)
                 for m in msgs:
                     if m and not getattr(m, "empty", False):
                         all_messages.append(m)
@@ -1818,66 +1816,97 @@ async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str
 
         if uid in bot_client.cancel_tasks:
             await userbot.stop()
-            return await msg.edit_text("🛑 **Task Cancelled by User!** (Stopped during fetch)")
+            return await msg.edit_text("🛑 **Task Cancelled by User!**")
 
         total_msgs = len(all_messages)
         if total_msgs == 0:
             await userbot.stop()
-            return await msg.edit_text(f"❌ Error: Message ID `{min_id}` se `{max_id}` ke beech koi file nahi mili.")
+            return await msg.edit_text(f"❌ Error: Koi message nahi mila is range me.")
             
-        await msg.edit_text(f"✅ Total `{total_msgs}` messages loaded!\n⏳ **Step 2:** Auto-Topic Creation & Forwarding chalu hai...", reply_markup=cancel_kb)
+        await msg.edit_text(f"✅ Total `{total_msgs}` messages loaded!\n⏳ **Step 2:** Modifying & Forwarding...", reply_markup=cancel_kb)
         
         created_topics = {} 
         forwarded_count = 0
         checked_count = 0
 
-        pattern = fr"{re.escape(keyword)}\s*:\s*(.*?)(?=\s+Batch:|\n|$)"
+        # Processing Inputs
+        rem_list = [w.strip() for w in remove_words.split(",") if w.strip()] if remove_words != "/s" else []
+        rep_list = []
+        if replace_words != "/s":
+            for r in replace_words.split(","):
+                if "|" in r:
+                    old_w, new_w = r.split("|", 1)
+                    rep_list.append((old_w.strip(), new_w.strip()))
 
         for m in all_messages:
             if uid in bot_client.cancel_tasks:
-                await msg.edit_text("🛑 **Task Cancelled by User!** (Stopped in middle)")
+                await msg.edit_text("🛑 **Task Cancelled by User!**")
                 break
 
             checked_count += 1
-            cap = m.caption or ""
-            t_match = re.search(pattern, cap, re.IGNORECASE)
+            if not (m.video or m.document):
+                continue
+
+            new_cap = m.caption or ""
             
-            if t_match and (m.video or m.document):
-                raw_topic_name = t_match.group(1).strip()
-                topic_key = raw_topic_name.lower() 
+            # 1. Apply Remove
+            for w in rem_list:
+                new_cap = new_cap.replace(w, "")
+            
+            # 2. Apply Replace
+            for old_w, new_w in rep_list:
+                new_cap = new_cap.replace(old_w, new_w)
+
+            new_cap = new_cap.strip()
+            topic_id = None
+            
+            # 3. Handle Topic Creation
+            if topic_kw != "/s":
+                pattern = fr"{re.escape(topic_kw)}\s*:\s*(.*?)(?=\s+Batch:|\n|$)"
+                t_match = re.search(pattern, new_cap, re.IGNORECASE)
                 
-                if topic_key not in created_topics:
-                    try:
-                        new_topic = await bot_client.create_forum_topic(chat_id=group_id, title=raw_topic_name)
-                        created_topics[topic_key] = new_topic.id
-                    except Exception:
+                if t_match:
+                    raw_topic_name = t_match.group(1).strip()
+                    topic_key = raw_topic_name.lower() 
+                    
+                    if topic_key not in created_topics:
                         try:
-                            new_topic = await userbot.create_forum_topic(chat_id=group_id, title=raw_topic_name)
+                            new_topic = await bot_client.create_forum_topic(chat_id=dest_id, title=raw_topic_name)
                             created_topics[topic_key] = new_topic.id
                         except Exception:
-                            continue 
+                            try:
+                                new_topic = await userbot.create_forum_topic(chat_id=dest_id, title=raw_topic_name)
+                                created_topics[topic_key] = new_topic.id
+                            except Exception:
+                                pass
+                    topic_id = created_topics.get(topic_key)
                 
-                target_topic_id = created_topics[topic_key]
-                try:
-                    await userbot.copy_message(chat_id=group_id, from_chat_id=channel_id, message_id=m.id, message_thread_id=target_topic_id)
-                    forwarded_count += 1
-                    await asyncio.sleep(1.5) 
-                except FloodWait as fw:
-                    await asyncio.sleep(fw.value + 1)
-                    await userbot.copy_message(chat_id=group_id, from_chat_id=channel_id, message_id=m.id, message_thread_id=target_topic_id)
-                    forwarded_count += 1
-                except Exception:
-                    pass
+            # 4. Copy and Replace Caption at the same time
+            try:
+                await userbot.copy_message(
+                    chat_id=dest_id, 
+                    from_chat_id=source_id, 
+                    message_id=m.id, 
+                    message_thread_id=topic_id,
+                    caption=new_cap
+                )
+                forwarded_count += 1
+                await asyncio.sleep(1.5) 
+            except FloodWait as fw:
+                await asyncio.sleep(fw.value + 1)
+                await userbot.copy_message(chat_id=dest_id, from_chat_id=source_id, message_id=m.id, message_thread_id=topic_id, caption=new_cap)
+                forwarded_count += 1
+            except Exception:
+                pass
             
             if checked_count % 30 == 0:
                 try:
-                    topics_made = len(created_topics)
+                    topics_made = len(created_topics) if topic_kw != "/s" else 0
                     await msg.edit_text(
-                        f"⏳ **Auto-Extractor Running...**\n\n"
-                        f"🔑 **Keyword Used:** `{keyword}`\n"
-                        f"📁 **New Folders Created:** `{topics_made}`\n"
-                        f"🔍 **Messages Scanned:** `{checked_count}/{total_msgs}`\n"
-                        f"✅ **Files Forwarded:** `{forwarded_count}`",
+                        f"⏳ **Super Forwarder Running...**\n\n"
+                        f"📁 **Topics Created:** `{topics_made}`\n"
+                        f"🔍 **Scanned:** `{checked_count}/{total_msgs}`\n"
+                        f"✅ **Forwarded:** `{forwarded_count}`",
                         reply_markup=cancel_kb
                     )
                 except:
@@ -1885,13 +1914,10 @@ async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str
 
         await userbot.stop()
         if uid not in bot_client.cancel_tasks:
-            final_topics_count = len(created_topics)
             await msg.edit_text(
                 f"🎯 **Operation Successful Master!**\n\n"
-                f"🔑 **Keyword Used:** `{keyword}`\n"
-                f"📈 **Range Scanned:** ID `{min_id}` to `{max_id}`\n"
-                f"✨ Group me **{final_topics_count}** naye Topics ban gaye hain.\n"
-                f"📦 Total **{forwarded_count}** files proper sequence me forward ho gaye hain.",
+                f"✨ **Topics Built:** `{len(created_topics) if topic_kw != '/s' else 0}`\n"
+                f"📦 **Total Forwarded & Edited:** `{forwarded_count}`",
                 parse_mode=ParseMode.MARKDOWN
             )
     except Exception as err:
@@ -1900,7 +1926,7 @@ async def run_topic_forwarder(bot_client: Client, message: Message, group_id_str
         await msg.edit_text(f"❌ **Userbot Error:** `{err}`")
         try: await userbot.stop()
         except: pass
-
+            
 async def cmd_advcap_start(client: Client, message: Message):
     channel_id = message.text.strip()
     uid = message.from_user.id
@@ -2204,71 +2230,64 @@ async def wizard_message(client: Client, message: Message):
             if uid in ADMIN_WIZARD: del ADMIN_WIZARD[uid]
         return True
 
-    elif state["step"] == "topicforward_channel":
-        channel_id = message.text.strip()
-        ADMIN_WIZARD[uid]["step"] = "topicforward_keyword"
-        ADMIN_WIZARD[uid]["channel_id"] = channel_id
-        
-        await message.reply_text(
-            f"✅ Channel ID `{channel_id}` saved.\n\n"
-            "**Step 3/3:** Ab us **Keyword** ko bhejein jiske aage naam likha hai.\n"
-            "Jaise agar caption me `Subject: Steel` hai, toh sirf **Subject** likh kar bhejein.\n"
-            "Agar `Topic: Current Affairs` hai, toh **Topic** bhejein.",
-            parse_mode=ParseMode.MARKDOWN
-        )
+    elif state["step"] == "superfwd_start_msg":
+        ADMIN_WIZARD[uid]["step"] = "superfwd_end_msg"
+        ADMIN_WIZARD[uid]["source"] = message.text.strip()
+        await message.reply_text("**Step 2/7:** Kahan forward karna hai? Us **Target Group/Channel ID** ko bhejein (e.g. `-10087654321`):", parse_mode=ParseMode.MARKDOWN)
         return True
 
-    elif state["step"] == "topicforward_keyword":
-        keyword = message.text.strip()
-        ADMIN_WIZARD[uid]["step"] = "topicforward_start_msg"
-        ADMIN_WIZARD[uid]["keyword"] = keyword
-        
-        await message.reply_text(
-            f"✅ Keyword `{keyword}` saved.\n\n"
-            "**Step 4/5:** Ab batayein kahan se **START** karna hai?\n"
-            "Pehli message ka **Message ID** bhejein (Jaise: `1005`):",
-            parse_mode=ParseMode.MARKDOWN
-        )
+    elif state["step"] == "superfwd_end_msg":
+        ADMIN_WIZARD[uid]["step"] = "superfwd_topic"
+        ADMIN_WIZARD[uid]["dest"] = message.text.strip()
+        await message.reply_text("**Step 3/7:** Kahan se shuru karna hai? **Start Message ID** bhejein (e.g. `1001`):", parse_mode=ParseMode.MARKDOWN)
         return True
 
-    elif state["step"] == "topicforward_start_msg":
+    elif state["step"] == "superfwd_topic":
         try:
-            start_msg_id = int(message.text.strip())
+            start_id = int(message.text.strip())
         except ValueError:
-            await message.reply_text("❌ Error: Kripya sirf number bhejein (Message ID).")
-            return True
-            
-        ADMIN_WIZARD[uid]["step"] = "topicforward_end_msg"
-        ADMIN_WIZARD[uid]["start_msg_id"] = start_msg_id
-        
-        await message.reply_text(
-            f"✅ Start ID `{start_msg_id}` saved.\n\n"
-            "**Step 5/5:** Ab batayein kahan tak **END** karna hai?\n"
-            "Aakhiri message ka **Message ID** bhejein (Jaise: `2050`):",
-            parse_mode=ParseMode.MARKDOWN
-        )
+            return await message.reply_text("❌ Error: Message ID number me bhejein.")
+        ADMIN_WIZARD[uid]["step"] = "superfwd_remove"
+        ADMIN_WIZARD[uid]["start_id"] = start_id
+        await message.reply_text("**Step 4/7:** Kahan tak scan karna hai? **End Message ID** bhejein (e.g. `2050`):", parse_mode=ParseMode.MARKDOWN)
         return True
 
-    elif state["step"] == "topicforward_end_msg":
+    elif state["step"] == "superfwd_remove":
         try:
-            end_msg_id = int(message.text.strip())
+            end_id = int(message.text.strip())
         except ValueError:
-            await message.reply_text("❌ Error: Kripya sirf number bhejein (Message ID).")
-            return True
-            
-        group_id = ADMIN_WIZARD[uid]["group_id"]
-        channel_id = ADMIN_WIZARD[uid]["channel_id"]
-        keyword = ADMIN_WIZARD[uid]["keyword"]
-        start_msg_id = ADMIN_WIZARD[uid]["start_msg_id"]
+            return await message.reply_text("❌ Error: Message ID number me bhejein.")
+        ADMIN_WIZARD[uid]["step"] = "superfwd_replace"
+        ADMIN_WIZARD[uid]["end_id"] = end_id
+        await message.reply_text("**Step 5/7:** Kya Naya Topic/Folder banana hai?\n\n- Agar HAAN: Topic ka Capturing word bhejein (e.g. `Subject` ya `Topic`)\n- Agar NAHI: Sirf `/s` bhejein (Direct forward hoga)", parse_mode=ParseMode.MARKDOWN)
+        return True
+
+    elif state["step"] == "superfwd_replace":
+        ADMIN_WIZARD[uid]["step"] = "superfwd_execute"
+        ADMIN_WIZARD[uid]["topic_kw"] = message.text.strip()
+        await message.reply_text("**Step 6/7:** Kya caption se kuch DELETE karna hai?\n\n- Agar HAAN: Words ko comma `,` lagakar bhejein (e.g. `_enc, @Team_JeeX`)\n- Agar NAHI: Sirf `/s` bhejein", parse_mode=ParseMode.MARKDOWN)
+        return True
+
+    elif state["step"] == "superfwd_execute":
+        remove_words = message.text.strip()
+        ADMIN_WIZARD[uid]["remove_words"] = remove_words
+        ADMIN_WIZARD[uid]["step"] = "superfwd_final"
+        await message.reply_text("**Step 7/7:** Kya caption me kuch REPLACE karna hai?\n\n- Agar HAAN: Format me bhejein -> `Purana | Naya, Purana2 | Naya2`\n- Agar NAHI: Sirf `/s` bhejein", parse_mode=ParseMode.MARKDOWN)
+        return True
+
+    elif state["step"] == "superfwd_final":
+        replace_words = message.text.strip()
         
-        await message.reply_text(
-            f"✅ End ID `{end_msg_id}` saved.\n\n"
-            f"🚀 **Auto-Extractor Started!**\nBot ab message `{start_msg_id}` se `{end_msg_id}` tak check karega, naye Topics banayega aur files sequence me forward karega.",
-            parse_mode=ParseMode.MARKDOWN
-        )
+        source = ADMIN_WIZARD[uid]["source"]
+        dest = ADMIN_WIZARD[uid]["dest"]
+        start_id = ADMIN_WIZARD[uid]["start_id"]
+        end_id = ADMIN_WIZARD[uid]["end_id"]
+        topic_kw = ADMIN_WIZARD[uid]["topic_kw"]
+        remove_words = ADMIN_WIZARD[uid]["remove_words"]
         
-        # Task start karo parameters ke sath
-        asyncio.create_task(run_topic_forwarder(client, message, group_id, channel_id, keyword, start_msg_id, end_msg_id))
+        await message.reply_text("🚀 **Super Forwarder Started!**\nEditing & Forwarding everything in one go...", parse_mode=ParseMode.MARKDOWN)
+        
+        asyncio.create_task(run_super_forwarder(client, message, source, dest, start_id, end_id, topic_kw, remove_words, replace_words))
         del ADMIN_WIZARD[uid]
         return True
 
@@ -2402,7 +2421,7 @@ async def wizard_message(client: Client, message: Message):
                 "userbotpass": cmd_userbotpass,
                 "storebatch": cmd_storebatch,
                 "userlookup": cmd_user_lookup,
-                "topicforward": cmd_topicforward_start,
+                "superfwd": cmd_superfwd_start,
                 "advcap": cmd_advcap_start,
             }
             if cmd_name in cmds:
@@ -2620,7 +2639,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                     InlineKeyboardButton("🧹 Empty Batch", callback_data="input_emptybatch"),
                 ],
                 [
-                    InlineKeyboardButton("🚀 Forward to Topic", callback_data="input_topicforward"),
+                    InlineKeyboardButton("🚀 Super Forwarder (All-in-One)", callback_data="input_superfwd"),
                     InlineKeyboardButton("🛡️ Clean Unverified", callback_data="input_cleanbatch")
                 ],
                 [InlineKeyboardButton("📝 Advanced Caption Changer", callback_data="input_advcap")],
@@ -2733,7 +2752,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                 "advcap": "📝 **Advanced Caption Changer (Step 1/5)**\n\nUs **Channel ID** ko bhejein jiske captions edit karne hain (e.g. `-10012345678`):",
                 "cleanbatch": "🛡️ **Clean Unverified Users (Anti-Leech)**\n\nUs **Batch/Channel ID** ko bhejein jise clean karna hai (e.g. `-100123456789`).\n\n*Note: Ye un sabhi users ko nikal dega jo Mandatory Channel me nahi hain ya jinhone bot start nahi kiya hai.*",
                 "storebatch": "🗄️ **Store Batch Data**\n\nJis channel ka purana data (Videos/PDFs) Firebase me index karna hai, uska Chat ID bhejein:\nFormat: `-100123456789`",
-                "topicforward": "🚀 **Topic Forwarder (Step 1/3)**\n\nKripya us **Group Chat ID** ko bhejein jaha naya topic banana hai (e.g. `-10012345678`):",
+                "superfwd": "🚀 **Super Forwarder (Step 1/7)**\n\nUs **Source Channel ID** ko bhejein jahan se files (content) uthani hain (e.g. `-10012345678`):",
                 "userbotphone": "  **Apna Phone Number bhejein**\nCountry code ke sath (Jaise: `+919876543210`):",
                 "userbototp": "  **OTP Bhejein**\n  *OTP spaces me bhejein!* Jaise: `1 2 3 4 5`:",
                 "userbotpass": "  **2FA Password bhejein:**",
