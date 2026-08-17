@@ -372,10 +372,20 @@
         );
     };
     $('inviteBtn').addEventListener('click', () => {
-      const link = `https://t.me/share/url?url=https://t.me/&text=${encodeURIComponent('Join me on H4R   the smartest way to crack your exam!')}`;
-      if (tg && tg.openTelegramLink) tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent('https://t.me/')}&text=${encodeURIComponent('Join me on H4R!')}`);
-      else window.open(link, '_blank');
-    });
+  const botUser = (typeof SERVER_BOT_USERNAME !== 'undefined' && SERVER_BOT_USERNAME && SERVER_BOT_USERNAME !== '{{ bot_username }}')
+    ? SERVER_BOT_USERNAME
+    : 'H4R_Contact_bot';
+  if (!UID) {
+    if (tg && tg.showAlert) tg.showAlert("Can't build your referral link — user ID missing. Please reopen from the Bot menu.");
+    else alert("Can't build your referral link — user ID missing. Please reopen from the Bot menu.");
+    return;
+  }
+  const refLink = `https://t.me/${botUser}?start=${UID}`;
+  const shareText = 'Join me on H4R — the smartest way to crack your exam!';
+  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent(shareText)}`;
+  if (tg && tg.openTelegramLink) tg.openTelegramLink(shareUrl);
+  else window.open(shareUrl, '_blank');
+});
     function getRecent() {
       try { return JSON.parse(localStorage.getItem('h4r_recent') || '[]'); } catch (e) { return []; }
     }
