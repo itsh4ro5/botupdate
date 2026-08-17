@@ -3667,7 +3667,7 @@ def build_home_menu(user_key, user):
         ]
     else:
         txt = (
-            "🌟 **Welcome to the Premium Hub!** 🌟\n\n
+            "🌟 **Welcome to the Premium Hub!** 🌟\n\n"
             "**4️⃣ Browse batches**\n"
             "🇬🇧 📚 **My Batches** = batches you already have. 🌐 **All Batches** = List of all section courese.\n"
             "🇮🇳 📚 **My Batches** = jo aapke paas already hain. 🌐 **All Batches** = Sare courese ka section hai.\n\n"
