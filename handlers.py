@@ -1143,6 +1143,7 @@ async def cmd_approve_demo(client: Client, message: Message):
             "warned": False,
         }
         clear_active_request(target_uid, batch_id)
+        DB.get("LINK_MAP", {}).pop(link, None)
         await save_data_async()
         await message.reply_text(
             f"  **APPROVED (DEMO)**\n  Time Given: `{hours} Hours`",
@@ -1196,6 +1197,7 @@ async def cmd_approve_perm(client: Client, message: Message):
         if str(batch_id) in DB["USER_DATA"].get(target_uid, {}).get("demos", {}):
             del DB["USER_DATA"][target_uid]["demos"][str(batch_id)]
         clear_active_request(target_uid, batch_id)
+        DB.get("LINK_MAP", {}).pop(link, None)
         await save_data_async()
         await message.reply_text("  **APPROVED (PERM)**", parse_mode=ParseMode.MARKDOWN)
         try:
@@ -3049,7 +3051,8 @@ async def general_callback(client: Client, q: CallbackQuery):
                     await start_from_cb(client, q)
             else:
                 await q.answer(
-                    "  Abhi tak join nahi kiya hai. Kripya pehle channel join karein!",
+                    "❌ Not joined yet! Tap 📢 Join Channel, join, then tap ✅ I've Joined again.\n"
+                    "❌ Abhi tak join nahi kiya! 📢 Join Channel par tap karein, join karein, phir ✅ I've Joined dobara tap karein.",
                     show_alert=True,
                 )
 
@@ -3065,7 +3068,7 @@ async def general_callback(client: Client, q: CallbackQuery):
             try:
                 sent_msg = await client.send_message(
                     uid,
-                    "  **Test Bot Access Verification:**\n\nYou are verified! Click the button below to open the Test Bot.",
+                    "  **Test Bot Access Verification:**\n\nYou are verified! Click the button below to open the Test Series Website.",
                     reply_markup=InlineKeyboardMarkup(kb),
                     parse_mode=ParseMode.MARKDOWN,
                 )
@@ -3162,7 +3165,8 @@ async def general_callback(client: Client, q: CallbackQuery):
                 [InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]
             ]
             await q.edit_message_text(
-                "📂 **All Batches - Select Category:**",
+                "📂 **All Batches - Select Category:**\n"
+                "📂 **Sabhi Batches - Category Chune kon sa chaiye:**",
                 reply_markup=InlineKeyboardMarkup(kb),
                 parse_mode=ParseMode.MARKDOWN,
             )
@@ -3184,7 +3188,10 @@ async def general_callback(client: Client, q: CallbackQuery):
                 ],
             ]
             await q.edit_message_text(
-                f"  **Category: {DB.get('CATEGORIES', DEFAULT_CATEGORIES)[cat_idx]}**\n\nAapko kis type ke batch chahiye?",
+                f"  **Category: {DB.get('CATEGORIES', DEFAULT_CATEGORIES)[cat_idx]}**\n\nAapko kis type ke batch chahiye?\n"
+                " *FREE = Isme aapko free me batches milenge*\n"
+                "*Paid = Isme aapko Paid Batches Milenge*\n"
+                "*Special = ISme aapko wo batches milenge jisko aap refer kiye gaye coin se purchase kar sakte hai*",
                 reply_markup=InlineKeyboardMarkup(kb),
                 parse_mode=ParseMode.MARKDOWN,
             )
@@ -3562,7 +3569,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                     name=f"Req-{uid}",
                     expire_date=datetime.now() + timedelta(seconds=60),
                 )
-                DB.setdefault("LINK_MAP", {})[l.invite_link] = {"u": uid, "b": cid}
+                DB.setdefault("LINK_MAP", {})[l.invite_link] = {"u": uid, "b": cid, "ts": time.time()}
                 register_link_request(uid, cid)
                 await save_data_async()
 
@@ -3660,7 +3667,20 @@ def build_home_menu(user_key, user):
         ]
     else:
         txt = (
-            "🌟 **Welcome to the Premium Hub!** 🌟\nYour centralized portal for exclusive communities.\n\n👇 *Select an option below:*"
+            "🌟 **Welcome to the Premium Hub!** 🌟\n\n
+            "**4️⃣ Browse batches**\n"
+            "🇬🇧 📚 **My Batches** = batches you already have. 🌐 **All Batches** = List of all section courese.\n"
+            "🇮🇳 📚 **My Batches** = jo aapke paas already hain. 🌐 **All Batches** = Sare courese ka section hai.\n\n"
+            "**5️⃣ Test Series Website**\n"
+            "🇬🇧 Tap **🤖 Test Bot** Here you can practice your question, daily new Current Affairs and also notes of all exam.\n"
+            "🇮🇳 **🤖 Test Bot** par tap karke aap aapne exam ka practice kar sakte hai saath hi current affairs and notes bhi hai.\n\n"
+            "**6️⃣ Earn coins to unlock free batches**\n"
+            "🇬🇧 Tap **🎁 Refer & Earn**, share your personal link with friends. Every real join earns you a coin — coins unlock free and special batches.\n"
+            "🇮🇳 **🎁 Refer & Earn** par tap karke apna personal link dosto ko bhejein. Har real join par coin milta hai — coins se free batches aur special batches unlock hoti hain.\n\n"
+            "**7️⃣ Check your stats anytime**\n"
+            "🇬🇧 Tap **ℹ️ My Info** to see your ID, total refers, and coin balance.\n"
+            "🇮🇳 **ℹ️ My Info** par tap karke apni ID, total refers aur coin balance dekhein.\n\n"
+
         )
         kb = [
             [
@@ -3668,9 +3688,9 @@ def build_home_menu(user_key, user):
                 InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0"),
             ],
             [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")],
-            [InlineKeyboardButton("🎥 How to use the bot", url="https://t.me/c/2836314734/1244")],
             [InlineKeyboardButton("🎁 Refer & Earn", callback_data="menu_refer")],
             [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")],
+            [InlineKeyboardButton("🎥 How to use the bot", url="https://t.me/c/2836314734/1244")],
         ]
     return txt, InlineKeyboardMarkup(kb)
 
@@ -3834,7 +3854,13 @@ async def start(client: Client, message: Message):
             [InlineKeyboardButton("✅ I've Joined", callback_data="verify")],
         ]
         await loading_msg.edit_text(
-            "📢 **Join Main Channel First**\n\nTo access batches and unlock referral rewards, please join our mandatory channel first.",
+            "📢 **Join Main Channel First / पहले Channel Join Karein**\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "🇬🇧 **1️⃣** Tap **📢 Join Channel** below and join it.\n"
+            "🇮🇳 **1️⃣** Neeche **📢 Join Channel** par tap karke channel join karein.\n\n"
+            "🇬🇧 **2️⃣** Come back here and tap **✅ I've Joined** to unlock the bot.\n"
+            "🇮🇳 **2️⃣** Wapas yahan aakar **✅ I've Joined** par tap karein aur bot unlock karein.\n\n"
+            "💡 *This unlocks batches, free demos, and referral rewards.*",
             reply_markup=InlineKeyboardMarkup(kb),
             parse_mode=ParseMode.MARKDOWN,
         )
@@ -3867,7 +3893,13 @@ async def start_from_cb(client: Client, q: CallbackQuery):
             [InlineKeyboardButton("✅ I've Joined", callback_data="verify")],
         ]
         await q.edit_message_text(
-            "📢 **Join Main Channel First**",
+            "📢 **Join Main Channel First / पहले Channel Join Karein**\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "🇬🇧 **1️⃣** Tap **📢 Join Channel** below and join it.\n"
+            "🇮🇳 **1️⃣** Neeche **📢 Join Channel** par tap karke channel join karein.\n\n"
+            "🇬🇧 **2️⃣** Come back here and tap **✅ I've Joined** to unlock the bot.\n"
+            "🇮🇳 **2️⃣** Wapas yahan aakar **✅ I've Joined** par tap karein aur bot unlock karein.\n\n"
+            "💡 *This unlocks batches, free demos, and referral rewards.*",
             reply_markup=InlineKeyboardMarkup(kb),
             parse_mode=ParseMode.MARKDOWN,
         )
@@ -4242,6 +4274,20 @@ async def check_demos(client: Client):
         if len(surviving) != len(DB.get("SCHEDULED_DELETES", [])):
             DB["SCHEDULED_DELETES"] = surviving
             mod = True
+
+    if DB.get("LINK_MAP"):
+        # Purge invite-links older than 24h. Missing "ts" (pre-upgrade entries)
+        # are treated as timestamp 0, so they get swept out on the first run.
+        LINK_MAP_TTL = 24 * 3600
+        stale_links = [
+            link for link, ld in DB["LINK_MAP"].items()
+            if now - (ld.get("ts", 0) if isinstance(ld, dict) else 0) > LINK_MAP_TTL
+        ]
+        for link in stale_links:
+            del DB["LINK_MAP"][link]
+        if stale_links:
+            mod = True
+            logger.info(f"  LINK_MAP cleanup: removed {len(stale_links)} stale link(s) older than 24h.")
 
     if DB.get("PENDING_REQUESTS"):
         stale_users = []
