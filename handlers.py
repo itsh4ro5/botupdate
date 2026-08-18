@@ -296,6 +296,55 @@ async def cmd_del_admin(client: Client, message: Message):
     except Exception as e:
         await message.reply_text(f"  Error removing admin: {e}")
 
+async def cmd_deluser(client: Client, message: Message):
+    if not is_admin_msg(message):
+        return
+    args = get_args(message)
+    if not args or not args[0].strip().lstrip("-").isdigit():
+        return await message.reply_text("❌ Error: Kripya valid numeric User ID bhejein.")
+
+    target = int(args[0].strip())
+    target_str = str(target)
+    deleted = False
+
+    # 1. Main USER_DATA delete
+    if target in DB.get("USER_DATA", {}):
+        del DB["USER_DATA"][target]
+        deleted = True
+    if target_str in DB.get("USER_DATA", {}):
+        del DB["USER_DATA"][target_str]
+        deleted = True
+
+    # 2. Block List se delete
+    if target in DB.get("BLOCKED_USERS", []):
+        DB["BLOCKED_USERS"].remove(target)
+        deleted = True
+    if target_str in DB.get("BLOCKED_USERS", []):
+        DB["BLOCKED_USERS"].remove(target_str)
+        deleted = True
+
+    # 3. Topics map delete
+    if target in DB.get("USER_TOPICS", {}):
+        del DB["USER_TOPICS"][target]
+        deleted = True
+    if target_str in DB.get("USER_TOPICS", {}):
+        del DB["USER_TOPICS"][target_str]
+        deleted = True
+
+    # 4. Pending Requests & Active Links Delete
+    if target_str in DB.get("PENDING_REQUESTS", {}):
+        del DB["PENDING_REQUESTS"][target_str]
+        deleted = True
+
+    if deleted:
+        await save_data_async()
+        await message.reply_text(
+            f"☢️ **HARD DELETE SUCCESSFUL!**\n\nUser `{target}` ka saara data bot ke database se poori tarah mita diya gaya hai.\nAb agar wo kisi ke refer link se dobara `/start` karega toh usko 100% fresh/new user mana jayega aur referrer ko coin milega.", 
+            parse_mode=ParseMode.MARKDOWN
+        )
+    else:
+        await message.reply_text(f"⚠️ User `{target}` database me pehle se exist nahi karta.")
+
 async def cmd_storebatch(client: Client, message: Message):
     if not is_owner_msg(message):
         return
@@ -2439,6 +2488,7 @@ async def wizard_message(client: Client, message: Message):
                 "userlookup": cmd_user_lookup,
                 "superfwd": cmd_superfwd_start,
                 "advcap": cmd_advcap_start,
+                "deluser": cmd_deluser,
             }
             if cmd_name in cmds:
                 await cmds[cmd_name](client, message)
@@ -2631,7 +2681,10 @@ async def general_callback(client: Client, q: CallbackQuery):
                     InlineKeyboardButton("🚫 Ban User", callback_data="input_ban"),
                     InlineKeyboardButton("✅ Unban User", callback_data="input_unban"),
                 ],
-                [InlineKeyboardButton("🎁 Gift Coin", callback_data="giftcoin_start")],
+                [
+                    InlineKeyboardButton("🎁 Gift Coin", callback_data="giftcoin_start"),
+                    InlineKeyboardButton("☢️ Hard Delete User", callback_data="input_deluser")
+                ],
                 [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
             ]
             await q.edit_message_text(
@@ -2773,6 +2826,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                 "userbototp": "  **OTP Bhejein**\n  *OTP spaces me bhejein!* Jaise: `1 2 3 4 5`:",
                 "userbotpass": "  **2FA Password bhejein:**",
                 "userlookup": "🔍 **Specific User Data**\n\nUser ka User ID bhejein:",
+                "deluser": "☢️ **HARD DELETE USER**\n\nJis user ka data database se **poori tarah mitana hai**, uska **User ID** bhejein.\n*(Warning: Ye action undo nahi hoga)*:",
             }
             await q.edit_message_text(
                 f"  **INPUT REQUIRED FOR: {cmd_name.upper()}**\n\n{prompts.get(cmd_name, 'Send input:')}",
