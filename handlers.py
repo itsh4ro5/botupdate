@@ -151,41 +151,51 @@ async def set_role_based_commands(user_id: int, client: Client):
     except Exception:
         pass
 
-# =====================================================================
-# REFERRAL POINTS & UNLOCK ENGINE
-# =====================================================================
 async def process_successful_referral(client: Client, referee_id: int, referrer_id: int):
-    referrer_key = referrer_id if referrer_id in DB["USER_DATA"] else str(referrer_id)
-    referee_key = referee_id if referee_id in DB["USER_DATA"] else str(referee_id)
+    # Strict key check (integer and string types handles both safely)
+    referrer_key = str(referrer_id) if str(referrer_id) in DB["USER_DATA"] else (referrer_id if referrer_id in DB["USER_DATA"] else str(referrer_id))
+    referee_key = str(referee_id) if str(referee_id) in DB["USER_DATA"] else (referee_id if referee_id in DB["USER_DATA"] else str(referee_id))
     
     if referrer_key not in DB["USER_DATA"]:
         return
 
-    # Referrer ko 1 Point aur +1 Invites count dein (yeh hamesha turant milta hai)
+    # Coins (referral_count) and Invites badhayein instantly
     DB["USER_DATA"][referrer_key]["referral_count"] = DB["USER_DATA"][referrer_key].get("referral_count", 0) + 1
     DB["USER_DATA"][referrer_key]["total_invited"] = DB["USER_DATA"][referrer_key].get("total_invited", 0) + 1
 
-    # --- TIERED MILESTONE BONUS: har 5 successful refers par 1 EXTRA bonus coin ---
+    # Har 5 refers par +1 bonus coin logic
     milestone_hit = DB["USER_DATA"][referrer_key]["total_invited"] % 5 == 0
     if milestone_hit:
         DB["USER_DATA"][referrer_key]["referral_count"] += 1
 
-    # --- 25+ REFERS VIP TAG (bot-internal, koi webpage badge nahi) ---
     total_now = DB["USER_DATA"][referrer_key]["total_invited"]
     newly_vip = total_now >= 25 and DB["USER_DATA"][referrer_key].get("tier") != "vip"
     if newly_vip:
         DB["USER_DATA"][referrer_key]["tier"] = "vip"
 
-    # Referee ko ABHI point NAHI milega — sirf record hoga ki isse kisne refer kiya,
-    # welcome bonus tab tak "locked" rahega jab tak yeh khud kisi ko refer na kare
     if referee_key in DB["USER_DATA"]:
         DB["USER_DATA"][referee_key]["referred_by"] = referrer_id
         DB["USER_DATA"][referee_key].setdefault("welcome_bonus_claimed", False)
 
     await save_data_async()
 
-    # Agar referrer khud kisi se refer hua tha aur uska welcome bonus abhi tak locked tha,
-    # to apna PEHLA successful refer karte hi wo bonus unlock ho jayega
+    # --- NAYA LOGIC: SUPPORT GROUP TOPIC NOTIFICATION ---
+    from config import SUPPORT_GROUP_ID, get_or_create_topic
+    if SUPPORT_GROUP_ID:
+        try:
+            referrer_user = await client.get_users(int(referrer_id))
+            topic_id = await get_or_create_topic(referrer_user, client)
+            if topic_id:
+                await client.send_message(
+                    chat_id=int(SUPPORT_GROUP_ID),
+                    text=f"🎉 <b>{total_now} refers successful by the user</b>",
+                    message_thread_id=topic_id,
+                    parse_mode=ParseMode.HTML
+                )
+        except Exception as e:
+            logger.error(f"Support topic notification failed: {e}")
+
+    # Welcome bonus check for the referrer if they were pending
     if not DB["USER_DATA"][referrer_key].get("welcome_bonus_claimed", True) and DB["USER_DATA"][referrer_key].get("referred_by"):
         DB["USER_DATA"][referrer_key]["referral_count"] = DB["USER_DATA"][referrer_key].get("referral_count", 0) + 1
         DB["USER_DATA"][referrer_key]["welcome_bonus_claimed"] = True
@@ -200,13 +210,13 @@ async def process_successful_referral(client: Client, referee_id: int, referrer_
         except Exception:
             pass
 
-    # Referrer notification
+    # Referrer message
     try:
         await client.send_message(
             referrer_id,
-            "🎉 **REFERRAL SUCCESSFUL!**\n\n"
-            "Aapke bheje gaye link se ek naye user ne saare steps complete kar liye hain! Aapko **1 Coin** mil gaya hai. 🎁\n"
-            "Ab aap is coin ka use karke koi bhi Special Batch unlock kar sakte hain.",
+            f"🎉 **REFERRAL SUCCESSFUL!**\n\n"
+            f"Aapke bheje gaye link se ek naye user ne saare steps complete kar liye hain! Aapko **1 Coin** mil gaya hai. 🎁\n"
+            f"💰 Total Balance: `{DB['USER_DATA'][referrer_key]['referral_count']}` Coins",
             parse_mode=ParseMode.MARKDOWN
         )
     except Exception:
@@ -236,11 +246,9 @@ async def process_successful_referral(client: Client, referee_id: int, referrer_
         except Exception:
             pass
 
-    # VIPs ko har successful refer par ek premium sticker/GIF treat milta hai (agar set hai)
     if DB["USER_DATA"][referrer_key].get("tier") == "vip":
         await send_vip_treat(client, referrer_id)
 
-    # Referee notification — coin abhi nahi, sirf unlock karne ka raasta batao
     try:
         await client.send_message(
             referee_id,
