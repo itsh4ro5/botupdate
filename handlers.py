@@ -3846,7 +3846,11 @@ async def start(client: Client, message: Message):
     
     user_key = user.id if user.id in DB.get("USER_DATA", {}) else (str(user.id) if str(user.id) in DB.get("USER_DATA", {}) else user.id)
     
+    # STRICT NEW USER CHECK FLAG
+    is_new_user = False
+    
     if user_key not in DB["USER_DATA"]:
+        is_new_user = True
         DB["USER_DATA"][user_key] = {
             "name": f"{user.first_name or ''} {user.last_name or ''}".strip(),
             "username": user.username,
@@ -3863,7 +3867,9 @@ async def start(client: Client, message: Message):
 
     # --- CHECK REFERRAL DEEP LINK PARAMETER ---
     args = get_args(message)
-    if args:
+    
+    # BUG FIX: Refer ka benefit tabhi milega jab "is_new_user" True hoga!
+    if args and is_new_user:
         ref_val = args[0]
         referrer_id = None
         
