@@ -296,6 +296,71 @@ async def cmd_del_admin(client: Client, message: Message):
     except Exception as e:
         await message.reply_text(f"  Error removing admin: {e}")
 
+async def cmd_gendemo(client: Client, message: Message):
+    if not is_admin_msg(message):
+        return
+    args = get_args(message)
+    if len(args) < 2:
+        return await message.reply_text("Usage: /gendemo <user_id> <batch_id>")
+    
+    try:
+        target_uid = int(args[0])
+        batch_id = int(args[1])
+    except ValueError:
+        return await message.reply_text("❌ Error: User ID and Batch ID numbers me hone chahiye.")
+
+    try:
+        # Generate link: 3 hours expiry, 1 use limit (Direct join, no request needed)
+        expire_ts = time.time() + (3 * 3600)
+        l = await client.create_chat_invite_link(
+            chat_id=batch_id,
+            creates_join_request=False,
+            member_limit=1,
+            expire_date=datetime.now() + timedelta(hours=3)
+        )
+        link = l.invite_link
+
+        # Store the demo timer instantly so they get kicked if not upgraded
+        target_key = str(target_uid) if str(target_uid) in DB.get("USER_DATA", {}) else target_uid
+        DB.setdefault("USER_DATA", {}).setdefault(target_key, {}).setdefault("demos", {})[str(batch_id)] = {
+            "expiry": expire_ts,
+            "warned": False,
+        }
+        
+        # Map the link so the /per command works perfectly
+        DB.setdefault("LINK_MAP", {})[link] = {"u": target_uid, "b": batch_id, "ts": time.time()}
+        await save_data_async()
+
+        bname = DB.get("ALL_CHATS", {}).get(batch_id, f"Batch {batch_id}")
+        
+        # Message to Admin
+        await message.reply_text(
+            f"✅ **Auto-Demo Link Generated!**\n\n"
+            f"📦 **Batch:** `{bname}`\n"
+            f"👤 **User:** `{target_uid}`\n"
+            f"⏱ **Validity:** `3 Hours`\n\n"
+            f"🔗 **Link to share:**\n`{link}`\n\n"
+            f"💡 *Give this to the student. They will join instantly for 3 hours.*\n"
+            f"🔄 *To make it permanent later, just reply to this with:* `/per {link}`",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        
+        # Optionally send it directly to the user
+        try:
+            await client.send_message(
+                target_uid,
+                f"🎁 **Admin granted you Demo Access!**\n\n"
+                f"📦 **Batch:** `{bname}`\n"
+                f"⏱ **Time Limit:** `3 Hours`\n\n"
+                f"🔗 Click below to join instantly. **Link expires in 3 hours and works only once.**",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚀 Join Demo Batch", url=link)]])
+            )
+        except Exception:
+            pass # User might have bot blocked
+            
+    except Exception as e:
+        await message.reply_text(f"❌ Failed to generate demo link: {e}")
+
 async def cmd_deluser(client: Client, message: Message):
     if not is_admin_msg(message):
         return
@@ -1249,14 +1314,22 @@ async def cmd_approve_perm(client: Client, message: Message):
         return await message.reply_text("  Error: Invalid data in database for this link.")
 
     try:
-        await client.approve_chat_join_request(batch_id, target_uid)
+        try:
+            await client.approve_chat_join_request(batch_id, target_uid)
+        except Exception:
+            pass # Accept direct links that bypass join requests (like /gendemo)
+            
         invalidate_membership_cache(target_uid, batch_id)
-        if str(batch_id) in DB["USER_DATA"].get(target_uid, {}).get("demos", {}):
-            del DB["USER_DATA"][target_uid]["demos"][str(batch_id)]
+        
+        # Remove Demo Timer -> Upgrade to Permanent
+        target_key = str(target_uid) if str(target_uid) in DB.get("USER_DATA", {}) else target_uid
+        if str(batch_id) in DB.get("USER_DATA", {}).get(target_key, {}).get("demos", {}):
+            del DB["USER_DATA"][target_key]["demos"][str(batch_id)]
+            
         clear_active_request(target_uid, batch_id)
         DB.get("LINK_MAP", {}).pop(link, None)
         await save_data_async()
-        await message.reply_text("  **APPROVED (PERM)**", parse_mode=ParseMode.MARKDOWN)
+        await message.reply_text("  **APPROVED (PERM)**\nUser now has lifetime permanent access.", parse_mode=ParseMode.MARKDOWN)
         try:
             bname = DB["ALL_CHATS"].get(int(batch_id), f"Batch {batch_id}")
             user_msg = (
@@ -2475,6 +2548,7 @@ async def wizard_message(client: Client, message: Message):
                 "demo": cmd_approve_demo,
                 "perm": cmd_approve_perm,
                 "extend": cmd_extend_demo,
+                "gendemo": cmd_gendemo,
                 "settestbot": cmd_set_testbot,
                 "setwelcome": cmd_set_welcome,
                 "delbatch": cmd_delbatch,
@@ -2812,6 +2886,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                 "demo": "Send Link and Time:\nFormat: `link 10h`",
                 "perm": "Send Link to approve:",
                 "extend": "Send User ID, Batch ID, Hours:\nFormat: `uid bid 24`",
+                "gendemo": "Send User ID and Batch ID to generate a 3-hour Demo link:\nFormat: `uid bid`",
                 "settestbot": "Send new Test Bot link:",
                 "setwelcome": "Send Batch ID and Welcome Msg:\nFormat: `bid message`",
                 "delbatch": "Send Type and ID:\nFormat: `free 123` or `paid 123` or `special 123`",
@@ -2892,7 +2967,10 @@ async def general_callback(client: Client, q: CallbackQuery):
                     InlineKeyboardButton("🕐 Approve Demo", callback_data="input_demo"),
                     InlineKeyboardButton("✅ Approve Perm", callback_data="input_perm"),
                 ],
-                [InlineKeyboardButton("⏳ Extend Demo Time", callback_data="input_extend")],
+                [
+                    InlineKeyboardButton("⏳ Extend Demo", callback_data="input_extend"),
+                    InlineKeyboardButton("🔗 Generate Demo Link", callback_data="input_gendemo")
+                ],
                 [InlineKeyboardButton("🔙 Back", callback_data="dash_home")],
             ]
             await q.edit_message_text(
