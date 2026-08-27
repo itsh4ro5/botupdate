@@ -2601,16 +2601,23 @@ async def broadcast_callback(client: Client, q: CallbackQuery):
         return await q.edit_message_text("  Cancelled")
     if q.data == "bc_yes":
         await q.answer()
-        await q.edit_message_text("  Processing...")
+        await q.edit_message_text("⏳ **Processing Broadcast...**")
+        
         count = 0
+        blocked_count = 0
+        is_user_broadcast = BROADCAST_STATE[uid]["type"] == "broadcast"
+        
         targets = (
             list(DB.get("USER_DATA", {}).keys())
-            if BROADCAST_STATE[uid]["type"] == "broadcast"
+            if is_user_broadcast
             else list(DB.get("FREE_CHANNELS", {}).keys())
             + list(DB.get("PAID_CHANNELS", {}).keys())
             + list(DB.get("SPECIAL_CHANNELS", {}).keys())
         )
-        for tid in targets:
+        
+        total_targets = len(targets)
+
+        for index, tid in enumerate(targets):
             try:
                 await client.copy_message(
                     int(tid), uid, BROADCAST_STATE[uid]["content"].id
@@ -2619,9 +2626,44 @@ async def broadcast_callback(client: Client, q: CallbackQuery):
                 await asyncio.sleep(0.05)
             except FloodWait as e:
                 await asyncio.sleep(e.value + 1)
+                try:
+                    await client.copy_message(int(tid), uid, BROADCAST_STATE[uid]["content"].id)
+                    count += 1
+                except Exception:
+                    pass
             except Exception:
-                pass
-        await client.send_message(uid, f"  Done. Sent to {count}.")
+                # Agar user broadcast hai aur error aaya, matlab Bot Blocked ya Account Deleted
+                if is_user_broadcast:
+                    blocked_count += 1
+                    target_id = int(tid)
+                    
+                    # Background task to ban from batches (Ignores Mandatory Channel automatically)
+                    async def auto_kick_blocked(u_id):
+                        from config import execute_universal_kick
+                        await execute_universal_kick(u_id, client, permanent_ban=True)
+                        
+                    asyncio.create_task(auto_kick_blocked(target_id))
+            
+            # Live Progress Update (Har 50 users ke baad msg update hoga)
+            if index > 0 and index % 50 == 0:
+                try:
+                    await q.edit_message_text(
+                        f"📡 **Broadcasting In Progress...**\n\n"
+                        f"📤 Sent: `{count} / {total_targets}`\n"
+                        f"🚫 Blocked/Removed: `{blocked_count}`"
+                    )
+                except Exception:
+                    pass
+
+        # Final Success Message
+        await q.edit_message_text(
+            f"✅ **Broadcast Completed!**\n\n"
+            f"📤 Successfully Sent: `{count}`\n"
+            f"🚫 Blocked & Removed: `{blocked_count}`\n\n"
+            f"💡 *Jin users ne bot ko block kiya tha, unhe sabhi premium/free batches se nikal diya gaya hai (Mandatory channel me abhi bhi hain).* ",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        
         del BROADCAST_STATE[uid]
 
 async def general_callback(client: Client, q: CallbackQuery):
