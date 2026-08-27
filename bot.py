@@ -130,7 +130,7 @@ async def _run_pyrogram_engine():
         "backup": H.cmd_backup, "allusers": H.cmd_all_users, "ban": H.cmd_ban,
         "unban": H.cmd_unban, "resetuser": H.cmd_reset_user, "find": H.cmd_find_user,
         "extend": H.cmd_extend_demo, "kick": H.cmd_kick_user, "batchstats": H.cmd_batch_stats,
-        "setwelcome": H.cmd_set_welcome, "settestbot": H.cmd_set_testbot,
+        "gendemo": H.cmd_gendemo, "setwelcome": H.cmd_set_welcome, "settestbot": H.cmd_set_testbot,
         "locktestbot": H.cmd_locktestbot, "lockdown": H.cmd_lockdown, "lockfree": H.cmd_lockfree,
         "lockpaid": H.cmd_lockpaid, "sync": H.cmd_sync, "joinall": H.cmd_joinall,
         "demo": H.cmd_approve_demo, "per": H.cmd_approve_perm, "perm": H.cmd_approve_perm,
