@@ -2979,6 +2979,71 @@ async def general_callback(client: Client, q: CallbackQuery):
             await q.answer()
             await show_user_menu_cb(client, q)
 
+        # =====================================================================
+        # 🔗 SHARE SPECIFIC BATCH & DEEP-LINK REDIRECT LOGIC
+        # =====================================================================
+        elif data.startswith("open_batch_"):
+            cid = int(data.split("_")[2])
+            user_key = uid if uid in DB["USER_DATA"] else str(uid)
+            
+            # Remove pending batch state so they don't get stuck in a loop
+            if "pending_batch" in DB["USER_DATA"].get(user_key, {}):
+                del DB["USER_DATA"][user_key]["pending_batch"]
+                await save_data_async()
+                
+            # Smart Redirect to the correct batch panel
+            if cid in DB.get("FREE_CHANNELS", {}) or str(cid) in DB.get("FREE_CHANNELS", {}):
+                q.data = f"get_f_{cid}"
+                return await general_callback(client, q)
+            elif cid in DB.get("PAID_CHANNELS", {}) or str(cid) in DB.get("PAID_CHANNELS", {}):
+                q.data = f"view_p_{cid}"
+                return await general_callback(client, q)
+            else:
+                q.data = f"view_s_{cid}"
+                return await general_callback(client, q)
+                
+        elif data == "clear_pending_batch":
+            user_key = uid if uid in DB["USER_DATA"] else str(uid)
+            if "pending_batch" in DB["USER_DATA"].get(user_key, {}):
+                del DB["USER_DATA"][user_key]["pending_batch"]
+                await save_data_async()
+            await q.answer()
+            await show_user_menu_cb(client, q)
+
+        elif data.startswith("share_btn_"):
+            await q.answer()
+            cid = data.split("_")[2]
+            bname = DB.get("ALL_CHATS", {}).get(int(cid)) or DB.get("ALL_CHATS", {}).get(cid) or f"Batch {cid}"
+            
+            import urllib.parse
+            import config
+            bot_username = getattr(config, 'BOT_USERNAME', 'H4R_Contact_bot')
+            batch_link = f"https://t.me/{bot_username}?start=batch_{cid}_{uid}"
+            
+            share_msg = f"🔥 Join **{bname}** on Telegram!\nAccess complete lectures, PDFs, and premium notes here:\n{batch_link}"
+            tg_url = f"https://t.me/share/url?url={urllib.parse.quote(batch_link)}&text={urllib.parse.quote(share_msg)}"
+            wa_url = f"https://api.whatsapp.com/send?text={urllib.parse.quote(share_msg)}"
+
+            kb = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("✈️ Send to Telegram", url=tg_url),
+                    InlineKeyboardButton("💬 Send to WhatsApp", url=wa_url)
+                ],
+                [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="u_main")]
+            ])
+
+            try:
+                await q.edit_message_text(
+                    f"🎯 **Share Link Ready for:**\n`{bname}`\n\n"
+                    f"🔗 **Your Direct Share Link:**\n`{batch_link}`\n\n"
+                    "💡 *Jab aapka dost is link par click karke bot start karega aur mandatory rules follow karega, toh usse direct yahi batch dikhega aur aapko +1 Referral Coin milega!*",
+                    reply_markup=kb,
+                    parse_mode=ParseMode.MARKDOWN,
+                    disable_web_page_preview=True
+                )
+            except Exception:
+                await client.send_message(uid, f"🎯 **Share Link Ready!**\n\n🔗 `{batch_link}`", reply_markup=kb)
+
         # --- MY INFO VIEW ---
         elif data == "my_info":
             await q.answer()
@@ -3454,7 +3519,10 @@ async def general_callback(client: Client, q: CallbackQuery):
                     joined_free.append(cid)
                     await save_data_async()
 
-                kb = [[InlineKeyboardButton("🚀 Join Batch", url=l.invite_link)]]
+                kb = [
+                    [InlineKeyboardButton("🚀 Join Batch", url=l.invite_link)],
+                    [InlineKeyboardButton("🔗 Share Batch with Friends", callback_data=f"share_btn_{cid}")]
+                ]
                 sent_msg = await client.send_message(
                     uid,
                     f"  <b>Link Generated!</b>\n\n<b>{bname}</b>\n\n  <i>Request auto-approved.</i>\n  <i>(Expires in 1 min)</i>",
@@ -3505,6 +3573,7 @@ async def general_callback(client: Client, q: CallbackQuery):
             await q.answer()
             kb = [
                 [InlineKeyboardButton("🔑 Request Access", callback_data=f"req_access_{cid}")],
+                [InlineKeyboardButton("🔗 Share Batch with Friends", callback_data=f"share_btn_{cid}")],
                 [InlineKeyboardButton("🔙 Back", callback_data="u_main")],
             ]
             try:
@@ -3547,6 +3616,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                     status_str = "🔒 Locked (Not Enough Coins)"
                     desc = f"Aapke paas enough coins nahi hain. Is batch ko unlock karne ke liye aapko **{cost} {coin_word}** chahiye.\nApne dosto ko refer karke coins earn karein!"
 
+            kb.append([InlineKeyboardButton("🔗 Share Batch with Friends", callback_data=f"share_btn_{cid}")])
             kb.append([InlineKeyboardButton("🔙 Back", callback_data="u_main")])
 
             await q.edit_message_text(
@@ -3704,6 +3774,23 @@ async def show_tnc_menu_cb(client: Client, q: CallbackQuery):
 
 def build_home_menu(user_key, user):
     """Normal users: standard half-width layout. VIPs: personalized greeting + exclusive full-width buttons."""
+    
+    # Check if user came from a Batch Share Link
+    pending_batch = DB["USER_DATA"].get(user_key, {}).get("pending_batch")
+    if pending_batch:
+        bname = DB.get("ALL_CHATS", {}).get(int(pending_batch)) or DB.get("ALL_CHATS", {}).get(str(pending_batch)) or "Shared Batch"
+        txt = (
+            f"🎉 **You were invited to a Batch!**\n\n"
+            f"📦 **Batch Name:** `{bname}`\n\n"
+            f"Aapke dost ne aapko is batch me join karne ke liye invite kiya hai. "
+            f"Neeche diye gaye button par click karke details dekhein aur turant join karein!"
+        )
+        kb = [
+            [InlineKeyboardButton("🚀 Open Shared Batch", callback_data=f"open_batch_{pending_batch}")],
+            [InlineKeyboardButton("🏠 Go to Main Menu", callback_data="clear_pending_batch")]
+        ]
+        return txt, InlineKeyboardMarkup(kb)
+
     vip = DB["USER_DATA"].get(user_key, {}).get("tier") == "vip"
     first_name = (user.first_name if user and user.first_name else "there")
 
@@ -3867,22 +3954,39 @@ async def start(client: Client, message: Message):
 
     # --- CHECK REFERRAL DEEP LINK PARAMETER ---
     args = get_args(message)
+    target_batch_to_open = None
     
-    # BUG FIX: Refer ka benefit tabhi milega jab "is_new_user" True hoga!
-    if args and is_new_user:
-        ref_val = args[0]
+    if args:
+        param = args[0].strip()
         referrer_id = None
         
-        if ref_val.isdigit():
-            referrer_id = int(ref_val)
-        elif ref_val.startswith("ref_"):
-            parts = ref_val.split("_")
+        # Case A: Batch Share Link (batch_CID_UID)
+        if param.startswith("batch_"):
+            parts = param.split("_")
+            if len(parts) >= 3:
+                target_batch_to_open = parts[1]
+                if parts[2].isdigit():
+                    referrer_id = int(parts[2])
+            elif len(parts) == 2 and parts[1].lstrip("-").isdigit():
+                target_batch_to_open = parts[1]
+                
+        # Case B: Standard Referral
+        elif param.isdigit():
+            referrer_id = int(param)
+        elif param.startswith("ref_"):
+            parts = param.split("_")
             if len(parts) >= 2 and parts[-1].isdigit():
                 referrer_id = int(parts[-1])
                 
-        if referrer_id and str(referrer_id) != str(user.id):
+        # Save pending referral if it's a new user
+        if is_new_user and referrer_id and str(referrer_id) != str(user.id):
             DB["USER_DATA"][user_key]["pending_referral"] = referrer_id
-            await save_data_async()
+            
+        # Save pending batch to show immediately after mandatory checks
+        if target_batch_to_open:
+            DB["USER_DATA"][user_key]["pending_batch"] = target_batch_to_open
+            
+        await save_data_async()
 
     await get_or_create_topic(user, client)
 
