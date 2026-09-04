@@ -3208,43 +3208,57 @@ async def general_callback(client: Client, q: CallbackQuery):
 
         # --- HOME MENU: REFER & EARN LAYOUT ---
         elif data == "menu_refer":
-            await q.answer()
-            bot_username = "H4R_Contact_bot"
-            ref_link = f"https://t.me/{bot_username}?start={uid}"
-            share_text = f"🚀 Crack your exams with H4R Bot! Get free access to premium study materials and special batches.\n\nStart now: {ref_link}"
-            share_url = f"https://t.me/share/url?url={urllib.parse.quote(ref_link)}&text={urllib.parse.quote(share_text)}"
+            try:
+                await q.answer()
+                import urllib.parse
+                
+                # Sirf bot ka naam aur user ID (uid) se link banega
+                bot_username = "H4R_Contact_bot"
+                ref_link = f"https://t.me/{bot_username}?start={uid}"
+                
+                # Aapka exact text jo aapne manga hai
+                share_text = "Join me on H4R — the smartest way to crack your exam!"
+                
+                # URL encoding jisse button 100% bina atke kaam kare
+                tg_share_url = f"https://t.me/share/url?url={urllib.parse.quote(ref_link)}&text={urllib.parse.quote(share_text)}"
+                wa_share_url = f"https://api.whatsapp.com/send?text={urllib.parse.quote(ref_link + ' ' + share_text)}"
 
-            kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("📤 Share to Chat", url=share_url)],
-                [InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")]
-            ])
+                kb = InlineKeyboardMarkup([
+                    [
+                        InlineKeyboardButton("✈️ Share on Telegram", url=tg_share_url),
+                        InlineKeyboardButton("💬 Share on WhatsApp", url=wa_share_url)
+                    ],
+                    [InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")]
+                ])
 
-            user_key = uid if uid in DB["USER_DATA"] else str(uid)
-            pts = DB["USER_DATA"].get(user_key, {}).get("referral_count", 0)
-            total_inv = DB["USER_DATA"].get(user_key, {}).get("total_invited", 0)
-            is_vip = DB["USER_DATA"].get(user_key, {}).get("tier") == "vip"
+                user_key = uid if uid in DB["USER_DATA"] else str(uid)
+                pts = DB["USER_DATA"].get(user_key, {}).get("referral_count", 0)
+                total_inv = DB["USER_DATA"].get(user_key, {}).get("total_invited", 0)
+                is_vip = DB["USER_DATA"].get(user_key, {}).get("tier") == "vip"
 
-            text = (
-                "🎁 **Refer & Earn Program**\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                "Invite your friends and earn 1 coin on every successful refer!\n\n"
-                "New users don't get a coin instantly — they unlock their own 1 coin welcome bonus only after THEY successfully refer someone too. Keep the chain going! 🔗\n\n"
-                "🏆 **Milestone Bonus:** Every 5 successful refers = **+1 EXTRA Coin!**\n"
-                "👑 **VIP Tag:** Cross 25 total refers to unlock the VIP Referrer tag!\n\n"
-                + (f"👑 Your Tag: **VIP Referrer**\n" if is_vip else "")
-                + f"👥 Total Referred Users: {total_inv}\n"
-                f"💰 Total Earnings: {pts}\n\n"
-                "🔗 Your Referral Link:\n"
-                f"`{ref_link}`\n\n"
-                "Click the button below to share directly with your friends! 👇"
-            )
+                text = (
+                    "🎁 **Refer & Earn Program**\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "Invite your friends and earn 1 coin on every successful refer!\n\n"
+                    "🏆 **Milestone Bonus:** Every 5 successful refers = **+1 EXTRA Coin!**\n"
+                    "👑 **VIP Tag:** Cross 25 total refers to unlock the VIP Referrer tag!\n\n"
+                    + (f"👑 Your Tag: **VIP Referrer**\n" if is_vip else "")
+                    + f"👥 Total Referred Users: `{total_inv}`\n"
+                    f"💰 Total Earnings: `{pts}` Coins\n\n"
+                    f"🔗 Your Referral Link:\n"
+                    f"`{ref_link}`\n\n"
+                    "Click the buttons below to share directly with your friends! 👇"
+                )
 
-            await q.edit_message_text(
-                text,
-                reply_markup=kb,
-                parse_mode=ParseMode.MARKDOWN,
-                disable_web_page_preview=True
-            )
+                await q.edit_message_text(
+                    text,
+                    reply_markup=kb,
+                    parse_mode=ParseMode.MARKDOWN,
+                    disable_web_page_preview=True
+                )
+            except Exception as e:
+                logger.error(f"Refer & Earn Error: {e}")
+                await q.answer("⚠️ Menu load hone me error aayi. Kripya wapas try karein.", show_alert=True)
 
         # =====================================================================
         # 💎 VIP-ONLY: EXCLUSIVE COURSE MATERIALS
