@@ -59,8 +59,8 @@
 
     * { 
       -webkit-tap-highlight-color: transparent; 
-      -webkit-touch-callout: none; /* Long press popup hide karega iOS pe */
-      user-select: none; /* Text selection band karega */
+      -webkit-touch-callout: none;
+      user-select: none; 
     }
 
     body {
@@ -71,7 +71,6 @@
       transition: background 0.4s ease, color 0.4s ease;
     }
 
-    /* ambient neon glow behind content */
     .aurora::before {
       content: '';
       position: fixed;
@@ -110,7 +109,6 @@
 
     .text-muted { color: var(--muted); }
 
-    /* dock */
     .dock {
       background: rgba(13, 13, 22, 0.72);
       border: 1px solid var(--border);
@@ -139,7 +137,6 @@
     }
     .reveal { animation: floatUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
     
-    /* Input Styling */
     .search-input:focus { border-color: rgba(99, 102, 241, 0.6); box-shadow: 0 0 15px rgba(99, 102, 241, 0.2); }
   </style>
 </head>
@@ -207,7 +204,7 @@
 
   </div>
 
-    <!-- Bottom Navigation Dock -->
+  <!-- Bottom Navigation Dock -->
   <nav id="bottomDock" class="fixed bottom-4 left-1/2 z-30 -translate-x-1/2 transition-transform duration-300" oncontextmenu="return false;">
     <div class="dock flex items-center gap-1 rounded-full px-2 py-2">
       <div onclick="window.location.href='/'" class="dock-item relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1.5 cursor-pointer">
@@ -248,7 +245,7 @@
 
   <script>
     /* ============================================================
-       H4R Test Generator Engine (Vanilla JS) - FULLY FIXED
+       H4R Test Generator Engine (Vanilla JS)
        ============================================================ */
     const tg = window.Telegram ? window.Telegram.WebApp : null;
     if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
@@ -256,7 +253,7 @@
     const $ = (id) => document.getElementById(id);
     const haptic = (t) => { if (tg && tg.HapticFeedback) { try { t === 'sel' ? tg.HapticFeedback.selectionChanged() : tg.HapticFeedback.impactOccurred(t); } catch (e) {} } };
 
-    let currentSeriesData = null; // Cache for breadcrumbs navigation
+    let currentSeriesData = null;
 
     /* ---------- Theme toggle ---------- */
     (function initTheme() {
@@ -280,7 +277,6 @@
       haptic('light');
     });
 
-    /* 🔥 BULLETPROOF ESCAPE HTML - PREVENTS ONCLICK CRASHES 🔥 */
     function escapeHtml(str) {
       if (!str) return '';
       return String(str)
@@ -331,9 +327,9 @@
     function saveRecentTest(testId, testTitle) {
         try {
             let recent = JSON.parse(localStorage.getItem('h4r_recent_tests') || '[]');
-            recent = recent.filter(t => t.id !== testId); // Remove duplicates
-            recent.unshift({ id: testId, title: testTitle }); // Add to front
-            localStorage.setItem('h4r_recent_tests', JSON.stringify(recent.slice(0, 10))); // Keep top 10
+            recent = recent.filter(t => t.id !== testId); 
+            recent.unshift({ id: testId, title: testTitle }); 
+            localStorage.setItem('h4r_recent_tests', JSON.stringify(recent.slice(0, 10))); 
         } catch (e) {}
     }
 
@@ -343,7 +339,6 @@
         loadRecentTests();
     }
 
-    // Initialize Recent Tests on load
     loadRecentTests();
 
 
@@ -451,7 +446,7 @@
 
 
     /* ============================================================
-       FETCH ACTUAL TESTS
+       FETCH ACTUAL TESTS WITH DYNAMIC DETAILS (MINUTES, MARKS)
        ============================================================ */
     async function fetchTests(seriesId, secId, subId, subName) {
         haptic('sel');
@@ -475,19 +470,66 @@
                         </div>
                         <h3 class="mb-3 text-sm font-bold text-indigo-soft"><i class="fa-solid fa-list-check"></i> ${escapeHtml(subName)}</h3>`;
             
+            // Aaj ki Date Timeline Logic ke liye
+            let now = new Date();
+
             html += data.map(t => {
                 let testId = t._id || t.id;
                 let testTitle = t.title || t.name || "Mock Test";
-                let tDuration = t.duration || 0;
-                let tMarks = t.totalMark || t.totalQuestions || 0;
+                
+                // Duration Logic
+                let rawDuration = t.duration || 0;
+                let durationMins = rawDuration > 300 ? Math.floor(rawDuration / 60) : rawDuration;
+
+                // Details Extract
+                let tQuestions = t.questionCount || t.totalQuestions || t.qCount || 0;
+                let tMarks = t.totalMark || t.marks || t.maxM || 0;
+
+                // ---- Timeline Logic ----
+                let statusBadge = "";
+                let timelineText = "";
+                
+                if (t.availFrom && t.availTill) {
+                    let fromDate = new Date(t.availFrom);
+                    let tillDate = new Date(t.availTill);
+                    
+                    // Format into standard local string (e.g. 27 Sep, 18:30)
+                    const formatDate = (d) => {
+                        return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) + " " + 
+                               d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+                    };
+
+                    if (now < fromDate) {
+                        // UPCOMING
+                        statusBadge = `<span class="absolute top-3 right-3 bg-indigo-500/20 text-indigo-400 px-2 py-1 rounded-md text-[10px] font-black uppercase"><i class="fa-solid fa-lock"></i> Upcoming</span>`;
+                        timelineText = `<p class="text-[11px] font-medium text-indigo-400 mb-3"><i class="fa-regular fa-calendar"></i> Starts: ${formatDate(fromDate)}</p>`;
+                    } else if (now >= fromDate && now <= tillDate) {
+                        // LIVE NOW
+                        statusBadge = `<span class="absolute top-3 right-3 bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-md text-[10px] font-black uppercase animate-pulse"><i class="fa-solid fa-bolt"></i> Live Now</span>`;
+                        timelineText = `<p class="text-[11px] font-medium text-emerald-400 mb-3"><i class="fa-regular fa-calendar-check"></i> Ends: ${formatDate(tillDate)}</p>`;
+                    } else {
+                        // EXPIRED / ENDED
+                        statusBadge = `<span class="absolute top-3 right-3 bg-red-500/20 text-red-400 px-2 py-1 rounded-md text-[10px] font-black uppercase"><i class="fa-solid fa-clock-rotate-left"></i> Ended</span>`;
+                        timelineText = `<p class="text-[11px] font-medium text-red-400/70 mb-3"><i class="fa-solid fa-circle-xmark"></i> Ended: ${formatDate(tillDate)}</p>`;
+                    }
+                } else {
+                     statusBadge = `<span class="absolute top-3 right-3 bg-white/10 text-white/50 px-2 py-1 rounded-md text-[10px] font-black uppercase">Available</span>`;
+                }
 
                 return `
-                <div class="glass rounded-2xl p-4 mb-3 border-l-4 border-emerald-soft">
-                    <h4 class="text-sm font-bold text-white mb-2 leading-tight">${escapeHtml(testTitle)}</h4>
-                    <div class="flex items-center gap-4 text-[11px] font-semibold text-muted mb-4">
-                        <span class="bg-white/5 px-2 py-1 rounded-md"><i class="fa-regular fa-clock text-emerald-soft"></i> ${tDuration} Mins</span>
-                        <span class="bg-white/5 px-2 py-1 rounded-md"><i class="fa-solid fa-check-double text-indigo-soft"></i> ${tMarks} Marks</span>
+                <div class="glass relative rounded-2xl p-4 mb-3 border-l-4 border-emerald-soft">
+                    ${statusBadge}
+                    
+                    <h4 class="text-sm font-bold text-white mb-1 leading-tight pr-20">${escapeHtml(testTitle)}</h4>
+                    
+                    ${timelineText}
+                    
+                    <div class="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-muted mb-4 mt-2">
+                        <span class="bg-white/5 px-2 py-1 rounded-md"><i class="fa-regular fa-clock text-emerald-soft"></i> ${durationMins} Mins</span>
+                        <span class="bg-white/5 px-2 py-1 rounded-md"><i class="fa-solid fa-list-ol text-indigo-soft"></i> ${tQuestions} Qs</span>
+                        <span class="bg-white/5 px-2 py-1 rounded-md"><i class="fa-solid fa-check-double text-blue-400"></i> ${tMarks} Marks</span>
                     </div>
+                    
                     <button onclick="extractTest('${escapeHtml(testId)}', '${escapeHtml(testTitle)}')" 
                         class="w-full card-press rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-neon py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20">
                         <i class="fa-solid fa-rocket mr-1"></i> Launch Engine
