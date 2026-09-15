@@ -2,7 +2,7 @@ import json
 import re
 import base64
 
-# --- HTML Template (Redesigned & Fixed) ---
+# --- HTML Template (Redesigned & Fixed for New JSON Structure) ---
 HTML_TEMPLATE = r"""
 <!DOCTYPE html>
 <html lang="en">
@@ -174,7 +174,6 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
             </div>
         </div>
         
-        <!-- RESTORED UNANSWERED & MARKED STATS -->
         <div class="grid grid-cols-2 gap-4 mb-8">
             <div style="background: var(--bg-base); padding: 16px; border-radius: 16px; border: 1px solid var(--border-subtle);">
                 <p class="text-2xl font-black notranslate" style="color: var(--text-secondary);" id="unanswered-count">0</p>
@@ -200,7 +199,6 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
             <div id="review-question-counter" class="font-bold text-lg"></div>
             <button onclick="window.backToResults()" class="btn-outline">Back</button>
         </div>
-        <!-- ADDED NUMBER PALETTE -->
         <div id="review-palette" class="review-palette w-full"></div>
     </header>
     
@@ -243,7 +241,6 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
             <h2 class="text-xl font-bold">Choose Language</h2>
             <button onclick="window.closeLanguageModal()" class="text-2xl text-gray-400 hover:text-red-500">&times;</button>
         </div>
-        <!-- SCROLL FIX FOR LANGUAGE -->
         <div id="language-options-container"></div>
     </div>
 </div>
@@ -266,42 +263,37 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
 
     window.getEl = function(id) { return document.getElementById(id); };
     
-    // HTML DECODER (Includes LaTeX cleanup for Testbook's weird formats)
     window.decodeHtml = function(html) {
         if (!html) return "";
         var txt = document.createElement("textarea"); txt.innerHTML = html;
         let res = txt.value.replace(/src=(["'])\/\//g, 'src=$1https://').replace(/src=(["'])\/([^\/])/g, 'src=$1https://testbook.com/$2');
-        // Testbook sometimes sends [tex] instead of \(
         res = res.replace(/\[tex\]/g, '\\(').replace(/\[\/tex\]/g, '\\)');
-        // Fix for "\rm" command which fails in modern MathJax
         res = res.replace(/\\rm\s/g, ''); 
         return res;
     };
 
+    // FIXED: Now returns the inner language object correctly
     window.getLocalizedContent = function(obj) {
-        if (!obj) return "";
+        if (!obj) return {}; 
         if (obj[window.currentLanguage]) return obj[window.currentLanguage];
         if (obj['en']) return obj['en'];
-        var keys = Object.keys(obj); return keys.length > 0 ? obj[keys[0]] : "";
+        var keys = Object.keys(obj); return keys.length > 0 ? obj[keys[0]] : {};
     };
 
-    // --- MATHJAX RENDER TRIGGER (Fixed) ---
     window.triggerMathJax = function() {
         if (window.MathJax && MathJax.typesetPromise) {
-            MathJax.typesetClear(); // Clear previous typeset to avoid caching issues
+            MathJax.typesetClear(); 
             MathJax.typesetPromise().catch(function (err) { console.error('MathJax Error:', err.message); });
         }
     };
 
-    // --- MODALS & NAVIGATION ---
     window.goBackToDashboard = function() {
-        // Page ko reload karne se Mini App close nahi hoga, 
-        // balki wapas tumhara main Dashboard (Test select karne wala page) khul jayega.
         window.location.reload();
     };
 
     window.openLanguageModal = function() { window.getEl('language-modal').classList.add('active'); };
     window.closeLanguageModal = function() { window.getEl('language-modal').classList.remove('active'); };
+    
     window.openQuestionNav = function() { 
         var grid = window.getEl('question-grid'); grid.innerHTML = ''; 
         window.quizData.questions.forEach(function(_, i) { 
@@ -317,8 +309,9 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
     };
     window.closeQuestionNav = function() { window.getEl('question-nav-modal').classList.remove('active'); };
 
+    // FIXED: Fetch languages directly from metadata
     window.initLanguageSelector = function() {
-        var langs = window.quizData.available_languages || [];
+        var langs = (window.quizData.metadata && window.quizData.metadata.available_languages) ? window.quizData.metadata.available_languages : [];
         var cont = window.getEl('language-options-container');
         if(!cont) return;
         cont.innerHTML = '';
@@ -346,6 +339,7 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
          window.questionStatus = new Array(window.quizData.questions.length).fill('not-answered');
          window.initLanguageSelector();
     };
+    
     window.startQuiz = function() {
         window.getEl('welcome-screen').classList.add('hidden');
         window.getEl('quiz-screen').classList.remove('hidden');
@@ -362,16 +356,22 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
         }, 1000);
     };
 
+    // FIXED: Render Nested Structure Properly
     window.loadQuestion = function(index) {
         if (index < 0 || index >= window.quizData.questions.length) return;
         window.currentQuestionIndex = index;
         window.questionStatus[index] = 'current';
         var q = window.quizData.questions[index];
         window.getEl('question-number').textContent = index + 1;
-        window.getEl('question-container').innerHTML = window.decodeHtml(window.getLocalizedContent(q.content));
+        
+        // Extract language specific object
+        var langContent = window.getLocalizedContent(q.content) || {};
+        
+        window.getEl('question-container').innerHTML = window.decodeHtml(langContent.question_text || "");
         var optsCont = window.getEl('options-container');
         optsCont.innerHTML = '';
-        var opts = window.getLocalizedContent(q.options);
+        var opts = langContent.options || [];
+        
         if (Array.isArray(opts)) {
             opts.forEach(function(opt, i) {
                 var isSelected = window.userAnswers[index] === i;
@@ -398,6 +398,7 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
     };
     window.closeConfirmSubmission = function() { window.getEl('confirm-submit-modal').classList.remove('active'); };
 
+    // FIXED: Submission Logic
     window.submitQuiz = function() {
         window.closeConfirmSubmission();
         clearInterval(window.timer);
@@ -412,7 +413,9 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
             if (ans === null) {
                 u++;
             } else {
-                var opts = q.options.en || q.options[Object.keys(q.options)[0]];
+                var langContent = q.content[window.currentLanguage] || q.content[Object.keys(q.content)[0]] || {};
+                var opts = langContent.options || [];
+                
                 if (opts && opts[ans] && opts[ans].is_correct) {
                     window.score += window.CORRECT_MARKS;
                     c++;
@@ -433,7 +436,6 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
         window.getEl('unanswered-count').textContent = u;
         window.getEl('marked-count-result').textContent = m;
 
-        // 🔥 NAYA CODE: TESTBOOK KA DATA FIREBASE ME SAVE KARNE KE LIYE
         try {
             let tg = window.Telegram.WebApp;
             let uid = tg.initDataUnsafe?.user?.id;
@@ -453,7 +455,7 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
         window.loadReviewQuestion(0); 
     };
 
-    // PALETTE LOGIC
+    // FIXED: Palette review setup
     window.populateReviewPalette = function() {
         var palette = window.getEl('review-palette');
         palette.innerHTML = '';
@@ -463,7 +465,8 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
             btn.textContent = idx + 1;
             
             var ua = window.userAnswers[idx]; 
-            var opts = q.options.en || q.options[Object.keys(q.options)[0]]; 
+            var langContent = q.content[window.currentLanguage] || q.content[Object.keys(q.content)[0]] || {};
+            var opts = langContent.options || []; 
             var isCorrect = ua !== null && opts && opts[ua] && opts[ua].is_correct;
             
             var cls = 'pal-btn notranslate ';
@@ -479,22 +482,25 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
             palette.appendChild(btn);
         });
         
-        // Auto scroll palette to active button
         var activeBtn = palette.querySelector('.pal-active');
         if(activeBtn) {
             palette.scrollTo({ left: activeBtn.offsetLeft - (palette.clientWidth / 2) + 22, behavior: 'smooth' });
         }
     };
 
+    // FIXED: Review Loading
     window.loadReviewQuestion = function(index) {
         if (index < 0 || index >= window.quizData.questions.length) return;
         window.currentReviewIndex = index;
         var container = window.getEl('review-container'); 
         var q = window.quizData.questions[index]; 
-        var content = window.getLocalizedContent(q.content); 
-        var opts = window.getLocalizedContent(q.options); 
-        var sol = window.getLocalizedContent(q.solution); 
+        
+        var langContent = window.getLocalizedContent(q.content) || {}; 
+        var content = langContent.question_text || ""; 
+        var opts = langContent.options || []; 
+        var sol = langContent.solution || ""; 
         var userAns = window.userAnswers[index]; 
+        
         var correctIdx = -1; 
         if (Array.isArray(opts)) opts.forEach(function(o, i) { if(o.is_correct) correctIdx = i; }); 
         
@@ -513,8 +519,8 @@ body { background-color: var(--bg-base); color: var(--text-primary); margin: 0; 
         window.getEl('prev-review-btn').disabled = index === 0; 
         window.getEl('next-review-btn').disabled = index === window.quizData.questions.length - 1; 
         
-        window.populateReviewPalette(); // Update Palette
-        window.triggerMathJax(); // Trigger MathJax
+        window.populateReviewPalette(); 
+        window.triggerMathJax(); 
     };
     
     window.prevReviewQuestion = function() { window.loadReviewQuestion(window.currentReviewIndex - 1); }; 
@@ -529,25 +535,38 @@ def generate_html(quiz_data: dict, details: dict) -> str:
     processed_content_str = json.dumps(quiz_data, ensure_ascii=False)
     final_html = HTML_TEMPLATE.replace('/* QUIZ_DATA_PLACEHOLDER */', processed_content_str)
     
-    try:
-        dur_str = details.get('Duration', '30 minutes')
-        dur_int = int(re.search(r'\d+', dur_str).group()) * 60
-    except:
-        dur_int = 1800
+    # Priority 1: Smart extraction directly from new 'metadata' block
+    meta = quiz_data.get("metadata", {})
     
+    total_qs = meta.get("total_questions") or details.get('Questions') or str(len(quiz_data.get("questions", [])))
+    
+    raw_duration = meta.get("duration_seconds")
+    if raw_duration:
+        dur_mins = int(raw_duration) // 60
+        dur_str = f"{dur_mins} Mins"
+        dur_int = int(raw_duration)
+    else:
+        try:
+            dur_str = details.get('Duration', '30 Mins')
+            dur_int = int(re.search(r'\d+', dur_str).group()) * 60
+        except:
+            dur_str = '30 Mins'
+            dur_int = 1800
+            
+    pos_marks = meta.get("positive_marks") or float(re.search(r'([+-]?\d+\.?\d*)', details.get('Correct', '1')).group(1) or 1)
+    neg_marks = meta.get("negative_marks") or float(re.search(r'([+-]?\d+\.?\d*)', details.get('Incorrect', '0')).group(1) or 0)
+    
+    # Replace variables directly based on exact test data
     replacements = {
-        '_TEST_NAME_': details.get('Test Name', quiz_data.get('title', 'Mock Test')),
+        '_TEST_NAME_': details.get('Test Name', meta.get('title', 'Mock Test')),
         '_TEST_SERIES_': details.get('Test Series', ''),
-        '_SECTION_': details.get('Section', 'N/A'),
-        '_SUBSECTION_': details.get('Subsection', 'N/A'),
-        '_QUESTIONS_': details.get('Questions', str(len(quiz_data.get("questions", [])))),
-        '_DURATION_': details.get('Duration', '30 minutes'),
+        '_QUESTIONS_': str(total_qs),
+        '_DURATION_': dur_str,
         '_TIMER_SECONDS_': str(dur_int),
-        '_TOTAL_MARKS_': details.get('Total Marks', 'N/A'),
-        '_CORRECT_MARKS_DISPLAY_': details.get('Correct', '+1'),
-        '_INCORRECT_MARKS_DISPLAY_': details.get('Incorrect', '-0.25'),
-        '_JS_CORRECT_MARKS_VALUE_': str(float(re.search(r'([+-]?\d+\.?\d*)', details.get('Correct', '1')).group(1) or 1)),
-        '_JS_INCORRECT_MARKS_VALUE_': str(float(re.search(r'([+-]?\d+\.?\d*)', details.get('Incorrect', '0')).group(1) or 0)),
+        '_CORRECT_MARKS_DISPLAY_': f"+{pos_marks}",
+        '_INCORRECT_MARKS_DISPLAY_': f"-{neg_marks}",
+        '_JS_CORRECT_MARKS_VALUE_': str(pos_marks),
+        '_JS_INCORRECT_MARKS_VALUE_': str(neg_marks),
     }
     
     for k, v in replacements.items(): 
