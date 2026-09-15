@@ -25,7 +25,7 @@ except Exception as _patch_err:
     logger.warning(f"  Could not patch pyrogram ID bounds: {_patch_err}")
 
 # --- CONFIGURATION & DEFAULTS ---
-DEFAULTS = {"TOKEN": "", "OWNER": 0, "SUPPORT": 0, "MAIN_CH": 0, "LOG_CH": 0}
+DEFAULTS = {"TOKEN": "", "OWNER": 0, "SUPPORT": 0, "MAIN_CH": 0, "LOG_CH": 0, "UPDATE_CH": 0}
 
 def _safe_int(env_name, default=0):
     raw = os.environ.get(env_name, None)
@@ -45,6 +45,8 @@ OWNER_ID = _safe_int("OWNER_ID", DEFAULTS["OWNER"])
 SUPPORT_GROUP_ID = _safe_int("SUPPORT_GROUP_ID", DEFAULTS["SUPPORT"])
 MANDATORY_CHANNEL_ID = _safe_int("MANDATORY_CHANNEL_ID", DEFAULTS["MAIN_CH"])
 LOG_CHANNEL_ID = _safe_int("LOG_CHANNEL_ID", DEFAULTS["LOG_CH"])
+BATCH_UPDATE_CHANNEL_ID = _safe_int("BATCH_UPDATE_CHANNEL_ID", DEFAULTS["UPDATE_CH"])
+BATCH_UPDATE_CHANNEL_LINK = os.environ.get("BATCH_UPDATE_CHANNEL_LINK", "https://t.me/YourUpdateChannel")
 MONGO_URL = os.environ.get("MONGO_URL", None) or None
 
 if not TELEGRAM_BOT_TOKEN:
