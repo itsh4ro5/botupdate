@@ -2174,6 +2174,80 @@ async def run_advanced_caption_changer(bot_client: Client, message: Message, cha
             pass
 
 # --- WIZARDS, MENUS & CALLBACKS ---
+async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: str, category: str, coin_cost: int = None):
+    import config
+    import os
+    update_channel = getattr(config, 'BATCH_UPDATE_CHANNEL_ID', 0)
+    if not update_channel:
+        return
+
+    bot_username = getattr(config, 'BOT_USERNAME', None)
+    if not bot_username:
+        try:
+            bot_username = (await client.get_me()).username
+        except Exception:
+            bot_username = "bot"
+
+    deep_link = f"https://t.me/{bot_username}?start=batch_{cid}"
+    kb = [[InlineKeyboardButton("🚀 Get Access Here", url=deep_link)]]
+    
+    caption = (
+        f"🎉 **NEW BATCH ADDED!**\n\n"
+        f"📦 **Name:** `{cname}`\n"
+        f"🏷️ **Type:** `{b_type.upper()}`\n"
+        f"📂 **Category:** `{category}`\n"
+    )
+    if b_type.lower() == 'special' and coin_cost:
+        caption += f"💰 **Unlock Cost:** `{coin_cost} Coin{'s' if coin_cost != 1 else ''}`\n"
+        
+    caption += f"\n👉 *Click the button below to get direct access via our Bot!*"
+
+    photo_path = None
+    try:
+        chat_info = await client.get_chat(cid)
+        if chat_info.photo:
+            photo_path = await client.download_media(chat_info.photo.big_file_id)
+    except Exception:
+        pass
+
+    try:
+        if photo_path:
+            await client.send_photo(int(update_channel), photo=photo_path, caption=caption, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+            if os.path.exists(photo_path):
+                os.remove(photo_path)
+        else:
+            await client.send_message(int(update_channel), text=caption, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+    except Exception as e:
+        logger.error(f"Failed to send to batch update channel: {e}")
+
+async def process_updatepost(client: Client, message: Message):
+    raw_id = message.text.strip()
+    try:
+        cid = int(raw_id)
+    except ValueError:
+        return await message.reply_text("❌ Error: Batch ID numbers me honi chahiye.", parse_mode=ParseMode.MARKDOWN)
+
+    import config
+    cname = config.DB.get("ALL_CHATS", {}).get(cid)
+    if not cname:
+        return await message.reply_text("❌ Error: Ye Batch ID database me nahi mili.", parse_mode=ParseMode.MARKDOWN)
+
+    b_type = "unknown"
+    if cid in config.DB.get("FREE_CHANNELS", {}):
+        b_type = "free"
+    elif cid in config.DB.get("PAID_CHANNELS", {}):
+        b_type = "paid"
+    elif cid in config.DB.get("SPECIAL_CHANNELS", {}):
+        b_type = "special"
+
+    category = config.DB.get("BATCH_CATEGORIES", {}).get(str(cid), "Other Batches")
+    coin_cost = config.DB.get("BATCH_COINS", {}).get(str(cid)) if b_type == "special" else None
+
+    msg = await message.reply_text(f"⏳ Generating update post for `{cname}`...", parse_mode=ParseMode.MARKDOWN)
+    await send_batch_update_post(client, cid, cname, b_type, category, coin_cost)
+    await msg.edit_text("✅ **Update post successfully sent to the channel!**", parse_mode=ParseMode.MARKDOWN)
+
+
 async def wizard_callback(client: Client, q: CallbackQuery):
     uid = q.from_user.id
     if uid not in ADMIN_WIZARD:
@@ -2239,6 +2313,9 @@ async def wizard_message(client: Client, message: Message):
                 f"✅ **Added!**\n📛 Name: {cname} ({cid})\n🏷️ Type: {state['type'].upper()}\n📂 Category: {state['category']}",
                 parse_mode=ParseMode.MARKDOWN,
             )
+            
+            if state["type"] in ["free", "paid"]:
+                await send_batch_update_post(client, cid, cname, state["type"], state["category"])
 
             if state["type"] == "free":
                 b_count = 0
@@ -2286,6 +2363,8 @@ async def wizard_message(client: Client, message: Message):
                 f"✅ **Added!**\n📛 Name: {cname} ({cid})\n🏷️ Type: SPECIAL\n📂 Category: {state['category']}\n💰 Unlock Cost: **{coin_cost} Coin{'s' if coin_cost != 1 else ''}**",
                 parse_mode=ParseMode.MARKDOWN,
             )
+
+            await send_batch_update_post(client, cid, cname, "special", state["category"], coin_cost)
 
             b_count = 0
             await message.reply_text("📡 Sending Auto-Broadcast for SPECIAL batch...", parse_mode=ParseMode.MARKDOWN)
@@ -2563,6 +2642,7 @@ async def wizard_message(client: Client, message: Message):
                 "superfwd": cmd_superfwd_start,
                 "advcap": cmd_advcap_start,
                 "deluser": cmd_deluser,
+                "updatepost": process_updatepost,
             }
             if cmd_name in cmds:
                 await cmds[cmd_name](client, message)
@@ -2824,6 +2904,9 @@ async def general_callback(client: Client, q: CallbackQuery):
                     InlineKeyboardButton("🧹 Empty Batch", callback_data="input_emptybatch"),
                 ],
                 [
+                    InlineKeyboardButton("📢 Post Batch Update", callback_data="input_updatepost"),
+                ],
+                [
                     InlineKeyboardButton("🚀 Super Forwarder (All-in-One)", callback_data="input_superfwd"),
                     InlineKeyboardButton("🛡️ Clean Unverified", callback_data="input_cleanbatch")
                 ],
@@ -2938,6 +3021,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                 "advcap": "📝 **Advanced Caption Changer (Step 1/5)**\n\nUs **Channel ID** ko bhejein jiske captions edit karne hain (e.g. `-10012345678`):",
                 "cleanbatch": "🛡️ **Clean Unverified Users (Anti-Leech)**\n\nUs **Batch/Channel ID** ko bhejein jise clean karna hai (e.g. `-100123456789`).\n\n*Note: Ye un sabhi users ko nikal dega jo Mandatory Channel me nahi hain ya jinhone bot start nahi kiya hai.*",
                 "storebatch": "🗄️ **Store Batch Data**\n\nJis channel ka purana data (Videos/PDFs) Firebase me index karna hai, uska Chat ID bhejein:\nFormat: `-100123456789`",
+                "updatepost": "📢 **Post Batch Update**\n\nJis purane batch ka update post channel me bhejna hai, uska **Batch ID** bhejein (e.g. `-100123456789`):",
                 "superfwd": "🚀 **Super Forwarder (Step 1/7)**\n\nUs **Source Channel ID** ko bhejein jahan se files (content) uthani hain (e.g. `-10012345678`):",
                 "userbotphone": "  **Apna Phone Number bhejein**\nCountry code ke sath (Jaise: `+919876543210`):",
                 "userbototp": "  **OTP Bhejein**\n  *OTP spaces me bhejein!* Jaise: `1 2 3 4 5`:",
@@ -3954,6 +4038,7 @@ def build_home_menu(user_key, user):
         kb = [
             [InlineKeyboardButton("👑 My Batches (Elite Access)", callback_data="my_batches_0")],
             [InlineKeyboardButton("🌟 All Batches", callback_data="all_batches_0")],
+            [InlineKeyboardButton("📢 Batch Updates", url=getattr(config, "BATCH_UPDATE_CHANNEL_LINK", "https://t.me/YourChannel"))],
             [InlineKeyboardButton("💎 VIP Course Materials", callback_data="vip_materials")],
             [InlineKeyboardButton("🎁 Claim Monthly Bonus", callback_data="vip_monthly_bonus")],
             [InlineKeyboardButton("🚀 Refer & Earn", callback_data="menu_refer")],
@@ -3984,6 +4069,7 @@ def build_home_menu(user_key, user):
                 InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0"),
             ],
             [InlineKeyboardButton("🔍 Search Batch", callback_data="search_batch_start")],
+            [InlineKeyboardButton("📢 Batch Updates", url=getattr(config, "BATCH_UPDATE_CHANNEL_LINK", "https://t.me/YourChannel"))],
             [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")],
             [InlineKeyboardButton("🎁 Refer & Earn", callback_data="menu_refer")],
             [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")],
