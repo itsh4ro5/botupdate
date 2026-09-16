@@ -4035,7 +4035,7 @@ def build_home_menu(user_key, user):
             f"💰 **Wallet Balance:** `{pts}` Coins\n\n"
             "✨ *Your VIP dashboard is ready:*"
         )
-       kb = [
+        kb = [
             [InlineKeyboardButton("👑 My Batches (Elite Access)", callback_data="my_batches_0")],
             [InlineKeyboardButton("🌟 All Batches", callback_data="all_batches_0")],
             [InlineKeyboardButton("📢 Batch Updates", url=BATCH_UPDATE_CHANNEL_LINK)],
@@ -4061,7 +4061,6 @@ def build_home_menu(user_key, user):
             "**7️⃣ Check your stats anytime**\n"
             "🇬🇧 Tap **ℹ️ My Info** to see your ID, total refers, and coin balance.\n"
             "🇮🇳 **ℹ️ My Info** par tap karke apni ID, total refers aur coin balance dekhein.\n\n"
-
         )
         kb = [
             [
