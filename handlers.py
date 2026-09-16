@@ -4035,10 +4035,10 @@ def build_home_menu(user_key, user):
             f"💰 **Wallet Balance:** `{pts}` Coins\n\n"
             "✨ *Your VIP dashboard is ready:*"
         )
-        kb = [
+       kb = [
             [InlineKeyboardButton("👑 My Batches (Elite Access)", callback_data="my_batches_0")],
             [InlineKeyboardButton("🌟 All Batches", callback_data="all_batches_0")],
-            [InlineKeyboardButton("📢 Batch Updates", url=getattr(config, "BATCH_UPDATE_CHANNEL_LINK", "https://t.me/YourChannel"))],
+            [InlineKeyboardButton("📢 Batch Updates", url=BATCH_UPDATE_CHANNEL_LINK)],
             [InlineKeyboardButton("💎 VIP Course Materials", callback_data="vip_materials")],
             [InlineKeyboardButton("🎁 Claim Monthly Bonus", callback_data="vip_monthly_bonus")],
             [InlineKeyboardButton("🚀 Refer & Earn", callback_data="menu_refer")],
@@ -4069,7 +4069,7 @@ def build_home_menu(user_key, user):
                 InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0"),
             ],
             [InlineKeyboardButton("🔍 Search Batch", callback_data="search_batch_start")],
-            [InlineKeyboardButton("📢 Batch Updates", url=getattr(config, "BATCH_UPDATE_CHANNEL_LINK", "https://t.me/YourChannel"))],
+            [InlineKeyboardButton("📢 Batch Updates", url=BATCH_UPDATE_CHANNEL_LINK)],
             [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")],
             [InlineKeyboardButton("🎁 Refer & Earn", callback_data="menu_refer")],
             [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")],
