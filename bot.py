@@ -55,29 +55,28 @@ async def _patched_send(client, chat_id, text=None, parse_mode=None, reply_marku
 
     if reply_markup and hasattr(reply_markup, "inline_keyboard") and reply_markup.inline_keyboard:
         try:
-            flat_btns = []
+            rp_rows = []
             for row in reply_markup.inline_keyboard:
+                r_btns = []
                 for b in row:
                     t_lower = b.text.lower()
                     if any(x in t_lower for x in ["delete", "cancel", "remove", "ban", "❌", "🗑", "🛑", "🚫", "hard delete", "empty batch", "close"]):
                         style = rp.Style.DANGER
-                    elif any(x in t_lower for x in ["confirm", "yes", "save", "add", "✅", "➕", "success", "join", "free", "paid", "special", "🎁", "🚀", "i read & accept"]):
+                    elif any(x in t_lower for x in ["confirm", "yes", "save", "add", "✅", "➕", "success", "join", "free", "paid", "special", "🎁", "🚀", "i read & accept", "generate link"]):
                         style = rp.Style.SUCCESS
                     else:
                         style = rp.Style.DEFAULT
                     
-                    if b.url:
-                        flat_btns.append(rp.url_btn(b.text, b.url, style=style))
-                    elif b.callback_data:
-                        flat_btns.append(rp.btn(b.text, b.callback_data, style=style))
-                    elif b.switch_inline_query is not None:
-                        flat_btns.append(rp.switch_inline_btn(b.text, b.switch_inline_query, style=style))
+                    if getattr(b, "url", None):
+                        r_btns.append(rp.url_btn(b.text, b.url, style=style))
+                    elif getattr(b, "callback_data", None):
+                        r_btns.append(rp.btn(b.text, b.callback_data, style=style))
+                    elif getattr(b, "switch_inline_query", None) is not None:
+                        r_btns.append(rp.switch_inline_btn(b.text, b.switch_inline_query, style=style))
                     else:
-                        flat_btns.append(rp.btn(b.text, "noop", style=style))
-            
-            rp_rows = []
-            for i in range(0, len(flat_btns), 2):
-                rp_rows.append(rp.buttons(*flat_btns[i:i+2]))
+                        r_btns.append(rp.btn(b.text, "noop", style=style))
+                if r_btns:
+                    rp_rows.append(rp.buttons(*r_btns))
             
             parser = Markdown(client)
             res = await parser.parse(str(text or ""))
@@ -97,29 +96,28 @@ async def _patched_edit(client, chat_id, message_id, text=None, parse_mode=None,
 
     if reply_markup and hasattr(reply_markup, "inline_keyboard") and reply_markup.inline_keyboard:
         try:
-            flat_btns = []
+            rp_rows = []
             for row in reply_markup.inline_keyboard:
+                r_btns = []
                 for b in row:
                     t_lower = b.text.lower()
                     if any(x in t_lower for x in ["delete", "cancel", "remove", "ban", "❌", "🗑", "🛑", "🚫", "hard delete", "empty batch", "close"]):
                         style = rp.Style.DANGER
-                    elif any(x in t_lower for x in ["confirm", "yes", "save", "add", "✅", "➕", "success", "join", "free", "paid", "special", "🎁", "🚀", "i read & accept"]):
+                    elif any(x in t_lower for x in ["confirm", "yes", "save", "add", "✅", "➕", "success", "join", "free", "paid", "special", "🎁", "🚀", "i read & accept", "generate link"]):
                         style = rp.Style.SUCCESS
                     else:
                         style = rp.Style.DEFAULT
                     
-                    if b.url:
-                        flat_btns.append(rp.url_btn(b.text, b.url, style=style))
-                    elif b.callback_data:
-                        flat_btns.append(rp.btn(b.text, b.callback_data, style=style))
-                    elif b.switch_inline_query is not None:
-                        flat_btns.append(rp.switch_inline_btn(b.text, b.switch_inline_query, style=style))
+                    if getattr(b, "url", None):
+                        r_btns.append(rp.url_btn(b.text, b.url, style=style))
+                    elif getattr(b, "callback_data", None):
+                        r_btns.append(rp.btn(b.text, b.callback_data, style=style))
+                    elif getattr(b, "switch_inline_query", None) is not None:
+                        r_btns.append(rp.switch_inline_btn(b.text, b.switch_inline_query, style=style))
                     else:
-                        flat_btns.append(rp.btn(b.text, "noop", style=style))
-            
-            rp_rows = []
-            for i in range(0, len(flat_btns), 2):
-                rp_rows.append(rp.buttons(*flat_btns[i:i+2]))
+                        r_btns.append(rp.btn(b.text, "noop", style=style))
+                if r_btns:
+                    rp_rows.append(rp.buttons(*r_btns))
             
             parser = Markdown(client)
             res = await parser.parse(str(text or ""))
@@ -132,8 +130,14 @@ async def _patched_edit(client, chat_id, message_id, text=None, parse_mode=None,
             return await _old_edit(client, chat_id, message_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
     return await _old_edit(client, chat_id, message_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
 
+async def _patched_reply(self, text, parse_mode=None, reply_markup=None, **kwargs):
+    kwargs.pop("reply_to_message_id", None)
+    return await _patched_send(self._client, self.chat.id, text, parse_mode, reply_markup, reply_to_message_id=self.id, **kwargs)
+
 pyrogram.Client.send_message = _patched_send
 pyrogram.Client.edit_message_text = _patched_edit
+pyrogram.types.Message.reply_text = _patched_reply
+pyrogram.types.Message.reply = _patched_reply
 # --- END BUTTON COLOR PATCH ---
 
 print("🟢 BOOT[1/5]: Pyrogram MTProto Engine Starting...", flush=True)

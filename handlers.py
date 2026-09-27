@@ -4118,7 +4118,7 @@ async def show_user_menu_cb(client: Client, q: CallbackQuery):
 def build_owner_panel_kb():
     return rp.message(
         rp.heading("👑 SYSTEM MASTER TERMINAL"),
-        rp.italic("Select a module below:"),
+        rp.para(rp.italic("Select a module below:")),
         rp.divider(),
         rp.buttons(
             rp.btn("🔒 Security", "dash_locks", style=rp.Style.DEFAULT),
@@ -4143,7 +4143,7 @@ def build_owner_panel_kb():
 def build_admin_panel_kb():
     return rp.message(
         rp.heading("🛡 ADMINISTRATOR DASHBOARD"),
-        rp.italic("Select an action below:"),
+        rp.para(rp.italic("Select an action below:")),
         rp.divider(),
         rp.buttons(
             rp.btn("👥 Users", "adash_users", style=rp.Style.DEFAULT),
@@ -4166,7 +4166,7 @@ def build_role_selector_kb(user_id):
         
     return rp.message(
         rp.heading("🎛 Select Panel"),
-        rp.italic("Aap kis panel me jaana chahte hain?"),
+        rp.para(rp.italic("Aap kis panel me jaana chahte hain?")),
         rp.divider(),
         *owner_btn,
         rp.buttons(rp.btn("🛡 Admin Panel", "goto_admin_panel", style=rp.Style.DEFAULT)),
