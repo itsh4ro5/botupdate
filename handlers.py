@@ -9,6 +9,7 @@ import time
 import urllib.parse
 import logging
 from config import *
+import richpyro as rp
 import pyrogram
 from pyrogram import Client, filters
 from pyrogram.enums import ChatMemberStatus, ChatType, ParseMode
