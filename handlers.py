@@ -4018,17 +4018,22 @@ def build_home_menu(user_key, user):
     pending_batch = DB["USER_DATA"].get(user_key, {}).get("pending_batch")
     if pending_batch:
         bname = DB.get("ALL_CHATS", {}).get(int(pending_batch)) or DB.get("ALL_CHATS", {}).get(str(pending_batch)) or "Shared Batch"
-        txt = (
-            f"🎉 **You were invited to a Batch!**\n\n"
-            f"📦 **Batch Name:** `{bname}`\n\n"
-            f"Aapke dost ne aapko is batch me join karne ke liye invite kiya hai. "
-            f"Neeche diye gaye button par click karke details dekhein aur turant join karein!"
+        
+        return rp.message(
+            rp.heading("🎉 Invitation Received!"),
+            rp.divider(),
+            rp.para("📦 ", rp.bold("Batch Name: "), rp.code(bname)),
+            rp.blockquote(
+                rp.para("You have been invited by a friend to join this exclusive batch."),
+                rp.para("Click below to view details and join instantly.")
+            ),
+            rp.buttons(
+                rp.btn("🚀 Open Shared Batch", f"open_batch_{pending_batch}", style=rp.Style.SUCCESS)
+            ),
+            rp.buttons(
+                rp.btn("🏠 Go to Main Menu", "clear_pending_batch", style=rp.Style.DEFAULT)
+            )
         )
-        kb = [
-            [InlineKeyboardButton("🚀 Open Shared Batch", callback_data=f"open_batch_{pending_batch}")],
-            [InlineKeyboardButton("🏠 Go to Main Menu", callback_data="clear_pending_batch")]
-        ]
-        return txt, InlineKeyboardMarkup(kb)
 
     vip = DB["USER_DATA"].get(user_key, {}).get("tier") == "vip"
     first_name = (user.first_name if user and user.first_name else "there")
@@ -4036,63 +4041,75 @@ def build_home_menu(user_key, user):
     if vip:
         total_inv = DB["USER_DATA"].get(user_key, {}).get("total_invited", 0)
         pts = DB["USER_DATA"].get(user_key, {}).get("referral_count", 0)
-        txt = (
-            f"👑 **[Elite Referrer] {first_name}**\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"Welcome back! You have successfully referred `{total_inv}` students so far.\n"
-            f"💰 **Wallet Balance:** `{pts}` Coins\n\n"
-            "✨ *Your VIP dashboard is ready:*"
+        return rp.message(
+            rp.heading("👑 Elite Dashboard"),
+            rp.para("Welcome back, ", rp.bold(first_name), "!"),
+            rp.divider(),
+            rp.table(
+                rows=[
+                    [rp.table_cell("Wallet Balance", is_header=True), rp.table_cell("Total Referrals", is_header=True)],
+                    [rp.table_cell(f"💎 {pts} Coins"), rp.table_cell(f"👥 {total_inv}")]
+                ],
+                bordered=True, striped=True
+            ),
+            rp.footer(rp.italic("Your VIP dashboard is ready to explore.")),
+            rp.buttons(
+                rp.btn("👑 My Batches", "my_batches_0", style=rp.Style.SUCCESS),
+                rp.btn("🌟 All Batches", "all_batches_0", style=rp.Style.DEFAULT)
+            ),
+            rp.buttons(
+                rp.btn("💎 VIP Materials", "vip_materials", style=rp.Style.DEFAULT),
+                rp.btn("🎁 Monthly Bonus", "vip_monthly_bonus", style=rp.Style.DEFAULT)
+            ),
+            rp.buttons(
+                rp.btn("🚀 Refer & Earn", "menu_refer", style=rp.Style.SUCCESS),
+                rp.btn("🤖 Test Bot", "test_bot", style=rp.Style.DEFAULT)
+            ),
+            rp.buttons(
+                rp.url_btn("📢 Updates", BATCH_UPDATE_CHANNEL_LINK, style=rp.Style.LINK),
+                rp.url_btn("🎥 Tutorial", "https://t.me/c/2836314734/1244", style=rp.Style.LINK),
+                rp.btn("ℹ️ Profile", "my_info", style=rp.Style.DEFAULT)
+            )
         )
-        kb = [
-            [InlineKeyboardButton("👑 My Batches (Elite Access)", callback_data="my_batches_0")],
-            [InlineKeyboardButton("🌟 All Batches", callback_data="all_batches_0")],
-            [InlineKeyboardButton("📢 Batch Updates", url=BATCH_UPDATE_CHANNEL_LINK)],
-            [InlineKeyboardButton("💎 VIP Course Materials", callback_data="vip_materials")],
-            [InlineKeyboardButton("🎁 Claim Monthly Bonus", callback_data="vip_monthly_bonus")],
-            [InlineKeyboardButton("🚀 Refer & Earn", callback_data="menu_refer")],
-            [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")],
-            [InlineKeyboardButton("🎥 How to use the bot", url="https://t.me/c/2836314734/1244")],
-            [InlineKeyboardButton("💎 My Info", callback_data="my_info")],
-        ]
     else:
-        txt = (
-            "🌟 **Welcome to the Premium Hub!** 🌟\n\n"
-            "**4️⃣ Browse batches**\n"
-            "🇬🇧 📚 **My Batches** = batches you already have. 🌐 **All Batches** = List of all section courese.\n"
-            "🇮🇳 📚 **My Batches** = jo aapke paas already hain. 🌐 **All Batches** = Sare courese ka section hai.\n\n"
-            "**5️⃣ Test Series Website**\n"
-            "🇬🇧 Tap **🤖 Test Bot** Here you can practice your question, daily new Current Affairs and also notes of all exam.\n"
-            "🇮🇳 **🤖 Test Bot** par tap karke aap aapne exam ka practice kar sakte hai saath hi current affairs and notes bhi hai.\n\n"
-            "**6️⃣ Earn coins to unlock free batches**\n"
-            "🇬🇧 Tap **🎁 Refer & Earn**, share your personal link with friends. Every real join earns you a coin — coins unlock free and special batches.\n"
-            "🇮🇳 **🎁 Refer & Earn** par tap karke apna personal link dosto ko bhejein. Har real join par coin milta hai — coins se free batches aur special batches unlock hoti hain.\n\n"
-            "**7️⃣ Check your stats anytime**\n"
-            "🇬🇧 Tap **ℹ️ My Info** to see your ID, total refers, and coin balance.\n"
-            "🇮🇳 **ℹ️ My Info** par tap karke apni ID, total refers aur coin balance dekhein.\n\n"
+        return rp.message(
+            rp.heading("🌟 Premium Hub"),
+            rp.para("Welcome, ", rp.bold(first_name), "! Select an option to begin:"),
+            rp.divider(),
+            rp.bullet_list(
+                rp.list_item(rp.para("📚 ", rp.bold("My Batches"), " — Access your unlocked courses.")),
+                rp.list_item(rp.para("🌐 ", rp.bold("All Batches"), " — Browse our complete catalog.")),
+                rp.list_item(rp.para("🤖 ", rp.bold("Test Bot"), " — Practice tests & daily current affairs.")),
+                rp.list_item(rp.para("🎁 ", rp.bold("Refer & Earn"), " — Invite friends to unlock free batches!"))
+            ),
+            rp.footer(rp.italic("Unlock your true potential today.")),
+            rp.buttons(
+                rp.btn("📚 My Batches", "my_batches_0", style=rp.Style.SUCCESS),
+                rp.btn("🌐 All Batches", "all_batches_0", style=rp.Style.DEFAULT)
+            ),
+            rp.buttons(
+                rp.btn("🔍 Search Batch", "search_batch_start", style=rp.Style.DEFAULT),
+                rp.btn("🤖 Test Bot", "test_bot", style=rp.Style.DEFAULT)
+            ),
+            rp.buttons(
+                rp.btn("🎁 Refer & Earn", "menu_refer", style=rp.Style.SUCCESS),
+                rp.btn("ℹ️ Profile", "my_info", style=rp.Style.DEFAULT)
+            ),
+            rp.buttons(
+                rp.url_btn("📢 Batch Updates", BATCH_UPDATE_CHANNEL_LINK, style=rp.Style.LINK),
+                rp.url_btn("🎥 Tutorial", "https://t.me/c/2836314734/1244", style=rp.Style.LINK)
+            )
         )
-        kb = [
-            [
-                InlineKeyboardButton("📚 My Batches", callback_data="my_batches_0"),
-                InlineKeyboardButton("🌐 All Batches", callback_data="all_batches_0"),
-            ],
-            [InlineKeyboardButton("🔍 Search Batch", callback_data="search_batch_start")],
-            [InlineKeyboardButton("📢 Batch Updates", url=BATCH_UPDATE_CHANNEL_LINK)],
-            [InlineKeyboardButton("🤖 Test Bot", callback_data="test_bot")],
-            [InlineKeyboardButton("🎁 Refer & Earn", callback_data="menu_refer")],
-            [InlineKeyboardButton("ℹ️ My Info", callback_data="my_info")],
-            [InlineKeyboardButton("🎥 How to use the bot", url="https://t.me/c/2836314734/1244")],
-        ]
-    return txt, InlineKeyboardMarkup(kb)
 
 async def show_user_menu(client: Client, message: Message):
     user_key = message.from_user.id if message.from_user.id in DB["USER_DATA"] else str(message.from_user.id)
-    txt, kb = build_home_menu(user_key, message.from_user)
-    await message.reply_text(txt, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+    msg = build_home_menu(user_key, message.from_user)
+    await rp.send(client, message.chat.id, msg)
 
 async def show_user_menu_cb(client: Client, q: CallbackQuery):
     user_key = q.from_user.id if q.from_user.id in DB["USER_DATA"] else str(q.from_user.id)
-    txt, kb = build_home_menu(user_key, q.from_user)
-    await q.edit_message_text(txt, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+    msg = build_home_menu(user_key, q.from_user)
+    await rp.edit(client, q.message.chat.id, q.message.id, msg)
 
 # =====================================================================
 # ROLE SWITCHER PANEL (Owner -> Owner/Admin/User, Admin -> Admin/User)
@@ -4265,8 +4282,8 @@ async def start(client: Client, message: Message):
                 await save_data_async()
                 await process_successful_referral(client, user.id, referrer_id)
 
-            txt, kb = build_home_menu(user_key, user)
-            await loading_msg.edit_text(txt, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+            msg = build_home_menu(user_key, user)
+            await rp.edit(client, loading_msg.chat.id, loading_msg.id, msg)
     else:
         if not DB.get("NEW_USERS_ALLOWED", True):
             return await loading_msg.edit_text("🚫 **Entry Closed!**", parse_mode=ParseMode.MARKDOWN)
