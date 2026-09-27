@@ -49,7 +49,10 @@ _old_send = pyrogram.Client.send_message
 _old_edit = pyrogram.Client.edit_message_text
 _old_reply = pyrogram.types.Message.reply_text
 
-async def _patched_send(client, chat_id, text, parse_mode=None, reply_markup=None, **kwargs):
+async def _patched_send(client, chat_id, text=None, parse_mode=None, reply_markup=None, **kwargs):
+    if "rich_message" in kwargs:
+        return await _old_send(client, chat_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
+
     if reply_markup and hasattr(reply_markup, "inline_keyboard") and reply_markup.inline_keyboard:
         try:
             rp_rows = []
@@ -73,7 +76,7 @@ async def _patched_send(client, chat_id, text, parse_mode=None, reply_markup=Non
                 rp_rows.append(rp.buttons(*rp_row))
             
             parser = Markdown(client)
-            res = await parser.parse(str(text))
+            res = await parser.parse(str(text or ""))
             rich_texts = _entities_to_rich(res['message'], res['entities'])
             msg = rp.message(rp.para(*rich_texts), *rp_rows)
             
@@ -84,7 +87,10 @@ async def _patched_send(client, chat_id, text, parse_mode=None, reply_markup=Non
             return await _old_send(client, chat_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
     return await _old_send(client, chat_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
 
-async def _patched_edit(client, chat_id, message_id, text, parse_mode=None, reply_markup=None, **kwargs):
+async def _patched_edit(client, chat_id, message_id, text=None, parse_mode=None, reply_markup=None, **kwargs):
+    if "rich_message" in kwargs:
+        return await _old_edit(client, chat_id, message_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
+
     if reply_markup and hasattr(reply_markup, "inline_keyboard") and reply_markup.inline_keyboard:
         try:
             rp_rows = []
@@ -108,7 +114,7 @@ async def _patched_edit(client, chat_id, message_id, text, parse_mode=None, repl
                 rp_rows.append(rp.buttons(*rp_row))
             
             parser = Markdown(client)
-            res = await parser.parse(str(text))
+            res = await parser.parse(str(text or ""))
             rich_texts = _entities_to_rich(res['message'], res['entities'])
             msg = rp.message(rp.para(*rich_texts), *rp_rows)
             
