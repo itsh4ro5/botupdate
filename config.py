@@ -142,20 +142,20 @@ def load_data():
                     val = _get_val(loaded, k)
                     if val is not None: DB[k] = val
                 
-                # --- UPDATE: LOADING SPECIAL_CHANNELS ALONG WITH OTHERS ---
                 for k in ["CUSTOM_WELCOMES", "FREE_CHANNELS", "PAID_CHANNELS", "SPECIAL_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
                     val = _get_val(loaded, k)
                     if val is not None: 
                         if k == "USER_TOPICS":
                             sanitized = {}
                             for i, v in val.items():
+                                i_key = int(i) if str(i).lstrip('-').isdigit() else i
                                 if isinstance(v, dict):
-                                    sanitized[int(i)] = v.get("topic_id") or v.get("message_thread_id") or 0
+                                    sanitized[i_key] = v.get("topic_id") or v.get("message_thread_id") or 0
                                 else:
-                                    sanitized[int(i)] = v
+                                    sanitized[i_key] = v
                             DB[k] = sanitized
                         else:
-                            DB[k] = {int(i): v for i, v in val.items()}
+                            DB[k] = {int(i) if str(i).lstrip('-').isdigit() else i: v for i, v in val.items()}
                     
                 if OWNER_ID not in DB["ADMIN_IDS"]: DB["ADMIN_IDS"].append(OWNER_ID)
                 
@@ -187,20 +187,20 @@ def load_data():
                 val = _get_val(loaded, k)
                 if val is not None: DB[k] = val
             
-            # --- UPDATE: LOADING SPECIAL_CHANNELS ALONG WITH OTHERS ---
             for k in ["CUSTOM_WELCOMES", "FREE_CHANNELS", "PAID_CHANNELS", "SPECIAL_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
                 val = _get_val(loaded, k)
                 if val is not None: 
                     if k == "USER_TOPICS":
                         sanitized = {}
                         for i, v in val.items():
+                            i_key = int(i) if str(i).lstrip('-').isdigit() else i
                             if isinstance(v, dict):
-                                sanitized[int(i)] = v.get("topic_id") or v.get("message_thread_id") or 0
+                                sanitized[i_key] = v.get("topic_id") or v.get("message_thread_id") or 0
                             else:
-                                sanitized[int(i)] = v
+                                sanitized[i_key] = v
                         DB[k] = sanitized
                     else:
-                        DB[k] = {int(i): v for i, v in val.items()}
+                        DB[k] = {int(i) if str(i).lstrip('-').isdigit() else i: v for i, v in val.items()}
                 
             if OWNER_ID not in DB["ADMIN_IDS"]: DB["ADMIN_IDS"].append(OWNER_ID)
             
@@ -475,9 +475,34 @@ async def get_or_create_topic(user, client, is_retry=False):
                     
         DB.setdefault("USER_TOPICS", {})[user.id] = topic_id
         await save_data_async()
-                
-        group_id_str = str(SUPPORT_GROUP_ID).replace("-100", "")
         
+        # --- NEW TICKET PINNED MESSAGE ---
+        try:
+            user_key = str(user.id) if str(user.id) in DB["USER_DATA"] else (user.id if user.id in DB["USER_DATA"] else str(user.id))
+            user_data = DB.get("USER_DATA", {}).get(user_key, {})
+            referrer_id = user_data.get("referred_by") or user_data.get("pending_referral")
+            
+            referrer_text = ""
+            if referrer_id:
+                try:
+                    referrer_user = await client.get_users(int(referrer_id))
+                    ref_name = referrer_user.first_name or "Referrer"
+                    referrer_text = f"\n🔗 **Referrer:** [{ref_name}](tg://user?id={referrer_id})"
+                except:
+                    referrer_text = f"\n🔗 **Referrer:** `{referrer_id}`"
+
+            pin_text = f"🚨 **NEW USER TICKET**\n👤 [{user.first_name or 'User'}](tg://user?id={user.id})\n🆔 `{user.id}`{referrer_text}"
+            
+            sent_msg = await client.send_message(
+                chat_id=int(SUPPORT_GROUP_ID),
+                text=pin_text,
+                message_thread_id=topic_id
+            )
+            await sent_msg.pin()
+        except Exception as e:
+            logger.error(f"Failed to pin ticket message: {e}")
+            
+        group_id_str = str(SUPPORT_GROUP_ID).replace("-100", "")
         # Name ko clickable link banaya (tg://user format use karke)
         safe_name = user.first_name or "User"
         
