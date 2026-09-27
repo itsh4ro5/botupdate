@@ -3980,28 +3980,36 @@ async def general_callback(client: Client, q: CallbackQuery):
 
 # --- START, MENUS & CORE EVENTS ---
 async def show_tnc_menu(client: Client, message: Message):
-    kb = [[InlineKeyboardButton("✅ I Read & Accept", callback_data="accept_tnc")]]
-    txt = (
-        "  **STRICT WARNING & TERMS OF SERVICE**  \n\n"
-        "  **ENGLISH:**\n"
-        "If you leave the Main Channel or block this bot, you will be **INSTANTLY REMOVED** from ALL joined groups and channels.\n\n"
-        "  **HINDI:**\n"
-        "Agar aapne Main Channel ko chhoda (leave kiya) ya is bot ko block kiya, toh aapko sabhi groups aur channels se **TURANT NIKAL** diya jayega.\n\n"
-        "  *Click 'I Read & Accept' only if you agree to these terms.*"
+    import richpyro as rp
+    tnc_msg = rp.message(
+        rp.para("⚠️ ", rp.bold("STRICT WARNING & TERMS OF SERVICE")),
+        rp.divider(),
+        rp.para("🇬🇧 ", rp.bold("ENGLISH:")),
+        rp.para("If you leave the Main Channel or block this bot, you will be ", rp.bold("INSTANTLY REMOVED"), " from ALL joined groups and channels."),
+        rp.divider(),
+        rp.para("🇮🇳 ", rp.bold("HINDI:")),
+        rp.para("Agar aapne Main Channel ko chhoda (leave kiya) ya is bot ko block kiya, toh aapko sabhi groups aur channels se ", rp.bold("TURANT NIKAL"), " diya jayega."),
+        rp.divider(),
+        rp.para("✅ ", rp.italic("Click 'I Read & Accept' only if you agree to these terms.")),
+        rp.buttons(rp.btn("✅ I Read & Accept", "accept_tnc", style=rp.Style.SUCCESS))
     )
-    await message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+    await rp.send(client, message.chat.id, tnc_msg)
 
 async def show_tnc_menu_cb(client: Client, q: CallbackQuery):
-    kb = [[InlineKeyboardButton("✅ I Read & Accept", callback_data="accept_tnc")]]
-    txt = (
-        "  **STRICT WARNING & TERMS OF SERVICE**  \n\n"
-        "  **ENGLISH:**\n"
-        "If you leave the Main Channel or block this bot, you will be **INSTANTLY REMOVED** from ALL joined groups and channels.\n\n"
-        "  **HINDI:**\n"
-        "Agar aapne Main Channel ko chhoda (leave kiya) ya is bot ko block kiya, toh aapko sabhi groups aur channels se **TURANT NIKAL** diya jayega.\n\n"
-        "  *Click 'I Read & Accept' only if you agree to these terms.*"
+    import richpyro as rp
+    tnc_msg = rp.message(
+        rp.para("⚠️ ", rp.bold("STRICT WARNING & TERMS OF SERVICE")),
+        rp.divider(),
+        rp.para("🇬🇧 ", rp.bold("ENGLISH:")),
+        rp.para("If you leave the Main Channel or block this bot, you will be ", rp.bold("INSTANTLY REMOVED"), " from ALL joined groups and channels."),
+        rp.divider(),
+        rp.para("🇮🇳 ", rp.bold("HINDI:")),
+        rp.para("Agar aapne Main Channel ko chhoda (leave kiya) ya is bot ko block kiya, toh aapko sabhi groups aur channels se ", rp.bold("TURANT NIKAL"), " diya jayega."),
+        rp.divider(),
+        rp.para("✅ ", rp.italic("Click 'I Read & Accept' only if you agree to these terms.")),
+        rp.buttons(rp.btn("✅ I Read & Accept", "accept_tnc", style=rp.Style.SUCCESS))
     )
-    await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+    await rp.edit(client, q.message.chat.id, q.message.id, tnc_msg)
 
 def build_home_menu(user_key, user):
     """Normal users: standard half-width layout. VIPs: personalized greeting + exclusive full-width buttons."""
@@ -4223,8 +4231,13 @@ async def start(client: Client, message: Message):
 
     await get_or_create_topic(user, client)
 
+    import richpyro as rp
     # --- LOADING ANIMATION ---
-    loading_msg = await message.reply_text("⏳ **Loading, please wait...**", parse_mode=ParseMode.MARKDOWN)
+    loading_msg = await rp.send(
+        client, 
+        message.chat.id, 
+        rp.message(rp.para("⏳ ", rp.italic("Loading, please wait...")))
+    )
     await asyncio.sleep(0.7)
 
     if str(user.id) == str(OWNER_ID) or is_admin(user.id):
@@ -4233,16 +4246,19 @@ async def start(client: Client, message: Message):
         await loading_msg.edit_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
     elif await check_membership_pyro(user.id, client):
         if not DB["USER_DATA"].get(user_key, {}).get("tnc_accepted", False):
-            tnc_kb = [[InlineKeyboardButton("✅ I Read & Accept", callback_data="accept_tnc")]]
-            tnc_txt = (
-                "⚠️ **STRICT WARNING & TERMS OF SERVICE**\n\n"
-                "🇬🇧 **ENGLISH:**\n"
-                "If you leave the Main Channel or block this bot, you will be **INSTANTLY REMOVED** from ALL joined groups and channels.\n\n"
-                "🇮🇳 **HINDI:**\n"
-                "Agar aapne Main Channel ko chhoda (leave kiya) ya is bot ko block kiya, toh aapko sabhi groups aur channels se **TURANT NIKAL** diya jayega.\n\n"
-                "✅ *Click 'I Read & Accept' only if you agree to these terms.*"
+            tnc_msg = rp.message(
+                rp.para("⚠️ ", rp.bold("STRICT WARNING & TERMS OF SERVICE")),
+                rp.divider(),
+                rp.para("🇬🇧 ", rp.bold("ENGLISH:")),
+                rp.para("If you leave the Main Channel or block this bot, you will be ", rp.bold("INSTANTLY REMOVED"), " from ALL joined groups and channels."),
+                rp.divider(),
+                rp.para("🇮🇳 ", rp.bold("HINDI:")),
+                rp.para("Agar aapne Main Channel ko chhoda (leave kiya) ya is bot ko block kiya, toh aapko sabhi groups aur channels se ", rp.bold("TURANT NIKAL"), " diya jayega."),
+                rp.divider(),
+                rp.para("✅ ", rp.italic("Click 'I Read & Accept' only if you agree to these terms.")),
+                rp.buttons(rp.btn("✅ I Read & Accept", "accept_tnc", style=rp.Style.SUCCESS))
             )
-            await loading_msg.edit_text(tnc_txt, reply_markup=InlineKeyboardMarkup(tnc_kb), parse_mode=ParseMode.MARKDOWN)
+            await rp.edit(client, message.chat.id, loading_msg.id, tnc_msg)
         else:
             if "pending_referral" in DB["USER_DATA"][user_key]:
                 referrer_id = DB["USER_DATA"][user_key].pop("pending_referral")
