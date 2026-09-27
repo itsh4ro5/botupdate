@@ -4116,71 +4116,84 @@ async def show_user_menu_cb(client: Client, q: CallbackQuery):
 # ROLE SWITCHER PANEL (Owner -> Owner/Admin/User, Admin -> Admin/User)
 # =====================================================================
 def build_owner_panel_kb():
-    kb = [
-        [
-            InlineKeyboardButton("🔒 Security", callback_data="dash_locks"),
-            InlineKeyboardButton("💾 Database", callback_data="dash_db"),
-        ],
-        [
-            InlineKeyboardButton("📦 Batches", callback_data="dash_batches"),
-            InlineKeyboardButton("🧑\u200d💼 Staff", callback_data="dash_staff"),
-        ],
-        [
-            InlineKeyboardButton("📢 Comms", callback_data="dash_comms"),
-            InlineKeyboardButton("📊 Analytics", callback_data="dash_stats"),
-        ],
-        [InlineKeyboardButton("🤖 Userbot Login & Stats", callback_data="userbot_details")],
-        [InlineKeyboardButton("🔄 Switch Panel", callback_data="role_selector")],
-    ]
-    text = "👑 **SYSTEM MASTER TERMINAL**\n\nSelect a module below:"
-    return text, InlineKeyboardMarkup(kb)
+    return rp.message(
+        rp.heading("👑 SYSTEM MASTER TERMINAL"),
+        rp.italic("Select a module below:"),
+        rp.divider(),
+        rp.buttons(
+            rp.btn("🔒 Security", "dash_locks", style=rp.Style.DEFAULT),
+            rp.btn("💾 Database", "dash_db", style=rp.Style.DEFAULT),
+        ),
+        rp.buttons(
+            rp.btn("📦 Batches", "dash_batches", style=rp.Style.DEFAULT),
+            rp.btn("🧑‍💼 Staff", "dash_staff", style=rp.Style.DEFAULT),
+        ),
+        rp.buttons(
+            rp.btn("📢 Comms", "dash_comms", style=rp.Style.DEFAULT),
+            rp.btn("📊 Analytics", "dash_stats", style=rp.Style.DEFAULT),
+        ),
+        rp.buttons(
+            rp.btn("🤖 Userbot Login & Stats", "userbot_details", style=rp.Style.DEFAULT)
+        ),
+        rp.buttons(
+            rp.btn("🔄 Switch Panel", "role_selector", style=rp.Style.SUCCESS)
+        )
+    )
 
 def build_admin_panel_kb():
-    kb = [
-        [
-            InlineKeyboardButton("👥 Users", callback_data="adash_users"),
-            InlineKeyboardButton("✅ Approvals", callback_data="adash_approvals"),
-        ],
-        [
-            InlineKeyboardButton("📦 Batches", callback_data="adash_batches"),
-            InlineKeyboardButton("📢 Comms", callback_data="adash_comms"),
-        ],
-        [InlineKeyboardButton("🔄 Switch Panel", callback_data="role_selector")],
-    ]
-    text = "🛡 **ADMINISTRATOR DASHBOARD**\n\nSelect an action below:"
-    return text, InlineKeyboardMarkup(kb)
+    return rp.message(
+        rp.heading("🛡 ADMINISTRATOR DASHBOARD"),
+        rp.italic("Select an action below:"),
+        rp.divider(),
+        rp.buttons(
+            rp.btn("👥 Users", "adash_users", style=rp.Style.DEFAULT),
+            rp.btn("✅ Approvals", "adash_approvals", style=rp.Style.DEFAULT),
+        ),
+        rp.buttons(
+            rp.btn("📦 Batches", "adash_batches", style=rp.Style.DEFAULT),
+            rp.btn("📢 Comms", "adash_comms", style=rp.Style.DEFAULT),
+        ),
+        rp.buttons(
+            rp.btn("🔄 Switch Panel", "role_selector", style=rp.Style.SUCCESS)
+        )
+    )
 
 def build_role_selector_kb(user_id):
     is_owner = str(user_id) == str(OWNER_ID)
-    kb = []
+    owner_btn = []
     if is_owner:
-        kb.append([InlineKeyboardButton("👑 Owner Panel", callback_data="goto_owner_panel")])
-    kb.append([InlineKeyboardButton("🛡 Admin Panel", callback_data="goto_admin_panel")])
-    kb.append([InlineKeyboardButton("👤 User Panel", callback_data="goto_user_panel")])
-    text = "🎛 **Select Panel**\n\nAap kis panel me jaana chahte hain?"
-    return text, InlineKeyboardMarkup(kb)
+        owner_btn = [rp.buttons(rp.btn("👑 Owner Panel", "goto_owner_panel", style=rp.Style.DEFAULT))]
+        
+    return rp.message(
+        rp.heading("🎛 Select Panel"),
+        rp.italic("Aap kis panel me jaana chahte hain?"),
+        rp.divider(),
+        *owner_btn,
+        rp.buttons(rp.btn("🛡 Admin Panel", "goto_admin_panel", style=rp.Style.DEFAULT)),
+        rp.buttons(rp.btn("👤 User Panel", "goto_user_panel", style=rp.Style.DEFAULT))
+    )
 
 async def show_role_selector(client: Client, message: Message, user):
-    text, kb = build_role_selector_kb(user.id)
-    await message.reply_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+    msg = build_role_selector_kb(user.id)
+    await client.send_rich_message(message.chat.id, rich_message=msg)
 
 async def show_role_selector_cb(client: Client, q: CallbackQuery):
-    text, kb = build_role_selector_kb(q.from_user.id)
-    await q.edit_message_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+    msg = build_role_selector_kb(q.from_user.id)
+    await rp.edit(client, q.message.chat.id, q.message.id, msg)
 
 async def goto_owner_panel_cb(client: Client, q: CallbackQuery):
     if str(q.from_user.id) != str(OWNER_ID):
         return await q.answer("  Access Denied! Owner Only.", show_alert=True)
     await q.answer()
-    text, kb = build_owner_panel_kb()
-    await q.edit_message_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+    msg = build_owner_panel_kb()
+    await rp.edit(client, q.message.chat.id, q.message.id, msg)
 
 async def goto_admin_panel_cb(client: Client, q: CallbackQuery):
     if not is_admin(q.from_user.id):
         return await q.answer("  Access Denied! Admins Only.", show_alert=True)
     await q.answer()
-    text, kb = build_admin_panel_kb()
-    await q.edit_message_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+    msg = build_admin_panel_kb()
+    await rp.edit(client, q.message.chat.id, q.message.id, msg)
 
 async def goto_user_panel_cb(client: Client, q: CallbackQuery):
     await q.answer()
