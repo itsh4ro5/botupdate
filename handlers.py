@@ -4493,6 +4493,20 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
             except TypeError:
                 target_reply_id = reply_id if reply_id else topic_id
                 sent = await message.copy(int(SUPPORT_GROUP_ID), reply_to_message_id=target_reply_id)
+            except Exception as e:
+                err_str = str(e).lower()
+                if "reply" in err_str or "message_id_invalid" in err_str:
+                    # Target reply message was deleted, try without reply_id
+                    try:
+                        sent = await message.copy(
+                            int(SUPPORT_GROUP_ID),
+                            message_thread_id=topic_id,
+                        )
+                    except TypeError:
+                        sent = await message.copy(int(SUPPORT_GROUP_ID), reply_to_message_id=topic_id)
+                else:
+                    raise e
+                    
             MESSAGE_MAP[(chat.id, message.id)] = (int(SUPPORT_GROUP_ID), sent.id)
             MESSAGE_MAP[(int(SUPPORT_GROUP_ID), sent.id)] = (chat.id, message.id)
 
@@ -4520,7 +4534,7 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
                     except Exception:
                         pass
                 
-            elif ("reply" in err_str or "deleted" in err_str or "topic" in err_str) and not is_retry:
+            elif ("thread" in err_str or "topic" in err_str or "forum" in err_str) and not is_retry:
                 if user.id in DB.get("USER_TOPICS", {}):
                     del DB["USER_TOPICS"][user.id]
                     await save_data_async()
