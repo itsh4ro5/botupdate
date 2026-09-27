@@ -5,6 +5,30 @@ import traceback
 import importlib
 from pyrogram import StopPropagation
 
+# --- START BUTTON COLOR PATCH ---
+import pyrogram.types
+from pyrogram.enums import ButtonStyle
+
+_original_btn_init = pyrogram.types.InlineKeyboardButton.__init__
+
+def _patched_btn_init(self, *args, **kwargs):
+    if 'style' not in kwargs and len(args) < 3:
+        text = kwargs.get('text', args[0] if len(args) > 0 else "")
+        text_lower = text.lower()
+        
+        # Smart coloring logic based on button text/emoji
+        if any(x in text_lower for x in ["delete", "cancel", "remove", "ban", "❌", "🗑", "🛑", "🚫", "hard delete", "empty batch"]):
+            kwargs['style'] = ButtonStyle.DANGER
+        elif any(x in text_lower for x in ["confirm", "yes", "save", "add", "✅", "➕", "success", "join", "free", "paid", "special", "🎁", "🚀"]):
+            kwargs['style'] = ButtonStyle.SUCCESS
+        else:
+            kwargs['style'] = ButtonStyle.PRIMARY
+            
+    _original_btn_init(self, *args, **kwargs)
+
+pyrogram.types.InlineKeyboardButton.__init__ = _patched_btn_init
+# --- END BUTTON COLOR PATCH ---
+
 print("🟢 BOOT[1/5]: Pyrogram MTProto Engine Starting...", flush=True)
 
 def _safe_port(default=7860):

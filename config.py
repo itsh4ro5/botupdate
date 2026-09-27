@@ -1,4 +1,10 @@
 import os, json, asyncio, logging, time
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 from pyrogram.enums import ChatMemberStatus, ParseMode
 from pyrogram.errors import RPCError, PeerIdInvalid, ChannelInvalid, ChannelPrivate
 
@@ -121,15 +127,25 @@ def load_data():
             data = mongo_collection.find_one({"_id": "main_settings"})
             if data and "data" in data:
                 loaded = data["data"]
-                if "ADMIN_IDS" in loaded: DB["ADMIN_IDS"] = [int(x) for x in loaded["ADMIN_IDS"] if str(x).isdigit()]
-                if "BLOCKED_USERS" in loaded: DB["BLOCKED_USERS"] = loaded["BLOCKED_USERS"]
+                def _get_val(d, k):
+                    if k in d: return d[k]
+                    if k.lower() in d: return d[k.lower()]
+                    return None
+                    
+                val_admin = _get_val(loaded, "ADMIN_IDS")
+                if val_admin is not None: DB["ADMIN_IDS"] = [int(x) for x in val_admin if str(x).isdigit()]
+                
+                val_blocked = _get_val(loaded, "BLOCKED_USERS")
+                if val_blocked is not None: DB["BLOCKED_USERS"] = val_blocked
                 
                 for k in keys_to_load:
-                    if k in loaded: DB[k] = loaded[k]
+                    val = _get_val(loaded, k)
+                    if val is not None: DB[k] = val
                 
                 # --- UPDATE: LOADING SPECIAL_CHANNELS ALONG WITH OTHERS ---
                 for k in ["CUSTOM_WELCOMES", "FREE_CHANNELS", "PAID_CHANNELS", "SPECIAL_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
-                    if k in loaded: DB[k] = {int(i): v for i, v in loaded[k].items()}
+                    val = _get_val(loaded, k)
+                    if val is not None: DB[k] = {int(i): v for i, v in val.items()}
                     
                 if OWNER_ID not in DB["ADMIN_IDS"]: DB["ADMIN_IDS"].append(OWNER_ID)
                 
@@ -146,15 +162,25 @@ def load_data():
     try:
         with open(DATA_FILE, "r") as f:
             loaded = json.load(f)
-            if "ADMIN_IDS" in loaded: DB["ADMIN_IDS"] = [int(x) for x in loaded["ADMIN_IDS"] if str(x).isdigit()]
-            if "BLOCKED_USERS" in loaded: DB["BLOCKED_USERS"] = loaded["BLOCKED_USERS"]
+            def _get_val(d, k):
+                if k in d: return d[k]
+                if k.lower() in d: return d[k.lower()]
+                return None
+                
+            val_admin = _get_val(loaded, "ADMIN_IDS")
+            if val_admin is not None: DB["ADMIN_IDS"] = [int(x) for x in val_admin if str(x).isdigit()]
+            
+            val_blocked = _get_val(loaded, "BLOCKED_USERS")
+            if val_blocked is not None: DB["BLOCKED_USERS"] = val_blocked
             
             for k in keys_to_load:
-                if k in loaded: DB[k] = loaded[k]
+                val = _get_val(loaded, k)
+                if val is not None: DB[k] = val
             
             # --- UPDATE: LOADING SPECIAL_CHANNELS ALONG WITH OTHERS ---
             for k in ["CUSTOM_WELCOMES", "FREE_CHANNELS", "PAID_CHANNELS", "SPECIAL_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
-                if k in loaded: DB[k] = {int(i): v for i, v in loaded[k].items()}
+                val = _get_val(loaded, k)
+                if val is not None: DB[k] = {int(i): v for i, v in val.items()}
                 
             if OWNER_ID not in DB["ADMIN_IDS"]: DB["ADMIN_IDS"].append(OWNER_ID)
             
