@@ -55,25 +55,29 @@ async def _patched_send(client, chat_id, text=None, parse_mode=None, reply_marku
 
     if reply_markup and hasattr(reply_markup, "inline_keyboard") and reply_markup.inline_keyboard:
         try:
-            rp_rows = []
+            flat_btns = []
             for row in reply_markup.inline_keyboard:
-                rp_row = []
                 for b in row:
                     t_lower = b.text.lower()
                     if any(x in t_lower for x in ["delete", "cancel", "remove", "ban", "❌", "🗑", "🛑", "🚫", "hard delete", "empty batch", "close"]):
                         style = rp.Style.DANGER
+                    elif any(x in t_lower for x in ["confirm", "yes", "save", "add", "✅", "➕", "success", "join", "free", "paid", "special", "🎁", "🚀", "i read & accept"]):
+                        style = rp.Style.SUCCESS
                     else:
-                        style = rp.Style.SUCCESS # Green everywhere else, no blue
+                        style = rp.Style.DEFAULT
                     
                     if b.url:
-                        rp_row.append(rp.url_btn(b.text, b.url, style=style))
+                        flat_btns.append(rp.url_btn(b.text, b.url, style=style))
                     elif b.callback_data:
-                        rp_row.append(rp.btn(b.text, b.callback_data, style=style))
+                        flat_btns.append(rp.btn(b.text, b.callback_data, style=style))
                     elif b.switch_inline_query is not None:
-                        rp_row.append(rp.switch_inline_btn(b.text, b.switch_inline_query, style=style))
+                        flat_btns.append(rp.switch_inline_btn(b.text, b.switch_inline_query, style=style))
                     else:
-                        rp_row.append(rp.btn(b.text, "noop", style=style))
-                rp_rows.append(rp.buttons(*rp_row))
+                        flat_btns.append(rp.btn(b.text, "noop", style=style))
+            
+            rp_rows = []
+            for i in range(0, len(flat_btns), 2):
+                rp_rows.append(rp.buttons(*flat_btns[i:i+2]))
             
             parser = Markdown(client)
             res = await parser.parse(str(text or ""))
@@ -93,25 +97,29 @@ async def _patched_edit(client, chat_id, message_id, text=None, parse_mode=None,
 
     if reply_markup and hasattr(reply_markup, "inline_keyboard") and reply_markup.inline_keyboard:
         try:
-            rp_rows = []
+            flat_btns = []
             for row in reply_markup.inline_keyboard:
-                rp_row = []
                 for b in row:
                     t_lower = b.text.lower()
                     if any(x in t_lower for x in ["delete", "cancel", "remove", "ban", "❌", "🗑", "🛑", "🚫", "hard delete", "empty batch", "close"]):
                         style = rp.Style.DANGER
-                    else:
+                    elif any(x in t_lower for x in ["confirm", "yes", "save", "add", "✅", "➕", "success", "join", "free", "paid", "special", "🎁", "🚀", "i read & accept"]):
                         style = rp.Style.SUCCESS
+                    else:
+                        style = rp.Style.DEFAULT
                     
                     if b.url:
-                        rp_row.append(rp.url_btn(b.text, b.url, style=style))
+                        flat_btns.append(rp.url_btn(b.text, b.url, style=style))
                     elif b.callback_data:
-                        rp_row.append(rp.btn(b.text, b.callback_data, style=style))
+                        flat_btns.append(rp.btn(b.text, b.callback_data, style=style))
                     elif b.switch_inline_query is not None:
-                        rp_row.append(rp.switch_inline_btn(b.text, b.switch_inline_query, style=style))
+                        flat_btns.append(rp.switch_inline_btn(b.text, b.switch_inline_query, style=style))
                     else:
-                        rp_row.append(rp.btn(b.text, "noop", style=style))
-                rp_rows.append(rp.buttons(*rp_row))
+                        flat_btns.append(rp.btn(b.text, "noop", style=style))
+            
+            rp_rows = []
+            for i in range(0, len(flat_btns), 2):
+                rp_rows.append(rp.buttons(*flat_btns[i:i+2]))
             
             parser = Markdown(client)
             res = await parser.parse(str(text or ""))

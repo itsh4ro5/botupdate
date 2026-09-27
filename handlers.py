@@ -4273,8 +4273,8 @@ async def start(client: Client, message: Message):
 
     if str(user.id) == str(OWNER_ID) or is_admin(user.id):
         # Owner ko 3 panel (Owner/Admin/User) aur Admin ko 2 panel (Admin/User) dikhega
-        text, kb = build_role_selector_kb(user.id)
-        await loading_msg.edit_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+        msg = build_role_selector_kb(user.id)
+        await rp.edit(client, loading_msg.chat.id, loading_msg.id, msg)
     elif await check_membership_pyro(user.id, client):
         if not DB["USER_DATA"].get(user_key, {}).get("tnc_accepted", False):
             tnc_msg = rp.message(
