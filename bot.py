@@ -5,29 +5,73 @@ import traceback
 import importlib
 from pyrogram import StopPropagation
 
-# --- START BUTTON COLOR PATCH ---
-import pyrogram.types
-from pyrogram.enums import ButtonStyle
+# --- START RICHPYRO AUTO-UPGRADE PATCH ---
+import pyrogram.client
+from pyrogram.types import InlineKeyboardMarkup
+from pyrogram.enums import ParseMode
+import richpyro as rp
 
-_original_btn_init = pyrogram.types.InlineKeyboardButton.__init__
+_orig_send_message = pyrogram.client.Client.send_message
+_orig_edit_message_text = pyrogram.client.Client.edit_message_text
 
-def _patched_btn_init(self, *args, **kwargs):
-    if 'style' not in kwargs and len(args) < 3:
-        text = kwargs.get('text', args[0] if len(args) > 0 else "")
-        text_lower = text.lower()
-        
-        # Smart coloring logic based on button text/emoji
-        if any(x in text_lower for x in ["delete", "cancel", "remove", "ban", "❌", "🗑", "🛑", "🚫", "hard delete", "empty batch"]):
-            kwargs['style'] = ButtonStyle.DANGER
-        elif any(x in text_lower for x in ["confirm", "yes", "save", "add", "✅", "➕", "success", "join", "free", "paid", "special", "🎁", "🚀"]):
-            kwargs['style'] = ButtonStyle.SUCCESS
+def _convert_markup(reply_markup):
+    if not isinstance(reply_markup, InlineKeyboardMarkup) or not reply_markup.inline_keyboard:
+        return None
+    rows = []
+    for row in reply_markup.inline_keyboard:
+        rp_btns = []
+        for btn in row:
+            text_lower = btn.text.lower()
+            if any(x in text_lower for x in ["delete", "cancel", "remove", "ban", "❌", "🗑", "🛑", "🚫", "hard delete", "empty batch"]):
+                style = rp.Style.DANGER
+            elif any(x in text_lower for x in ["confirm", "yes", "save", "add", "✅", "➕", "success", "join", "free", "paid", "special", "🎁", "🚀", "i read & accept"]):
+                style = rp.Style.SUCCESS
+            else:
+                style = rp.Style.PRIMARY
+
+            if getattr(btn, 'callback_data', None):
+                rp_btns.append(rp.btn(btn.text, btn.callback_data, style=style))
+            elif getattr(btn, 'url', None):
+                rp_btns.append(rp.url_btn(btn.text, btn.url, style=style))
+            elif getattr(btn, 'switch_inline_query', None) is not None:
+                rp_btns.append(rp.switch_inline_btn(btn.text, btn.switch_inline_query, style=style))
+            else:
+                rp_btns.append(rp.btn(btn.text, "no_op", style=style))
+        rows.append(rp.buttons(*rp_btns))
+    return rows
+
+async def _patched_send_message(self, chat_id, text, **kwargs):
+    markup = kwargs.get("reply_markup")
+    rows = _convert_markup(markup)
+    if rows and text:
+        pm = kwargs.get("parse_mode") or self.parse_mode
+        if pm == ParseMode.HTML:
+            msg = rp.html_message(text)
         else:
-            kwargs['style'] = ButtonStyle.PRIMARY
-            
-    _original_btn_init(self, *args, **kwargs)
+            msg = rp.markdown_message(text)
+        msg.blocks = rows
+        kwargs.pop("reply_markup", None)
+        return await self.send_rich_message(chat_id, rich_message=msg, **kwargs)
+    return await _orig_send_message(self, chat_id, text, **kwargs)
 
-pyrogram.types.InlineKeyboardButton.__init__ = _patched_btn_init
-# --- END BUTTON COLOR PATCH ---
+async def _patched_edit_message_text(self, chat_id, message_id, text, **kwargs):
+    markup = kwargs.get("reply_markup")
+    rows = _convert_markup(markup)
+    if rows and text:
+        pm = kwargs.get("parse_mode") or self.parse_mode
+        if pm == ParseMode.HTML:
+            msg = rp.html_message(text)
+        else:
+            msg = rp.markdown_message(text)
+        msg.blocks = rows
+        kwargs.pop("reply_markup", None)
+        kwargs["rich_message"] = msg
+        return await _orig_edit_message_text(self, chat_id, message_id, text=None, **kwargs)
+    return await _orig_edit_message_text(self, chat_id, message_id, text=text, **kwargs)
+
+pyrogram.client.Client.send_message = _patched_send_message
+pyrogram.client.Client.edit_message_text = _patched_edit_message_text
+# --- END RICHPYRO AUTO-UPGRADE PATCH ---
 
 print("🟢 BOOT[1/5]: Pyrogram MTProto Engine Starting...", flush=True)
 
