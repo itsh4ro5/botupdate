@@ -8,25 +8,118 @@ from pyrogram import StopPropagation
 # --- START BUTTON COLOR PATCH ---
 import pyrogram.types
 from pyrogram.enums import ButtonStyle
+import richpyro as rp
+from pyrogram.parser.markdown import Markdown
+from pyrogram.raw.types import (
+    MessageEntityBold, MessageEntityItalic, MessageEntityTextUrl, 
+    MessageEntityCode, MessageEntityPre, MessageEntitySpoiler, MessageEntityStrike
+)
 
-_original_btn_init = pyrogram.types.InlineKeyboardButton.__init__
-
-def _patched_btn_init(self, *args, **kwargs):
-    if 'style' not in kwargs and len(args) < 3:
-        text = kwargs.get('text', args[0] if len(args) > 0 else "")
-        text_lower = text.lower()
-        
-        # Smart coloring logic based on button text/emoji
-        if any(x in text_lower for x in ["delete", "cancel", "remove", "ban", "❌", "🗑", "🛑", "🚫", "hard delete", "empty batch"]):
-            kwargs['style'] = ButtonStyle.DANGER
-        elif any(x in text_lower for x in ["confirm", "yes", "save", "add", "✅", "➕", "success", "join", "free", "paid", "special", "🎁", "🚀", "i read & accept"]):
-            kwargs['style'] = ButtonStyle.SUCCESS
+def _entities_to_rich(text, entities):
+    if not entities:
+        return [text]
+    result = []
+    last_offset = 0
+    for ent in entities:
+        if ent.offset > last_offset:
+            result.append(text[last_offset:ent.offset])
+        ent_text = text[ent.offset:ent.offset+ent.length]
+        if isinstance(ent, MessageEntityBold):
+            result.append(rp.bold(ent_text))
+        elif isinstance(ent, MessageEntityItalic):
+            result.append(rp.italic(ent_text))
+        elif isinstance(ent, MessageEntityCode):
+            result.append(rp.code(ent_text))
+        elif isinstance(ent, MessageEntityPre):
+            result.append(rp.preformatted(ent_text))
+        elif isinstance(ent, MessageEntityTextUrl):
+            result.append(rp.link(ent_text, ent.url))
+        elif isinstance(ent, MessageEntitySpoiler):
+            result.append(rp.spoiler(ent_text))
+        elif isinstance(ent, MessageEntityStrike):
+            result.append(rp.strike(ent_text))
         else:
-            kwargs['style'] = ButtonStyle.DEFAULT  # Changed to DEFAULT for lighter color
-            
-    _original_btn_init(self, *args, **kwargs)
+            result.append(ent_text)
+        last_offset = ent.offset + ent.length
+    if last_offset < len(text):
+        result.append(text[last_offset:])
+    return result
 
-pyrogram.types.InlineKeyboardButton.__init__ = _patched_btn_init
+_old_send = pyrogram.Client.send_message
+_old_edit = pyrogram.Client.edit_message_text
+_old_reply = pyrogram.types.Message.reply_text
+
+async def _patched_send(client, chat_id, text, parse_mode=None, reply_markup=None, **kwargs):
+    if reply_markup and hasattr(reply_markup, "inline_keyboard") and reply_markup.inline_keyboard:
+        try:
+            rp_rows = []
+            for row in reply_markup.inline_keyboard:
+                rp_row = []
+                for b in row:
+                    t_lower = b.text.lower()
+                    if any(x in t_lower for x in ["delete", "cancel", "remove", "ban", "❌", "🗑", "🛑", "🚫", "hard delete", "empty batch", "close"]):
+                        style = rp.Style.DANGER
+                    else:
+                        style = rp.Style.SUCCESS # Green everywhere else, no blue
+                    
+                    if b.url:
+                        rp_row.append(rp.url_btn(b.text, b.url, style=style))
+                    elif b.callback_data:
+                        rp_row.append(rp.btn(b.text, b.callback_data, style=style))
+                    elif b.switch_inline_query is not None:
+                        rp_row.append(rp.switch_inline_btn(b.text, b.switch_inline_query, style=style))
+                    else:
+                        rp_row.append(rp.btn(b.text, "noop", style=style))
+                rp_rows.append(rp.buttons(*rp_row))
+            
+            parser = Markdown(client)
+            res = await parser.parse(str(text))
+            rich_texts = _entities_to_rich(res['message'], res['entities'])
+            msg = rp.message(rp.para(*rich_texts), *rp_rows)
+            
+            safe_kwargs = {k:v for k,v in kwargs.items() if k in ['reply_to_message_id', 'disable_notification', 'protect_content']}
+            return await client.send_rich_message(chat_id, rich_message=msg, **safe_kwargs)
+        except Exception as e:
+            traceback.print_exc()
+            return await _old_send(client, chat_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
+    return await _old_send(client, chat_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
+
+async def _patched_edit(client, chat_id, message_id, text, parse_mode=None, reply_markup=None, **kwargs):
+    if reply_markup and hasattr(reply_markup, "inline_keyboard") and reply_markup.inline_keyboard:
+        try:
+            rp_rows = []
+            for row in reply_markup.inline_keyboard:
+                rp_row = []
+                for b in row:
+                    t_lower = b.text.lower()
+                    if any(x in t_lower for x in ["delete", "cancel", "remove", "ban", "❌", "🗑", "🛑", "🚫", "hard delete", "empty batch", "close"]):
+                        style = rp.Style.DANGER
+                    else:
+                        style = rp.Style.SUCCESS
+                    
+                    if b.url:
+                        rp_row.append(rp.url_btn(b.text, b.url, style=style))
+                    elif b.callback_data:
+                        rp_row.append(rp.btn(b.text, b.callback_data, style=style))
+                    elif b.switch_inline_query is not None:
+                        rp_row.append(rp.switch_inline_btn(b.text, b.switch_inline_query, style=style))
+                    else:
+                        rp_row.append(rp.btn(b.text, "noop", style=style))
+                rp_rows.append(rp.buttons(*rp_row))
+            
+            parser = Markdown(client)
+            res = await parser.parse(str(text))
+            rich_texts = _entities_to_rich(res['message'], res['entities'])
+            msg = rp.message(rp.para(*rich_texts), *rp_rows)
+            
+            return await rp.edit(client, chat_id, message_id, msg)
+        except Exception as e:
+            traceback.print_exc()
+            return await _old_edit(client, chat_id, message_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
+    return await _old_edit(client, chat_id, message_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
+
+pyrogram.Client.send_message = _patched_send
+pyrogram.Client.edit_message_text = _patched_edit
 # --- END BUTTON COLOR PATCH ---
 
 print("🟢 BOOT[1/5]: Pyrogram MTProto Engine Starting...", flush=True)
