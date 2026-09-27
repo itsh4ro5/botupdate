@@ -145,7 +145,17 @@ def load_data():
                 # --- UPDATE: LOADING SPECIAL_CHANNELS ALONG WITH OTHERS ---
                 for k in ["CUSTOM_WELCOMES", "FREE_CHANNELS", "PAID_CHANNELS", "SPECIAL_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
                     val = _get_val(loaded, k)
-                    if val is not None: DB[k] = {int(i): v for i, v in val.items()}
+                    if val is not None: 
+                        if k == "USER_TOPICS":
+                            sanitized = {}
+                            for i, v in val.items():
+                                if isinstance(v, dict):
+                                    sanitized[int(i)] = v.get("topic_id") or v.get("message_thread_id") or 0
+                                else:
+                                    sanitized[int(i)] = v
+                            DB[k] = sanitized
+                        else:
+                            DB[k] = {int(i): v for i, v in val.items()}
                     
                 if OWNER_ID not in DB["ADMIN_IDS"]: DB["ADMIN_IDS"].append(OWNER_ID)
                 
@@ -180,7 +190,17 @@ def load_data():
             # --- UPDATE: LOADING SPECIAL_CHANNELS ALONG WITH OTHERS ---
             for k in ["CUSTOM_WELCOMES", "FREE_CHANNELS", "PAID_CHANNELS", "SPECIAL_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
                 val = _get_val(loaded, k)
-                if val is not None: DB[k] = {int(i): v for i, v in val.items()}
+                if val is not None: 
+                    if k == "USER_TOPICS":
+                        sanitized = {}
+                        for i, v in val.items():
+                            if isinstance(v, dict):
+                                sanitized[int(i)] = v.get("topic_id") or v.get("message_thread_id") or 0
+                            else:
+                                sanitized[int(i)] = v
+                        DB[k] = sanitized
+                    else:
+                        DB[k] = {int(i): v for i, v in val.items()}
                 
             if OWNER_ID not in DB["ADMIN_IDS"]: DB["ADMIN_IDS"].append(OWNER_ID)
             
