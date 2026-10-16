@@ -3131,7 +3131,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                 rp.heading("🤖 USERBOT CONTROL PANEL"),
                 rp.para("⚠️ ", rp.bold("Userbot is now LOGGED OUT.")),
                 rp.divider(),
-                rp.para("📌 ", rp.bold("Status:"), " Userbot session successfully terminate ho gaya hai."),
+                rp.expandable_quote("Userbot session successfully terminate ho gaya hai."),
                 rp.buttons(
                     rp.btn("🔑 Login Again", "input_userbotphone", style=rp.Style.SUCCESS),
                     rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DANGER)
@@ -3251,7 +3251,7 @@ async def general_callback(client: Client, q: CallbackQuery):
             admin_msg = rp.message(
                 rp.heading("📋 Bot Admins List"),
                 rp.divider(),
-                rp.para("\n".join(lines)),
+                rp.expandable_quote("\n".join(lines)),
                 rp.buttons(rp.btn("🔙 Back to Staff Menu", "dash_staff", style=rp.Style.DANGER))
             )
             await rp.edit(client, q.message.chat.id, q.message.id, admin_msg)
@@ -3798,13 +3798,13 @@ async def general_callback(client: Client, q: CallbackQuery):
                 rp.heading(f"📁 {cat_name}"),
                 rp.para("Aapko kis type ke batch chahiye? Neeche category options chunein:"),
                 rp.divider(),
-                rp.para(
-                    "📌 ", rp.bold("Available Batch Options:\n\n"),
-                    "➤ ", rp.bold("Free Batches"), " — 100% Free study courses, direct access bina kisi cost ke\n",
-                    "➤ ", rp.bold("Paid Batches"), " — Premium batches, full structured lectures aur study material\n",
-                    "➤ ", rp.bold("Special Batches"), " — Referral coins se free me unlock hone wale courses\n",
-                    "➤ ", rp.bold("Refer & Earn"), " — Friends ko invite karein aur free coins earn karein"
-                ),
+                rp.expandable_quote([
+                    rp.bold("ℹ️ Available Batch Options:\n\n"),
+                    rp.bold("• "), "🆓 ", rp.bold("Free Batches"), " — ", rp.italic("100% Free study courses, direct access bina kisi cost ke\n\n"),
+                    rp.bold("• "), "💰 ", rp.bold("Paid Batches"), " — ", rp.italic("Premium batches, full structured lectures aur study material\n\n"),
+                    rp.bold("• "), "✨ ", rp.bold("Special Batches"), " — ", rp.italic("Referral coins se free me unlock hone wale courses\n\n"),
+                    rp.bold("• "), "🎁 ", rp.bold("Refer & Earn"), " — ", rp.italic("Friends ko invite karein aur free coins earn karein")
+                ]),
                 rp.buttons(rp.btn("🆓 Free Batches", f"listcat_{cat_idx}_free_0", style=rp.Style.SUCCESS)),
                 rp.buttons(rp.btn("💰 Paid Batches", f"listcat_{cat_idx}_paid_0", style=rp.Style.DEFAULT)),
                 rp.buttons(rp.btn("✨ Special Batches", f"listcat_{cat_idx}_special_0", style=rp.Style.SUCCESS)),
@@ -4332,18 +4332,18 @@ def build_home_menu(user_key, user):
                 ],
                 bordered=True, striped=True
             ),
-            rp.para(
-                "📌 ", rp.bold("VIP Privilege Pointers:\n\n"),
-                "➤ ", rp.bold("My Batches"), " — Aapke sabhi VIP aur unlocked batches\n",
-                "➤ ", rp.bold("All Batches"), " — Complete batches & engineering catalog\n",
-                "➤ ", rp.bold("Daily Streak"), " — Roz login karke bonus points claim karein\n",
-                "➤ ", rp.bold("Leaderboard"), " — Top students aur referral champions ranking\n",
-                "➤ ", rp.bold("VIP Materials"), " — Exclusive study notes aur lectures\n",
-                "➤ ", rp.bold("Monthly Bonus"), " — Har mahine VIP bonus rewards\n",
-                "➤ ", rp.bold("Refer & Earn"), " — Friends ko invite karein aur free coins earn karein\n",
-                "➤ ", rp.bold("Redeem Voucher"), " — Promo codes se free coins activate karein\n",
-                "➤ ", rp.bold("Request Batch"), " — Naye batch ki demand direct submit karein"
-            ),
+            rp.expandable_quote([
+                rp.bold("📌 VIP Privilege Pointers:\n\n"),
+                rp.bold("• "), "📚 ", rp.bold("My Batches"), " — ", rp.italic("Aapke sabhi VIP aur unlocked batches\n\n"),
+                rp.bold("• "), "🌐 ", rp.bold("All Batches"), " — ", rp.italic("Complete batches & engineering catalog\n\n"),
+                rp.bold("• "), "🔥 ", rp.bold("Daily Streak"), " — ", rp.italic("Roz login karke bonus points claim karein\n\n"),
+                rp.bold("• "), "🏆 ", rp.bold("Leaderboard"), " — ", rp.italic("Top students aur referral champions ranking\n\n"),
+                rp.bold("• "), "💎 ", rp.bold("VIP Materials"), " — ", rp.italic("Exclusive study notes aur lectures\n\n"),
+                rp.bold("• "), "🎁 ", rp.bold("Monthly Bonus"), " — ", rp.italic("Har mahine VIP bonus rewards\n\n"),
+                rp.bold("• "), "🚀 ", rp.bold("Refer & Earn"), " — ", rp.italic("Friends ko invite karein aur free coins earn karein\n\n"),
+                rp.bold("• "), "🎟️ ", rp.bold("Redeem Voucher"), " — ", rp.italic("Promo codes se free coins activate karein\n\n"),
+                rp.bold("• "), "🙋 ", rp.bold("Request Batch"), " — ", rp.italic("Naye batch ki demand direct submit karein")
+            ]),
             rp.buttons(
                 rp.btn("👑 My Batches", "my_batches_0", style=rp.Style.SUCCESS),
                 rp.btn("🌟 All Batches", "all_batches_0", style=rp.Style.DEFAULT)
@@ -4378,18 +4378,18 @@ def build_home_menu(user_key, user):
             rp.heading("🌟 Premium Study Hub"),
             rp.para("Welcome, ", rp.bold(first_name), "! Niche diye gaye options se apna section chunein:"),
             rp.divider(),
-            rp.para(
-                "📌 ", rp.bold("Quick Feature Pointers:\n\n"),
-                "➤ ", rp.bold("My Batches"), " — Aapke unlocked aur enrolled study courses\n",
-                "➤ ", rp.bold("All Batches"), " — Complete batches & engineering catalog\n",
-                "➤ ", rp.bold("Daily Streak"), " — Rozana login karke free coins claim karein\n",
-                "➤ ", rp.bold("Leaderboard"), " — Top students & referral rank dekhein\n",
-                "➤ ", rp.bold("Refer & Earn"), " — Dosto ko invite karein aur free courses payein\n",
-                "➤ ", rp.bold("Redeem Voucher"), " — Promo codes se free coins activate karein\n",
-                "➤ ", rp.bold("Request Batch"), " — Apne manpasand batch ki request dalein\n",
-                "➤ ", rp.bold("Test Bot"), " — Practice test series solve karein\n",
-                "➤ ", rp.bold("Profile"), " — Wallet balance, streak & account details"
-            ),
+            rp.expandable_quote([
+                rp.bold("📌 Quick Feature Pointers:\n\n"),
+                rp.bold("• "), "📚 ", rp.bold("My Batches"), " — ", rp.italic("Aapke unlocked aur enrolled study courses\n\n"),
+                rp.bold("• "), "🌐 ", rp.bold("All Batches"), " — ", rp.italic("Complete batches & engineering catalog\n\n"),
+                rp.bold("• "), "🔥 ", rp.bold("Daily Streak"), " — ", rp.italic("Rozana login karke free coins claim karein\n\n"),
+                rp.bold("• "), "🏆 ", rp.bold("Leaderboard"), " — ", rp.italic("Top students & referral rank dekhein\n\n"),
+                rp.bold("• "), "🎁 ", rp.bold("Refer & Earn"), " — ", rp.italic("Dosto ko invite karein aur free courses payein\n\n"),
+                rp.bold("• "), "🎟️ ", rp.bold("Redeem Voucher"), " — ", rp.italic("Promo codes se free coins activate karein\n\n"),
+                rp.bold("• "), "🙋 ", rp.bold("Request Batch"), " — ", rp.italic("Apne manpasand batch ki request dalein\n\n"),
+                rp.bold("• "), "🤖 ", rp.bold("Test Bot"), " — ", rp.italic("Practice test series solve karein\n\n"),
+                rp.bold("• "), "ℹ️ ", rp.bold("Profile"), " — ", rp.italic("Wallet balance, streak & account details")
+            ]),
             rp.buttons(
                 rp.btn("📚 My Batches", "my_batches_0", style=rp.Style.SUCCESS),
                 rp.btn("🌐 All Batches", "all_batches_0", style=rp.Style.DEFAULT)
@@ -4465,14 +4465,14 @@ def build_security_panel_msg():
     return rp.message(
         rp.heading("🔒 Security & Access Control"),
         rp.divider(),
-        rp.para(
-            "📌 ", rp.bold("Security Controls Pointers:\n\n"),
-            "➤ ", rp.bold("Lockdown"), " : Naye users ko bot me aane se rokein ya allow karein\n",
-            "➤ ", rp.bold("Free Batches"), " : Free batches section ko instant lock/unlock karein\n",
-            "➤ ", rp.bold("Paid Batches"), " : Paid courses catalog ko lock/unlock karein\n",
-            "➤ ", rp.bold("Test Bot"), " : Practice test bot access toggle karein\n",
-            "➤ ", rp.bold("Maintenance"), " : Server update ke waqt users ko temporarily block karein"
-        ),
+        rp.expandable_quote([
+            rp.bold("📌 Security Controls Pointers:\n\n"),
+            rp.bold("• "), "🔒 ", rp.bold("Lockdown"), " — ", rp.italic("Naye users ko bot me aane se rokein ya allow karein\n\n"),
+            rp.bold("• "), "🆓 ", rp.bold("Free Batches"), " — ", rp.italic("Free batches section ko instant lock/unlock karein\n\n"),
+            rp.bold("• "), "💰 ", rp.bold("Paid Batches"), " — ", rp.italic("Paid courses catalog ko lock/unlock karein\n\n"),
+            rp.bold("• "), "🤖 ", rp.bold("Test Bot"), " — ", rp.italic("Practice test bot access toggle karein\n\n"),
+            rp.bold("• "), "🛠️ ", rp.bold("Maintenance"), " — ", rp.italic("Server update ke waqt users ko temporarily block karein")
+        ]),
         rp.buttons(lockdown_btn, free_btn),
         rp.buttons(paid_btn, testbot_btn),
         rp.buttons(maint_btn),
@@ -4483,18 +4483,18 @@ def build_database_panel_msg():
     return rp.message(
         rp.heading("💾 Database Management Tools"),
         rp.divider(),
-        rp.para(
-            "📌 ", rp.bold("Database Tools Pointers:\n\n"),
-            "➤ ", rp.bold("Download Backup"), " — Bot database ka poora JSON backup download karein\n",
-            "➤ ", rp.bold("Run Sync"), " — Storage aur MongoDB database sync karein\n",
-            "➤ ", rp.bold("All Users List"), " — Sabhi registered users ki list export karein\n",
-            "➤ ", rp.bold("Specific User Data"), " — User ID ya username se complete details dekhein\n",
-            "➤ ", rp.bold("Generate Redeem Code"), " — Referral coins/points ke naye promo voucher banayein\n",
-            "➤ ", rp.bold("Active Vouchers"), " — Sabhi active redeem codes ki list dekhein\n",
-            "➤ ", rp.bold("Gift Coin"), " — User ke wallet me free coins credit karein\n",
-            "➤ ", rp.bold("Ban / Unban"), " — User access control manage karein\n",
-            "➤ ", rp.bold("Hard Delete User"), " — User ka saara record database se delete karein"
-        ),
+        rp.expandable_quote([
+            rp.bold("📌 Database Tools Pointers:\n\n"),
+            rp.bold("• "), "📥 ", rp.bold("Download Backup"), " — ", rp.italic("Bot database ka poora JSON backup download karein\n\n"),
+            rp.bold("• "), "🔄 ", rp.bold("Run Sync"), " — ", rp.italic("Storage aur MongoDB database sync karein\n\n"),
+            rp.bold("• "), "👥 ", rp.bold("All Users List"), " — ", rp.italic("Sabhi registered users ki list export karein\n\n"),
+            rp.bold("• "), "🔍 ", rp.bold("Specific User Data"), " — ", rp.italic("User ID ya username se complete details dekhein\n\n"),
+            rp.bold("• "), "🎟️ ", rp.bold("Generate Redeem Code"), " — ", rp.italic("Referral coins/points ke naye promo voucher banayein\n\n"),
+            rp.bold("• "), "📋 ", rp.bold("Active Vouchers"), " — ", rp.italic("Sabhi active redeem codes ki list dekhein\n\n"),
+            rp.bold("• "), "🎁 ", rp.bold("Gift Coin"), " — ", rp.italic("User ke wallet me free coins credit karein\n\n"),
+            rp.bold("• "), "🚫 ", rp.bold("Ban / Unban"), " — ", rp.italic("User access control manage karein\n\n"),
+            rp.bold("• "), "☢️ ", rp.bold("Hard Delete User"), " — ", rp.italic("User ka saara record database se delete karein")
+        ]),
         rp.buttons(
             rp.btn("📥 Download Backup", "act_backup", style=rp.Style.DEFAULT),
             rp.btn("🔄 Run Sync", "act_sync", style=rp.Style.DEFAULT)
@@ -4523,19 +4523,19 @@ def build_batches_panel_msg(back_cb="dash_home"):
     return rp.message(
         rp.heading("📦 Batches Management"),
         rp.divider(),
-        rp.para(
-            "📌 ", rp.bold("Batches Tools Pointers:\n\n"),
-            "➤ ", rp.bold("Add Batch"), " — Naya Free/Paid/Special batch link add karein\n",
-            "➤ ", rp.bold("Delete Batch"), " — Existing batch catalog se remove karein\n",
-            "➤ ", rp.bold("Categories"), " — Nayi category banayein ya remove karein\n",
-            "➤ ", rp.bold("Set Category"), " — Batches ko unki specific category me assign karein\n",
-            "➤ ", rp.bold("Empty Batch"), " — Batch se un-approved users ko mass-kick karein\n",
-            "➤ ", rp.bold("Post Update"), " — Batch channel me latest update notice post karein\n",
-            "➤ ", rp.bold("Super Forwarder"), " — Messages & lectures channel se auto copy karein\n",
-            "➤ ", rp.bold("Clean Unverified"), " — Non-members ko batch se remove karein\n",
-            "➤ ", rp.bold("Caption Changer"), " — Files ke captions automatically edit karein\n",
-            "➤ ", rp.bold("Batch Stats"), " — Kisi batch ke total members aur active users dekhein"
-        ),
+        rp.expandable_quote([
+            rp.bold("📌 Batches Tools Pointers:\n\n"),
+            rp.bold("• "), "➕ ", rp.bold("Add Batch"), " — ", rp.italic("Naya Free/Paid/Special batch link add karein\n\n"),
+            rp.bold("• "), "🗑️ ", rp.bold("Delete Batch"), " — ", rp.italic("Existing batch catalog se remove karein\n\n"),
+            rp.bold("• "), "📁 ", rp.bold("Categories"), " — ", rp.italic("Nayi category banayein ya remove karein\n\n"),
+            rp.bold("• "), "🏷️ ", rp.bold("Set Category"), " — ", rp.italic("Batches ko unki specific category me assign karein\n\n"),
+            rp.bold("• "), "🧹 ", rp.bold("Empty Batch"), " — ", rp.italic("Batch se un-approved users ko mass-kick karein\n\n"),
+            rp.bold("• "), "📢 ", rp.bold("Post Update"), " — ", rp.italic("Batch channel me latest update notice post karein\n\n"),
+            rp.bold("• "), "🚀 ", rp.bold("Super Forwarder"), " — ", rp.italic("Messages & lectures channel se auto copy karein\n\n"),
+            rp.bold("• "), "🛡️ ", rp.bold("Clean Unverified"), " — ", rp.italic("Non-members ko batch se remove karein\n\n"),
+            rp.bold("• "), "📝 ", rp.bold("Caption Changer"), " — ", rp.italic("Files ke captions automatically edit karein\n\n"),
+            rp.bold("• "), "📊 ", rp.bold("Batch Stats"), " — ", rp.italic("Kisi batch ke total members aur active users dekhein")
+        ]),
         rp.buttons(
             rp.btn("➕ Add Batch", "act_addbatch", style=rp.Style.SUCCESS),
             rp.btn("🗑️ Delete Batch", "input_delbatch", style=rp.Style.DANGER)
@@ -4567,12 +4567,12 @@ def build_staff_panel_msg(back_cb="dash_home"):
     return rp.message(
         rp.heading("🧑‍💼 Staff & Admin Management"),
         rp.divider(),
-        rp.para(
-            "📌 ", rp.bold("Staff Tools Pointers:\n\n"),
-            "➤ ", rp.bold("Add Admin"), " — Kisi user ko bot me Admin rights grant karein\n",
-            "➤ ", rp.bold("Remove Admin"), " — Kisi user se Admin permissions revoke karein\n",
-            "➤ ", rp.bold("Admin List"), " — Current active admins aur unki IDs ki list dekhein"
-        ),
+        rp.expandable_quote([
+            rp.bold("📌 Staff Tools Pointers:\n\n"),
+            rp.bold("• "), "➕ ", rp.bold("Add Admin"), " — ", rp.italic("Kisi user ko bot me Admin rights grant karein\n\n"),
+            rp.bold("• "), "➖ ", rp.bold("Remove Admin"), " — ", rp.italic("Kisi user se Admin permissions revoke karein\n\n"),
+            rp.bold("• "), "📋 ", rp.bold("Admin List"), " — ", rp.italic("Current active admins aur unki IDs ki list dekhein")
+        ]),
         rp.buttons(
             rp.btn("➕ Add Admin", "input_addadmin", style=rp.Style.SUCCESS),
             rp.btn("➖ Remove Admin", "input_deladmin", style=rp.Style.DANGER)
@@ -4588,13 +4588,13 @@ def build_comms_panel_msg(back_cb="dash_home"):
     return rp.message(
         rp.heading("📢 Communications & Messaging"),
         rp.divider(),
-        rp.para(
-            "📌 ", rp.bold("Communications Pointers:\n\n"),
-            "➤ ", rp.bold("Broadcast"), " — Bot ke sabhi users ko mass message/media bhejein\n",
-            "➤ ", rp.bold("Post Message"), " — Kisi specific channel ya group me message bhejein\n",
-            "➤ ", rp.bold("Set Test Bot"), " — Practice Test bot ka direct link configure karein\n",
-            "➤ ", rp.bold("Set Welcome"), " — Kisi batch channel ke liye custom welcome message set karein"
-        ),
+        rp.expandable_quote([
+            rp.bold("📌 Communications Pointers:\n\n"),
+            rp.bold("• "), "📢 ", rp.bold("Broadcast"), " — ", rp.italic("Bot ke sabhi users ko mass message/media bhejein\n\n"),
+            rp.bold("• "), "📝 ", rp.bold("Post Message"), " — ", rp.italic("Kisi specific channel ya group me message bhejein\n\n"),
+            rp.bold("• "), "🤖 ", rp.bold("Set Test Bot"), " — ", rp.italic("Practice Test bot ka direct link configure karein\n\n"),
+            rp.bold("• "), "👋 ", rp.bold("Set Welcome"), " — ", rp.italic("Kisi batch channel ke liye custom welcome message set karein")
+        ]),
         rp.buttons(
             rp.btn("📢 Broadcast to All", "act_broadcast", style=rp.Style.DEFAULT),
             rp.btn("📝 Post Message", "act_post", style=rp.Style.DEFAULT)
@@ -4609,26 +4609,26 @@ def build_comms_panel_msg(back_cb="dash_home"):
 def build_userbot_panel_msg(session, phone):
     if session:
         status_text = "🟢 Active & Ready"
-        info_para = (
-            "📌 ", rp.bold("Userbot Status & Tools:\n\n"),
-            "➤ Logged In Number: ", rp.code(phone), "\n",
-            "➤ Userbot ready hai: /emptybatch, /clear, /joinall execute karne ke liye."
-        )
+        quote_text = [
+            rp.bold("📌 Userbot Status & Tools:\n\n"),
+            rp.bold("• "), "📞 ", rp.bold("Logged In Number: "), rp.code(phone), "\n\n",
+            rp.bold("• "), "⚡ ", rp.bold("Ready Commands: "), rp.italic("Userbot /emptybatch, /clear, /joinall execute karne ke liye ready hai.")
+        ]
         action_btn = rp.buttons(rp.btn("🚪 Logout (Delete Session)", "userbot_logout", style=rp.Style.DANGER))
     else:
         status_text = "🔴 Not Logged In"
-        info_para = (
-            "📌 ", rp.bold("Userbot Status:\n\n"),
-            "➤ Koi active session nahi mila.\n",
-            "➤ Userbot mass cleanup features use karne ke liye login karein."
-        )
+        quote_text = [
+            rp.bold("📌 Userbot Status:\n\n"),
+            rp.bold("• "), "⚠️ ", rp.bold("No Session: "), rp.italic("Koi active userbot session nahi mila.\n\n"),
+            rp.bold("• "), "🔑 ", rp.bold("Login Required: "), rp.italic("Userbot mass cleanup features use karne ke liye login karein.")
+        ]
         action_btn = rp.buttons(rp.btn("🔑 Login Now", "input_userbotphone", style=rp.Style.SUCCESS))
 
     return rp.message(
         rp.heading("🤖 USERBOT CONTROL PANEL"),
         rp.para("Status: ", rp.bold(status_text)),
         rp.divider(),
-        rp.para(*info_para),
+        rp.expandable_quote(quote_text),
         action_btn,
         rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DANGER))
     )
@@ -4638,13 +4638,13 @@ def build_admin_users_panel_msg(back_cb="goto_admin_panel"):
     return rp.message(
         rp.heading("👥 User Management"),
         rp.divider(),
-        rp.para(
-            "📌 ", rp.bold("User Tools Pointers:\n\n"),
-            "➤ ", rp.bold("Ban / Unban"), " — User access control manage karein\n",
-            "➤ ", rp.bold("Kick User"), " — Batch se member ko remove karein\n",
-            "➤ ", rp.bold("Find User"), " — Username ya ID se lookup karein\n",
-            "➤ ", rp.bold("Reset Data"), " — User stats aur demo reset karein"
-        ),
+        rp.expandable_quote([
+            rp.bold("📌 User Tools Pointers:\n\n"),
+            rp.bold("• "), "🚫 ", rp.bold("Ban / Unban"), " — ", rp.italic("User access control manage karein\n\n"),
+            rp.bold("• "), "👢 ", rp.bold("Kick User"), " — ", rp.italic("Batch se member ko remove karein\n\n"),
+            rp.bold("• "), "🔍 ", rp.bold("Find User"), " — ", rp.italic("Username ya ID se lookup karein\n\n"),
+            rp.bold("• "), "♻️ ", rp.bold("Reset Data"), " — ", rp.italic("User stats aur demo reset karein")
+        ]),
         rp.buttons(
             rp.btn("🚫 Ban User", "input_ban", style=rp.Style.DANGER),
             rp.btn("✅ Unban User", "input_unban", style=rp.Style.SUCCESS)
@@ -4664,13 +4664,13 @@ def build_admin_approvals_panel_msg(back_cb="goto_admin_panel"):
     return rp.message(
         rp.heading("✅ Access Approvals"),
         rp.divider(),
-        rp.para(
-            "📌 ", rp.bold("Approvals Guide Pointers:\n\n"),
-            "➤ ", rp.bold("Approve Demo"), " — Demo access grant karein\n",
-            "➤ ", rp.bold("Approve Perm"), " — Permanent access approve karein\n",
-            "➤ ", rp.bold("Extend Demo"), " — User ke time limit ko extend karein\n",
-            "➤ ", rp.bold("Generate Link"), " — 3-hour demo invite link banayein"
-        ),
+        rp.expandable_quote([
+            rp.bold("📌 Approvals Guide Pointers:\n\n"),
+            rp.bold("• "), "🕐 ", rp.bold("Approve Demo"), " — ", rp.italic("Demo access grant karein\n\n"),
+            rp.bold("• "), "✅ ", rp.bold("Approve Perm"), " — ", rp.italic("Permanent access approve karein\n\n"),
+            rp.bold("• "), "⏳ ", rp.bold("Extend Demo"), " — ", rp.italic("User ke time limit ko extend karein\n\n"),
+            rp.bold("• "), "🔗 ", rp.bold("Generate Link"), " — ", rp.italic("3-hour demo invite link banayein")
+        ]),
         rp.buttons(
             rp.btn("🕐 Approve Demo", "input_demo", style=rp.Style.SUCCESS),
             rp.btn("✅ Approve Perm", "input_perm", style=rp.Style.SUCCESS)
@@ -4685,31 +4685,37 @@ def build_admin_approvals_panel_msg(back_cb="goto_admin_panel"):
 def build_commands_manual_msg():
     return rp.message(
         rp.heading("📖 Master Commands & Manual"),
-        rp.para("Neeche sabhi hidden aur terminal commands diye gaye hain:"),
+        rp.para("Neeche sabhi hidden aur terminal commands diye gaye hain. Expand karke details dekhein:"),
         rp.divider(),
-        rp.para(
-            "🤖 ", rp.bold("Userbot & Cleanup Commands:\n\n"),
-            "➤ ", rp.code("/joinall"), " — Userbot sabhi channels auto-join karein\n",
-            "➤ ", rp.code("/emptybatch <chat_id>"), " — Batch se un-approved mass-kick karein\n",
-            "➤ ", rp.code("/clear <chat_id>"), " — Specific chat ke messages delete karein\n",
-            "➤ ", rp.code("/del <N>"), " — Pichle N messages delete karein (Ex: /del 10)\n\n",
-            "🔑 ", rp.bold("Access & Approvals Commands:\n\n"),
-            "➤ ", rp.code("/demo <link> <time>"), " — Temporary demo approve karein\n",
-            "➤ ", rp.code("/perm <link>"), " — Permanent access approve karein\n",
-            "➤ ", rp.code("/gendemo <uid> <bid>"), " — 3-hour demo invite link banayein\n",
-            "➤ ", rp.code("/extend <uid> <bid> <hours>"), " — Active demo extend karein\n",
-            "➤ ", rp.code("/kick <uid> <bid>"), " — User ko channel se remove karein\n\n",
-            "💎 ", rp.bold("Batch & Config Commands:\n\n"),
-            "➤ ", rp.code("/setprice <bid> <price>"), " — Paid Batch price update karein\n",
-            "➤ ", rp.code("/setrequestnote <msg>"), " — Batch demand note customize karein\n",
-            "➤ ", rp.code("/setwelcome <bid> <msg>"), " — Custom welcome message set karein\n",
-            "➤ ", rp.code("/settestbot <link>"), " — Test bot link update karein\n\n",
-            "💾 ", rp.bold("Database & Promo Commands:\n\n"),
-            "➤ ", rp.code("/genvoucher <CODE> <PTS> <USES>"), " — Promo voucher banayein\n",
-            "➤ ", rp.code("/vouchers"), " — Active promo vouchers ki list dekhein\n",
-            "➤ ", rp.code("/batchrequests"), " — Users ki batch demands dekhein\n",
-            "➤ ", rp.code("/backup"), " / ", rp.code("/sync"), " / ", rp.code("/allusers")
-        ),
+        rp.expandable_quote([
+            rp.bold("🤖 Userbot & Cleanup Commands:\n\n"),
+            rp.bold("• "), "🌐 ", rp.code("/joinall"), " — Userbot sabhi channels auto-join karein\n\n",
+            rp.bold("• "), "🧹 ", rp.code("/emptybatch <chat_id>"), " — Batch se un-approved mass-kick karein\n\n",
+            rp.bold("• "), "🗑️ ", rp.code("/clear <chat_id>"), " — Specific chat ke messages delete karein\n\n",
+            rp.bold("• "), "❌ ", rp.code("/del <N>"), " — Pichle N messages delete karein (Ex: ", rp.code("/del 10"), ")"
+        ]),
+        rp.expandable_quote([
+            rp.bold("🔑 Access & Approvals Commands:\n\n"),
+            rp.bold("• "), "⏳ ", rp.code("/demo <link> <time>"), " — Temporary demo approve karein\n\n",
+            rp.bold("• "), "✅ ", rp.code("/perm <link>"), " — Permanent access approve karein\n\n",
+            rp.bold("• "), "🔗 ", rp.code("/gendemo <uid> <bid>"), " — 3-hour demo invite link banayein\n\n",
+            rp.bold("• "), "⏱️ ", rp.code("/extend <uid> <bid> <hours>"), " — Active demo extend karein\n\n",
+            rp.bold("• "), "👢 ", rp.code("/kick <uid> <bid>"), " — User ko channel se remove karein"
+        ]),
+        rp.expandable_quote([
+            rp.bold("💎 Batch & Config Commands:\n\n"),
+            rp.bold("• "), "💰 ", rp.code("/setprice <bid> <price>"), " — Paid Batch price update karein\n\n",
+            rp.bold("• "), "📝 ", rp.code("/setrequestnote <msg>"), " — Batch demand note customize karein\n\n",
+            rp.bold("• "), "👋 ", rp.code("/setwelcome <bid> <msg>"), " — Custom welcome message set karein\n\n",
+            rp.bold("• "), "🤖 ", rp.code("/settestbot <link>"), " — Test bot link update karein"
+        ]),
+        rp.expandable_quote([
+            rp.bold("💾 Database & Promo Commands:\n\n"),
+            rp.bold("• "), "🎟️ ", rp.code("/genvoucher <CODE> <PTS> <USES>"), " — Promo voucher banayein\n\n",
+            rp.bold("• "), "📋 ", rp.code("/vouchers"), " — Active promo vouchers ki list dekhein\n\n",
+            rp.bold("• "), "🙋 ", rp.code("/batchrequests"), " — Users ki batch demands dekhein\n\n",
+            rp.bold("• "), "💾 ", rp.code("/backup"), " / ", rp.code("/sync"), " / ", rp.code("/allusers")
+        ]),
         rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DANGER))
     )
 
@@ -4717,17 +4723,17 @@ def build_owner_panel_kb():
     return rp.message(
         rp.heading("👑 SYSTEM MASTER TERMINAL"),
         rp.divider(),
-        rp.para(
-            "📌 ", rp.bold("System Master Modules Pointers:\n\n"),
-            "➤ ", rp.bold("Security"), " : Lockdown, locks, maintenance mode\n",
-            "➤ ", rp.bold("Database"), " : Backup, users, coins, vouchers\n",
-            "➤ ", rp.bold("Batches"), " : Add/delete batches & categories\n",
-            "➤ ", rp.bold("Staff"), " : Admin permissions grant/revoke & staff list\n",
-            "➤ ", rp.bold("Comms"), " : Global broadcast & batch notifications\n",
-            "➤ ", rp.bold("Analytics"), " : Real-time performance & stats\n",
-            "➤ ", rp.bold("Userbot"), " : String session manager & status\n",
-            "➤ ", rp.bold("Commands"), " : Hidden commands manual"
-        ),
+        rp.expandable_quote([
+            rp.bold("📌 System Master Modules Pointers:\n\n"),
+            rp.bold("• "), "🔒 ", rp.bold("Security"), " — ", rp.italic("Lockdown, locks, maintenance mode\n\n"),
+            rp.bold("• "), "💾 ", rp.bold("Database"), " — ", rp.italic("Backup, users, coins, vouchers\n\n"),
+            rp.bold("• "), "📦 ", rp.bold("Batches"), " — ", rp.italic("Add/delete batches & categories\n\n"),
+            rp.bold("• "), "🧑‍💼 ", rp.bold("Staff"), " — ", rp.italic("Admin permissions grant/revoke & staff list\n\n"),
+            rp.bold("• "), "📢 ", rp.bold("Comms"), " — ", rp.italic("Global broadcast & batch notifications\n\n"),
+            rp.bold("• "), "📊 ", rp.bold("Analytics"), " — ", rp.italic("Real-time performance & stats\n\n"),
+            rp.bold("• "), "🤖 ", rp.bold("Userbot"), " — ", rp.italic("String session manager & status\n\n"),
+            rp.bold("• "), "📖 ", rp.bold("Commands"), " — ", rp.italic("Hidden commands manual")
+        ]),
         rp.buttons(
             rp.btn("🔒 Security & Locks", "dash_locks", style=rp.Style.DEFAULT),
             rp.btn("💾 Database Tools", "dash_db", style=rp.Style.DEFAULT)
@@ -4753,13 +4759,13 @@ def build_admin_panel_kb():
     return rp.message(
         rp.heading("🛡 ADMINISTRATOR DASHBOARD"),
         rp.divider(),
-        rp.para(
-            "📌 ", rp.bold("Admin Tools Pointers:\n\n"),
-            "➤ ", rp.bold("Users"), " — Ban, Unban, Kick, Find & Reset user data\n",
-            "➤ ", rp.bold("Approvals"), " — Demo aur Permanent access request approval\n",
-            "➤ ", rp.bold("Batches"), " — Add/Delete batches & categories\n",
-            "➤ ", rp.bold("Comms"), " — Broadcast announcements & custom posts"
-        ),
+        rp.expandable_quote([
+            rp.bold("📌 Admin Tools Pointers:\n\n"),
+            rp.bold("• "), "👥 ", rp.bold("Users"), " — ", rp.italic("Ban, Unban, Kick, Find & Reset user data\n\n"),
+            rp.bold("• "), "✅ ", rp.bold("Approvals"), " — ", rp.italic("Demo aur Permanent access request approval\n\n"),
+            rp.bold("• "), "📦 ", rp.bold("Batches"), " — ", rp.italic("Add/Delete batches & categories\n\n"),
+            rp.bold("• "), "📢 ", rp.bold("Comms"), " — ", rp.italic("Broadcast announcements & custom posts")
+        ]),
         rp.buttons(
             rp.btn("👥 Users Management", "adash_users", style=rp.Style.DEFAULT),
             rp.btn("✅ Approvals Center", "adash_approvals", style=rp.Style.DEFAULT)
