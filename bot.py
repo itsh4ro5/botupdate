@@ -153,25 +153,26 @@ def _safe_port(default=7860):
 
 PORT = _safe_port()
 
-# Light imports for Web Dashboard
+# Light imports for Health Check Web Server (Hugging Face requirement)
 from hypercorn.asyncio import serve
 from hypercorn.config import Config as HyperConfig
 
-print("🟢 BOOT[2/5]: Web server libs loaded.", flush=True)
+print("🟢 BOOT[2/5]: Health-check server libs loaded.", flush=True)
 
 def _load_web_app():
     try:
         from app import app as web_app
-        print("🟢 BOOT[3/5]: Dashboard app imported.", flush=True)
+        print("🟢 BOOT[3/5]: Health-check app loaded.", flush=True)
         return web_app
     except Exception:
-        print("❌ Dashboard import failed — Serving fallback page.", flush=True)
+        print("❌ App import failed — Serving fallback health-check.", flush=True)
         traceback.print_exc()
         from quart import Quart
         fb = Quart(__name__)
         @fb.route("/")
+        @fb.route("/health")
         async def _root():
-            return "Web layer import failed. Check container logs.", 500
+            return {"status": "healthy", "service": "Telegram Bot Fallback"}, 200
         return fb
 
 WEB_APP = _load_web_app()

@@ -527,7 +527,7 @@ async def cmd_storebatch(client: Client, message: Message):
         # --- FIREBASE SAVE LOGIC ---
         import app as backend_app
         import time
-        if backend_app.db_fs:
+        if getattr(backend_app, "db_fs", None):
             final_data = {
                 "channel_name": channel_name,
                 "chat_id": str(chat_id),
@@ -543,7 +543,7 @@ async def cmd_storebatch(client: Client, message: Message):
             )
             firebase_status = "✅ Successfully saved to Firebase DB!"
         else:
-            firebase_status = "⚠️ Firebase is NOT connected! Data lost."
+            firebase_status = "ℹ️ Web database disabled (Bot-only mode)."
 
         await msg.edit_text(
             f"🎯 **Batch Scan Complete (Userbot)!**\n\n"
@@ -4314,11 +4314,11 @@ async def start_from_cb(client: Client, q: CallbackQuery):
     await set_role_based_commands(user.id, client)
     
     if str(user.id) == str(OWNER_ID):
-        text, kb = build_owner_panel_kb()
-        await q.edit_message_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+        msg = build_owner_panel_kb()
+        await rp.edit(client, q.message.chat.id, q.message.id, msg)
     elif is_admin(user.id):
-        text, kb = build_admin_panel_kb()
-        await q.edit_message_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+        msg = build_admin_panel_kb()
+        await rp.edit(client, q.message.chat.id, q.message.id, msg)
     elif await check_membership_pyro(user.id, client):
         if not DB["USER_DATA"].get(user_key, {}).get("tnc_accepted", False):
             await show_tnc_menu_cb(client, q)
