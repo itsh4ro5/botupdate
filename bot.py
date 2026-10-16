@@ -285,6 +285,7 @@ async def _run_pyrogram_engine():
         "storebatch": H.cmd_storebatch,
         "setvipmaterials": H.cmd_set_vip_materials, "setvipsticker": H.cmd_set_vip_sticker,
         "genvoucher": H.cmd_genvoucher, "batchrequests": H.cmd_batchrequests, "vouchers": H.cmd_list_vouchers,
+        "setprice": H.cmd_set_batch_price, "setrequestnote": H.cmd_set_request_note,
     }
 
     @app.on_message(filters.command(list(all_commands.keys())))

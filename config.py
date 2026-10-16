@@ -71,7 +71,9 @@ DB = {
     "FREE_LOCKED": False, "PAID_LOCKED": False, "TEST_BOT_LOCKED": False, 
     "SCHEDULED_DELETES": [], "TEST_BOT_LINK": "", "BATCH_CATEGORIES": {},
     "CATEGORIES": DEFAULT_CATEGORIES.copy(), "MAINTENANCE_MODE": False,
-    "BATCH_COINS": {}, "BATCH_REQUESTS": {}, "VOUCHERS": {}
+    "BATCH_COINS": {}, "BATCH_REQUESTS": {}, "VOUCHERS": {},
+    "BATCH_PRICES": {},
+    "BATCH_REQUEST_NOTE": "🙏 **Important Note from Admin:**\nMain abhi regular active nahi reh pata hu isliye batch upload/add hone me thoda waqt lag sakta hai. Aap bilkul chinta na karein aur thoda dhairya (patience) rakhein. Jaise hi yeh batch bot me add hoga, bot aapko direct notification bhej dega! Tab tak ke liye dhanyawad."
 }
 
 MESSAGE_MAP = {} 
@@ -120,7 +122,7 @@ def load_data():
         "SCHEDULED_DELETES", "TEST_BOT_LINK", "MAINTENANCE_MODE", "CATEGORIES", "BATCH_CATEGORIES", 
         "USERBOT_SESSION", "USERBOT_PHONE",
         "VIP_MATERIALS_LINK", "VIP_STICKER_ID", "VIP_STICKER_TYPE", "BATCH_COINS",
-        "BATCH_REQUESTS", "VOUCHERS",
+        "BATCH_REQUESTS", "VOUCHERS", "BATCH_PRICES", "BATCH_REQUEST_NOTE",
     ]
     
     if MONGO_URL and mongo_collection is not None:
@@ -241,7 +243,9 @@ def save_data_sync():
             "USER_TOPICS": {str(k): v for k, v in DB.get("USER_TOPICS", {}).items()},
             "PENDING_REQUESTS": {str(k): v for k, v in DB.get("PENDING_REQUESTS", {}).items()},
             "BATCH_REQUESTS": DB.get("BATCH_REQUESTS", {}),
-            "VOUCHERS": DB.get("VOUCHERS", {})
+            "VOUCHERS": DB.get("VOUCHERS", {}),
+            "BATCH_PRICES": {str(k): v for k, v in DB.get("BATCH_PRICES", {}).items()},
+            "BATCH_REQUEST_NOTE": DB.get("BATCH_REQUEST_NOTE", "")
         }
         if MONGO_URL and mongo_collection is not None:
             try: 

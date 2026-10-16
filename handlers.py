@@ -1049,6 +1049,86 @@ async def cmd_list_vouchers(client: Client, message: Message):
         txt += f"• `{code}`: `{pts} Coins` | `{used}/{max_u} Used`\n"
     await message.reply_text(txt, parse_mode=ParseMode.MARKDOWN)
 
+async def cmd_set_batch_price(client: Client, message: Message):
+    if not is_admin_msg(message):
+        return
+    args = get_args(message)
+    if len(args) < 2:
+        return await message.reply_text(
+            "💰 **Usage:** `/setprice <batch_id> <price>`\nExample: `/setprice -100123456789 ₹499`",
+            parse_mode=ParseMode.MARKDOWN
+        )
+    raw_id = args[0].strip()
+    price_val = " ".join(args[1:]).strip()
+    try:
+        cid = int(raw_id)
+    except ValueError:
+        return await message.reply_text("❌ Error: Batch ID numbers me honi chahiye.")
+    
+    cname = DB.get("ALL_CHATS", {}).get(cid) or DB.get("PAID_CHANNELS", {}).get(cid) or f"Batch {cid}"
+    DB.setdefault("BATCH_PRICES", {})[str(cid)] = price_val
+    await save_data_async()
+    await message.reply_text(
+        f"✅ **Batch Price Updated!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📦 **Batch:** `{cname}` (`{cid}`)\n"
+        f"💰 **Price / Fee:** `{price_val}`",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+async def cmd_set_request_note(client: Client, message: Message):
+    if not is_admin_msg(message):
+        return
+    args = message.text.split(None, 1)
+    if len(args) < 2 or not args[1].strip():
+        current = DB.get("BATCH_REQUEST_NOTE", "Not set")
+        return await message.reply_text(
+            f"📝 **Current Batch Request Note:**\n\n{current}\n\n"
+            f"📌 **To update, use:** `/setrequestnote <Your custom message>`",
+            parse_mode=ParseMode.MARKDOWN
+        )
+    new_note = args[1].strip()
+    DB["BATCH_REQUEST_NOTE"] = new_note
+    await save_data_async()
+    await message.reply_text(
+        f"✅ **Batch Request Note Updated!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n\n{new_note}",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+async def cmd_genvoucher_from_wizard(client: Client, message: Message):
+    if not is_admin_msg(message):
+        return
+    parts = (message.text or "").strip().split()
+    if len(parts) < 3:
+        return await message.reply_text(
+            "❌ Format invalid! Kripya is format me bhejein:\n`<CODE> <COINS> <MAX_USES>`\nExample: `DIWALI 5 100`",
+            parse_mode=ParseMode.MARKDOWN
+        )
+    code = parts[0].upper().strip()
+    try:
+        pts = float(parts[1])
+        max_uses = int(parts[2])
+    except ValueError:
+        return await message.reply_text("❌ Error: Coins aur Max Uses numeric hone chahiye.")
+
+    DB.setdefault("VOUCHERS", {})[code] = {
+        "points": pts,
+        "max_uses": max_uses,
+        "used_by": [],
+        "created_at": time.time()
+    }
+    await save_data_async()
+    copy_btn = make_copy_button(f"📋 Copy Code: {code}", code)
+    kb = InlineKeyboardMarkup([[copy_btn]])
+    await message.reply_text(
+        f"✅ **Promo Voucher Created!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎟️ **Code:** `{code}`\n"
+        f"💰 **Reward:** `{pts} Coins`\n"
+        f"👥 **Total Uses:** `{max_uses}`\n\n"
+        f"Yeh code users ke sath share karein!",
+        reply_markup=kb,
+        parse_mode=ParseMode.MARKDOWN
+    )
+
 async def cmd_find_user(client: Client, message: Message):
     if not is_admin_msg(message):
         return
@@ -2293,7 +2373,7 @@ async def run_advanced_caption_changer(bot_client: Client, message: Message, cha
             pass
 
 # --- WIZARDS, MENUS & CALLBACKS ---
-async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: str, category: str, coin_cost: int = None):
+async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: str, category: str, coin_cost: int = None, price: str = None):
     import config
     import os
     import urllib.parse
@@ -2316,7 +2396,13 @@ async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: s
     ]
 
     type_badge = "FREE BATCH" if b_type.lower() == "free" else ("PAID BATCH" if b_type.lower() == "paid" else "SPECIAL BATCH")
-    cost_line = f"\n💰 <b>Coin Cost:</b> <code>{coin_cost} Coins</code>" if (b_type.lower() == 'special' and coin_cost) else ""
+    paid_price = price or DB.get("BATCH_PRICES", {}).get(str(cid))
+    if b_type.lower() == 'special' and coin_cost:
+        cost_line = f"\n💰 <b>Coin Cost:</b> <code>{coin_cost} Coins</code>"
+    elif b_type.lower() == 'paid' and paid_price:
+        cost_line = f"\n💰 <b>Price / Fee:</b> <code>{paid_price}</code>"
+    else:
+        cost_line = ""
 
     caption = (
         "🌟 ━━━━━━━━━━━━━━━━━━━━━ 🌟\n"
@@ -2465,7 +2551,18 @@ async def wizard_message(client: Client, message: Message):
             DB.setdefault("BATCH_CATEGORIES", {})[str(cid)] = state["category"]
             await save_data_async()
 
-            # Special batches: ab yahan ruk kar unlock-coin cost poochenge, baaki (free/paid) turant finish
+            # Paid batches: ask price/fee so user sees exact cost without asking owner repeatedly
+            if state["type"] == "paid":
+                ADMIN_WIZARD[uid]["step"] = "ask_price"
+                ADMIN_WIZARD[uid]["cid"] = cid
+                ADMIN_WIZARD[uid]["cname"] = cname
+                await message.reply_text(
+                    f"💰 **Step 4:** '{cname}' ki Price / Fee kitni hai?\n(Example: `₹499`, `₹199 / Month`, etc.):",
+                    parse_mode=ParseMode.MARKDOWN,
+                )
+                return True
+
+            # Special batches: ab yahan ruk kar unlock-coin cost poochenge
             if state["type"] == "special":
                 ADMIN_WIZARD[uid]["step"] = "ask_coin"
                 ADMIN_WIZARD[uid]["cid"] = cid
@@ -2481,7 +2578,7 @@ async def wizard_message(client: Client, message: Message):
                 parse_mode=ParseMode.MARKDOWN,
             )
             
-            if state["type"] in ["free", "paid"]:
+            if state["type"] == "free":
                 await send_batch_update_post(client, cid, cname, state["type"], state["category"])
 
             if state["type"] == "free":
@@ -2513,6 +2610,26 @@ async def wizard_message(client: Client, message: Message):
             del ADMIN_WIZARD[uid]
         except Exception as e:
             await message.reply_text(f"  Error: Ensure valid ID ({e}).")
+        return True
+
+    elif state["step"] == "ask_price":
+        try:
+            price = message.text.strip()
+            cid = state["cid"]
+            cname = state["cname"]
+            DB.setdefault("BATCH_PRICES", {})[str(cid)] = price
+            await save_data_async()
+
+            await message.reply_text(
+                f"✅ **Added!**\n📛 Name: {cname} ({cid})\n🏷️ Type: PAID\n📂 Category: {state['category']}\n💰 Price / Fee: **{price}**",
+                parse_mode=ParseMode.MARKDOWN,
+            )
+
+            await send_batch_update_post(client, cid, cname, "paid", state["category"], price=price)
+            del ADMIN_WIZARD[uid]
+        except Exception as e:
+            await message.reply_text(f"  Error: {e}")
+            if uid in ADMIN_WIZARD: del ADMIN_WIZARD[uid]
         return True
 
     elif state["step"] == "ask_coin":
@@ -2810,6 +2927,9 @@ async def wizard_message(client: Client, message: Message):
                 "advcap": cmd_advcap_start,
                 "deluser": cmd_deluser,
                 "updatepost": process_updatepost,
+                "genvoucher": cmd_genvoucher_from_wizard,
+                "setreqnote": cmd_set_request_note,
+                "setprice": cmd_set_batch_price,
             }
             if cmd_name in cmds:
                 await cmds[cmd_name](client, message)
@@ -2978,7 +3098,8 @@ async def general_callback(client: Client, q: CallbackQuery):
             await rp.edit(client, q.message.chat.id, q.message.id, msg)
         elif data in ["dash_batches", "adash_batches"]:
             await q.answer()
-            msg = build_batches_panel_msg()
+            back_cb = "goto_admin_panel" if data.startswith("adash_") else "dash_home"
+            msg = build_batches_panel_msg(back_cb=back_cb)
             await rp.edit(client, q.message.chat.id, q.message.id, msg)
         elif data == "dash_staff":
             await q.answer()
@@ -2986,7 +3107,8 @@ async def general_callback(client: Client, q: CallbackQuery):
             await rp.edit(client, q.message.chat.id, q.message.id, msg)
         elif data in ["dash_comms", "adash_comms"]:
             await q.answer()
-            msg = build_comms_panel_msg()
+            back_cb = "goto_admin_panel" if data.startswith("adash_") else "dash_home"
+            msg = build_comms_panel_msg(back_cb=back_cb)
             await rp.edit(client, q.message.chat.id, q.message.id, msg)
         elif data == "userbot_details":
             await q.answer()
@@ -3011,7 +3133,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                 rp.divider(),
                 rp.expandable_quote("Userbot session successfully terminate ho gaya hai."),
                 rp.buttons(rp.btn("🔑 Login Again", "input_userbotphone", style=rp.Style.SUCCESS)),
-                rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DEFAULT))
+                rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.PRIMARY))
             )
             await rp.edit(client, q.message.chat.id, q.message.id, logout_msg)
         elif data.startswith("input_"):
@@ -3046,6 +3168,9 @@ async def general_callback(client: Client, q: CallbackQuery):
                 "userbotpass": "  **2FA Password bhejein:**",
                 "userlookup": "🔍 **Specific User Data**\n\nUser ka User ID bhejein:",
                 "deluser": "☢️ **HARD DELETE USER**\n\nJis user ka data database se **poori tarah mitana hai**, uska **User ID** bhejein.\n*(Warning: Ye action undo nahi hoga)*:",
+                "genvoucher": "🎟️ **GENERATE REDEEM CODE / VOUCHER**\n\nFormat: `<CODE> <COINS> <MAX_USES>`\n(Example: `DIWALI5 5 100` ya `GIFT10 10 50`):",
+                "setreqnote": "📝 **SET BATCH REQUEST CUSTOM NOTE**\n\nNaya note message bhejein jo users ko batch demand karte waqt show hoga:\n(Example: `Admin abhi busy hain, kripya thoda dhairya rakhein...`):",
+                "setprice": "💰 **SET PAID BATCH PRICE**\n\nFormat: `<BATCH_ID> <PRICE>`\n(Example: `-100123456789 ₹499`):",
             }
             await q.edit_message_text(
                 f"  **INPUT REQUIRED FOR: {cmd_name.upper()}**\n\n{prompts.get(cmd_name, 'Send input:')}",
@@ -3087,12 +3212,15 @@ async def general_callback(client: Client, q: CallbackQuery):
             await cmd_stats(client, q.message)
         elif data == "adash_users":
             await q.answer()
-            msg = build_admin_users_panel_msg()
+            msg = build_admin_users_panel_msg(back_cb="goto_admin_panel")
             await rp.edit(client, q.message.chat.id, q.message.id, msg)
         elif data == "adash_approvals":
             await q.answer()
-            msg = build_admin_approvals_panel_msg()
+            msg = build_admin_approvals_panel_msg(back_cb="goto_admin_panel")
             await rp.edit(client, q.message.chat.id, q.message.id, msg)
+        elif data == "act_vouchers":
+            await q.answer()
+            await cmd_list_vouchers(client, q.message)
         elif data == "dash_commands":
             await q.answer()
             msg = build_commands_manual_msg()
@@ -3720,7 +3848,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                 prefix, btn_style = "⚡", rp.Style.SUCCESS
             elif b_type == "paid":
                 source_dict = DB.get("PAID_CHANNELS", {})
-                prefix, btn_style = "👑", rp.Style.DEFAULT
+                prefix, btn_style = "👑", rp.Style.PRIMARY
             else:
                 source_dict = DB.get("SPECIAL_CHANNELS", {})
                 prefix, btn_style = "✨", rp.Style.SUCCESS
@@ -3929,14 +4057,26 @@ async def general_callback(client: Client, q: CallbackQuery):
             if DB.get("PAID_LOCKED", False):
                 return await q.answer("Sorry, but at this moment the paid batch is locked. When it will unlock I will inform you.", show_alert=True)
             await q.answer()
+            bname = DB.get("ALL_CHATS", {}).get(cid) or DB.get("PAID_CHANNELS", {}).get(cid) or f"Paid Batch {cid}"
+            bcat = DB.get("BATCH_CATEGORIES", {}).get(str(cid), "Premium Batches")
+            price = DB.get("BATCH_PRICES", {}).get(str(cid), "Affordable / Contact Admin")
+            
             kb = [
-                [InlineKeyboardButton("🔑 Request Access", callback_data=f"req_access_{cid}")],
+                [InlineKeyboardButton("🔑 Request Access / Buy", callback_data=f"req_access_{cid}")],
                 [InlineKeyboardButton("🔗 Share Batch with Friends", callback_data=f"share_btn_{cid}")],
-                [InlineKeyboardButton("🔙 Back", callback_data="u_main")],
+                [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="u_main")],
             ]
+            msg_text = (
+                f"👑 **PREMIUM / PAID BATCH**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"📦 **Batch Name:** `{bname}`\n"
+                f"📁 **Category:** `{bcat}`\n"
+                f"💰 **Batch Price / Fee:** `{price}`\n\n"
+                f"ℹ️ Is batch me high quality lectures, structured DPPs aur complete study notes shamil hain.\n"
+                f"Access lene ke liye neeche **'🔑 Request Access / Buy'** button par tap karein!"
+            )
             try:
                 await q.edit_message_text(
-                    "  **Premium Access:**\nClick below.",
+                    msg_text,
                     reply_markup=InlineKeyboardMarkup(kb),
                     parse_mode=ParseMode.MARKDOWN,
                 )
@@ -4196,14 +4336,14 @@ def build_home_menu(user_key, user):
             rp.buttons(rp.btn("👑 My Batches", "my_batches_0", style=rp.Style.SUCCESS)),
             rp.buttons(rp.btn("🌟 All Batches", "all_batches_0", style=rp.Style.PRIMARY)),
             rp.buttons(rp.btn("🔥 Daily Streak Rewards", "claim_daily_streak", style=rp.Style.SUCCESS)),
-            rp.buttons(rp.btn("🏆 Top Leaderboard", "show_leaderboard", style=rp.Style.DEFAULT)),
-            rp.buttons(rp.btn("💎 VIP Materials", "vip_materials", style=rp.Style.DEFAULT)),
-            rp.buttons(rp.btn("🎁 Monthly Bonus", "vip_monthly_bonus", style=rp.Style.DEFAULT)),
+            rp.buttons(rp.btn("🏆 Top Leaderboard", "show_leaderboard", style=rp.Style.PRIMARY)),
+            rp.buttons(rp.btn("💎 VIP Materials", "vip_materials", style=rp.Style.PRIMARY)),
+            rp.buttons(rp.btn("🎁 Monthly Bonus", "vip_monthly_bonus", style=rp.Style.PRIMARY)),
             rp.buttons(rp.btn("🚀 Refer & Earn", "menu_refer", style=rp.Style.SUCCESS)),
-            rp.buttons(rp.btn("🎟️ Redeem Voucher", "redeem_voucher_btn", style=rp.Style.DEFAULT)),
-            rp.buttons(rp.btn("🙋 Request a Batch", "req_batch_btn", style=rp.Style.DEFAULT)),
-            rp.buttons(rp.btn("🤖 Test Bot", "test_bot", style=rp.Style.DEFAULT)),
-            rp.buttons(rp.btn("ℹ️ Profile", "my_info", style=rp.Style.DEFAULT)),
+            rp.buttons(rp.btn("🎟️ Redeem Voucher", "redeem_voucher_btn", style=rp.Style.PRIMARY)),
+            rp.buttons(rp.btn("🙋 Request a Batch", "req_batch_btn", style=rp.Style.PRIMARY)),
+            rp.buttons(rp.btn("🤖 Test Bot", "test_bot", style=rp.Style.PRIMARY)),
+            rp.buttons(rp.btn("ℹ️ Profile", "my_info", style=rp.Style.PRIMARY)),
             rp.buttons(rp.url_btn("📢 Updates", BATCH_UPDATE_CHANNEL_LINK, style=rp.Style.LINK)),
             rp.buttons(rp.url_btn("🎥 Tutorial", "https://t.me/c/2836314734/1244", style=rp.Style.LINK))
         )
@@ -4228,12 +4368,12 @@ def build_home_menu(user_key, user):
             rp.buttons(rp.btn("📚 My Batches", "my_batches_0", style=rp.Style.SUCCESS)),
             rp.buttons(rp.btn("🌐 All Batches", "all_batches_0", style=rp.Style.PRIMARY)),
             rp.buttons(rp.btn("🔥 Daily Streak Rewards", "claim_daily_streak", style=rp.Style.SUCCESS)),
-            rp.buttons(rp.btn("🏆 Top Leaderboard", "show_leaderboard", style=rp.Style.DEFAULT)),
+            rp.buttons(rp.btn("🏆 Top Leaderboard", "show_leaderboard", style=rp.Style.PRIMARY)),
             rp.buttons(rp.btn("🎁 Refer & Earn", "menu_refer", style=rp.Style.SUCCESS)),
-            rp.buttons(rp.btn("🎟️ Redeem Voucher", "redeem_voucher_btn", style=rp.Style.DEFAULT)),
-            rp.buttons(rp.btn("🙋 Request a Batch", "req_batch_btn", style=rp.Style.DEFAULT)),
-            rp.buttons(rp.btn("🤖 Test Bot", "test_bot", style=rp.Style.DEFAULT)),
-            rp.buttons(rp.btn("ℹ️ Profile", "my_info", style=rp.Style.DEFAULT)),
+            rp.buttons(rp.btn("🎟️ Redeem Voucher", "redeem_voucher_btn", style=rp.Style.PRIMARY)),
+            rp.buttons(rp.btn("🙋 Request a Batch", "req_batch_btn", style=rp.Style.PRIMARY)),
+            rp.buttons(rp.btn("🤖 Test Bot", "test_bot", style=rp.Style.PRIMARY)),
+            rp.buttons(rp.btn("ℹ️ Profile", "my_info", style=rp.Style.PRIMARY)),
             rp.buttons(rp.url_btn("📢 Batch Updates", BATCH_UPDATE_CHANNEL_LINK, style=rp.Style.LINK)),
             rp.buttons(rp.url_btn("🎥 Tutorial", "https://t.me/c/2836314734/1244", style=rp.Style.LINK))
         )
@@ -4301,7 +4441,7 @@ def build_security_panel_msg():
         rp.buttons(paid_btn),
         rp.buttons(testbot_btn),
         rp.buttons(maint_btn),
-        rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DEFAULT))
+        rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.PRIMARY))
     )
 
 def build_database_panel_msg():
@@ -4314,23 +4454,28 @@ def build_database_panel_msg():
             "• ", rp.bold("Run Sync"), " — Storage aur MongoDB database sync karein.\n",
             "• ", rp.bold("All Users List"), " — Sabhi registered users ki list download karein.\n",
             "• ", rp.bold("Specific User Data"), " — User ID ya username se user details dekhein.\n",
+            "• ", rp.bold("Generate Redeem Code"), " — Referral coins/points ke redeem voucher banayein.\n",
+            "• ", rp.bold("Active Vouchers"), " — Sabhi active redeem codes ki list dekhein.\n",
+            "• ", rp.bold("Gift Coin"), " — User ke wallet me free coins credit karein.\n",
             "• ", rp.bold("Ban User"), " — Kisi user ko bot access se ban karein.\n",
             "• ", rp.bold("Unban User"), " — Banned user ka access restore karein.\n",
-            "• ", rp.bold("Gift Coin"), " — User ke wallet me free coins credit karein.\n",
             "• ", rp.bold("Hard Delete User"), " — User ka saara record database se delete karein."
         ]),
-        rp.buttons(rp.btn("📥 Download Backup", "act_backup", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("🔄 Run Sync", "act_sync", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("👥 Download All Users List", "act_allusers", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("🔍 Specific User Data", "input_userlookup", style=rp.Style.DEFAULT)),
+        rp.buttons(rp.btn("📥 Download Backup", "act_backup", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("🔄 Run Sync", "act_sync", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("👥 Download All Users List", "act_allusers", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("🔍 Specific User Data", "input_userlookup", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("🎟️ Generate Redeem Code", "input_genvoucher", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("📋 Active Redeem Codes", "act_vouchers", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("🎁 Gift Coin", "giftcoin_start", style=rp.Style.PRIMARY)),
         rp.buttons(rp.btn("🚫 Ban User", "input_ban", style=rp.Style.DANGER)),
         rp.buttons(rp.btn("✅ Unban User", "input_unban", style=rp.Style.SUCCESS)),
-        rp.buttons(rp.btn("🎁 Gift Coin", "giftcoin_start", style=rp.Style.DEFAULT)),
         rp.buttons(rp.btn("☢️ Hard Delete User", "input_deluser", style=rp.Style.DANGER)),
-        rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DEFAULT))
+        rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.PRIMARY))
     )
 
-def build_batches_panel_msg():
+def build_batches_panel_msg(back_cb="dash_home"):
+    back_text = "🔙 Back to Admin Panel" if back_cb == "goto_admin_panel" else "🔙 Back to Terminal"
     return rp.message(
         rp.heading("📦 Batches Management"),
         rp.divider(),
@@ -4350,19 +4495,20 @@ def build_batches_panel_msg():
         ]),
         rp.buttons(rp.btn("➕ Add Batch", "act_addbatch", style=rp.Style.SUCCESS)),
         rp.buttons(rp.btn("🗑️ Delete Batch", "input_delbatch", style=rp.Style.DANGER)),
-        rp.buttons(rp.btn("📁➕ Add Category", "input_addcat", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("📁🗑️ Delete Category", "act_delcat", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("🏷️ Set Batch Category", "input_setcat", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("🧹 Empty Batch (Userbot)", "input_emptybatch", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("📢 Post Batch Update", "input_updatepost", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("🚀 Super Forwarder", "input_superfwd", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("🛡️ Clean Unverified", "input_cleanbatch", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("📝 Advanced Caption Changer", "input_advcap", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("📊 Batch Stats", "act_batchstats", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DEFAULT))
+        rp.buttons(rp.btn("📁➕ Add Category", "input_addcat", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("📁🗑️ Delete Category", "act_delcat", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("🏷️ Set Batch Category", "input_setcat", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("🧹 Empty Batch (Userbot)", "input_emptybatch", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("📢 Post Batch Update", "input_updatepost", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("🚀 Super Forwarder", "input_superfwd", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("🛡️ Clean Unverified", "input_cleanbatch", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("📝 Advanced Caption Changer", "input_advcap", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("📊 Batch Stats", "act_batchstats", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn(back_text, back_cb, style=rp.Style.PRIMARY))
     )
 
-def build_staff_panel_msg():
+def build_staff_panel_msg(back_cb="dash_home"):
+    back_text = "🔙 Back to Admin Panel" if back_cb == "goto_admin_panel" else "🔙 Back to Terminal"
     return rp.message(
         rp.heading("🧑‍💼 Staff & Admin Management"),
         rp.divider(),
@@ -4374,11 +4520,12 @@ def build_staff_panel_msg():
         ]),
         rp.buttons(rp.btn("➕ Add Admin", "input_addadmin", style=rp.Style.SUCCESS)),
         rp.buttons(rp.btn("➖ Remove Admin", "input_deladmin", style=rp.Style.DANGER)),
-        rp.buttons(rp.btn("📋 Admin List", "act_adminlist", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DEFAULT))
+        rp.buttons(rp.btn("📋 Admin List", "act_adminlist", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn(back_text, back_cb, style=rp.Style.PRIMARY))
     )
 
-def build_comms_panel_msg():
+def build_comms_panel_msg(back_cb="dash_home"):
+    back_text = "🔙 Back to Admin Panel" if back_cb == "goto_admin_panel" else "🔙 Back to Terminal"
     return rp.message(
         rp.heading("📢 Communications & Messaging"),
         rp.divider(),
@@ -4389,11 +4536,11 @@ def build_comms_panel_msg():
             "• ", rp.bold("Set Test Bot"), " — Practice Test bot ka direct link configure karein.\n",
             "• ", rp.bold("Set Welcome"), " — Kisi batch channel ke liye custom welcome message set karein."
         ]),
-        rp.buttons(rp.btn("📢 Broadcast to All Users", "act_broadcast", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("📝 Post Message to Chat", "act_post", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("🤖 Set Test Bot Link", "input_settestbot", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("👋 Set Batch Welcome Message", "input_setwelcome", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DEFAULT))
+        rp.buttons(rp.btn("📢 Broadcast to All Users", "act_broadcast", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("📝 Post Message to Chat", "act_post", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("🤖 Set Test Bot Link", "input_settestbot", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("👋 Set Batch Welcome Message", "input_setwelcome", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn(back_text, back_cb, style=rp.Style.PRIMARY))
     )
 
 def build_userbot_panel_msg(session, phone):
@@ -4420,10 +4567,11 @@ def build_userbot_panel_msg(session, phone):
         rp.divider(),
         rp.expandable_quote(quote_text),
         action_btn,
-        rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DEFAULT))
+        rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.PRIMARY))
     )
 
-def build_admin_users_panel_msg():
+def build_admin_users_panel_msg(back_cb="goto_admin_panel"):
+    back_text = "🔙 Back to Admin Panel" if back_cb == "goto_admin_panel" else "🔙 Back to Terminal"
     return rp.message(
         rp.heading("👥 User Management"),
         rp.divider(),
@@ -4437,12 +4585,13 @@ def build_admin_users_panel_msg():
         rp.buttons(rp.btn("🚫 Ban User", "input_ban", style=rp.Style.DANGER)),
         rp.buttons(rp.btn("✅ Unban User", "input_unban", style=rp.Style.SUCCESS)),
         rp.buttons(rp.btn("👢 Kick User", "input_kick", style=rp.Style.DANGER)),
-        rp.buttons(rp.btn("🔍 Find User", "input_find", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("♻️ Reset User Data", "input_resetuser", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DEFAULT))
+        rp.buttons(rp.btn("🔍 Find User", "input_find", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("♻️ Reset User Data", "input_resetuser", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn(back_text, back_cb, style=rp.Style.PRIMARY))
     )
 
-def build_admin_approvals_panel_msg():
+def build_admin_approvals_panel_msg(back_cb="goto_admin_panel"):
+    back_text = "🔙 Back to Admin Panel" if back_cb == "goto_admin_panel" else "🔙 Back to Terminal"
     return rp.message(
         rp.heading("✅ Access Approvals"),
         rp.divider(),
@@ -4455,9 +4604,9 @@ def build_admin_approvals_panel_msg():
         ]),
         rp.buttons(rp.btn("🕐 Approve Demo", "input_demo", style=rp.Style.SUCCESS)),
         rp.buttons(rp.btn("✅ Approve Perm", "input_perm", style=rp.Style.SUCCESS)),
-        rp.buttons(rp.btn("⏳ Extend Demo", "input_extend", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("🔗 Generate Demo Link", "input_gendemo", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DEFAULT))
+        rp.buttons(rp.btn("⏳ Extend Demo", "input_extend", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("🔗 Generate Demo Link", "input_gendemo", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn(back_text, back_cb, style=rp.Style.PRIMARY))
     )
 
 def build_commands_manual_msg():
@@ -4498,7 +4647,11 @@ def build_commands_manual_msg():
             "• ", rp.code("/settestbot <link>"), "\n",
             "  Test Bot ka link update karein.\n\n",
             "• ", rp.code("/setwelcome <bid> <message>"), "\n",
-            "  Batch ke liye custom welcome message set karein."
+            "  Batch ke liye custom welcome message set karein.\n\n",
+            "• ", rp.code("/setprice <bid> <price>"), "\n",
+            "  Paid Batch ki price update karein (Ex: ", rp.code("/setprice -100123 ₹499"), ").\n\n",
+            "• ", rp.code("/setrequestnote <message>"), "\n",
+            "  User batch request acknowledgement note customize karein."
         ]),
         rp.expandable_quote([
             rp.bold("💾 Database & User Operations:"), "\n\n",
@@ -4507,12 +4660,15 @@ def build_commands_manual_msg():
             "• ", rp.code("/allusers"), " — Sabhi registered users ki list export karein.\n\n",
             "• ", rp.code("/user <uid>"), " — User ki poori details aur stats dekhein.\n\n",
             "• ", rp.code("/find <username/id>"), " — Database me user dhoondhein.\n\n",
+            "• ", rp.code("/genvoucher <CODE> <COINS> <MAX_USES>"), " — Promo voucher banayein.\n\n",
+            "• ", rp.code("/vouchers"), " — Active promo vouchers ki list dekhein.\n\n",
+            "• ", rp.code("/batchrequests"), " — Users ki batch demands dekhein.\n\n",
             "• ", rp.code("/ban <uid>"), " / ", rp.code("/unban <uid>"), " — Ban ya unban karein.\n\n",
             "• ", rp.code("/resetuser <uid>"), " — User data aur demo reset karein.\n\n",
             "• ", rp.code("/batchstats <bid>"), " — Batch ki member statistics dekhein.\n\n",
             "• ", rp.code("/cancel"), " — Active input/wizard ko cancel karein."
         ]),
-        rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DEFAULT))
+        rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.PRIMARY))
     )
 
 def build_owner_panel_kb():
@@ -4530,14 +4686,14 @@ def build_owner_panel_kb():
             "• ", rp.bold("Userbot"), " — String session manager & status\n",
             "• ", rp.bold("All Commands"), " — Hidden & advanced terminal commands manual"
         ]),
-        rp.buttons(rp.btn("🔒 Security & Access Control", "dash_locks", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("💾 Database Management", "dash_db", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("📦 Batches & Categories", "dash_batches", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("🧑‍💼 Staff & Admins", "dash_staff", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("📢 Communications", "dash_comms", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("📊 Analytics & Stats", "dash_stats", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("🤖 Userbot Login & Stats", "userbot_details", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("📖 All Commands & Manual", "dash_commands", style=rp.Style.DEFAULT)),
+        rp.buttons(rp.btn("🔒 Security & Access Control", "dash_locks", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("💾 Database Management", "dash_db", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("📦 Batches & Categories", "dash_batches", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("🧑‍💼 Staff & Admins", "dash_staff", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("📢 Communications", "dash_comms", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("📊 Analytics & Stats", "dash_stats", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("🤖 Userbot Login & Stats", "userbot_details", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("📖 All Commands & Manual", "dash_commands", style=rp.Style.PRIMARY)),
         rp.buttons(rp.btn("🔄 Switch Panel", "role_selector", style=rp.Style.SUCCESS))
     )
 
@@ -4552,10 +4708,10 @@ def build_admin_panel_kb():
             "• ", rp.bold("Batches"), " — Add/Delete batches & categories\n",
             "• ", rp.bold("Comms"), " — Broadcast announcements & custom posts"
         ]),
-        rp.buttons(rp.btn("👥 Users Management", "adash_users", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("✅ Approvals Center", "adash_approvals", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("📦 Batches Management", "adash_batches", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("📢 Communications", "adash_comms", style=rp.Style.DEFAULT)),
+        rp.buttons(rp.btn("👥 Users Management", "adash_users", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("✅ Approvals Center", "adash_approvals", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("📦 Batches Management", "adash_batches", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("📢 Communications", "adash_comms", style=rp.Style.PRIMARY)),
         rp.buttons(rp.btn("🔄 Switch Panel", "role_selector", style=rp.Style.SUCCESS))
     )
 
@@ -4563,15 +4719,15 @@ def build_role_selector_kb(user_id):
     is_owner = str(user_id) == str(OWNER_ID)
     owner_btn = []
     if is_owner:
-        owner_btn = [rp.buttons(rp.btn("👑 Owner Panel", "goto_owner_panel", style=rp.Style.DEFAULT))]
+        owner_btn = [rp.buttons(rp.btn("👑 Owner Panel", "goto_owner_panel", style=rp.Style.PRIMARY))]
         
     return rp.message(
         rp.heading("🎛 Select Panel"),
         rp.para(rp.italic("Aap kis panel me jaana chahte hain?")),
         rp.divider(),
         *owner_btn,
-        rp.buttons(rp.btn("🛡 Admin Panel", "goto_admin_panel", style=rp.Style.DEFAULT)),
-        rp.buttons(rp.btn("👤 User Panel", "goto_user_panel", style=rp.Style.DEFAULT))
+        rp.buttons(rp.btn("🛡 Admin Panel", "goto_admin_panel", style=rp.Style.PRIMARY)),
+        rp.buttons(rp.btn("👤 User Panel", "goto_user_panel", style=rp.Style.PRIMARY))
     )
 
 async def show_role_selector(client: Client, message: Message, user):
@@ -4859,12 +5015,17 @@ async def handle_user_flow_messages(client: Client, message: Message) -> bool:
         if uid not in DB["BATCH_REQUESTS"][text]:
             DB["BATCH_REQUESTS"][text].append(uid)
         await save_data_async()
-        await safe_reaction(client, message.chat.id, message.id, "👍")
+        note = DB.get("BATCH_REQUEST_NOTE") or (
+            "🙏 **Important Note from Admin:**\n"
+            "Main abhi regular active nahi reh pata hu isliye batch upload/add hone me thoda waqt lag sakta hai. "
+            "Aap bilkul chinta na karein aur thoda dhairya (patience) rakhein. "
+            "Jaise hi yeh batch bot me add hoga, bot aapko direct notification bhej dega! Tab tak ke liye dhanyawad."
+        )
         kb = [[InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]]
         await message.reply_text(
             f"✅ **Batch Request Received!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📦 **Requested:** `{text}`\n\n"
-            f"Aapki request record ho gayi hai! Jaise hi yeh batch bot me add hoga, aapko notification mil jayega.",
+            f"📦 **Requested Batch:** `{text}`\n\n"
+            f"{note}",
             reply_markup=InlineKeyboardMarkup(kb),
             parse_mode=ParseMode.MARKDOWN
         )
