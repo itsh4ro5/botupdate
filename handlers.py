@@ -678,28 +678,40 @@ async def cmd_userbotpass(client: Client, message: Message):
         user_store.pop("login_client", None)
         await msg.edit_text(f"❌ Password Error: `{e}`", parse_mode=ParseMode.MARKDOWN)
 async def cmd_del_msg(client: Client, message: Message):
-    if not is_admin_msg(message) or not message.reply_to_message:
+    if not is_admin_msg(message):
         return
-    key = (message.chat.id, message.reply_to_message.id)
-    if key in MESSAGE_MAP:
-        tc, tm = MESSAGE_MAP[key]
+
+    # Mode 1: Reply to a specific message to delete it (and its bridged support topic message)
+    if message.reply_to_message:
+        key = (message.chat.id, message.reply_to_message.id)
+        if key in MESSAGE_MAP:
+            tc, tm = MESSAGE_MAP[key]
+            try:
+                await client.delete_messages(tc, tm)
+                del MESSAGE_MAP[key]
+                if (tc, tm) in MESSAGE_MAP:
+                    del MESSAGE_MAP[(tc, tm)]
+            except Exception:
+                pass
         try:
-            await client.delete_messages(tc, tm)
-            await message.reply_to_message.delete()
-            await message.delete()
-            del MESSAGE_MAP[key]
-            if (tc, tm) in MESSAGE_MAP:
-                del MESSAGE_MAP[(tc, tm)]
-        except Exception as e:
-            logger.error(f"Error deleting message: {e}")
-            msg = await message.reply_text(f"  Delete failed: {e}")
-            await schedule_delete(client, msg)
-    else:
-        try:
-            await message.reply_to_message.delete()
-            await message.delete()
+            await client.delete_messages(message.chat.id, [message.reply_to_message.id, message.id])
         except Exception as e:
             logger.error(f"Delete failed: {e}")
+            msg = await message.reply_text(f"  Delete failed: {e}")
+            await schedule_delete(client, msg)
+        return
+
+    # Mode 2: Official Telegram Batch Delete /del <N> (up to 100 messages at once)
+    args = get_args(message)
+    if args and args[0].isdigit():
+        count = min(int(args[0]), 100)
+        msg_ids = [message.id]
+        try:
+            async for m in client.get_chat_history(message.chat.id, limit=count, offset_id=message.id):
+                msg_ids.append(m.id)
+            await client.delete_messages(message.chat.id, msg_ids)
+        except Exception as e:
+            logger.error(f"Bulk delete error: {e}")
 
 async def cmd_emptybatch(client: Client, message: Message):
     if not is_admin_msg(message):
@@ -920,20 +932,29 @@ async def cmd_unban(client: Client, message: Message):
         db_msg = "  Database se unban kiya gaya aur Profile reset kar di gayi."
     else:
         db_msg = "  Database me pehle se unbanned tha."
-    all_channels = (
-        list(DB.get("FREE_CHANNELS", {}).keys())
-        + list(DB.get("PAID_CHANNELS", {}).keys())
-        + list(DB.get("SPECIAL_CHANNELS", {}).keys())
+    all_channels = list(
+        set(
+            list(DB.get("FREE_CHANNELS", {}).keys())
+            + list(DB.get("PAID_CHANNELS", {}).keys())
+            + list(DB.get("SPECIAL_CHANNELS", {}).keys())
+            + ([MANDATORY_CHANNEL_ID] if MANDATORY_CHANNEL_ID else [])
+        )
     )
-    if MANDATORY_CHANNEL_ID:
-        all_channels.append(MANDATORY_CHANNEL_ID)
     success_count = 0
-    for bid in all_channels:
-        try:
-            await client.unban_chat_member(int(bid), target)
-            success_count += 1
-        except Exception:
-            pass
+    sem = asyncio.Semaphore(5)
+
+    async def _unban_single(bid):
+        nonlocal success_count
+        async with sem:
+            try:
+                await client.unban_chat_member(int(bid), target)
+                success_count += 1
+            except Exception:
+                pass
+
+    if all_channels:
+        await asyncio.gather(*[_unban_single(bid) for bid in all_channels], return_exceptions=True)
+
     await message.reply_text(
         f"  **User `{target}` Successfully Unbanned!**\n{db_msg}\n`{success_count}` channels/groups se unban request bheji gayi.",
         parse_mode=ParseMode.MARKDOWN,
@@ -1416,25 +1437,36 @@ async def cmd_user_details(client: Client, message: Message):
         + ("  BLOCKED\n\n" if target_id in DB.get("BLOCKED_USERS", []) else "")
         + "--- MEMBERSHIP ---\n"
     )
-    found = False
-    for cid in set(
+    all_target_cids = list(set(
         list(DB.get("ALL_CHATS", {}).keys())
         + list(DB.get("FREE_CHANNELS", {}).keys())
         + list(DB.get("PAID_CHANNELS", {}).keys())
         + list(DB.get("SPECIAL_CHANNELS", {}).keys())
-    ):
-        try:
-            m = await client.get_chat_member(int(cid), target_id)
-            if m.status in [
-                ChatMemberStatus.MEMBER,
-                ChatMemberStatus.ADMINISTRATOR,
-                ChatMemberStatus.OWNER,
-                ChatMemberStatus.RESTRICTED,
-            ]:
-                r += f"{DB['ALL_CHATS'].get(cid, cid)}: Joined\n"
-                found = True
-        except Exception:
-            pass
+    ))
+    found = False
+    sem = asyncio.Semaphore(5)
+
+    async def _check_membership(cid):
+        async with sem:
+            try:
+                m = await client.get_chat_member(int(cid), target_id)
+                if m.status in [
+                    ChatMemberStatus.MEMBER,
+                    ChatMemberStatus.ADMINISTRATOR,
+                    ChatMemberStatus.OWNER,
+                    ChatMemberStatus.RESTRICTED,
+                ]:
+                    chat_name = DB.get('ALL_CHATS', {}).get(cid, cid)
+                    return f"{chat_name}: Joined\n"
+            except Exception:
+                pass
+            return None
+
+    results = await asyncio.gather(*[_check_membership(cid) for cid in all_target_cids], return_exceptions=True)
+    for res in results:
+        if isinstance(res, str) and res:
+            r += res
+            found = True
     if not found:
         r += "Not found in any batch.\n"
     if "demo_history" in info:
@@ -1560,28 +1592,32 @@ async def cmd_clear(client: Client, message: Message):
             + list(DB.get("SPECIAL_CHANNELS", {}).keys())
         )
         removed_count = checked_users = safe_users = 0
+        membership_memo = {}
         for bid in all_channels:
             try:
                 async for member in userbot.get_chat_members(int(bid)):
                     uid = member.user.id
                     checked_users += 1
                     if uid != OWNER_ID and not member.user.is_bot:
-                        is_in_main = False
-                        try:
-                            await userbot.get_chat_member(int(MANDATORY_CHANNEL_ID), uid)
-                            is_in_main = True
+                        if uid not in membership_memo:
+                            try:
+                                await userbot.get_chat_member(int(MANDATORY_CHANNEL_ID), uid)
+                                membership_memo[uid] = True
+                            except Exception:
+                                membership_memo[uid] = False
+
+                        is_in_main = membership_memo[uid]
+                        if is_in_main:
                             safe_users += 1
-                        except Exception:
-                            pass
-                        if not is_in_main:
+                        else:
                             try:
                                 await client.ban_chat_member(int(bid), uid)
                                 await client.unban_chat_member(int(bid), uid)
                                 removed_count += 1
-                                await asyncio.sleep(1.5)
+                                await asyncio.sleep(1.0)
                             except Exception:
                                 pass
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.05)
             except Exception:
                 pass
         await userbot.stop()
@@ -2687,7 +2723,8 @@ async def broadcast_callback(client: Client, q: CallbackQuery):
         count = 0
         blocked_count = 0
         is_user_broadcast = BROADCAST_STATE[uid]["type"] == "broadcast"
-        
+        blocked_to_kick = []
+
         targets = (
             list(DB.get("USER_DATA", {}).keys())
             if is_user_broadcast
@@ -2695,7 +2732,7 @@ async def broadcast_callback(client: Client, q: CallbackQuery):
             + list(DB.get("PAID_CHANNELS", {}).keys())
             + list(DB.get("SPECIAL_CHANNELS", {}).keys())
         )
-        
+
         total_targets = len(targets)
 
         for index, tid in enumerate(targets):
@@ -2716,15 +2753,8 @@ async def broadcast_callback(client: Client, q: CallbackQuery):
                 # Agar user broadcast hai aur error aaya, matlab Bot Blocked ya Account Deleted
                 if is_user_broadcast:
                     blocked_count += 1
-                    target_id = int(tid)
-                    
-                    # Background task to ban from batches (Ignores Mandatory Channel automatically)
-                    async def auto_kick_blocked(u_id):
-                        from config import execute_universal_kick
-                        await execute_universal_kick(u_id, client, permanent_ban=True)
-                        
-                    asyncio.create_task(auto_kick_blocked(target_id))
-            
+                    blocked_to_kick.append(int(tid))
+
             # Live Progress Update (Har 50 users ke baad msg update hoga)
             if index > 0 and index % 50 == 0:
                 try:
@@ -2744,8 +2774,24 @@ async def broadcast_callback(client: Client, q: CallbackQuery):
             f"💡 *Jin users ne bot ko block kiya tha, unhe sabhi premium/free batches se nikal diya gaya hai (Mandatory channel me abhi bhi hain).* ",
             parse_mode=ParseMode.MARKDOWN
         )
-        
+
         del BROADCAST_STATE[uid]
+
+        # Process blocked users in background with bounded concurrency
+        if is_user_broadcast and blocked_to_kick:
+            async def _kick_blocked_batch(uids):
+                sem = asyncio.Semaphore(3)
+                async def _kick_worker(u_id):
+                    async with sem:
+                        try:
+                            from config import execute_universal_kick
+                            await execute_universal_kick(u_id, client, permanent_ban=True)
+                        except Exception:
+                            pass
+                        await asyncio.sleep(0.5)
+                await asyncio.gather(*[_kick_worker(u) for u in uids], return_exceptions=True)
+
+            asyncio.create_task(_kick_blocked_batch(blocked_to_kick))
 
 async def general_callback(client: Client, q: CallbackQuery):
     uid = q.from_user.id
@@ -4737,24 +4783,30 @@ async def background_sync(client: Client):
 
         CHUNK_SIZE = 15   # ek saath kitne membership checks parallel chalein (flood-safe)
         CHUNK_DELAY = 1.0 # har chunk ke beech gap (Telegram rate limits ke andar rehne ke liye)
+        kicked_any = False
 
         async def _check_one(user_id: int):
+            nonlocal kicked_any
             try:
                 m = await client.get_chat_member(int(MANDATORY_CHANNEL_ID), user_id)
                 if m.status in [ChatMemberStatus.LEFT, ChatMemberStatus.BANNED]:
                     logger.info(f"🚨 AUTO-SCANNER: User {user_id} has LEFT. Kicking now!")
                     await execute_universal_kick(user_id, client)
+                    kicked_any = True
             except UserNotParticipant:
                 logger.info(f"🚨 AUTO-SCANNER: User {user_id} is MISSING. Kicking now!")
                 await execute_universal_kick(user_id, client)
+                kicked_any = True
             except Exception:
                 pass
 
         for i in range(0, len(user_ids), CHUNK_SIZE):
             chunk = user_ids[i:i + CHUNK_SIZE]
             await asyncio.gather(*[_check_one(uid) for uid in chunk])
-            await save_data_async()
             await asyncio.sleep(CHUNK_DELAY)
+
+        if kicked_any:
+            await save_data_async()
 
     finally:
         _SYNC_IN_PROGRESS = False

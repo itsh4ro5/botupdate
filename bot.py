@@ -471,14 +471,19 @@ async def _run_pyrogram_engine():
 
     # Background Tasks Scheduler
     async def run_jobs():
+        sync_counter = 0
         while True:
             try:
                 await asyncio.sleep(60)
                 if hasattr(H, "check_demos"):
                     await H.check_demos(app)
-                # 👇 YEH NAYI LINE ADD KAREIN 👇
-                if hasattr(H, "background_sync"):
-                    await H.background_sync(app)
+                # Run background_sync every 30 minutes (30 * 60s) to keep CPU & network load minimal
+                # Real-time events (leaves/blocks) are already captured instantly by Telegram event handlers
+                sync_counter += 1
+                if sync_counter >= 30:
+                    sync_counter = 0
+                    if hasattr(H, "background_sync"):
+                        await H.background_sync(app)
             except asyncio.CancelledError:
                 break
             except Exception as e:
