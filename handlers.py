@@ -3629,7 +3629,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                 rp.footer(rp.italic("Select batch type below:")),
                 rp.buttons(
                     rp.btn("🆓 Free Batches", f"listcat_{cat_idx}_free_0", style=rp.Style.SUCCESS),
-                    rp.btn("💰 Paid Batches", f"listcat_{cat_idx}_paid_0", style=rp.Style.DEFAULT)
+                    rp.btn("💰 Paid Batches", f"listcat_{cat_idx}_paid_0", style=rp.Style.PRIMARY)
                 ),
                 rp.buttons(
                     rp.btn("✨ Special Batches", f"listcat_{cat_idx}_special_0", style=rp.Style.SUCCESS),
@@ -4171,7 +4171,7 @@ def build_home_menu(user_key, user):
                 "• ", rp.bold("Test Bot"), " — Practice tests aur daily current affairs solve karein."
             ]),
             rp.buttons(rp.btn("👑 My Batches", "my_batches_0", style=rp.Style.SUCCESS)),
-            rp.buttons(rp.btn("🌟 All Batches", "all_batches_0", style=rp.Style.DEFAULT)),
+            rp.buttons(rp.btn("🌟 All Batches", "all_batches_0", style=rp.Style.PRIMARY)),
             rp.buttons(rp.btn("🔥 Daily Streak Rewards", "claim_daily_streak", style=rp.Style.SUCCESS)),
             rp.buttons(rp.btn("🏆 Top Leaderboard", "show_leaderboard", style=rp.Style.DEFAULT)),
             rp.buttons(rp.btn("💎 VIP Materials", "vip_materials", style=rp.Style.DEFAULT)),
@@ -4203,7 +4203,7 @@ def build_home_menu(user_key, user):
                 "• ", rp.bold("Profile"), " — Apna account balance, streak aur tier stats check karein."
             ]),
             rp.buttons(rp.btn("📚 My Batches", "my_batches_0", style=rp.Style.SUCCESS)),
-            rp.buttons(rp.btn("🌐 All Batches", "all_batches_0", style=rp.Style.DEFAULT)),
+            rp.buttons(rp.btn("🌐 All Batches", "all_batches_0", style=rp.Style.PRIMARY)),
             rp.buttons(rp.btn("🔥 Daily Streak Rewards", "claim_daily_streak", style=rp.Style.SUCCESS)),
             rp.buttons(rp.btn("🏆 Top Leaderboard", "show_leaderboard", style=rp.Style.DEFAULT)),
             rp.buttons(rp.btn("🎁 Refer & Earn", "menu_refer", style=rp.Style.SUCCESS)),
