@@ -1487,7 +1487,17 @@ async def cmd_broadcast_start(client: Client, message: Message):
     if not message.from_user:
         return
     BROADCAST_STATE[message.from_user.id] = {"type": "broadcast", "step": "wait_msg"}
-    await message.reply_text("  Send message to broadcast.")
+    guide_text = (
+        "📢 **Super Broadcast Engine**\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Ab aap jo message bhejenge wo bot ke sabhi users ko deliver kiya jayega.\n\n"
+        "💡 **Pro Tips for Modern Styling & Colors:**\n"
+        "• **Colored Box (Green/Orange):** Message me ````diff```` code block use karein (`+ text` for green, `! text` for orange).\n"
+        "• **Expandable Dropdown:** Text ko `**<blockquote expandable>Details</blockquote>**` me daalein.\n"
+        "• **Media Supported:** Text ke alawa photo, video ya document bhi bhej sakte hain!\n\n"
+        "👉 *Kripya apna broadcast message yahan bhejein:*"
+    )
+    await message.reply_text(guide_text, parse_mode=ParseMode.MARKDOWN)
 
 async def cmd_post_start(client: Client, message: Message):
     if not message.from_user:
@@ -2286,9 +2296,8 @@ async def run_advanced_caption_changer(bot_client: Client, message: Message, cha
 async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: str, category: str, coin_cost: int = None):
     import config
     import os
+    import urllib.parse
     update_channel = getattr(config, 'BATCH_UPDATE_CHANNEL_ID', 0)
-    if not update_channel:
-        return
 
     bot_username = getattr(config, 'BOT_USERNAME', None)
     if not bot_username:
@@ -2298,18 +2307,37 @@ async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: s
             bot_username = "bot"
 
     deep_link = f"https://t.me/{bot_username}?start=batch_{cid}"
-    kb = [[InlineKeyboardButton("🚀 Get Access Here", url=deep_link)]]
-    
+    share_text = f"🔥 Check out new batch: {cname} on our Bot!"
+    share_url = f"https://t.me/share/url?url={urllib.parse.quote(deep_link)}&text={urllib.parse.quote(share_text)}"
+
+    kb = [
+        [InlineKeyboardButton("🚀 Get Direct Access via Bot", url=deep_link)],
+        [InlineKeyboardButton("📢 Share with Friends", url=share_url)],
+    ]
+
+    type_badge = "FREE BATCH" if b_type.lower() == "free" else ("PAID BATCH" if b_type.lower() == "paid" else "SPECIAL BATCH")
+    cost_line = f"\n💰 <b>Coin Cost:</b> <code>{coin_cost} Coins</code>" if (b_type.lower() == 'special' and coin_cost) else ""
+
     caption = (
-        f"🎉 **NEW BATCH ADDED!**\n\n"
-        f"📦 **Name:** `{cname}`\n"
-        f"🏷️ **Type:** `{b_type.upper()}`\n"
-        f"📂 **Category:** `{category}`\n"
+        "🌟 ━━━━━━━━━━━━━━━━━━━━━ 🌟\n"
+        "⚡ <b>NEW BATCH OFFICIALLY ADDED!</b> ⚡\n"
+        "🌟 ━━━━━━━━━━━━━━━━━━━━━ 🌟\n\n"
+        f"📦 <b>Batch Name:</b> <code>{cname}</code>\n"
+        f"🏷️ <b>Access Level:</b> <code>{type_badge}</code>\n"
+        f"📁 <b>Category:</b> <code>{category}</code>"
+        f"{cost_line}\n\n"
+        "```diff\n"
+        "+ [STATUS: 100% VERIFIED & ACTIVE]\n"
+        "+ [INSTANT BOT DELIVERY ENABLED]\n"
+        "! [TAP BUTTON BELOW TO ENROLL]\n"
+        "```\n\n"
+        "<blockquote expandable>📖 <b>Batch Features & Highlights:</b>\n"
+        "• Complete High-Quality Lectures & Study Material\n"
+        "• Chapter-wise DPPs, Hand-written Notes & Test Papers\n"
+        "• 24x7 Discussion Community & Doubt Sessions\n"
+        "• Direct instant access without wait or verification delay!</blockquote>\n\n"
+        "👉 <i>Neeche button par tap karke turant access unlock karein!</i>"
     )
-    if b_type.lower() == 'special' and coin_cost:
-        caption += f"💰 **Unlock Cost:** `{coin_cost} Coin{'s' if coin_cost != 1 else ''}`\n"
-        
-    caption += f"\n👉 *Click the button below to get direct access via our Bot!*"
 
     photo_path = None
     try:
@@ -2319,15 +2347,45 @@ async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: s
     except Exception:
         pass
 
-    try:
-        if photo_path:
-            await client.send_photo(int(update_channel), photo=photo_path, caption=caption, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-            if os.path.exists(photo_path):
-                os.remove(photo_path)
-        else:
-            await client.send_message(int(update_channel), text=caption, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-    except Exception as e:
-        logger.error(f"Failed to send to batch update channel: {e}")
+    if update_channel:
+        try:
+            if photo_path:
+                await client.send_photo(int(update_channel), photo=photo_path, caption=caption, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
+            else:
+                await client.send_message(int(update_channel), text=caption, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
+        except Exception as e:
+            logger.error(f"Failed to send to batch update channel: {e}")
+
+    if photo_path and os.path.exists(photo_path):
+        try:
+            os.remove(photo_path)
+        except Exception:
+            pass
+
+    # Auto-notify users who requested this batch
+    reqs = DB.get("BATCH_REQUESTS", {})
+    matched_uids = set()
+    cname_lower = cname.lower()
+    for req_text, uids in list(reqs.items()):
+        if req_text.lower() in cname_lower or cname_lower in req_text.lower():
+            for u in uids:
+                matched_uids.add(int(u))
+
+    for target_uid in matched_uids:
+        try:
+            notify_kb = [[InlineKeyboardButton("🚀 Open Your Requested Batch", url=deep_link)]]
+            await client.send_message(
+                target_uid,
+                f"🎉 **Great News! Aapka Requested Batch Live Ho Chuka Hai!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📦 **Batch Name:** `{cname}`\n"
+                f"🏷️ **Type:** `{type_badge}`\n\n"
+                f"Aapne is batch ki demand ki thi. Ab yeh bot me successfully add ho gaya hai!\n"
+                f"Neeche button se direct join karein:",
+                reply_markup=InlineKeyboardMarkup(notify_kb),
+                parse_mode=ParseMode.MARKDOWN
+            )
+        except Exception:
+            pass
 
 async def process_updatepost(client: Client, message: Message):
     raw_id = message.text.strip()
@@ -2769,12 +2827,12 @@ async def handle_broadcast_flow(client: Client, message: Message):
     if state["step"] == "wait_msg":
         state["content"] = message
         state["step"] = "confirm"
-        kb = [[
-            InlineKeyboardButton("✅ YES", callback_data="bc_yes"),
-            InlineKeyboardButton("❌ NO", callback_data="bc_no"),
-        ]]
+        kb = [
+            [InlineKeyboardButton("🚀 Send Broadcast Now", callback_data="bc_yes")],
+            [InlineKeyboardButton("❌ Cancel Broadcast", callback_data="bc_no")],
+        ]
         await message.reply_text(
-            "❓ **Confirm?**",
+            "📢 **Broadcast Confirmation**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n\nKya aap sach me yeh message sabhi users ko broadcast karna chahte hain?",
             reply_markup=InlineKeyboardMarkup(kb),
             parse_mode=ParseMode.MARKDOWN,
         )
@@ -3298,10 +3356,8 @@ async def general_callback(client: Client, q: CallbackQuery):
             wa_url = f"https://api.whatsapp.com/send?text={urllib.parse.quote(share_msg)}"
 
             kb = InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton("✈️ Send to Telegram", url=tg_url),
-                    InlineKeyboardButton("💬 Send to WhatsApp", url=wa_url)
-                ],
+                [InlineKeyboardButton("✈️ Send to Telegram", url=tg_url)],
+                [InlineKeyboardButton("💬 Send to WhatsApp", url=wa_url)],
                 [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="u_main")]
             ])
 
@@ -3382,10 +3438,8 @@ async def general_callback(client: Client, q: CallbackQuery):
 
                 kb = InlineKeyboardMarkup([
                     [make_copy_button("📋 1-Tap Copy Invite Link", ref_link)],
-                    [
-                        InlineKeyboardButton("✈️ Share on Telegram", url=tg_share_url),
-                        InlineKeyboardButton("💬 Share on WhatsApp", url=wa_share_url)
-                    ],
+                    [InlineKeyboardButton("✈️ Share on Telegram", url=tg_share_url)],
+                    [InlineKeyboardButton("💬 Share on WhatsApp", url=wa_share_url)],
                     [InlineKeyboardButton("🏆 Top 10 Leaderboard", callback_data="show_leaderboard")],
                     [InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")]
                 ])
@@ -3568,14 +3622,10 @@ async def general_callback(client: Client, q: CallbackQuery):
 
                 kb.append([InlineKeyboardButton(button_text, url=f"https://t.me/c/{clean_id}/1")])
 
-            nav_buttons = []
             if page > 0:
-                nav_buttons.append(InlineKeyboardButton("🔙 Back", callback_data=f"my_batches_{page-1}"))
+                kb.append([InlineKeyboardButton("🔙 Previous Page", callback_data=f"my_batches_{page-1}")])
             if end_idx < total_batches:
-                nav_buttons.append(InlineKeyboardButton("Next ➡️", callback_data=f"my_batches_{page+1}"))
-
-            if nav_buttons:
-                kb.append(nav_buttons)
+                kb.append([InlineKeyboardButton("Next Page ➡️", callback_data=f"my_batches_{page+1}")])
             kb.append([InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")])
 
             await q.edit_message_text(
@@ -3587,18 +3637,10 @@ async def general_callback(client: Client, q: CallbackQuery):
         elif data.startswith("all_batches_"):
             await q.answer()
             categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES)
-            cat_rows = []
-            
-            # 2-2 Categories ek row me (Bilkul User Panel Home Menu jaisa Grid)
-            for i in range(0, len(categories), 2):
-                row_btns = [
-                    rp.btn(f"📁 {categories[i]}", f"showcat_{i}", style=rp.Style.DEFAULT)
-                ]
-                if i + 1 < len(categories):
-                    row_btns.append(
-                        rp.btn(f"📁 {categories[i+1]}", f"showcat_{i+1}", style=rp.Style.DEFAULT)
-                    )
-                cat_rows.append(rp.buttons(*row_btns))
+            cat_rows = [
+                rp.buttons(rp.btn(f"📁 {cat}", f"showcat_{i}", style=rp.Style.PRIMARY))
+                for i, cat in enumerate(categories)
+            ]
 
             msg = rp.message(
                 rp.heading("📂 All Batches Catalog"),
@@ -3621,24 +3663,19 @@ async def general_callback(client: Client, q: CallbackQuery):
                 rp.heading(f"📁 {cat_name}"),
                 rp.para("Aapko kis type ke batch chahiye? Neeche option select karein:"),
                 rp.divider(),
-                rp.bullet_list(
-                    rp.list_item(rp.para("🆓 ", rp.bold("Free"), " — Isme aapko free me batches milenge.")),
-                    rp.list_item(rp.para("💰 ", rp.bold("Paid"), " — Isme aapko Paid Batches milenge.")),
-                    rp.list_item(rp.para("✨ ", rp.bold("Special"), " — Refer kiye gaye coin se free unlock karein!"))
-                ),
-                rp.footer(rp.italic("Select batch type below:")),
-                rp.buttons(
-                    rp.btn("🆓 Free Batches", f"listcat_{cat_idx}_free_0", style=rp.Style.SUCCESS),
-                    rp.btn("💰 Paid Batches", f"listcat_{cat_idx}_paid_0", style=rp.Style.PRIMARY)
-                ),
-                rp.buttons(
-                    rp.btn("✨ Special Batches", f"listcat_{cat_idx}_special_0", style=rp.Style.SUCCESS),
-                    rp.btn("🎁 Refer & Earn", "menu_refer", style=rp.Style.DEFAULT)
-                ),
-                rp.buttons(
-                    rp.btn("🔙 Back to Categories", "all_batches_0", style=rp.Style.DEFAULT),
-                    rp.btn("🏠 Main Menu", "u_main", style=rp.Style.DEFAULT)
-                )
+                rp.expandable_quote([
+                    rp.bold("ℹ️ Category Options & Uses:"), "\n",
+                    "• ", rp.bold("Free Batches"), " — 100% Free study courses, direct access bina kisi cost ke.\n",
+                    "• ", rp.bold("Paid Batches"), " — Premium batches, full structured lectures aur material.\n",
+                    "• ", rp.bold("Special Batches"), " — Referral coins se free me unlock hone wale courses.\n",
+                    "• ", rp.bold("Refer & Earn"), " — Friends ko invite karein aur free coins earn karein."
+                ]),
+                rp.buttons(rp.btn("🆓 Free Batches", f"listcat_{cat_idx}_free_0", style=rp.Style.SUCCESS)),
+                rp.buttons(rp.btn("💰 Paid Batches", f"listcat_{cat_idx}_paid_0", style=rp.Style.PRIMARY)),
+                rp.buttons(rp.btn("✨ Special Batches", f"listcat_{cat_idx}_special_0", style=rp.Style.SUCCESS)),
+                rp.buttons(rp.btn("🎁 Refer & Earn", "menu_refer", style=rp.Style.DEFAULT)),
+                rp.buttons(rp.btn("🔙 Back to Categories", "all_batches_0", style=rp.Style.DEFAULT)),
+                rp.buttons(rp.btn("🏠 Main Menu", "u_main", style=rp.Style.DEFAULT))
             )
             await rp.edit(client, q.message.chat.id, q.message.id, msg)
 
@@ -3714,37 +3751,23 @@ async def general_callback(client: Client, q: CallbackQuery):
             batch_rows = []
             page_items = filtered_batches[start_idx:end_idx]
 
-            # 2-2 Batches ek row me (Half-width grid layout)
-            for i in range(0, len(page_items), 2):
-                r_btns = []
-                for cid, name in page_items[i:i+2]:
-                    if b_type == "free":
-                        cb_data = f"get_f_{cid}"
-                    elif b_type == "paid":
-                        cb_data = f"view_p_{cid}"
-                    else:
-                        cb_data = f"view_s_{cid}"
-                    r_btns.append(rp.btn(f"{prefix} {name}", cb_data, style=btn_style))
-                batch_rows.append(rp.buttons(*r_btns))
+            # Single column grid: Har batch apni separate row me
+            for cid, name in page_items:
+                if b_type == "free":
+                    cb_data = f"get_f_{cid}"
+                elif b_type == "paid":
+                    cb_data = f"view_p_{cid}"
+                else:
+                    cb_data = f"view_s_{cid}"
+                batch_rows.append(rp.buttons(rp.btn(f"{prefix} {name}", cb_data, style=btn_style)))
 
-            nav_buttons = []
             if page > 0:
-                nav_buttons.append(
-                    rp.btn("🔙 Back", f"listcat_{cat_idx}_{b_type}_{page-1}", style=rp.Style.DEFAULT)
-                )
+                batch_rows.append(rp.buttons(rp.btn("🔙 Previous Page", f"listcat_{cat_idx}_{b_type}_{page-1}", style=rp.Style.DEFAULT)))
             if end_idx < total:
-                nav_buttons.append(
-                    rp.btn("Next ➡️", f"listcat_{cat_idx}_{b_type}_{page+1}", style=rp.Style.DEFAULT)
-                )
-            if nav_buttons:
-                batch_rows.append(rp.buttons(*nav_buttons))
+                batch_rows.append(rp.buttons(rp.btn("Next Page ➡️", f"listcat_{cat_idx}_{b_type}_{page+1}", style=rp.Style.DEFAULT)))
 
-            batch_rows.append(
-                rp.buttons(
-                    rp.btn("📂 Category Menu", f"showcat_{cat_idx}", style=rp.Style.DEFAULT),
-                    rp.btn("🏠 Main Menu", "u_main", style=rp.Style.DEFAULT)
-                )
-            )
+            batch_rows.append(rp.buttons(rp.btn("📂 Category Menu", f"showcat_{cat_idx}", style=rp.Style.DEFAULT)))
+            batch_rows.append(rp.buttons(rp.btn("🏠 Main Menu", "u_main", style=rp.Style.DEFAULT)))
 
             list_msg = rp.message(
                 rp.heading(f"📂 {cat_name} ({b_type.title()})"),
