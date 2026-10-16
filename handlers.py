@@ -3511,43 +3511,61 @@ async def general_callback(client: Client, q: CallbackQuery):
 
         elif data.startswith("all_batches_"):
             await q.answer()
-            kb = [
-                [InlineKeyboardButton(f"📁 {cat}", callback_data=f"showcat_{i}")]
-                for i, cat in enumerate(DB.get("CATEGORIES", DEFAULT_CATEGORIES))
-            ] + [
-                [InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]
-            ]
-            await q.edit_message_text(
-                "📂 **All Batches - Select Category:**\n"
-                "📂 **Sabhi Batches - Category Chune kon sa chaiye:**",
-                reply_markup=InlineKeyboardMarkup(kb),
-                parse_mode=ParseMode.MARKDOWN,
+            categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES)
+            cat_rows = []
+            
+            # 2-2 Categories ek row me (Bilkul User Panel Home Menu jaisa Grid)
+            for i in range(0, len(categories), 2):
+                row_btns = [
+                    rp.btn(f"📁 {categories[i]}", f"showcat_{i}", style=rp.Style.DEFAULT)
+                ]
+                if i + 1 < len(categories):
+                    row_btns.append(
+                        rp.btn(f"📁 {categories[i+1]}", f"showcat_{i+1}", style=rp.Style.DEFAULT)
+                    )
+                cat_rows.append(rp.buttons(*row_btns))
+
+            msg = rp.message(
+                rp.heading("📂 All Batches Catalog"),
+                rp.para("Apni exam preparation ke liye neeche se ", rp.bold("Category"), " chunein:"),
+                rp.divider(),
+                *cat_rows,
+                rp.buttons(
+                    rp.btn("🏠 Main Menu", "u_main", style=rp.Style.SUCCESS)
+                )
             )
+            await rp.edit(client, q.message.chat.id, q.message.id, msg)
 
         # --- CATEGORY DETAILS WITH SPECIAL BATCHES BUTTON ---
         elif data.startswith("showcat_"):
             await q.answer()
             cat_idx = int(data.split("_")[1])
-            kb = [
-                [
-                    InlineKeyboardButton("🆓 Free Batches", callback_data=f"listcat_{cat_idx}_free_0"),
-                    InlineKeyboardButton("💰 Paid Batches", callback_data=f"listcat_{cat_idx}_paid_0"),
-                ],
-                [
-                    InlineKeyboardButton("✨ Special Batches", callback_data=f"listcat_{cat_idx}_special_0"),
-                ],
-                [
-                    InlineKeyboardButton("🔙 Back to Categories", callback_data="all_batches_0")
-                ],
-            ]
-            await q.edit_message_text(
-                f"  **Category: {DB.get('CATEGORIES', DEFAULT_CATEGORIES)[cat_idx]}**\n\nAapko kis type ke batch chahiye?\n"
-                " *FREE = Isme aapko free me batches milenge*\n"
-                "*Paid = Isme aapko Paid Batches Milenge*\n"
-                "*Special = ISme aapko wo batches milenge jisko aap refer kiye gaye coin se purchase kar sakte hai*",
-                reply_markup=InlineKeyboardMarkup(kb),
-                parse_mode=ParseMode.MARKDOWN,
+            cat_name = DB.get("CATEGORIES", DEFAULT_CATEGORIES)[cat_idx]
+
+            msg = rp.message(
+                rp.heading(f"📁 {cat_name}"),
+                rp.para("Aapko kis type ke batch chahiye? Neeche option select karein:"),
+                rp.divider(),
+                rp.bullet_list(
+                    rp.list_item(rp.para("🆓 ", rp.bold("Free"), " — Isme aapko free me batches milenge.")),
+                    rp.list_item(rp.para("💰 ", rp.bold("Paid"), " — Isme aapko Paid Batches milenge.")),
+                    rp.list_item(rp.para("✨ ", rp.bold("Special"), " — Refer kiye gaye coin se free unlock karein!"))
+                ),
+                rp.footer(rp.italic("Select batch type below:")),
+                rp.buttons(
+                    rp.btn("🆓 Free Batches", f"listcat_{cat_idx}_free_0", style=rp.Style.SUCCESS),
+                    rp.btn("💰 Paid Batches", f"listcat_{cat_idx}_paid_0", style=rp.Style.DEFAULT)
+                ),
+                rp.buttons(
+                    rp.btn("✨ Special Batches", f"listcat_{cat_idx}_special_0", style=rp.Style.SUCCESS),
+                    rp.btn("🎁 Refer & Earn", "menu_refer", style=rp.Style.DEFAULT)
+                ),
+                rp.buttons(
+                    rp.btn("🔙 Back to Categories", "all_batches_0", style=rp.Style.DEFAULT),
+                    rp.btn("🏠 Main Menu", "u_main", style=rp.Style.DEFAULT)
+                )
             )
+            await rp.edit(client, q.message.chat.id, q.message.id, msg)
 
         elif data.startswith("setextcat_"):
             await q.answer()
@@ -3587,10 +3605,13 @@ async def general_callback(client: Client, q: CallbackQuery):
             cat_name = DB.get("CATEGORIES", DEFAULT_CATEGORIES)[cat_idx]
             if b_type == "free":
                 source_dict = DB.get("FREE_CHANNELS", {})
+                prefix, btn_style = "⚡", rp.Style.SUCCESS
             elif b_type == "paid":
                 source_dict = DB.get("PAID_CHANNELS", {})
+                prefix, btn_style = "👑", rp.Style.DEFAULT
             else:
                 source_dict = DB.get("SPECIAL_CHANNELS", {})
+                prefix, btn_style = "✨", rp.Style.SUCCESS
 
             filtered_batches = [
                 (cid, name)
@@ -3599,51 +3620,64 @@ async def general_callback(client: Client, q: CallbackQuery):
             ]
 
             if not filtered_batches:
-                return await q.edit_message_text(
-                    f"  Is category ({cat_name}) me abhi koi {b_type.title()} batch nahi hai.",
-                    reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("🔙 Back", callback_data=f"showcat_{cat_idx}")
-                    ]]),
-                    parse_mode=ParseMode.MARKDOWN,
+                empty_msg = rp.message(
+                    rp.heading(f"📂 {cat_name} ({b_type.title()})"),
+                    rp.divider(),
+                    rp.para("⚠️ Is category (", rp.bold(cat_name), ") me abhi koi ", rp.bold(f"{b_type.title()} Batch"), " nahi hai."),
+                    rp.buttons(
+                        rp.btn("🔙 Back", f"showcat_{cat_idx}", style=rp.Style.DEFAULT),
+                        rp.btn("🏠 Main Menu", "u_main", style=rp.Style.SUCCESS)
+                    )
                 )
+                return await rp.edit(client, q.message.chat.id, q.message.id, empty_msg)
 
             MAX_PER_PAGE = 10
             total = len(filtered_batches)
             start_idx = page * MAX_PER_PAGE
             end_idx = start_idx + MAX_PER_PAGE
 
-            kb = []
-            for cid, name in filtered_batches[start_idx:end_idx]:
-                if b_type == "free":
-                    cb_data = f"get_f_{cid}"
-                    prefix = "⚡"
-                elif b_type == "paid":
-                    cb_data = f"view_p_{cid}"
-                    prefix = "👑"
-                else:
-                    cb_data = f"view_s_{cid}"
-                    prefix = "✨"
+            batch_rows = []
+            page_items = filtered_batches[start_idx:end_idx]
 
-                kb.append([InlineKeyboardButton(f"{prefix} {name}", callback_data=cb_data)])
+            # 2-2 Batches ek row me (Half-width grid layout)
+            for i in range(0, len(page_items), 2):
+                r_btns = []
+                for cid, name in page_items[i:i+2]:
+                    if b_type == "free":
+                        cb_data = f"get_f_{cid}"
+                    elif b_type == "paid":
+                        cb_data = f"view_p_{cid}"
+                    else:
+                        cb_data = f"view_s_{cid}"
+                    r_btns.append(rp.btn(f"{prefix} {name}", cb_data, style=btn_style))
+                batch_rows.append(rp.buttons(*r_btns))
 
             nav_buttons = []
             if page > 0:
                 nav_buttons.append(
-                    InlineKeyboardButton("🔙 Back", callback_data=f"listcat_{cat_idx}_{b_type}_{page-1}")
+                    rp.btn("🔙 Back", f"listcat_{cat_idx}_{b_type}_{page-1}", style=rp.Style.DEFAULT)
                 )
             if end_idx < total:
                 nav_buttons.append(
-                    InlineKeyboardButton("Next ➡️", callback_data=f"listcat_{cat_idx}_{b_type}_{page+1}")
+                    rp.btn("Next ➡️", f"listcat_{cat_idx}_{b_type}_{page+1}", style=rp.Style.DEFAULT)
                 )
             if nav_buttons:
-                kb.append(nav_buttons)
-            kb.append([InlineKeyboardButton("📂 Category Menu", callback_data=f"showcat_{cat_idx}")])
+                batch_rows.append(rp.buttons(*nav_buttons))
 
-            await q.edit_message_text(
-                f"  **{cat_name} ({b_type.title()})**\n\nNeeche diye gaye batches par click karein:",
-                reply_markup=InlineKeyboardMarkup(kb),
-                parse_mode=ParseMode.MARKDOWN,
+            batch_rows.append(
+                rp.buttons(
+                    rp.btn("📂 Category Menu", f"showcat_{cat_idx}", style=rp.Style.DEFAULT),
+                    rp.btn("🏠 Main Menu", "u_main", style=rp.Style.DEFAULT)
+                )
             )
+
+            list_msg = rp.message(
+                rp.heading(f"📂 {cat_name} ({b_type.title()})"),
+                rp.para("Neeche diye gaye batches par click karein:"),
+                rp.divider(),
+                *batch_rows
+            )
+            await rp.edit(client, q.message.chat.id, q.message.id, list_msg)
 
         elif data.startswith("delcat_"):
             await q.answer()
