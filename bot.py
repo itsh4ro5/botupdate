@@ -138,6 +138,11 @@ pyrogram.Client.send_message = _patched_send
 pyrogram.Client.edit_message_text = _patched_edit
 pyrogram.types.Message.reply_text = _patched_reply
 pyrogram.types.Message.reply = _patched_reply
+
+async def _patched_cb_edit(self, text, parse_mode=None, reply_markup=None, **kwargs):
+    return await _patched_edit(self._client, self.message.chat.id, self.message.id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
+
+pyrogram.types.CallbackQuery.edit_message_text = _patched_cb_edit
 # --- END BUTTON COLOR PATCH ---
 
 print("🟢 BOOT[1/5]: Pyrogram MTProto Engine Starting...", flush=True)
