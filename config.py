@@ -71,7 +71,7 @@ DB = {
     "FREE_LOCKED": False, "PAID_LOCKED": False, "TEST_BOT_LOCKED": False, 
     "SCHEDULED_DELETES": [], "TEST_BOT_LINK": "", "BATCH_CATEGORIES": {},
     "CATEGORIES": DEFAULT_CATEGORIES.copy(), "MAINTENANCE_MODE": False,
-    "BATCH_COINS": {}
+    "BATCH_COINS": {}, "BATCH_REQUESTS": {}, "VOUCHERS": {}
 }
 
 MESSAGE_MAP = {} 
@@ -120,6 +120,7 @@ def load_data():
         "SCHEDULED_DELETES", "TEST_BOT_LINK", "MAINTENANCE_MODE", "CATEGORIES", "BATCH_CATEGORIES", 
         "USERBOT_SESSION", "USERBOT_PHONE",
         "VIP_MATERIALS_LINK", "VIP_STICKER_ID", "VIP_STICKER_TYPE", "BATCH_COINS",
+        "BATCH_REQUESTS", "VOUCHERS",
     ]
     
     if MONGO_URL and mongo_collection is not None:
@@ -238,7 +239,9 @@ def save_data_sync():
             "ALL_CHATS": {str(k): v for k, v in DB.get("ALL_CHATS", {}).items()},
             "USER_DATA": {str(k): v for k, v in DB.get("USER_DATA", {}).items()},
             "USER_TOPICS": {str(k): v for k, v in DB.get("USER_TOPICS", {}).items()},
-            "PENDING_REQUESTS": {str(k): v for k, v in DB.get("PENDING_REQUESTS", {}).items()}
+            "PENDING_REQUESTS": {str(k): v for k, v in DB.get("PENDING_REQUESTS", {}).items()},
+            "BATCH_REQUESTS": DB.get("BATCH_REQUESTS", {}),
+            "VOUCHERS": DB.get("VOUCHERS", {})
         }
         if MONGO_URL and mongo_collection is not None:
             try: 
@@ -538,3 +541,30 @@ async def get_or_create_topic(user, client, is_retry=False):
         raise e
     finally:
         TOPIC_CREATION_LOCK.discard(user.id)
+
+# --- MODERN UI & INTERACTIVE HELPERS ---
+def render_progress_bar(current: float, total: float, length: int = 10) -> str:
+    """Returns a sleek unicode progress bar (e.g. ▰▰▰▰▰▱▱▱▱▱ 50%)."""
+    if total <= 0:
+        return "▱" * length + " 0%"
+    ratio = min(max(current / total, 0.0), 1.0)
+    filled = int(round(ratio * length))
+    empty = length - filled
+    percent = int(ratio * 100)
+    return f"{'▰' * filled}{'▱' * empty} {percent}%"
+
+async def safe_reaction(client, chat_id, message_id, emoji: str = "🔥"):
+    """Safely sends an emoji reaction to a message without crashing if disabled."""
+    try:
+        await client.send_reaction(chat_id=chat_id, message_id=message_id, emoji=emoji)
+    except Exception:
+        pass
+
+def make_copy_button(text: str, copy_value: str):
+    """Creates a Telegram 1-tap CopyTextButton if supported by kurigram, else fallback."""
+    try:
+        from pyrogram.types import CopyTextButton, InlineKeyboardButton
+        return InlineKeyboardButton(text, copy_text=CopyTextButton(text=copy_value))
+    except Exception:
+        from pyrogram.types import InlineKeyboardButton
+        return InlineKeyboardButton(text, callback_data="u_main")

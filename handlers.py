@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 
 _SYNC_IN_PROGRESS = False
 _BOT_SELF_ID = None
+USER_FLOW_STATE = {}
 
 # --- ANTI-SPAM CONFIG: Link generation cooldown & per-batch lock ---
 GLOBAL_LINK_COOLDOWN = 15 * 60   # Rule A: 15 minutes between ANY link generation
@@ -141,6 +142,8 @@ async def set_role_based_commands(user_id: int, client: Client):
             admin_cmds = user_cmds + [
                 BotCommand("stats", "Bot Statistics"),
                 BotCommand("batchstats", "Batch Info"),
+                BotCommand("genvoucher", "Generate Promo Code"),
+                BotCommand("batchrequests", "View Batch Requests"),
             ]
             await client.set_bot_commands(
                 admin_cmds, scope=BotCommandScopeChat(chat_id=user_id)
@@ -149,6 +152,11 @@ async def set_role_based_commands(user_id: int, client: Client):
             await client.set_bot_commands(
                 user_cmds, scope=BotCommandScopeChat(chat_id=user_id)
             )
+        try:
+            from pyrogram.types import MenuButtonCommands
+            await client.set_chat_menu_button(chat_id=user_id, menu_button=MenuButtonCommands())
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -976,6 +984,70 @@ async def cmd_reset_user(client: Client, message: Message):
             DB["BLOCKED_USERS"].remove(target_uid)
         await save_data_async()
         await message.reply_text(f"  User `{target_uid}` reset.", parse_mode=ParseMode.MARKDOWN)
+
+async def cmd_genvoucher(client: Client, message: Message):
+    if not is_admin_msg(message):
+        return
+    args = get_args(message)
+    if len(args) < 3:
+        return await message.reply_text(
+            "🎟️ **Usage:** `/genvoucher <CODE> <POINTS> <MAX_USES>`\n"
+            "Example: `/genvoucher DIWALI2026 5 100`",
+            parse_mode=ParseMode.MARKDOWN
+        )
+    code = args[0].upper().strip()
+    try:
+        pts = float(args[1])
+        max_uses = int(args[2])
+    except ValueError:
+        return await message.reply_text("❌ Error: Points aur Max Uses numeric hone chahiye.")
+
+    DB.setdefault("VOUCHERS", {})[code] = {
+        "points": pts,
+        "max_uses": max_uses,
+        "used_by": [],
+        "created_at": time.time()
+    }
+    await save_data_async()
+    copy_btn = make_copy_button(f"📋 Copy Code: {code}", code)
+    kb = InlineKeyboardMarkup([[copy_btn]])
+    await message.reply_text(
+        f"✅ **Promo Voucher Created!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎟️ **Code:** `{code}`\n"
+        f"💰 **Reward:** `{pts} Coins`\n"
+        f"👥 **Total Uses:** `{max_uses}`\n\n"
+        f"Yeh code users ke sath share karein!",
+        reply_markup=kb,
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+async def cmd_batchrequests(client: Client, message: Message):
+    if not is_admin_msg(message):
+        return
+    reqs = DB.get("BATCH_REQUESTS", {})
+    if not reqs:
+        return await message.reply_text("📭 Abhi tak koi batch requests nahi aayi hain.")
+
+    sorted_reqs = sorted(reqs.items(), key=lambda x: len(x[1]), reverse=True)
+    txt = "🙋 **USER BATCH REQUESTS & DEMAND**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    for idx, (bname, uids) in enumerate(sorted_reqs[:25], 1):
+        txt += f"`{idx}.` **{bname}** — `{len(uids)} Users Requested`\n"
+    txt += f"\n📊 Total Unique Requests: `{len(reqs)}`"
+    await message.reply_text(txt, parse_mode=ParseMode.MARKDOWN)
+
+async def cmd_list_vouchers(client: Client, message: Message):
+    if not is_admin_msg(message):
+        return
+    vouchers = DB.get("VOUCHERS", {})
+    if not vouchers:
+        return await message.reply_text("📭 Abhi tak koi vouchers create nahi kiye gaye hain.")
+    txt = "🎟️ **ACTIVE PROMO VOUCHERS**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    for code, data in vouchers.items():
+        used = len(data.get("used_by", []))
+        max_u = data.get("max_uses", 1)
+        pts = data.get("points", 0)
+        txt += f"• `{code}`: `{pts} Coins` | `{used}/{max_u} Used`\n"
+    await message.reply_text(txt, parse_mode=ParseMode.MARKDOWN)
 
 async def cmd_find_user(client: Client, message: Message):
     if not is_admin_msg(message):
@@ -3040,10 +3112,144 @@ async def general_callback(client: Client, q: CallbackQuery):
             await show_user_menu_cb(client, q)
 
         # =====================================================================
-        # 🔍 SEARCH BATCH TRIGGER (Removed)
+        # 🎁 DAILY STREAK CLAIM SYSTEM
         # =====================================================================
-        elif data == "search_batch_start":
-            await q.answer("Search feature has been removed.", show_alert=True)
+        elif data == "claim_daily_streak":
+            await q.answer()
+            user_key = uid if uid in DB["USER_DATA"] else str(uid)
+            user_info = DB["USER_DATA"].setdefault(user_key, {})
+            now_dt = datetime.now()
+            today_str = now_dt.strftime("%Y-%m-%d")
+            yesterday_str = (now_dt - timedelta(days=1)).strftime("%Y-%m-%d")
+            last_claim = user_info.get("last_streak_date")
+
+            if last_claim == today_str:
+                return await q.answer("⏳ Aapne aaj ka streak reward pehle hi claim kar liya hai! Agla reward kal milega.", show_alert=True)
+
+            streak = user_info.get("streak", 0)
+            if last_claim == yesterday_str:
+                streak = (streak % 7) + 1
+            else:
+                streak = 1
+
+            reward_coins = 0.25 if streak in [1, 2] else (0.50 if streak in [3, 4, 5, 6] else 1.0)
+            user_info["streak"] = streak
+            user_info["last_streak_date"] = today_str
+            user_info["referral_count"] = round(user_info.get("referral_count", 0) + reward_coins, 2)
+            await save_data_async()
+
+            if q.message:
+                await safe_reaction(client, q.message.chat.id, q.message.id, "🎉")
+
+            streak_boxes = []
+            for day in range(1, 8):
+                if day < streak:
+                    streak_boxes.append(f"D{day}: ✅")
+                elif day == streak:
+                    streak_boxes.append(f"D{day}: 🔥")
+                else:
+                    streak_boxes.append(f"D{day}: ⚪")
+
+            bar_display = " | ".join(streak_boxes)
+            kb = [
+                [InlineKeyboardButton("🏆 View Leaderboard", callback_data="show_leaderboard")],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]
+            ]
+
+            msg_text = (
+                f"🔥 **Daily Streak Claimed!** 🔥\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🎉 **Badhai ho! Streak Active!**\n\n"
+                f"⚡ **Current Streak:** `{streak} Days`\n"
+                f"💰 **Reward Added:** `+{reward_coins} Coins`\n"
+                f"💎 **Total Balance:** `{user_info['referral_count']} Coins`\n\n"
+                f"📅 **7-Day Streak Tracker:**\n"
+                f"`[{bar_display}]`\n\n"
+                f"💡 *Roz bot open karke claim karein! Day 7 par milega Mega Bonus!*"
+            )
+            await q.edit_message_text(msg_text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
+        # =====================================================================
+        # 🏆 LIVE REFERRAL LEADERBOARD
+        # =====================================================================
+        elif data == "show_leaderboard":
+            await q.answer()
+            user_key = uid if uid in DB["USER_DATA"] else str(uid)
+            ranked = []
+            for u_k, u_d in DB.get("USER_DATA", {}).items():
+                inv = u_d.get("total_invited", 0)
+                if inv > 0:
+                    ranked.append((u_k, inv, u_d.get("name") or "Telegram User"))
+            ranked.sort(key=lambda x: x[1], reverse=True)
+
+            medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+            lines = []
+            top_10 = ranked[:10]
+            for idx, (rk, count, uname) in enumerate(top_10):
+                medal = medals[idx] if idx < len(medals) else f"`#{idx+1}`"
+                crown = " 👑" if idx == 0 else ""
+                lines.append(f"{medal} **{uname}** — `{count}` Invites{crown}")
+
+            if not lines:
+                lines.append("📭 Abhi tak kisi ne refer nahi kiya hai. Pehle banen!")
+
+            user_rank_txt = "🎯 Your Rank: `Not Ranked (0 Invites)`"
+            for idx, (rk, count, _) in enumerate(ranked):
+                if str(rk) == str(user_key):
+                    user_rank_txt = f"🎯 Your Rank: `#{idx + 1}` (`{count}` Invites)"
+                    break
+
+            kb = [
+                [InlineKeyboardButton("🎁 Refer & Earn", callback_data="menu_refer")],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]
+            ]
+
+            txt = (
+                "🏆 **TOP 10 REFERRAL CHAMPIONS** 🏆\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                + "\n".join(lines)
+                + "\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                + f"{user_rank_txt}\n\n"
+                "✨ *Top referrers ko automatic VIP tier aur free batches ka access milta hai!*"
+            )
+            await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
+        # =====================================================================
+        # 🙋 REQUEST A BATCH
+        # =====================================================================
+        elif data == "req_batch_btn":
+            await q.answer()
+            USER_FLOW_STATE[uid] = "wait_batch_req"
+            kb = [[InlineKeyboardButton("❌ Cancel", callback_data="cancel_user_flow")]]
+            await q.edit_message_text(
+                "🙋 **Request a New Batch / Course**\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "Aapko kaun sa batch chahiye? Kripya uska poora naam type karke message bhejein.\n\n"
+                "*(Jaise: 'PW Yakeen NEET 2026', 'Khan Sir UPSC Foundation', 'Civil Booster')*\n\n"
+                "Admin aapki demand review karke batch bot me add karenge! 🚀",
+                reply_markup=InlineKeyboardMarkup(kb),
+                parse_mode=ParseMode.MARKDOWN
+            )
+
+        # =====================================================================
+        # 🎟️ REDEEM PROMO VOUCHER
+        # =====================================================================
+        elif data == "redeem_voucher_btn":
+            await q.answer()
+            USER_FLOW_STATE[uid] = "wait_voucher_code"
+            kb = [[InlineKeyboardButton("❌ Cancel", callback_data="cancel_user_flow")]]
+            await q.edit_message_text(
+                "🎟️ **Redeem Promo Voucher**\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "Agar aapke paas koi Promo Code ya Gift Coupon hai, toh use yahan type karke message bhejein:\n\n"
+                "💡 *Check our Updates Channel for surprise promo code drops!*",
+                reply_markup=InlineKeyboardMarkup(kb),
+                parse_mode=ParseMode.MARKDOWN
+            )
+
+        elif data == "cancel_user_flow":
+            await q.answer("Cancelled")
+            USER_FLOW_STATE.pop(uid, None)
             await show_user_menu_cb(client, q)
 
         # =====================================================================
@@ -3115,29 +3321,42 @@ async def general_callback(client: Client, q: CallbackQuery):
         elif data == "my_info":
             await q.answer()
             user_key = uid if uid in DB["USER_DATA"] else str(uid)
-            refer_points = DB["USER_DATA"].get(user_key, {}).get("referral_count", 0)
-            total_invited = DB["USER_DATA"].get(user_key, {}).get("total_invited", 0)
-            is_vip = DB["USER_DATA"].get(user_key, {}).get("tier") == "vip"
+            u_data = DB["USER_DATA"].get(user_key, {})
+            refer_points = u_data.get("referral_count", 0)
+            total_invited = u_data.get("total_invited", 0)
+            streak = u_data.get("streak", 0)
+            is_vip = u_data.get("tier") == "vip"
+
+            progress_bar = render_progress_bar(total_invited, 25, length=10)
 
             if is_vip:
                 txt = (
-                    "👑 **[Elite Referrer] — MY INFO** 👑\n"
+                    "👑 **[Elite Referrer Profile]** 👑\n"
                     "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"🆔 **User ID:** `{uid}`\n"
-                    f"🏷️ **Tag:** `👑 VIP Referrer`\n"
+                    f"🏷️ **Status:** `👑 VIP Referrer` 🌟\n"
+                    f"🔥 **Daily Streak:** `{streak} Days`\n"
                     f"👥 **Total Refers:** `{total_invited}`\n"
-                    f"💰 **Wallet:** `{refer_points}` Coins\n\n"
-                    "💎 *Enjoy zero cooldowns, exclusive materials, and monthly bonuses — thank you for being Elite.*"
+                    f"💰 **Wallet Balance:** `{refer_points}` Coins\n\n"
+                    "💎 *Enjoy zero cooldowns, exclusive VIP materials, and priority access.*"
                 )
             else:
                 txt = (
-                    f"👤 **MY INFO**\n"
-                    f"🆔 **ID:** `{uid}`\n"
+                    f"👤 **USER PROFILE & STATS**\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🆔 **User ID:** `{uid}`\n"
+                    f"🔥 **Daily Streak:** `{streak} Days`\n"
                     f"👥 **Total Refers:** `{total_invited}`\n"
                     f"🎁 **Available Coins:** `{refer_points}`\n\n"
-                    f"💡 *In coins ka use karke aap koi bhi Special Batch ya saari Free Batches unlock kar sakte hain.*"
+                    f"🎯 **VIP Tier Goal:** `{total_invited}/25`\n"
+                    f"`[{progress_bar}]`\n\n"
+                    f"💡 *Coins ka use karke aap koi bhi Special Batch ya Free Batch unlock kar sakte hain.*"
                 )
-            kb = [[InlineKeyboardButton("🔙 Back", callback_data="u_main")]]
+            kb = [
+                [InlineKeyboardButton("🔥 Claim Daily Streak", callback_data="claim_daily_streak")],
+                [InlineKeyboardButton("🏆 Top Leaderboard", callback_data="show_leaderboard")],
+                [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="u_main")]
+            ]
             await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
         # --- HOME MENU: REFER & EARN LAYOUT ---
@@ -3145,43 +3364,44 @@ async def general_callback(client: Client, q: CallbackQuery):
             try:
                 await q.answer()
                 import urllib.parse
-                
-                # Sirf bot ka naam aur user ID (uid) se link banega
-                bot_username = "H4R_Contact_bot"
+                import config
+                bot_username = getattr(config, 'BOT_USERNAME', 'H4R_Contact_bot')
                 ref_link = f"https://t.me/{bot_username}?start={uid}"
-                
-                # Aapka exact text jo aapne manga hai
+
                 share_text = "Join me on H4R — the smartest way to crack your exam!"
-                
-                # URL encoding jisse button 100% bina atke kaam kare
                 tg_share_url = f"https://t.me/share/url?url={urllib.parse.quote(ref_link)}&text={urllib.parse.quote(share_text)}"
                 wa_share_url = f"https://api.whatsapp.com/send?text={urllib.parse.quote(ref_link + ' ' + share_text)}"
 
+                user_key = uid if uid in DB["USER_DATA"] else str(uid)
+                u_data = DB["USER_DATA"].get(user_key, {})
+                pts = u_data.get("referral_count", 0)
+                total_inv = u_data.get("total_invited", 0)
+                is_vip = u_data.get("tier") == "vip"
+
+                progress_bar = render_progress_bar(total_inv, 25, length=10)
+
                 kb = InlineKeyboardMarkup([
+                    [make_copy_button("📋 1-Tap Copy Invite Link", ref_link)],
                     [
                         InlineKeyboardButton("✈️ Share on Telegram", url=tg_share_url),
                         InlineKeyboardButton("💬 Share on WhatsApp", url=wa_share_url)
                     ],
+                    [InlineKeyboardButton("🏆 Top 10 Leaderboard", callback_data="show_leaderboard")],
                     [InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")]
                 ])
-
-                user_key = uid if uid in DB["USER_DATA"] else str(uid)
-                pts = DB["USER_DATA"].get(user_key, {}).get("referral_count", 0)
-                total_inv = DB["USER_DATA"].get(user_key, {}).get("total_invited", 0)
-                is_vip = DB["USER_DATA"].get(user_key, {}).get("tier") == "vip"
 
                 text = (
                     "🎁 **Refer & Earn Program**\n"
                     "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                     "Invite your friends and earn 1 coin on every successful refer!\n\n"
                     "🏆 **Milestone Bonus:** Every 5 successful refers = **+1 EXTRA Coin!**\n"
-                    "👑 **VIP Tag:** Cross 25 total refers to unlock the VIP Referrer tag!\n\n"
-                    + (f"👑 Your Tag: **VIP Referrer**\n" if is_vip else "")
+                    "👑 **VIP Elite Tag:** Cross 25 total refers to unlock the VIP Referrer tag!\n\n"
+                    + (f"👑 Your Status: **VIP Referrer** 🌟\n\n" if is_vip else f"🎯 VIP Goal Progress: `{total_inv}/25`\n`[{progress_bar}]`\n\n")
                     + f"👥 Total Referred Users: `{total_inv}`\n"
-                    f"💰 Total Earnings: `{pts}` Coins\n\n"
-                    f"🔗 Your Referral Link:\n"
+                    f"💰 Wallet Balance: `{pts}` Coins\n\n"
+                    f"🔗 **Your Referral Link:**\n"
                     f"`{ref_link}`\n\n"
-                    "Click the buttons below to share directly with your friends! 👇"
+                    "👇 *Neeche button se link copy karein ya share karein:*"
                 )
 
                 await q.edit_message_text(
@@ -3925,14 +4145,15 @@ def build_home_menu(user_key, user):
     if vip:
         total_inv = DB["USER_DATA"].get(user_key, {}).get("total_invited", 0)
         pts = DB["USER_DATA"].get(user_key, {}).get("referral_count", 0)
+        streak = DB["USER_DATA"].get(user_key, {}).get("streak", 0)
         return rp.message(
             rp.heading("👑 Elite Dashboard"),
             rp.para("Welcome back, ", rp.bold(first_name), "!"),
             rp.divider(),
             rp.table(
                 rows=[
-                    [rp.table_cell("Wallet Balance", is_header=True), rp.table_cell("Total Referrals", is_header=True)],
-                    [rp.table_cell(f"💎 {pts} Coins"), rp.table_cell(f"👥 {total_inv}")]
+                    [rp.table_cell("Wallet Balance", is_header=True), rp.table_cell("Total Referrals", is_header=True), rp.table_cell("Daily Streak", is_header=True)],
+                    [rp.table_cell(f"💎 {pts} Coins"), rp.table_cell(f"👥 {total_inv}"), rp.table_cell(f"🔥 {streak} Days")]
                 ],
                 bordered=True, striped=True
             ),
@@ -3940,22 +4161,31 @@ def build_home_menu(user_key, user):
                 rp.bold("ℹ️ VIP Elite Features:"), "\n",
                 "• ", rp.bold("My Batches"), " — Aapke sabhi VIP aur unlocked batches access karein.\n",
                 "• ", rp.bold("All Batches"), " — Full course catalog browse karein.\n",
+                "• ", rp.bold("Daily Streak"), " — Roz free bonus points aur rewards claim karein.\n",
+                "• ", rp.bold("Leaderboard"), " — Top 10 referrers aur monthly champions rank dekhein.\n",
                 "• ", rp.bold("VIP Materials"), " — Exclusive VIP notes aur study content.\n",
                 "• ", rp.bold("Monthly Bonus"), " — Har mahine exclusive VIP bonus claim karein.\n",
                 "• ", rp.bold("Refer & Earn"), " — Friends ko invite karke extra coins earn karein.\n",
+                "• ", rp.bold("Redeem Voucher"), " — Promo codes enter karke bonus unlock karein.\n",
+                "• ", rp.bold("Request Batch"), " — Naye batch ki demand direct submit karein.\n",
                 "• ", rp.bold("Test Bot"), " — Practice tests aur daily current affairs solve karein."
             ]),
             rp.buttons(rp.btn("👑 My Batches", "my_batches_0", style=rp.Style.SUCCESS)),
             rp.buttons(rp.btn("🌟 All Batches", "all_batches_0", style=rp.Style.DEFAULT)),
+            rp.buttons(rp.btn("🔥 Daily Streak Rewards", "claim_daily_streak", style=rp.Style.SUCCESS)),
+            rp.buttons(rp.btn("🏆 Top Leaderboard", "show_leaderboard", style=rp.Style.DEFAULT)),
             rp.buttons(rp.btn("💎 VIP Materials", "vip_materials", style=rp.Style.DEFAULT)),
             rp.buttons(rp.btn("🎁 Monthly Bonus", "vip_monthly_bonus", style=rp.Style.DEFAULT)),
             rp.buttons(rp.btn("🚀 Refer & Earn", "menu_refer", style=rp.Style.SUCCESS)),
+            rp.buttons(rp.btn("🎟️ Redeem Voucher", "redeem_voucher_btn", style=rp.Style.DEFAULT)),
+            rp.buttons(rp.btn("🙋 Request a Batch", "req_batch_btn", style=rp.Style.DEFAULT)),
             rp.buttons(rp.btn("🤖 Test Bot", "test_bot", style=rp.Style.DEFAULT)),
             rp.buttons(rp.btn("ℹ️ Profile", "my_info", style=rp.Style.DEFAULT)),
             rp.buttons(rp.url_btn("📢 Updates", BATCH_UPDATE_CHANNEL_LINK, style=rp.Style.LINK)),
             rp.buttons(rp.url_btn("🎥 Tutorial", "https://t.me/c/2836314734/1244", style=rp.Style.LINK))
         )
     else:
+        streak = DB["USER_DATA"].get(user_key, {}).get("streak", 0)
         return rp.message(
             rp.heading("🌟 Premium Hub"),
             rp.para("Welcome, ", rp.bold(first_name), "! Select an option to begin:"),
@@ -3964,13 +4194,21 @@ def build_home_menu(user_key, user):
                 rp.bold("ℹ️ Navigation & Features:"), "\n",
                 "• ", rp.bold("My Batches"), " — Apne unlocked batches aur study courses access karein.\n",
                 "• ", rp.bold("All Batches"), " — Complete batches catalog explore karein.\n",
+                "• ", rp.bold("Daily Streak"), " — Roz active reh kar free coins aur demo time claim karein.\n",
+                "• ", rp.bold("Leaderboard"), " — Top 10 referrers ki ranking live dekhein.\n",
                 "• ", rp.bold("Refer & Earn"), " — Dosto ko invite karke coins kamaayein aur free batch unlock karein.\n",
+                "• ", rp.bold("Redeem Voucher"), " — Promo codes claim karke free points payein.\n",
+                "• ", rp.bold("Request a Batch"), " — Apne manpasand batch ki request submit karein.\n",
                 "• ", rp.bold("Test Bot"), " — Practice tests aur daily current affairs solve karein.\n",
-                "• ", rp.bold("Profile"), " — Apna account balance, tier aur stats check karein."
+                "• ", rp.bold("Profile"), " — Apna account balance, streak aur tier stats check karein."
             ]),
             rp.buttons(rp.btn("📚 My Batches", "my_batches_0", style=rp.Style.SUCCESS)),
             rp.buttons(rp.btn("🌐 All Batches", "all_batches_0", style=rp.Style.DEFAULT)),
+            rp.buttons(rp.btn("🔥 Daily Streak Rewards", "claim_daily_streak", style=rp.Style.SUCCESS)),
+            rp.buttons(rp.btn("🏆 Top Leaderboard", "show_leaderboard", style=rp.Style.DEFAULT)),
             rp.buttons(rp.btn("🎁 Refer & Earn", "menu_refer", style=rp.Style.SUCCESS)),
+            rp.buttons(rp.btn("🎟️ Redeem Voucher", "redeem_voucher_btn", style=rp.Style.DEFAULT)),
+            rp.buttons(rp.btn("🙋 Request a Batch", "req_batch_btn", style=rp.Style.DEFAULT)),
             rp.buttons(rp.btn("🤖 Test Bot", "test_bot", style=rp.Style.DEFAULT)),
             rp.buttons(rp.btn("ℹ️ Profile", "my_info", style=rp.Style.DEFAULT)),
             rp.buttons(rp.url_btn("📢 Batch Updates", BATCH_UPDATE_CHANNEL_LINK, style=rp.Style.LINK)),
@@ -4341,6 +4579,7 @@ async def goto_user_panel_cb(client: Client, q: CallbackQuery):
 
 async def start(client: Client, message: Message):
     user = message.from_user
+    await safe_reaction(client, message.chat.id, message.id, "🎉")
     await set_role_based_commands(user.id, client)
     
     user_key = user.id if user.id in DB.get("USER_DATA", {}) else (str(user.id) if str(user.id) in DB.get("USER_DATA", {}) else user.id)
@@ -4578,6 +4817,85 @@ async def handle_reaction(client: Client, update):
     except Exception as e:
         logger.error(f"  Reaction sync failed: {e}")
 
+async def handle_user_flow_messages(client: Client, message: Message) -> bool:
+    if not message.from_user:
+        return False
+    uid = message.from_user.id
+    state = USER_FLOW_STATE.get(uid)
+    if not state:
+        return False
+
+    text = (message.text or "").strip()
+
+    if state == "wait_batch_req":
+        USER_FLOW_STATE.pop(uid, None)
+        if not text:
+            await message.reply_text("⚠️ Kripya valid text message me batch ka naam bhejein.")
+            return True
+        DB.setdefault("BATCH_REQUESTS", {}).setdefault(text, [])
+        if uid not in DB["BATCH_REQUESTS"][text]:
+            DB["BATCH_REQUESTS"][text].append(uid)
+        await save_data_async()
+        await safe_reaction(client, message.chat.id, message.id, "👍")
+        kb = [[InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]]
+        await message.reply_text(
+            f"✅ **Batch Request Received!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📦 **Requested:** `{text}`\n\n"
+            f"Aapki request record ho gayi hai! Jaise hi yeh batch bot me add hoga, aapko notification mil jayega.",
+            reply_markup=InlineKeyboardMarkup(kb),
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return True
+
+    elif state == "wait_voucher_code":
+        USER_FLOW_STATE.pop(uid, None)
+        code = text.upper()
+        vouchers = DB.get("VOUCHERS", {})
+        if code not in vouchers:
+            await safe_reaction(client, message.chat.id, message.id, "❌")
+            kb = [
+                [InlineKeyboardButton("🔄 Try Again", callback_data="redeem_voucher_btn")],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]
+            ]
+            await message.reply_text(
+                "❌ **Invalid Promo Code!**\n\nYeh voucher code exist nahi karta ya expire ho chuka hai.",
+                reply_markup=InlineKeyboardMarkup(kb),
+                parse_mode=ParseMode.MARKDOWN
+            )
+            return True
+
+        v_data = vouchers[code]
+        used_by = v_data.setdefault("used_by", [])
+        if uid in used_by or str(uid) in used_by:
+            await safe_reaction(client, message.chat.id, message.id, "⚠️")
+            return await message.reply_text("⚠️ Aapne yeh voucher pehle hi redeem kar liya hai!")
+
+        max_uses = v_data.get("max_uses", 1)
+        if len(used_by) >= max_uses:
+            await safe_reaction(client, message.chat.id, message.id, "⌛")
+            return await message.reply_text("⌛ Yeh voucher fully redeemed ho chuka hai (maximum limit reached)!")
+
+        pts = v_data.get("points", 0)
+        used_by.append(uid)
+        user_key = uid if uid in DB["USER_DATA"] else str(uid)
+        user_info = DB["USER_DATA"].setdefault(user_key, {})
+        user_info["referral_count"] = round(user_info.get("referral_count", 0) + pts, 2)
+        await save_data_async()
+        await safe_reaction(client, message.chat.id, message.id, "💎")
+
+        kb = [[InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]]
+        await message.reply_text(
+            f"🎉 **Voucher Redeemed Successfully!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎟️ **Code:** `{code}`\n"
+            f"💰 **Reward:** `+{pts} Coins` added to your wallet!\n\n"
+            f"Ab aap in coins se batches unlock kar sakte hain.",
+            reply_markup=InlineKeyboardMarkup(kb),
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return True
+
+    return False
+
 # =====================================================================
 # REGULAR MESSAGES & SUPPORT TICKETS ENGINE (BULLETPROOF 2-WAY)
 # =====================================================================
@@ -4591,6 +4909,8 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
             if await wizard_message(client, message):
                 return
             if await handle_broadcast_flow(client, message):
+                return
+            if await handle_user_flow_messages(client, message):
                 return
     elif chat.type == ChatType.PRIVATE:
         return
@@ -4861,11 +5181,47 @@ async def check_demos(client: Client):
             continue
         for bid, d_data in data["demos"].copy().items():
             expiry = d_data["expiry"] if isinstance(d_data, dict) else float(d_data)
-            if now > expiry:
+            warned = d_data.get("warned", False) if isinstance(d_data, dict) else False
+
+            # 10-Minute Expiry Warning (between 1 and 10 minutes remaining)
+            if 60 < expiry - now <= 10 * 60 and not warned:
+                bname = DB.get("ALL_CHATS", {}).get(int(bid)) or DB.get("ALL_CHATS", {}).get(str(bid)) or "Batch"
+                try:
+                    await client.send_message(
+                        int(uid),
+                        f"⏳ **Demo Access Ending in 10 Minutes!**\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"📦 **Batch:** `{bname}`\n\n"
+                        f"⚠️ Aapka is batch ka demo access agle **10 minutes** me expire ho jayega.\n\n"
+                        f"Lagataar study jari rakhne ke liye dosto ko refer karein ya VIP access lein taaki lectures na ruken!",
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+                except Exception:
+                    pass
+                if isinstance(d_data, dict):
+                    d_data["warned"] = True
+                else:
+                    data["demos"][bid] = {"expiry": expiry, "warned": True}
+                mod = True
+
+            elif now > expiry:
                 try:
                     await client.ban_chat_member(int(bid), int(uid))
                     await client.unban_chat_member(int(bid), int(uid))
                     invalidate_membership_cache(uid, bid)
+                except Exception:
+                    pass
+                bname = DB.get("ALL_CHATS", {}).get(int(bid)) or DB.get("ALL_CHATS", {}).get(str(bid)) or "Batch"
+                try:
+                    await client.send_message(
+                        int(uid),
+                        f"⌛ **Demo Access Expired**\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"📦 **Batch:** `{bname}`\n\n"
+                        f"Aapka demo access period complete ho chuka hai.\n"
+                        f"Aur access ke liye bot me `/start` karein aur coins claim karein!",
+                        parse_mode=ParseMode.MARKDOWN
+                    )
                 except Exception:
                     pass
                 if bid in data["demos"]:
