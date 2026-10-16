@@ -3185,17 +3185,11 @@ async def general_callback(client: Client, q: CallbackQuery):
             await show_user_menu_cb(client, q)
 
         # =====================================================================
-        # 🔍 SEARCH BATCH TRIGGER
+        # 🔍 SEARCH BATCH TRIGGER (Removed)
         # =====================================================================
         elif data == "search_batch_start":
-            await q.answer()
-            await q.edit_message_text(
-                "🔍 **Search Batch**\n\n"
-                "Kripya us batch ka naam type karke bhejein jise aap dhoondh rahe hain (Jaise: `UPSC`, `Maths`, `Physics`):\n\n"
-                "💡 *Aap direct kabhi bhi bot me naam likh kar bhejenge to bot khud search kar lega.*",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")]]),
-                parse_mode=ParseMode.MARKDOWN
-            )
+            await q.answer("Search feature has been removed.", show_alert=True)
+            await show_user_menu_cb(client, q)
 
         # =====================================================================
         # 🔗 SHARE SPECIFIC BATCH & DEEP-LINK REDIRECT LOGIC
@@ -4089,16 +4083,13 @@ def build_home_menu(user_key, user):
                 rp.btn("🌐 All Batches", "all_batches_0", style=rp.Style.DEFAULT)
             ),
             rp.buttons(
-                rp.btn("🔍 Search Batch", "search_batch_start", style=rp.Style.DEFAULT),
+                rp.btn("🎁 Refer & Earn", "menu_refer", style=rp.Style.SUCCESS),
                 rp.btn("🤖 Test Bot", "test_bot", style=rp.Style.DEFAULT)
             ),
             rp.buttons(
-                rp.btn("🎁 Refer & Earn", "menu_refer", style=rp.Style.SUCCESS),
-                rp.btn("ℹ️ Profile", "my_info", style=rp.Style.DEFAULT)
-            ),
-            rp.buttons(
                 rp.url_btn("📢 Batch Updates", BATCH_UPDATE_CHANNEL_LINK, style=rp.Style.LINK),
-                rp.url_btn("🎥 Tutorial", "https://t.me/c/2836314734/1244", style=rp.Style.LINK)
+                rp.url_btn("🎥 Tutorial", "https://t.me/c/2836314734/1244", style=rp.Style.LINK),
+                rp.btn("ℹ️ Profile", "my_info", style=rp.Style.DEFAULT)
             )
         )
 
@@ -4460,50 +4451,7 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
         if DB.get("MAINTENANCE_MODE", False) and not is_admin(user.id):
             return await message.reply_text("🛠 **Under Maintenance.**")
         
-        # =====================================================================
-        # 🔍 SMART AUTO-SEARCH ENGINE
-        # =====================================================================
-        if message.text and not is_admin(user.id):
-            query = message.text.strip().lower()
-            # Ignore very short words or common greetings
-            if len(query) >= 3 and query not in ["hello", "hi", "hey", "help", "thanks", "thank you", "sir"]:
-                matches = []
-                for cid, name in DB.get("ALL_CHATS", {}).items():
-                    # Check if typed word matches batch name
-                    if query in str(name).lower():
-                        matches.append((cid, name))
-                
-                if matches:
-                    kb = []
-                    # Top 8 results dikhayenge limit ke liye
-                    for cid, name in matches[:8]:
-                        # Assign correct callback so it opens your Join/Request/Share menus directly
-                        if cid in DB.get("FREE_CHANNELS", {}) or str(cid) in DB.get("FREE_CHANNELS", {}):
-                            cb = f"get_f_{cid}"
-                            prefix = "⚡"
-                        elif cid in DB.get("PAID_CHANNELS", {}) or str(cid) in DB.get("PAID_CHANNELS", {}):
-                            cb = f"view_p_{cid}"
-                            prefix = "👑"
-                        else:
-                            cb = f"view_s_{cid}"
-                            prefix = "✨"
-                        
-                        kb.append([InlineKeyboardButton(f"{prefix} {name}", callback_data=cb)])
-                    
-                    kb.append([InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")])
-                    
-                    # Batch mil gaya, user ko wahin result de do aur admin ko disturb mat karo
-                    return await message.reply_text(
-                        f"🔍 **Search Results for:** `{message.text}`\n\n"
-                        f"Mujhe ye batches mile hain. Details dekhne ke liye click karein:",
-                        reply_markup=InlineKeyboardMarkup(kb),
-                        parse_mode=ParseMode.MARKDOWN
-                    )
-                else:
-                    # Agar batch nahi mila, to user ko bata do ki admin ke paas message chala gaya hai
-                    await message.reply_text("🔍 **Batch Not Found!**\n\nAapki request Admin ko bhej di gayi hai. Kripya reply ka wait karein.", parse_mode=ParseMode.MARKDOWN)
-        # =====================================================================
-        
+
         try:
             topic_id = await get_or_create_topic(user, client)
             if not topic_id:
