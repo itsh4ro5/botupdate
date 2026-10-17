@@ -1101,10 +1101,10 @@ def build_batch_requests_msg(page: int = 0):
         return rp.message(
             rp.heading("📋 Batch Demands & Checklist"),
             rp.divider(),
-            rp.blockquote(
+            rp.expandable_quote([
                 ce("INFO", "ℹ️"), " ", rp.bold("Abhi tak koi batch requests nahi aayi hain."), "\n\n",
                 rp.italic("Jab users 'Request Batch' button se demand submit karenge, wo yahan checkbox checklist format me dikhengi.")
-            ),
+            ]),
             rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DANGER))
         )
 
@@ -4260,11 +4260,11 @@ async def general_callback(client: Client, q: CallbackQuery):
                         "  |  ",
                         ce("DIAMOND", "💎"), " ", rp.bold("Wallet Balance: "), rp.code(f"{pts} Coins")
                     ),
-                    rp.blockquote(
+                    rp.expandable_quote([
                         ce("LINK", "🔗"), " ", rp.bold("Your Personal Referral Link:\n"),
                         rp.code(ref_link), "\n\n",
                         rp.italic("Niche diye gaye copy button ya sharing links se dosto ko invite karein!")
-                    ),
+                    ]),
                     rp.buttons(rp.copy_btn("📋 1-Tap Copy Invite Link", ref_link)),
                     rp.buttons(
                         rp.url_btn("✈️ Share on Telegram", tg_share_url),
@@ -5837,10 +5837,10 @@ async def handle_user_flow_messages(client: Client, message: Message) -> bool:
                 rp.para(
                     rp.marked(" ⏳ Added to Admin Task Checklist ")
                 ),
-                rp.blockquote(
+                rp.expandable_quote([
                     ce("INFO", "ℹ️"), " ", rp.bold("Note from Admin:\n"),
                     rp.italic(note)
-                ),
+                ]),
                 rp.buttons(rp.btn("🏠 Main Menu", "u_main", style=rp.Style.SUCCESS))
             )
             await rp.send(client, message.chat.id, req_rcvd_msg)
