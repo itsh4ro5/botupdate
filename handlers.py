@@ -83,10 +83,31 @@ CUSTOM_EMOJIS = {
     "BAN": "4967927656977793959",         # 🚫
 }
 
+def _patch_rich_text_classes():
+    for name in dir(pyrogram.types):
+        if name.startswith("RichText"):
+            cls = getattr(pyrogram.types, name)
+            if hasattr(cls, "write") and callable(getattr(cls, "write")):
+                orig_fn = cls.write
+                def _wrap(fn):
+                    async def _safe_write(self, *args, **kwargs):
+                        client = kwargs.get('client') or (args[0] if args else None)
+                        try:
+                            return await fn(self, client)
+                        except TypeError:
+                            return await fn(self, *args, **kwargs)
+                    return _safe_write
+                cls.write = _wrap(orig_fn)
+
+_patch_rich_text_classes()
+
 def ce(name: str, fallback: str = ""):
     eid = CUSTOM_EMOJIS.get(name)
     if eid:
-        return rp.custom_emoji(eid, fallback or "✨")
+        try:
+            return rp.custom_emoji(eid, fallback or "✨")
+        except Exception:
+            return fallback
     return fallback
 
 _SYNC_IN_PROGRESS = False
@@ -4137,9 +4158,33 @@ async def general_callback(client: Client, q: CallbackQuery):
                     )
                 ]
 
-                ref_msg = rp.message(*refer_elements)
-                await rp.edit(client, q.message.chat.id, q.message.id, ref_msg)
+                try:
+                    ref_msg = rp.message(*refer_elements)
+                    await rp.edit(client, q.message.chat.id, q.message.id, ref_msg)
+                except Exception as e_rich:
+                    if "MESSAGE_NOT_MODIFIED" in str(e_rich):
+                        return
+                    logger.warning(f"Rich edit failed for Refer & Earn ({e_rich}), falling back to markdown")
+                    fallback_text = (
+                        "🎁 **Refer & Earn Rewards**\n"
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        "🏆 Milestone Bonus: Har 5 refers par +1 EXTRA Coin!\n"
+                        "👑 VIP Elite Tag: 25 refers cross karne par auto unlock!\n"
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"👑 **Your Tier:** {'👑 VIP Referrer 🌟' if is_vip else 'Standard Referrer'}\n"
+                        f"{('📊 **VIP Goal Progress:** `[' + progress_bar + f'] {total_inv}/25`') if not is_vip else ''}\n"
+                        f"✅ **Total Referred:** `{total_inv} Users` | 💎 **Wallet Balance:** `{pts} Coins`\n\n"
+                        f"🔗 **Your Personal Referral Link:**\n`{ref_link}`\n\n"
+                        "_Niche diye gaye buttons se dosto ko invite karein:_"
+                    )
+                    kb = [
+                        [InlineKeyboardButton("✈️ Share on Telegram", url=tg_share_url), InlineKeyboardButton("💬 Share on WhatsApp", url=wa_share_url)],
+                        [InlineKeyboardButton("🏆 Top 10 Leaderboard", callback_data="show_leaderboard"), InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]
+                    ]
+                    await q.edit_message_text(fallback_text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
             except Exception as e:
+                if "MESSAGE_NOT_MODIFIED" in str(e):
+                    return
                 logger.error(f"Refer & Earn Error: {e}")
                 await q.answer("⚠️ Menu load hone me error aayi. Kripya wapas try karein.", show_alert=True)
 
@@ -4813,6 +4858,8 @@ async def general_callback(client: Client, q: CallbackQuery):
             except Exception as e:
                 await client.send_message(uid, f"  Error: {e}")
     except Exception as e:
+        if "MESSAGE_NOT_MODIFIED" in str(e):
+            return
         logger.error(f"Callback Error: {e}")
 
 # --- START, MENUS & CORE EVENTS ---

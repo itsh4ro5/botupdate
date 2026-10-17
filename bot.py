@@ -15,6 +15,24 @@ from pyrogram.raw.types import (
     MessageEntityCode, MessageEntityPre, MessageEntitySpoiler, MessageEntityStrike
 )
 
+def _patch_rich_text_classes():
+    for name in dir(pyrogram.types):
+        if name.startswith("RichText"):
+            cls = getattr(pyrogram.types, name)
+            if hasattr(cls, "write") and callable(getattr(cls, "write")):
+                orig_fn = cls.write
+                def _wrap(fn):
+                    async def _safe_write(self, *args, **kwargs):
+                        client = kwargs.get('client') or (args[0] if args else None)
+                        try:
+                            return await fn(self, client)
+                        except TypeError:
+                            return await fn(self, *args, **kwargs)
+                    return _safe_write
+                cls.write = _wrap(orig_fn)
+
+_patch_rich_text_classes()
+
 def _entities_to_rich(text, entities):
     if not entities:
         return [text]
@@ -83,10 +101,16 @@ async def _patched_send(client, chat_id, text=None, parse_mode=None, reply_marku
             rich_texts = _entities_to_rich(res['message'], res['entities'])
             msg = rp.message(rp.para(*rich_texts), *rp_rows)
             
-            safe_kwargs = {k:v for k,v in kwargs.items() if k in ['reply_to_message_id', 'disable_notification', 'protect_content']}
+            safe_kwargs = {k:v for k,v in kwargs.items() if k in ['disable_notification', 'protect_content', 'message_thread_id']}
+            if 'reply_parameters' in kwargs and kwargs['reply_parameters']:
+                safe_kwargs['reply_parameters'] = kwargs['reply_parameters']
+            elif 'reply_to_message_id' in kwargs and kwargs['reply_to_message_id']:
+                try:
+                    safe_kwargs['reply_parameters'] = pyrogram.types.ReplyParameters(message_id=int(kwargs['reply_to_message_id']))
+                except Exception:
+                    pass
             return await client.send_rich_message(chat_id, rich_message=msg, **safe_kwargs)
-        except Exception as e:
-            traceback.print_exc()
+        except Exception:
             return await _old_send(client, chat_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
     return await _old_send(client, chat_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
 
