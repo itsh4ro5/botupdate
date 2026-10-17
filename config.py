@@ -441,6 +441,9 @@ async def execute_universal_kick(user_id, client, permanent_ban=False):
             
     if mod: await save_data_async()
 
+def is_owner(uid):
+    return bool(uid) and str(uid) == str(OWNER_ID)
+
 def is_admin(uid):
     if str(uid) == str(OWNER_ID):
         return True

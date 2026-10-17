@@ -166,8 +166,11 @@ def is_admin_msg(message: Message) -> bool:
         return is_admin(message.from_user.id)
     return bool(message.sender_chat) and str(message.chat.id) == str(SUPPORT_GROUP_ID)
 
+def is_owner(user_id: int) -> bool:
+    return bool(user_id) and str(user_id) == str(OWNER_ID)
+
 def is_owner_msg(message: Message) -> bool:
-    return bool(message.from_user) and str(message.from_user.id) == str(OWNER_ID)
+    return bool(message.from_user) and is_owner(message.from_user.id)
 
 # --- HELPER: ROBUST MEMBERSHIP CHECKS FOR PYROGRAM ---
 async def check_membership_pyro(uid: int, client: Client):
