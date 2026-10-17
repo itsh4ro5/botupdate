@@ -3378,23 +3378,6 @@ async def wizard_message(client: Client, message: Message):
         asyncio.create_task(run_super_forwarder(client, message, source, dest, start_id, end_id, topic_kw, remove_words, replace_words))
         del ADMIN_WIZARD[uid]
         return True
-    elif state["step"] == "topicforward_caption":
-        caption = message.text
-        
-        # Ye regex "Topic:" ke aage ka text extract karega, jab tak line break ya "Batch:" na aaye
-        match = re.search(r"Topic:\s*(.*?)(?=\s+Batch:|\n|$)", caption, re.IGNORECASE)
-        if not match:
-            await message.reply_text("❌ Error: Is caption me `Topic:` format nahi mila. Kripya dhyan se phir se paste karein.")
-            return True
-        
-        topic_name = match.group(1).strip()
-        group_id = ADMIN_WIZARD[uid]["group_id"]
-        channel_id = ADMIN_WIZARD[uid]["channel_id"]
-        
-        # Task start karo parameters ke sath
-        asyncio.create_task(run_topic_forwarder(client, message, group_id, channel_id, keyword, start_msg_id, end_msg_id))
-        del ADMIN_WIZARD[uid]
-        return True
 
     elif state["step"] == "advcap_start_msg":
         try:
