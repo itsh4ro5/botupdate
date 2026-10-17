@@ -1575,10 +1575,17 @@ async def cmd_approve_demo(client: Client, message: Message):
         if m:
             link = m.group(1)
         if args:
-            try:
-                hours = float(args[0].lower().replace("h", ""))
-            except Exception:
-                pass
+            for arg in args:
+                if "h" in arg.lower():
+                    try:
+                        hours = float(arg.lower().replace("h", ""))
+                    except Exception:
+                        pass
+                elif arg.replace(".", "", 1).isdigit():
+                    try:
+                        hours = float(arg)
+                    except Exception:
+                        pass
 
     if not link and args:
         for arg in args:
@@ -1589,48 +1596,110 @@ async def cmd_approve_demo(client: Client, message: Message):
                     hours = float(arg.lower().replace("h", ""))
                 except Exception:
                     pass
+            elif arg.replace(".", "", 1).isdigit():
+                try:
+                    hours = float(arg)
+                except Exception:
+                    pass
 
-    if not link:
-        return await message.reply_text("  Error: Link nahi mila.")
+    target_uid = None
+    batch_id = None
 
-    ld = DB.get("LINK_MAP", {}).get(link)
-    if not ld:
-        return await message.reply_text("  Error: Ye link database me registered nahi hai.")
+    if link:
+        ld = DB.get("LINK_MAP", {}).get(link)
+        if ld:
+            target_uid = ld.get("u") if isinstance(ld, dict) else None
+            batch_id = ld.get("b") if isinstance(ld, dict) else ld
 
-    target_uid = ld.get("u") if isinstance(ld, dict) else None
-    batch_id = ld.get("b") if isinstance(ld, dict) else ld
+    # Also support /demo <user_id> <batch_id> [hours]
+    if (not target_uid or not batch_id) and len(args) >= 2:
+        try:
+            target_uid = int(args[0])
+            batch_id = int(args[1])
+            if len(args) >= 3:
+                try:
+                    hours = float(args[2].lower().replace("h", ""))
+                except Exception:
+                    pass
+        except ValueError:
+            pass
+
     if not target_uid or not batch_id:
-        return await message.reply_text("  Error: Invalid data in database for this link.")
+        return await message.reply_text("❌ Error: Valid Link ya `<user_id> <batch_id>` nahi mila.")
+
+    batch_id = int(batch_id)
+    target_uid = int(target_uid)
 
     try:
-        await client.approve_chat_join_request(batch_id, target_uid)
+        approved_via_req = False
+        try:
+            await client.approve_chat_join_request(batch_id, target_uid)
+            approved_via_req = True
+        except Exception:
+            pass
+
+        try:
+            await client.add_chat_members(batch_id, target_uid)
+        except Exception:
+            pass
+
+        # Generate a guaranteed direct invite link
+        direct_link = None
+        try:
+            l_obj = await client.create_chat_invite_link(
+                chat_id=batch_id,
+                creates_join_request=False,
+                name=f"Demo-{target_uid}",
+                member_limit=1,
+                expire_date=datetime.now() + timedelta(hours=int(hours) + 1),
+            )
+            direct_link = l_obj.invite_link
+        except Exception as e_link:
+            logger.error(f"Failed to create demo direct link: {e_link}")
+
         invalidate_membership_cache(target_uid, batch_id)
         expiry_time = time.time() + (hours * 3600)
-        DB["USER_DATA"].setdefault(target_uid, {}).setdefault("demos", {})[str(batch_id)] = {
+        target_key = str(target_uid) if str(target_uid) in DB.get("USER_DATA", {}) else target_uid
+        DB.setdefault("USER_DATA", {}).setdefault(target_key, {}).setdefault("demos", {})[str(batch_id)] = {
             "expiry": expiry_time,
             "warned": False,
         }
         clear_active_request(target_uid, batch_id)
-        DB.get("LINK_MAP", {}).pop(link, None)
+        if link:
+            DB.get("LINK_MAP", {}).pop(link, None)
         await save_data_async()
-        await message.reply_text(
-            f"  **APPROVED (DEMO)**\n  Time Given: `{hours} Hours`",
-            parse_mode=ParseMode.MARKDOWN,
+
+        bname = DB.get("ALL_CHATS", {}).get(batch_id, f"Batch {batch_id}")
+        kb = []
+        if direct_link:
+            kb.append([InlineKeyboardButton("🚀 Join Demo Batch", url=direct_link)])
+        kb.append([InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")])
+
+        user_msg = (
+            f"🎉 <b>Congratulations!</b>\n\n"
+            f"Aapki request <b>{bname}</b> ke liye approve ho gayi hai.\n\n"
+            f"🏷️ <b>Access Type:</b> Demo Trial\n"
+            f"⏳ <b>Duration:</b> <code>{hours} Hours</code>\n\n"
+            f"👉 <b>Neeche diye gaye button par click karke turant join karein:</b>"
         )
         try:
-            bname = DB["ALL_CHATS"].get(int(batch_id), f"Batch {batch_id}")
-            user_msg = (
-                f"  **Congratulations!**\n\n"
-                f"Aapki request **{bname}** ke liye approve ho gayi hai.\n\n"
-                f"  **Access Type:** Demo Trial\n"
-                f"  **Duration:** `{hours} Hours`\n\n"
-                f"Kripya diye gaye samay me batch access kar lein."
-            )
-            await client.send_message(target_uid, user_msg, parse_mode=ParseMode.MARKDOWN)
-        except Exception as e:
-            logger.error(f"User demo notification failed: {e}")
+            await client.send_message(target_uid, user_msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
+        except Exception as e_user:
+            logger.error(f"User demo notification failed: {e_user}")
+
+        admin_resp = (
+            f"✅ <b>APPROVED (DEMO)</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 <b>User:</b> <code>{target_uid}</code>\n"
+            f"📦 <b>Batch:</b> <b>{bname}</b> (<code>{batch_id}</code>)\n"
+            f"⏳ <b>Duration:</b> <code>{hours} Hours</code>\n"
+            f"⚡ <b>Join Request:</b> {'Approved (Auto-Joined)' if approved_via_req else 'Link Sent to User'}\n"
+            f"🔗 <b>Direct Link:</b> {direct_link or 'N/A'}\n\n"
+            f"✨ User ko message aur direct Join Button deliver kar diya gaya hai!"
+        )
+        await message.reply_text(admin_resp, parse_mode=ParseMode.HTML)
     except Exception as e:
-        await message.reply_text(f"  Approval failed: {e}")
+        await message.reply_text(f"❌ Approval failed: {e}")
 
 async def cmd_approve_perm(client: Client, message: Message):
     if not is_admin_msg(message):
@@ -1645,50 +1714,116 @@ async def cmd_approve_perm(client: Client, message: Message):
             link = m.group(1)
 
     if not link and args:
-        link = args[0]
+        for arg in args:
+            if "t.me" in arg:
+                link = arg.strip()
 
-    if not link:
-        return await message.reply_text("  Error: Link nahi mila. Kripya link provide karein.")
+    target_uid = None
+    batch_id = None
 
-    ld = DB.get("LINK_MAP", {}).get(link)
-    if not ld:
-        return await message.reply_text("  Error: Ye link database me registered nahi hai.")
+    if link:
+        ld = DB.get("LINK_MAP", {}).get(link)
+        if ld:
+            target_uid = ld.get("u") if isinstance(ld, dict) else None
+            batch_id = ld.get("b") if isinstance(ld, dict) else ld
 
-    target_uid = ld.get("u") if isinstance(ld, dict) else None
-    batch_id = ld.get("b") if isinstance(ld, dict) else ld
+    # Also support direct /per <user_id> <batch_id>
+    if (not target_uid or not batch_id) and len(args) >= 2:
+        try:
+            target_uid = int(args[0])
+            batch_id = int(args[1])
+        except ValueError:
+            pass
+
     if not target_uid or not batch_id:
-        return await message.reply_text("  Error: Invalid data in database for this link.")
+        return await message.reply_text("❌ Error: Link nahi mila ya database me registered nahi hai.\nUsage: `/per <link>` ya `/per <user_id> <batch_id>`", parse_mode=ParseMode.MARKDOWN)
+
+    batch_id = int(batch_id)
+    target_uid = int(target_uid)
 
     try:
+        # 1. Try to approve pending join request if present
+        approved_via_join_request = False
         try:
             await client.approve_chat_join_request(batch_id, target_uid)
-        except Exception:
-            pass # Accept direct links that bypass join requests (like /gendemo)
-            
-        invalidate_membership_cache(target_uid, batch_id)
-        
-        # Remove Demo Timer -> Upgrade to Permanent
-        target_key = str(target_uid) if str(target_uid) in DB.get("USER_DATA", {}) else target_uid
-        if str(batch_id) in DB.get("USER_DATA", {}).get(target_key, {}).get("demos", {}):
-            del DB["USER_DATA"][target_key]["demos"][str(batch_id)]
-            
-        clear_active_request(target_uid, batch_id)
-        DB.get("LINK_MAP", {}).pop(link, None)
-        await save_data_async()
-        await message.reply_text("  **APPROVED (PERM)**\nUser now has lifetime permanent access.", parse_mode=ParseMode.MARKDOWN)
+            approved_via_join_request = True
+        except Exception as e_req:
+            logger.info(f"approve_chat_join_request notice: {e_req}")
+
+        # 2. Try direct add if possible
         try:
-            bname = DB["ALL_CHATS"].get(int(batch_id), f"Batch {batch_id}")
-            user_msg = (
-                f"  **Congratulations!**\n\n"
-                f"Aapki request **{bname}** ke liye approve ho gayi hai.\n\n"
-                f"  **Access Type:** Lifetime Premium Access\n\n"
-                f"Welcome to the premium community! Ab aap jab chahein apne batches section se isey access kar sakte hain."
+            await client.add_chat_members(batch_id, target_uid)
+        except Exception:
+            pass
+
+        # 3. Always create a guaranteed direct 1-use invite link for the user
+        direct_join_link = None
+        try:
+            l_obj = await client.create_chat_invite_link(
+                chat_id=batch_id,
+                creates_join_request=False,
+                name=f"Perm-{target_uid}",
+                member_limit=1,
             )
-            await client.send_message(target_uid, user_msg, parse_mode=ParseMode.MARKDOWN)
-        except Exception as e:
-            logger.error(f"User perm notification failed: {e}")
+            direct_join_link = l_obj.invite_link
+        except Exception as e_link:
+            logger.error(f"Failed to create direct perm link: {e_link}")
+
+        invalidate_membership_cache(target_uid, batch_id)
+
+        # 4. Save to Database: grant lifetime access
+        target_key = str(target_uid) if str(target_uid) in DB.get("USER_DATA", {}) else target_uid
+        u_info = DB.setdefault("USER_DATA", {}).setdefault(target_key, {})
+        u_info.setdefault("unlocked_batches", [])
+        if batch_id not in u_info["unlocked_batches"]:
+            u_info["unlocked_batches"].append(batch_id)
+        u_info.setdefault("permanent_batches", [])
+        if batch_id not in u_info["permanent_batches"]:
+            u_info["permanent_batches"].append(batch_id)
+
+        # Remove demo timer if any
+        if "demos" in u_info and str(batch_id) in u_info["demos"]:
+            del u_info["demos"][str(batch_id)]
+
+        clear_active_request(target_uid, batch_id)
+        if link:
+            DB.get("LINK_MAP", {}).pop(link, None)
+        await save_data_async()
+
+        bname = DB.get("ALL_CHATS", {}).get(batch_id, f"Batch {batch_id}")
+
+        # 5. Notify the user with Direct Join Button!
+        kb = []
+        if direct_join_link:
+            kb.append([InlineKeyboardButton("🚀 Join Batch Now", url=direct_join_link)])
+        kb.append([InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")])
+
+        user_msg = (
+            f"🎉 <b>Congratulations!</b>\n\n"
+            f"Aapki request <b>{bname}</b> ke liye approve ho gayi hai.\n\n"
+            f"🏷️ <b>Access Type:</b> Lifetime Permanent Access\n\n"
+            f"👉 <b>Neeche diye gaye button par click karke turant channel / group join karein:</b>\n"
+            f"<i>(Yeh link sirf aapke liye 1-time valid hai)</i>"
+        )
+        try:
+            await client.send_message(target_uid, user_msg, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
+        except Exception as e_user:
+            logger.error(f"User perm notification failed: {e_user}")
+
+        # 6. Notify admin
+        admin_resp = (
+            f"✅ <b>APPROVED (PERMANENT)</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 <b>User:</b> <code>{target_uid}</code>\n"
+            f"📦 <b>Batch:</b> <b>{bname}</b> (<code>{batch_id}</code>)\n"
+            f"⚡ <b>Join Request:</b> {'Approved (Auto-Joined)' if approved_via_join_request else 'Link Sent to User'}\n"
+            f"🔗 <b>Direct Link:</b> {direct_join_link or 'N/A'}\n\n"
+            f"✨ User ko confirmation message aur direct Join Button deliver kar diya gaya hai!"
+        )
+        await message.reply_text(admin_resp, parse_mode=ParseMode.HTML)
+
     except Exception as e:
-        await message.reply_text(f"  Approval failed: {e}")
+        await message.reply_text(f"❌ Approval failed: {e}")
 
 async def cmd_delbatch(client: Client, message: Message):
     if not is_admin_msg(message):
@@ -4300,10 +4435,20 @@ async def general_callback(client: Client, q: CallbackQuery):
                         n_k = c_k
                     if n_k not in all_batches:
                         all_batches[n_k] = c_v
-            unlocked_ref_batches = DB["USER_DATA"].get(user_key, {}).get("unlocked_batches", [])
+            u_data = DB["USER_DATA"].get(user_key, {})
+            unlocked_ref_batches = u_data.get("unlocked_batches", [])
+            perm_batches = u_data.get("permanent_batches", [])
+            combined_unlocked = set(
+                [int(x) for x in unlocked_ref_batches if str(x).lstrip('-').isdigit()] +
+                [int(x) for x in perm_batches if str(x).lstrip('-').isdigit()]
+            )
 
             async def check_member(cid, name):
-                is_unlocked = int(cid) in unlocked_ref_batches or str(cid) in unlocked_ref_batches
+                try:
+                    cid_int = int(cid)
+                except Exception:
+                    cid_int = None
+                is_unlocked = cid_int in combined_unlocked or str(cid) in [str(x) for x in combined_unlocked]
                 try:
                     m = await client.get_chat_member(int(cid), uid)
                     if m.status in [
@@ -4317,7 +4462,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                     pass
 
                 if is_unlocked:
-                    return (cid, name, "Referral Unlocked")
+                    return (cid, name, "Unlocked")
 
                 return None
 
@@ -4339,8 +4484,8 @@ async def general_callback(client: Client, q: CallbackQuery):
             kb = []
             for cid, name, status_type in joined_batches[start_idx:end_idx]:
                 clean_id = str(cid).replace('-100', '')
-                if status_type == "Referral Unlocked":
-                    button_text = f"✨ {name} [SPECIAL UNLOCKED]"
+                if status_type == "Unlocked":
+                    button_text = f"✨ {name} [UNLOCKED]"
                 else:
                     button_text = f"⚡ {name}"
 
@@ -4812,7 +4957,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                     cid,
                     creates_join_request=True,
                     name=f"Req-{uid}",
-                    expire_date=datetime.now() + timedelta(seconds=60),
+                    expire_date=datetime.now() + timedelta(hours=24),
                 )
                 DB.setdefault("LINK_MAP", {})[l.invite_link] = {"u": uid, "b": cid, "ts": time.time()}
                 register_link_request(uid, cid)
@@ -4847,14 +4992,17 @@ async def general_callback(client: Client, q: CallbackQuery):
                     except Exception as e:
                         logger.error(f"Admin notification failed: {e}")
 
-                kb = [[InlineKeyboardButton("🔑 Request Access", url=l.invite_link)]]
+                kb = [[InlineKeyboardButton("🔑 Send Join Request", url=l.invite_link)]]
                 user_msg_obj = await client.send_message(
                     uid,
-                    f"  <b>Access Link Generated!</b>\n\n<b>{bname}</b>\n\n  <b>Sent to Admin.</b> Wait for approval.\n  <i>(Expires in 1 min)</i>",
+                    f"📨 <b>Access Request Created!</b>\n\n"
+                    f"📦 <b>{bname}</b>\n\n"
+                    f"👉 <b>Important:</b> Neeche diye gaye button par click karke channel join request submit karein.\n"
+                    f"Admin ke approve karte hi aap channel me successfully add ho jayenge!",
                     reply_markup=InlineKeyboardMarkup(kb),
                     parse_mode=ParseMode.HTML,
                 )
-                await schedule_delete(client, user_msg_obj, delay=60)
+                await schedule_delete(client, user_msg_obj, delay=1800)
             except Exception as e:
                 await client.send_message(uid, f"  Error: {e}")
     except Exception as e:
@@ -6017,13 +6165,57 @@ async def handle_join_request(client: Client, req: ChatJoinRequest):
         except Exception:
             pass
         return
-    if chat.id in DB["FREE_CHANNELS"]:
+
+    # Check if user has permanent access or active demo or unlocked batch in DB
+    target_key = str(user.id) if str(user.id) in DB.get("USER_DATA", {}) else user.id
+    u_info = DB.get("USER_DATA", {}).get(target_key, {})
+
+    perm_batches = [int(x) for x in u_info.get("permanent_batches", []) if str(x).lstrip('-').isdigit()]
+    unlocked_batches = [int(x) for x in u_info.get("unlocked_batches", []) if str(x).lstrip('-').isdigit()]
+
+    chat_id_int = int(chat.id)
+    chat_id_str = str(chat.id)
+
+    has_perm = (
+        chat_id_int in perm_batches or 
+        chat_id_str in [str(x) for x in u_info.get("permanent_batches", [])] or
+        chat_id_int in unlocked_batches or
+        chat_id_str in [str(x) for x in u_info.get("unlocked_batches", [])]
+    )
+
+    demo_dict = u_info.get("demos", {})
+    demo_info = demo_dict.get(chat_id_str) or demo_dict.get(chat_id_int)
+    has_demo = False
+    if demo_info:
+        exp = demo_info.get("expiry") if isinstance(demo_info, dict) else float(demo_info)
+        if exp > time.time():
+            has_demo = True
+
+    # If user is already permanently approved or on active demo, AUTO-APPROVE immediately!
+    if has_perm or has_demo:
+        try:
+            await client.approve_chat_join_request(chat.id, user.id)
+            invalidate_membership_cache(user.id, chat.id)
+            welcome_str = DB.get("CUSTOM_WELCOMES", {}).get(
+                chat.id, f"🎉 **Approved!**\nWelcome to {chat.title}!"
+            )
+            w_msg = await client.send_message(
+                user.id, welcome_str, parse_mode=ParseMode.MARKDOWN
+            )
+            await schedule_delete(client, w_msg, delay=120)
+            return
+        except Exception as e:
+            logger.error(f"Error auto-approving permitted join request for {user.id} in {chat.id}: {e}")
+            return
+
+    # Free Channels handling
+    if chat.id in DB.get("FREE_CHANNELS", {}):
         if await check_membership_pyro(user.id, client):
             try:
                 await client.approve_chat_join_request(chat.id, user.id)
                 invalidate_membership_cache(user.id, chat.id)
-                welcome_str = DB["CUSTOM_WELCOMES"].get(
-                    chat.id, f"  **Approved!**\nWelcome to {chat.title}"
+                welcome_str = DB.get("CUSTOM_WELCOMES", {}).get(
+                    chat.id, f"🎉 **Approved!**\nWelcome to {chat.title}!"
                 )
                 w_msg = await client.send_message(
                     user.id, welcome_str, parse_mode=ParseMode.MARKDOWN
@@ -6035,20 +6227,16 @@ async def handle_join_request(client: Client, req: ChatJoinRequest):
             try:
                 await client.send_message(
                     user.id,
-                    f"  **Declined!**\nJoin Main:\n{MANDATORY_CHANNEL_LINK}",
+                    f"⚠️ **Join Main Channel First!**\n{MANDATORY_CHANNEL_LINK}",
                     parse_mode=ParseMode.MARKDOWN,
                 )
                 await client.decline_chat_join_request(chat.id, user.id)
             except Exception:
                 pass
-    elif chat.id in DB["PAID_CHANNELS"]:
-        if req.invite_link and req.invite_link.invite_link in DB["LINK_MAP"]:
-            try:
-                await client.revoke_chat_invite_link(
-                    chat.id, req.invite_link.invite_link
-                )
-            except Exception:
-                pass
+    else:
+        # Paid or Special batch channel join request
+        # Keep request pending for Admin approval via /per or /demo
+        logger.info(f"Pending join request from user {user.id} for batch chat {chat.id} ({chat.title})")
 
 async def check_demos(client: Client):
     now = time.time()
