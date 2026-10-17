@@ -2612,7 +2612,7 @@ async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: s
     import config
     import os
     import urllib.parse
-    update_channel = getattr(config, 'BATCH_UPDATE_CHANNEL_ID', 0)
+    update_channel = getattr(config, 'BATCH_UPDATE_CHANNEL_ID', 0) or config.DB.get('BATCH_UPDATE_CHANNEL_ID', 0) or -1004304703943
 
     bot_username = getattr(config, 'BOT_USERNAME', None)
     if not bot_username:

@@ -31,7 +31,7 @@ except Exception as _patch_err:
     logger.warning(f"  Could not patch pyrogram ID bounds: {_patch_err}")
 
 # --- CONFIGURATION & DEFAULTS ---
-DEFAULTS = {"TOKEN": "", "OWNER": 0, "SUPPORT": 0, "MAIN_CH": 0, "LOG_CH": 0, "UPDATE_CH": 0}
+DEFAULTS = {"TOKEN": "", "OWNER": 0, "SUPPORT": 0, "MAIN_CH": 0, "LOG_CH": 0, "UPDATE_CH": -1004304703943}
 
 def _safe_int(env_name, default=0):
     raw = os.environ.get(env_name, None)
@@ -51,8 +51,8 @@ OWNER_ID = _safe_int("OWNER_ID", DEFAULTS["OWNER"])
 SUPPORT_GROUP_ID = _safe_int("SUPPORT_GROUP_ID", DEFAULTS["SUPPORT"])
 MANDATORY_CHANNEL_ID = _safe_int("MANDATORY_CHANNEL_ID", DEFAULTS["MAIN_CH"])
 LOG_CHANNEL_ID = _safe_int("LOG_CHANNEL_ID", DEFAULTS["LOG_CH"])
-BATCH_UPDATE_CHANNEL_ID = _safe_int("BATCH_UPDATE_CHANNEL_ID", DEFAULTS["UPDATE_CH"])
-BATCH_UPDATE_CHANNEL_LINK = os.environ.get("BATCH_UPDATE_CHANNEL_LINK", "https://t.me/YourUpdateChannel")
+BATCH_UPDATE_CHANNEL_ID = _safe_int("BATCH_UPDATE_CHANNEL_ID", -1004304703943)
+BATCH_UPDATE_CHANNEL_LINK = os.environ.get("BATCH_UPDATE_CHANNEL_LINK", "https://t.me/c/4304703943")
 MONGO_URL = os.environ.get("MONGO_URL", None) or None
 
 if not TELEGRAM_BOT_TOKEN:
@@ -123,6 +123,7 @@ def load_data():
         "USERBOT_SESSION", "USERBOT_PHONE",
         "VIP_MATERIALS_LINK", "VIP_STICKER_ID", "VIP_STICKER_TYPE", "BATCH_COINS",
         "BATCH_REQUESTS", "BATCH_REQUEST_STATUS", "VOUCHERS", "BATCH_PRICES", "BATCH_REQUEST_NOTE",
+        "BATCH_UPDATE_CHANNEL_ID", "BATCH_UPDATE_CHANNEL_LINK",
     ]
     
     if MONGO_URL and mongo_collection is not None:
