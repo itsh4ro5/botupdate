@@ -1180,95 +1180,8 @@ async def cmd_batchrequests(client: Client, message: Message):
         await message.reply_text(txt, parse_mode=ParseMode.MARKDOWN)
 
 async def cmd_restorebatches(client: Client, message: Message):
-    if not is_admin_msg(message):
-        return
-
-    backup_file = None
-    cleanup_temp = False
-
-    if message.document:
-        if not (message.document.file_name or "").lower().endswith(".json"):
-            return await message.reply_text("❌ Error: Kripya valid `.json` backup file bhejein.")
-        dl_msg = await message.reply_text("⏳ Backup JSON download ho raha hai...")
-        backup_file = await message.download()
-        cleanup_temp = True
-        try:
-            await dl_msg.delete()
-        except Exception:
-            pass
-    else:
-        args = get_args(message)
-        if args and os.path.exists(args[0]):
-            backup_file = args[0]
-        elif os.path.exists("backup.json"):
-            backup_file = "backup.json"
-        elif os.path.exists("old_backup.json"):
-            backup_file = "old_backup.json"
-        else:
-            return await message.reply_text(
-                "📥 **Usage: /restorebatches**\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                "1️⃣ Backup JSON file ko **Document** ke taur par attach karein aur caption me `/restorebatches` likhein.\n"
-                "2️⃣ Ya bot folder me `backup.json` rakh kar `/restorebatches` command chalayein.\n\n"
-                "🛡️ **Safe Merge Guarantee:**\n"
-                "• Jo batches aapne abhi manually add/update kiye hain, wo waise hi rahenge (kuch overwrite nahi hoga).\n"
-                "• Sirf missing batches Userbot ke through channels me bot ko add & full admin promote karke restore honge!",
-                parse_mode=ParseMode.MARKDOWN
-            )
-
-    status_msg = await message.reply_text(
-        "🚀 **Batch Restoration Engine Started...**\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "• Parsing backup JSON...\n"
-        "• Checking existing database (skipping manual updates)...\n"
-        "• Starting Userbot to add & promote bot in missing channels...",
-        parse_mode=ParseMode.MARKDOWN
-    )
-
-    try:
-        from restore_batches import run_batch_restore
-        res = await run_batch_restore(backup_file)
-
-        if not res.get("success"):
-            return await status_msg.edit_text(
-                f"❌ **Restoration Failed:**\n`{res.get('error')}`",
-                parse_mode=ParseMode.MARKDOWN
-            )
-
-        restored_cnt = res.get("restored_count", 0)
-        skipped_cnt = res.get("skipped_count", 0)
-        failed_cnt = res.get("failed_count", 0)
-
-        preview_lines = []
-        for b in (res.get("restored") or [])[:8]:
-            p_tag = "👑 Admin" if b.get("promoted") else "⚠️ Member"
-            preview_lines.append(f"• `{b['title']}` ({b['type'].upper()}) -> {b['category']} [{p_tag}]")
-
-        if len(res.get("restored", [])) > 8:
-            preview_lines.append(f"• ...aur {len(res['restored']) - 8} batches aur.")
-
-        preview_txt = "\n".join(preview_lines) if preview_lines else "Koi naya batch restore karne ki zaroorat nahi thi."
-
-        report = (
-            f"🎉 **BATCH RESTORATION COMPLETE!**\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"✅ **Restored & Connected:** `{restored_cnt}` Batches\n"
-            f"⏩ **Skipped (Preserved):** `{skipped_cnt}` Batches *(Manual updates bilkul safe rahe)*\n"
-            f"❌ **Failed:** `{failed_cnt}` Batches\n\n"
-            f"📋 **Restored Preview:**\n{preview_txt}\n\n"
-            f"💾 **MongoDB & Local DB 100% Synced!**"
-        )
-        await status_msg.edit_text(report, parse_mode=ParseMode.MARKDOWN)
-
-    except Exception as e:
-        logger.error(f"Error during cmd_restorebatches: {e}")
-        await status_msg.edit_text(f"❌ **Error:** `{e}`", parse_mode=ParseMode.MARKDOWN)
-    finally:
-        if cleanup_temp and backup_file and os.path.exists(backup_file):
-            try:
-                os.remove(backup_file)
-            except Exception:
-                pass
+    # Backward compatibility redirect to batch requests
+    await cmd_batchrequests(client, message)
 
 async def cmd_list_vouchers(client: Client, message: Message):
     if not is_admin_msg(message):
@@ -3614,7 +3527,7 @@ async def general_callback(client: Client, q: CallbackQuery):
         # =====================================================================
         # 📋 BATCH REQUESTS DEMANDS & CHECKLIST TRACKER
         # =====================================================================
-        elif data == "view_batch_requests":
+        elif data in ["view_batch_requests", "act_requestbatches", "requestbatches"]:
             if not is_admin(uid):
                 return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
             await q.answer()
@@ -4979,7 +4892,7 @@ def build_database_panel_msg():
             rp.bold("• "), "📋 ", rp.bold("Active Vouchers"), " — ", rp.italic("Sabhi active redeem codes ki list dekhein\n\n"),
             rp.bold("• "), "🎁 ", rp.bold("Gift Coin"), " — ", rp.italic("User ke wallet me free coins credit karein\n\n"),
             rp.bold("• "), "🚫 ", rp.bold("Ban / Unban"), " — ", rp.italic("User access control manage karein\n\n"),
-            rp.bold("• "), "📥 ", rp.bold("Restore Old Batches"), " — ", rp.italic("Old backup JSON se missing batches aur bot rights restore karein\n\n"),
+            rp.bold("• "), "📋 ", rp.bold("Request Batches"), " — ", rp.italic("User-requested batches ki complete checklist aur interactive status dekhein\n\n"),
             rp.bold("• "), "☢️ ", rp.bold("Hard Delete User"), " — ", rp.italic("User ka saara record database se delete karein")
         ]),
         rp.buttons(
@@ -5003,8 +4916,7 @@ def build_database_panel_msg():
             rp.btn("✅ Unban User", "input_unban", style=rp.Style.SUCCESS)
         ),
         rp.buttons(
-            rp.btn("📥 Restore Batches", "act_restorebatches", style=rp.Style.DEFAULT),
-            rp.btn("📋 Demands Tracker", "view_batch_requests", style=rp.Style.SUCCESS)
+            rp.btn("📋 Request Batches", "view_batch_requests", style=rp.Style.SUCCESS)
         ),
         rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DANGER))
     )
