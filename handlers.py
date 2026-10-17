@@ -41,6 +41,54 @@ from pyrogram.types import (
 
 logger = logging.getLogger(__name__)
 
+# Custom Animated / Premium Emojis from @istevedogs Emoji Icons Pack
+CUSTOM_EMOJIS = {
+    "CHECK": "4967612238874542985",       # ✅
+    "CHECK_2": "4967770182001885951",     # ✅
+    "CHECK_GREEN": "4969981205396063191", # ✅
+    "CROSS": "4970239229851337393",       # ✖️
+    "CROSS_BOX": "4967749291280958323",   # ❎
+    "ALERT": "4967800109334004515",       # ❗️
+    "SIREN": "4969741112429249159",       # 🚨
+    "STOP": "4967893421793477515",        # 🛑
+    "QUESTION": "4967611285391803206",    # ❓
+    "PLUS": "4967481744883188442",        # ➕
+    "MINUS": "4967648879240544998",       # ➖
+    "INFO": "4970095936857440997",        # ℹ️
+    "BELL": "4967778303785042605",        # 🔔
+    "SPARKLE": "4970033831630341184",     # ❇️
+    "LIGHT": "4968003407315993509",       # 💡
+    "LIGHTNING": "4967489802241835579",   # ⚡️
+    "HEART": "4967994490963886991",       # ❤️
+    "THUMB_UP": "4967792296788501647",    # 👍
+    "BROADCAST": "4969807937825407652",   # 📢
+    "ANNOUNCE": "4969904819402703699",    # 📣
+    "DOWNLOAD": "4967594608033792786",    # 📥
+    "STATS": "4967970726909838084",       # 📊
+    "DIAMOND": "4968025655246586724",     # 💎
+    "FOLDER": "4967570599166608213",      # 📂
+    "GEAR": "4967490064234840998",       # ⚙️
+    "GIFT": "4967740821605450859",        # 🎁
+    "KEY": "4969770296732025426",         # 🔑
+    "LOCK": "4970224115861422958",        # 🔒
+    "PIN": "4970003148383978212",         # 📍
+    "CLOCK": "4967710224258433643",       # 🕰
+    "CROWN": "4969765374699504624",       # 👑
+    "MEDAL": "4967587877820039770",       # 🥇
+    "MAIL": "4967770306555937780",        # 📧
+    "SHIELD": "4967861870963720868",      # 🛡
+    "REFRESH": "4967823117473809209",     # 🔃
+    "LINK": "4967826519087907994",        # 🔗
+    "DOC": "4967625145251267473",         # 📄
+    "BAN": "4967927656977793959",         # 🚫
+}
+
+def ce(name: str, fallback: str = ""):
+    eid = CUSTOM_EMOJIS.get(name)
+    if eid:
+        return rp.custom_emoji(eid, fallback or "✨")
+    return fallback
+
 _SYNC_IN_PROGRESS = False
 _BOT_SELF_ID = None
 USER_FLOW_STATE = {}
@@ -1021,19 +1069,115 @@ async def cmd_genvoucher(client: Client, message: Message):
         parse_mode=ParseMode.MARKDOWN
     )
 
+def build_batch_requests_msg(page: int = 0):
+    reqs = DB.get("BATCH_REQUESTS", {})
+    statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
+
+    if not reqs:
+        return rp.message(
+            rp.heading("📋 Batch Demands & Checklist"),
+            rp.divider(),
+            rp.quote(
+                ce("INFO", "ℹ️"), " ", rp.bold("Abhi tak koi batch requests nahi aayi hain."), "\n\n",
+                rp.italic("Jab users 'Request Batch' button se demand submit karenge, wo yahan checkbox checklist format me dikhengi.")
+            ),
+            rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DANGER))
+        )
+
+    def _sort_key(item):
+        bname, uids = item
+        status = statuses.get(bname, "pending")
+        status_rank = 0 if status != "done" else 1
+        return (status_rank, -len(uids), bname.lower())
+
+    sorted_items = sorted(reqs.items(), key=_sort_key)
+    total = len(sorted_items)
+    completed = sum(1 for b, _ in sorted_items if statuses.get(b) == "done")
+    pending = total - completed
+    pct = int((completed / total) * 100) if total > 0 else 0
+    pbar = render_progress_bar(completed, total if total > 0 else 1, length=10)
+
+    PER_PAGE = 5
+    total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
+    page = max(0, min(page, total_pages - 1))
+    start_idx = page * PER_PAGE
+    end_idx = min(start_idx + PER_PAGE, total)
+    page_items = sorted_items[start_idx:end_idx]
+
+    body_elements = [
+        rp.heading("📋 Batch Demands & Task Checklist"),
+        rp.divider(),
+        rp.para(
+            ce("STATS", "📊"), " ", rp.bold("Task Progress: "),
+            rp.code(f"[{pbar}] {completed}/{total} ({pct}%)")
+        ),
+        rp.para(
+            rp.marked(f" 📦 Total: {total} | ⏳ Pending: {pending} | ✅ Uploaded: {completed} ")
+        ),
+        rp.divider(),
+    ]
+
+    for idx, (bname, uids) in enumerate(page_items, start=start_idx + 1):
+        st = statuses.get(bname, "pending")
+        is_done = (st == "done")
+        badge = ce("CHECK", "✅") if is_done else ce("ALERT", "❗️")
+        status_tag = rp.marked(" [☑ Uploaded] ") if is_done else rp.italic(" [☐ Pending] ")
+        body_elements.append(
+            rp.para(
+                badge, " ", rp.bold(f"{idx}. {bname}"), "\n",
+                "   ↳ ", rp.bold(f"👥 {len(uids)} Users"), " — ", status_tag
+            )
+        )
+
+    body_elements.append(rp.divider())
+    body_elements.append(
+        rp.italic("💡 Niche buttons se checkbox toggle karein. Uploaded tick karte hi users ko auto-notification bhej di jayegi!")
+    )
+
+    btn_rows = []
+    for sub_idx, (bname, uids) in enumerate(page_items):
+        item_global_idx = start_idx + sub_idx
+        st = statuses.get(bname, "pending")
+        is_done = (st == "done")
+        check_icon = "☑" if is_done else "☐"
+        short_name = (bname[:18] + "..") if len(bname) > 20 else bname
+        label = f"{check_icon} {short_name} ({'Done' if is_done else 'Upload'})"
+        style = rp.Style.SUCCESS if is_done else rp.Style.DEFAULT
+        btn_rows.append(rp.buttons(rp.btn(label, f"breq_t_{item_global_idx}_{page}", style=style)))
+
+    nav_buttons = []
+    if page > 0:
+        nav_buttons.append(rp.btn("◀ Prev", f"breq_p_{page - 1}", style=rp.Style.DEFAULT))
+    nav_buttons.append(rp.btn(f"📄 {page + 1}/{total_pages}", f"breq_p_{page}", style=rp.Style.DEFAULT))
+    if page < total_pages - 1:
+        nav_buttons.append(rp.btn("Next ▶", f"breq_p_{page + 1}", style=rp.Style.DEFAULT))
+
+    btn_rows.append(rp.buttons(*nav_buttons))
+    btn_rows.append(rp.buttons(
+        rp.btn("🔄 Refresh", f"breq_p_{page}", style=rp.Style.DEFAULT),
+        rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DANGER)
+    ))
+
+    return rp.message(*body_elements, *btn_rows)
+
 async def cmd_batchrequests(client: Client, message: Message):
     if not is_admin_msg(message):
         return
-    reqs = DB.get("BATCH_REQUESTS", {})
-    if not reqs:
-        return await message.reply_text("📭 Abhi tak koi batch requests nahi aayi hain.")
+    try:
+        msg = build_batch_requests_msg(page=0)
+        await rp.send(client, message.chat.id, msg)
+    except Exception as e:
+        logger.error(f"cmd_batchrequests error: {e}")
+        reqs = DB.get("BATCH_REQUESTS", {})
+        if not reqs:
+            return await message.reply_text("📭 Abhi tak koi batch requests nahi aayi hain.")
 
-    sorted_reqs = sorted(reqs.items(), key=lambda x: len(x[1]), reverse=True)
-    txt = "🙋 **USER BATCH REQUESTS & DEMAND**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-    for idx, (bname, uids) in enumerate(sorted_reqs[:25], 1):
-        txt += f"`{idx}.` **{bname}** — `{len(uids)} Users Requested`\n"
-    txt += f"\n📊 Total Unique Requests: `{len(reqs)}`"
-    await message.reply_text(txt, parse_mode=ParseMode.MARKDOWN)
+        sorted_reqs = sorted(reqs.items(), key=lambda x: len(x[1]), reverse=True)
+        txt = "🙋 **USER BATCH REQUESTS & DEMAND**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        for idx, (bname, uids) in enumerate(sorted_reqs[:25], 1):
+            txt += f"`{idx}.` **{bname}** — `{len(uids)} Users Requested`\n"
+        txt += f"\n📊 Total Unique Requests: `{len(reqs)}`"
+        await message.reply_text(txt, parse_mode=ParseMode.MARKDOWN)
 
 async def cmd_list_vouchers(client: Client, message: Message):
     if not is_admin_msg(message):
@@ -3228,6 +3372,84 @@ async def general_callback(client: Client, q: CallbackQuery):
             msg = build_commands_manual_msg()
             await rp.edit(client, q.message.chat.id, q.message.id, msg)
 
+        # =====================================================================
+        # 📋 BATCH REQUESTS DEMANDS & CHECKLIST TRACKER
+        # =====================================================================
+        elif data == "view_batch_requests":
+            if not is_admin(uid):
+                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
+            await q.answer()
+            msg = build_batch_requests_msg(page=0)
+            await rp.edit(client, q.message.chat.id, q.message.id, msg)
+
+        elif data.startswith("breq_p_"):
+            if not is_admin(uid):
+                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
+            page = int(data.split("_")[2])
+            await q.answer()
+            msg = build_batch_requests_msg(page=page)
+            await rp.edit(client, q.message.chat.id, q.message.id, msg)
+
+        elif data.startswith("breq_t_"):
+            if not is_admin(uid):
+                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
+            parts = data.split("_")
+            item_global_idx = int(parts[2])
+            page = int(parts[3])
+
+            reqs = DB.get("BATCH_REQUESTS", {})
+            statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
+
+            def _sort_key(item):
+                bname, uids = item
+                status = statuses.get(bname, "pending")
+                status_rank = 0 if status != "done" else 1
+                return (status_rank, -len(uids), bname.lower())
+
+            sorted_items = sorted(reqs.items(), key=_sort_key)
+            if item_global_idx < 0 or item_global_idx >= len(sorted_items):
+                return await q.answer("❌ Invalid batch index.", show_alert=True)
+
+            bname, uids = sorted_items[item_global_idx]
+            current_status = statuses.get(bname, "pending")
+
+            if current_status == "done":
+                # Toggle back to pending
+                statuses[bname] = "pending"
+                await save_data_async()
+                await q.answer(f"Marked '{bname}' as Pending (☐)")
+            else:
+                # Mark done & notify requesting users
+                statuses[bname] = "done"
+                await save_data_async()
+
+                notified_count = 0
+                for target_uid in uids:
+                    try:
+                        notify_kb = InlineKeyboardMarkup([
+                            [InlineKeyboardButton("📚 Open Batches Catalog", callback_data="all_batches_0")],
+                            [InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]
+                        ])
+                        await client.send_message(
+                            int(target_uid),
+                            f"🎉 **Great News! Aapka Requested Batch Live Ho Chuka Hai!**\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"📦 **Batch Name:** `{bname}`\n\n"
+                            f"Aapne is batch ke liye demand request submit ki thi. Admin ne ise bot me successfully upload kar diya hai!\n\n"
+                            f"Abhi access karke apni preparation continue karein! 🚀",
+                            reply_markup=notify_kb,
+                            parse_mode=ParseMode.MARKDOWN
+                        )
+                        notified_count += 1
+                    except Exception as err:
+                        logger.warning(f"Could not notify user {target_uid}: {err}")
+
+                alert_txt = f"✅ '{bname}' marked as Uploaded (☑)!\n👥 {notified_count} user(s) notified."
+                await q.answer(alert_txt, show_alert=True)
+
+            msg = build_batch_requests_msg(page=page)
+            await rp.edit(client, q.message.chat.id, q.message.id, msg)
+
         elif data == "act_adminlist":
             await q.answer("Fetching Admin List...")
             
@@ -3566,34 +3788,48 @@ async def general_callback(client: Client, q: CallbackQuery):
 
                 progress_bar = render_progress_bar(total_inv, 25, length=10)
 
-                kb = InlineKeyboardMarkup([
-                    [make_copy_button("📋 1-Tap Copy Invite Link", ref_link)],
-                    [InlineKeyboardButton("✈️ Share on Telegram", url=tg_share_url)],
-                    [InlineKeyboardButton("💬 Share on WhatsApp", url=wa_share_url)],
-                    [InlineKeyboardButton("🏆 Top 10 Leaderboard", callback_data="show_leaderboard")],
-                    [InlineKeyboardButton("🔙 Main Menu", callback_data="u_main")]
-                ])
+                refer_elements = [
+                    rp.heading("🎁 Refer & Earn Rewards"),
+                    rp.divider(),
+                    rp.para(
+                        ce("TROPHY", "🏆"), " ",
+                        rp.marked(" Milestone Bonus: Har 5 refers par +1 EXTRA Coin! ")
+                    ),
+                    rp.para(
+                        ce("CROWN", "👑"), " ",
+                        rp.marked(" VIP Elite Tag: 25 refers cross karne par auto unlock! ")
+                    ),
+                    rp.divider(),
+                    rp.para(
+                        ce("CROWN", "👑"), " ", rp.bold("Your Tier: "),
+                        rp.marked(" 👑 VIP Referrer 🌟 ") if is_vip else rp.italic("Standard Referrer")
+                    ) if is_vip else rp.para(
+                        ce("STATS", "📊"), " ", rp.bold("VIP Goal Progress: "),
+                        rp.code(f"[{progress_bar}] {total_inv}/25")
+                    ),
+                    rp.para(
+                        ce("CHECK", "✅"), " ", rp.bold("Total Referred: "), rp.code(f"{total_inv} Users"),
+                        "  |  ",
+                        ce("DIAMOND", "💎"), " ", rp.bold("Wallet Balance: "), rp.code(f"{pts} Coins")
+                    ),
+                    rp.blockquote(
+                        ce("LINK", "🔗"), " ", rp.bold("Your Personal Referral Link:\n"),
+                        rp.code(ref_link), "\n\n",
+                        rp.italic("Niche diye gaye copy button ya sharing links se dosto ko invite karein!")
+                    ),
+                    rp.buttons(rp.copy_btn("📋 1-Tap Copy Invite Link", ref_link)),
+                    rp.buttons(
+                        rp.url_btn("✈️ Share on Telegram", tg_share_url),
+                        rp.url_btn("💬 Share on WhatsApp", wa_share_url)
+                    ),
+                    rp.buttons(
+                        rp.btn("🏆 Top 10 Leaderboard", "show_leaderboard", style=rp.Style.SUCCESS),
+                        rp.btn("🏠 Main Menu", "u_main", style=rp.Style.DANGER)
+                    )
+                ]
 
-                text = (
-                    "🎁 **Refer & Earn Program**\n"
-                    "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "Invite your friends and earn 1 coin on every successful refer!\n\n"
-                    "🏆 **Milestone Bonus:** Every 5 successful refers = **+1 EXTRA Coin!**\n"
-                    "👑 **VIP Elite Tag:** Cross 25 total refers to unlock the VIP Referrer tag!\n\n"
-                    + (f"👑 Your Status: **VIP Referrer** 🌟\n\n" if is_vip else f"🎯 VIP Goal Progress: `{total_inv}/25`\n`[{progress_bar}]`\n\n")
-                    + f"👥 Total Referred Users: `{total_inv}`\n"
-                    f"💰 Wallet Balance: `{pts}` Coins\n\n"
-                    f"🔗 **Your Referral Link:**\n"
-                    f"`{ref_link}`\n\n"
-                    "👇 *Neeche button se link copy karein ya share karein:*"
-                )
-
-                await q.edit_message_text(
-                    text,
-                    reply_markup=kb,
-                    parse_mode=ParseMode.MARKDOWN,
-                    disable_web_page_preview=True
-                )
+                ref_msg = rp.message(*refer_elements)
+                await rp.edit(client, q.message.chat.id, q.message.id, ref_msg)
             except Exception as e:
                 logger.error(f"Refer & Earn Error: {e}")
                 await q.answer("⚠️ Menu load hone me error aayi. Kripya wapas try karein.", show_alert=True)
@@ -4515,6 +4751,7 @@ def build_database_panel_msg():
             rp.btn("🚫 Ban User", "input_ban", style=rp.Style.DANGER),
             rp.btn("✅ Unban User", "input_unban", style=rp.Style.SUCCESS)
         ),
+        rp.buttons(rp.btn("📋 Demands Tracker & Checklist", "view_batch_requests", style=rp.Style.SUCCESS)),
         rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DANGER))
     )
 
@@ -4557,7 +4794,8 @@ def build_batches_panel_msg(back_cb="dash_home"):
             rp.btn("📝 Caption Changer", "input_advcap", style=rp.Style.DEFAULT)
         ),
         rp.buttons(
-            rp.btn("📊 Batch Stats", "act_batchstats", style=rp.Style.DEFAULT)
+            rp.btn("📊 Batch Stats", "act_batchstats", style=rp.Style.DEFAULT),
+            rp.btn("📋 Demands Checklist", "view_batch_requests", style=rp.Style.SUCCESS)
         ),
         rp.buttons(rp.btn(back_text, back_cb, style=rp.Style.DANGER))
     )
@@ -5080,6 +5318,7 @@ async def handle_user_flow_messages(client: Client, message: Message) -> bool:
         DB.setdefault("BATCH_REQUESTS", {}).setdefault(text, [])
         if uid not in DB["BATCH_REQUESTS"][text]:
             DB["BATCH_REQUESTS"][text].append(uid)
+        DB.setdefault("BATCH_REQUEST_STATUS", {}).setdefault(text, "pending")
         await save_data_async()
         note = DB.get("BATCH_REQUEST_NOTE") or (
             "🙏 **Important Note from Admin:**\n"
@@ -5087,14 +5326,32 @@ async def handle_user_flow_messages(client: Client, message: Message) -> bool:
             "Aap bilkul chinta na karein aur thoda dhairya (patience) rakhein. "
             "Jaise hi yeh batch bot me add hoga, bot aapko direct notification bhej dega! Tab tak ke liye dhanyawad."
         )
-        kb = [[InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]]
-        await message.reply_text(
-            f"✅ **Batch Request Received!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📦 **Requested Batch:** `{text}`\n\n"
-            f"{note}",
-            reply_markup=InlineKeyboardMarkup(kb),
-            parse_mode=ParseMode.MARKDOWN
-        )
+        try:
+            req_rcvd_msg = rp.message(
+                rp.heading("✅ Batch Request Received!"),
+                rp.divider(),
+                rp.para(
+                    ce("CHECK", "✅"), " ", rp.bold("Demand Registered: "), rp.code(text)
+                ),
+                rp.para(
+                    rp.marked(" ⏳ Added to Admin Task Checklist ")
+                ),
+                rp.blockquote(
+                    ce("INFO", "ℹ️"), " ", rp.bold("Note from Admin:\n"),
+                    rp.italic(note)
+                ),
+                rp.buttons(rp.btn("🏠 Main Menu", "u_main", style=rp.Style.SUCCESS))
+            )
+            await rp.send(client, message.chat.id, req_rcvd_msg)
+        except Exception:
+            kb = [[InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]]
+            await message.reply_text(
+                f"✅ **Batch Request Received!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📦 **Requested Batch:** `{text}`\n\n"
+                f"{note}",
+                reply_markup=InlineKeyboardMarkup(kb),
+                parse_mode=ParseMode.MARKDOWN
+            )
         return True
 
     elif state == "wait_voucher_code":
