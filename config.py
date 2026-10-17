@@ -162,10 +162,7 @@ def load_data():
                     
                 if OWNER_ID not in DB["ADMIN_IDS"]: DB["ADMIN_IDS"].append(OWNER_ID)
                 
-                for cid, name in DB.get("FREE_CHANNELS", {}).items(): DB["ALL_CHATS"][cid] = name
-                for cid, name in DB.get("PAID_CHANNELS", {}).items(): DB["ALL_CHATS"][cid] = name
-                for cid, name in DB.get("SPECIAL_CHANNELS", {}).items(): DB["ALL_CHATS"][cid] = name
-                
+                deduplicate_channels_in_memory()
                 logger.info("  Data Loaded from MongoDB!")
                 return
         except Exception as e: logger.error(f"  MongoDB Load Error: {e}")
@@ -207,12 +204,55 @@ def load_data():
                 
             if OWNER_ID not in DB["ADMIN_IDS"]: DB["ADMIN_IDS"].append(OWNER_ID)
             
-            for cid, name in DB.get("FREE_CHANNELS", {}).items(): DB["ALL_CHATS"][cid] = name
-            for cid, name in DB.get("PAID_CHANNELS", {}).items(): DB["ALL_CHATS"][cid] = name
-            for cid, name in DB.get("SPECIAL_CHANNELS", {}).items(): DB["ALL_CHATS"][cid] = name
-            
+            deduplicate_channels_in_memory()
             logger.info("  Data Loaded from Local JSON!")
     except Exception as e: logger.error(f"  Local Load Error: {e}")
+
+def deduplicate_channels_in_memory():
+    """Removes duplicate keys (int vs str) and cross-type duplication across batch collections."""
+    for col in ["FREE_CHANNELS", "PAID_CHANNELS", "SPECIAL_CHANNELS", "ALL_CHATS"]:
+        normalized = {}
+        for k, v in list(DB.get(col, {}).items()):
+            try:
+                norm_k = int(str(k).strip())
+            except Exception:
+                norm_k = k
+            normalized[norm_k] = v
+        DB[col] = normalized
+
+    # Cross-type deduplication: Special > Paid > Free
+    special_ids = set(DB.get("SPECIAL_CHANNELS", {}).keys())
+    paid_ids = set(DB.get("PAID_CHANNELS", {}).keys())
+
+    # If in Special, remove from Paid & Free
+    for sid in special_ids:
+        if sid in DB.get("PAID_CHANNELS", {}):
+            del DB["PAID_CHANNELS"][sid]
+        if sid in DB.get("FREE_CHANNELS", {}):
+            del DB["FREE_CHANNELS"][sid]
+
+    # If in Paid, remove from Free
+    for pid in paid_ids:
+        if pid in DB.get("FREE_CHANNELS", {}):
+            del DB["FREE_CHANNELS"][pid]
+
+    # Normalize BATCH_CATEGORIES keys to strings of integer IDs
+    if "BATCH_CATEGORIES" in DB and isinstance(DB["BATCH_CATEGORIES"], dict):
+        norm_cats = {}
+        for k, v in list(DB["BATCH_CATEGORIES"].items()):
+            try:
+                norm_cats[str(int(str(k).strip()))] = v
+            except Exception:
+                norm_cats[str(k)] = v
+        DB["BATCH_CATEGORIES"] = norm_cats
+
+    # Rebuild ALL_CHATS
+    for cid, name in DB.get("FREE_CHANNELS", {}).items():
+        DB.setdefault("ALL_CHATS", {})[cid] = name
+    for cid, name in DB.get("PAID_CHANNELS", {}).items():
+        DB.setdefault("ALL_CHATS", {})[cid] = name
+    for cid, name in DB.get("SPECIAL_CHANNELS", {}).items():
+        DB.setdefault("ALL_CHATS", {})[cid] = name
 
 def save_data_sync():
     try:

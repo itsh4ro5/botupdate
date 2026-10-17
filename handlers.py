@@ -1179,6 +1179,97 @@ async def cmd_batchrequests(client: Client, message: Message):
         txt += f"\n📊 Total Unique Requests: `{len(reqs)}`"
         await message.reply_text(txt, parse_mode=ParseMode.MARKDOWN)
 
+async def cmd_restorebatches(client: Client, message: Message):
+    if not is_admin_msg(message):
+        return
+
+    backup_file = None
+    cleanup_temp = False
+
+    if message.document:
+        if not (message.document.file_name or "").lower().endswith(".json"):
+            return await message.reply_text("❌ Error: Kripya valid `.json` backup file bhejein.")
+        dl_msg = await message.reply_text("⏳ Backup JSON download ho raha hai...")
+        backup_file = await message.download()
+        cleanup_temp = True
+        try:
+            await dl_msg.delete()
+        except Exception:
+            pass
+    else:
+        args = get_args(message)
+        if args and os.path.exists(args[0]):
+            backup_file = args[0]
+        elif os.path.exists("backup.json"):
+            backup_file = "backup.json"
+        elif os.path.exists("old_backup.json"):
+            backup_file = "old_backup.json"
+        else:
+            return await message.reply_text(
+                "📥 **Usage: /restorebatches**\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "1️⃣ Backup JSON file ko **Document** ke taur par attach karein aur caption me `/restorebatches` likhein.\n"
+                "2️⃣ Ya bot folder me `backup.json` rakh kar `/restorebatches` command chalayein.\n\n"
+                "🛡️ **Safe Merge Guarantee:**\n"
+                "• Jo batches aapne abhi manually add/update kiye hain, wo waise hi rahenge (kuch overwrite nahi hoga).\n"
+                "• Sirf missing batches Userbot ke through channels me bot ko add & full admin promote karke restore honge!",
+                parse_mode=ParseMode.MARKDOWN
+            )
+
+    status_msg = await message.reply_text(
+        "🚀 **Batch Restoration Engine Started...**\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "• Parsing backup JSON...\n"
+        "• Checking existing database (skipping manual updates)...\n"
+        "• Starting Userbot to add & promote bot in missing channels...",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+    try:
+        from restore_batches import run_batch_restore
+        res = await run_batch_restore(backup_file)
+
+        if not res.get("success"):
+            return await status_msg.edit_text(
+                f"❌ **Restoration Failed:**\n`{res.get('error')}`",
+                parse_mode=ParseMode.MARKDOWN
+            )
+
+        restored_cnt = res.get("restored_count", 0)
+        skipped_cnt = res.get("skipped_count", 0)
+        failed_cnt = res.get("failed_count", 0)
+
+        preview_lines = []
+        for b in (res.get("restored") or [])[:8]:
+            p_tag = "👑 Admin" if b.get("promoted") else "⚠️ Member"
+            preview_lines.append(f"• `{b['title']}` ({b['type'].upper()}) -> {b['category']} [{p_tag}]")
+
+        if len(res.get("restored", [])) > 8:
+            preview_lines.append(f"• ...aur {len(res['restored']) - 8} batches aur.")
+
+        preview_txt = "\n".join(preview_lines) if preview_lines else "Koi naya batch restore karne ki zaroorat nahi thi."
+
+        report = (
+            f"🎉 **BATCH RESTORATION COMPLETE!**\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"✅ **Restored & Connected:** `{restored_cnt}` Batches\n"
+            f"⏩ **Skipped (Preserved):** `{skipped_cnt}` Batches *(Manual updates bilkul safe rahe)*\n"
+            f"❌ **Failed:** `{failed_cnt}` Batches\n\n"
+            f"📋 **Restored Preview:**\n{preview_txt}\n\n"
+            f"💾 **MongoDB & Local DB 100% Synced!**"
+        )
+        await status_msg.edit_text(report, parse_mode=ParseMode.MARKDOWN)
+
+    except Exception as e:
+        logger.error(f"Error during cmd_restorebatches: {e}")
+        await status_msg.edit_text(f"❌ **Error:** `{e}`", parse_mode=ParseMode.MARKDOWN)
+    finally:
+        if cleanup_temp and backup_file and os.path.exists(backup_file):
+            try:
+                os.remove(backup_file)
+            except Exception:
+                pass
+
 async def cmd_list_vouchers(client: Client, message: Message):
     if not is_admin_msg(message):
         return
@@ -2675,15 +2766,140 @@ async def wizard_callback(client: Client, q: CallbackQuery):
             parse_mode=ParseMode.MARKDOWN,
         )
 
+    if q.data.startswith("wiz_dup_update_"):
+        cid = int(q.data.replace("wiz_dup_update_", ""))
+        state = ADMIN_WIZARD[uid]
+        target_type = state.get("type", "free")
+        target_cat = state.get("category", "Other Batches")
+        
+        # Clean from all collections first (both int and str keys)
+        for col in ["FREE_CHANNELS", "PAID_CHANNELS", "SPECIAL_CHANNELS"]:
+            DB.get(col, {}).pop(cid, None)
+            DB.get(col, {}).pop(str(cid), None)
+
+        try:
+            cname = (await client.get_chat(cid)).title or state.get("existing_name") or f"Batch {cid}"
+        except Exception:
+            cname = state.get("existing_name") or f"Batch {cid}"
+
+        if target_type == "free":
+            DB.setdefault("FREE_CHANNELS", {})[cid] = cname
+        elif target_type == "paid":
+            DB.setdefault("PAID_CHANNELS", {})[cid] = cname
+        elif target_type == "special":
+            DB.setdefault("SPECIAL_CHANNELS", {})[cid] = cname
+
+        DB.setdefault("ALL_CHATS", {})[cid] = cname
+        DB.get("ALL_CHATS", {}).pop(str(cid), None)
+        DB.setdefault("BATCH_CATEGORIES", {})[str(cid)] = target_cat
+        await save_data_async()
+
+        # Check if paid or special requires extra input
+        if target_type == "paid":
+            ADMIN_WIZARD[uid]["step"] = "ask_price"
+            ADMIN_WIZARD[uid]["cid"] = cid
+            ADMIN_WIZARD[uid]["cname"] = cname
+            await q.edit_message_text(
+                f"✅ **Batch Moved to PAID!**\n\n"
+                f"💰 **Step 4:** '{cname}' ki Price / Fee kitni hai?\n(Example: `₹499`, `₹199 / Month`, etc.):",
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            return
+        elif target_type == "special":
+            ADMIN_WIZARD[uid]["step"] = "ask_coin"
+            ADMIN_WIZARD[uid]["cid"] = cid
+            ADMIN_WIZARD[uid]["cname"] = cname
+            await q.edit_message_text(
+                f"✅ **Batch Moved to SPECIAL!**\n\n"
+                f"  **Step 4:** '{cname}' ko unlock karne ke liye kitne Coins chahiye?\nSirf number bhejein (e.g. `3`):",
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            return
+
+        ADMIN_WIZARD.pop(uid, None)
+        await q.edit_message_text(
+            f"✅ **Batch Successfully Updated & Cleaned!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📦 **Name:** `{cname}`\n"
+            f"🆔 **ID:** `{cid}`\n"
+            f"🏷️ **Type:** `{target_type.upper()}`\n"
+            f"📂 **Category:** `{target_cat}`\n\n"
+            f"✨ Purani duplicate entries safely remove kar di gayi hain!",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
+    if q.data == "wiz_dup_cancel":
+        ADMIN_WIZARD.pop(uid, None)
+        await q.answer("Cancelled! No duplicate created.")
+        return await q.edit_message_text("❌ **Add Batch Cancelled.** Batch pehle jaisa hi surakshit hai.")
+
 async def wizard_message(client: Client, message: Message):
     if not message.from_user or message.from_user.id not in ADMIN_WIZARD:
         return False
     uid, state = message.from_user.id, ADMIN_WIZARD[message.from_user.id]
     if state["step"] == "ask_id":
         try:
-            cid = int(message.text)
+            raw_text = message.text.strip()
+            cid = int(raw_text)
+        except ValueError:
+            await message.reply_text("❌ Error: Valid numeric Channel ID bhejein (jaise `-1001234567890`).")
+            return True
+
+        # --- DUPLICATE BATCH CHECK ---
+        existing_type = None
+        if cid in DB.get("FREE_CHANNELS", {}) or str(cid) in DB.get("FREE_CHANNELS", {}):
+            existing_type = "free"
+        elif cid in DB.get("PAID_CHANNELS", {}) or str(cid) in DB.get("PAID_CHANNELS", {}):
+            existing_type = "paid"
+        elif cid in DB.get("SPECIAL_CHANNELS", {}) or str(cid) in DB.get("SPECIAL_CHANNELS", {}):
+            existing_type = "special"
+
+        existing_cat = DB.get("BATCH_CATEGORIES", {}).get(str(cid)) or DB.get("BATCH_CATEGORIES", {}).get(cid, "Not Assigned")
+        existing_name = (
+            DB.get("ALL_CHATS", {}).get(cid)
+            or DB.get("ALL_CHATS", {}).get(str(cid))
+            or (DB.get(f"{existing_type.upper()}_CHANNELS", {}).get(cid) if existing_type else None)
+            or f"Batch {cid}"
+        )
+
+        if existing_type:
+            # Batch is already registered!
+            ADMIN_WIZARD[uid]["step"] = "confirm_dup_update"
+            ADMIN_WIZARD[uid]["cid"] = cid
+            ADMIN_WIZARD[uid]["existing_name"] = existing_name
+            ADMIN_WIZARD[uid]["existing_type"] = existing_type
+            ADMIN_WIZARD[uid]["existing_cat"] = existing_cat
+
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 Yes, Update & Move Batch", callback_data=f"wiz_dup_update_{cid}")],
+                [InlineKeyboardButton("❌ Cancel (Keep Existing)", callback_data="wiz_dup_cancel")]
+            ])
+
+            warn_text = (
+                f"⚠️ **BATCH ALREADY REGISTERED / PEHLE SE EXIST KARTA HAI!**\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📦 **Batch Name:** `{existing_name}`\n"
+                f"🆔 **Channel ID:** `{cid}`\n"
+                f"🏷️ **Current Type:** `{existing_type.upper()}`\n"
+                f"📂 **Current Category:** `{existing_cat}`\n\n"
+                f"Aap ise dobara upload karne ki koshish kar rahe the:\n"
+                f"➤ Target Type: **{state['type'].upper()}**\n"
+                f"➤ Target Category: **{state['category']}**\n\n"
+                f"💡 **Duplicate Rokne Ke Liye:**\n"
+                f"• Agar category ya type change karna chahte hain toh **'Update & Move'** dabayein.\n"
+                f"• Agar bhool se upload ho raha tha toh **'Cancel'** dabayein taaki duplicate batch na bane!"
+            )
+            await message.reply_text(warn_text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+            return True
+
+        try:
             cname = (await client.get_chat(cid)).title or f"Batch {cid}"
             
+            # Clean from all collections first to avoid duplicate keys
+            for col in ["FREE_CHANNELS", "PAID_CHANNELS", "SPECIAL_CHANNELS"]:
+                DB.get(col, {}).pop(cid, None)
+                DB.get(col, {}).pop(str(cid), None)
+
             if state["type"] == "free":
                 DB.setdefault("FREE_CHANNELS", {})[cid] = cname
             elif state["type"] == "paid":
@@ -2692,6 +2908,7 @@ async def wizard_message(client: Client, message: Message):
                 DB.setdefault("SPECIAL_CHANNELS", {})[cid] = cname
 
             DB.setdefault("ALL_CHATS", {})[cid] = cname
+            DB.get("ALL_CHATS", {}).pop(str(cid), None)
             DB.setdefault("BATCH_CATEGORIES", {})[str(cid)] = state["category"]
             await save_data_async()
 
@@ -3373,6 +3590,28 @@ async def general_callback(client: Client, q: CallbackQuery):
             await rp.edit(client, q.message.chat.id, q.message.id, msg)
 
         # =====================================================================
+        # 📥 RESTORE OLD BATCHES WIZARD & GUIDE
+        # =====================================================================
+        elif data == "act_restorebatches":
+            if not is_admin(uid):
+                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
+            await q.answer()
+            info_text = (
+                "📥 **RESTORE OLD BATCHES FROM BACKUP**\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "Aap apne purane erased batches ko Userbot ke zariye bot me auto-add aur admin promote kar sakte hain.\n\n"
+                "📌 **Step-by-Step Guide:**\n"
+                "1️⃣ Apna saved MongoDB/JSON backup file chat me **Document (📎 File)** ke taur par send karein.\n"
+                "2️⃣ File ke caption me `/restorebatches` likhein aur send karein.\n"
+                "3️⃣ Bot automatic backup file download karke restore engine start kar dega!\n\n"
+                "🛡️ **Safety Guarantee:**\n"
+                "• Jo batches aapne abhi manually upload ya update kiye hain, wo **100% waise hi surakshit rahenge** (overwrite nahi honge).\n"
+                "• Sirf missing batches Userbot ke through channels me join honge, bot ko add & all permissions ke sath promote karenge, aur unki original categories restore ho jayengi!"
+            )
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Database Tools", callback_data="dash_db")]])
+            await q.edit_message_text(info_text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+
+        # =====================================================================
         # 📋 BATCH REQUESTS DEMANDS & CHECKLIST TRACKER
         # =====================================================================
         elif data == "view_batch_requests":
@@ -3937,11 +4176,15 @@ async def general_callback(client: Client, q: CallbackQuery):
             )
 
             page = int(data.split("_")[-1])
-            all_batches = {
-                **DB.get("FREE_CHANNELS", {}),
-                **DB.get("PAID_CHANNELS", {}),
-                **DB.get("SPECIAL_CHANNELS", {})
-            }
+            all_batches = {}
+            for col in ["SPECIAL_CHANNELS", "PAID_CHANNELS", "FREE_CHANNELS"]:
+                for c_k, c_v in DB.get(col, {}).items():
+                    try:
+                        n_k = int(str(c_k).strip())
+                    except Exception:
+                        n_k = c_k
+                    if n_k not in all_batches:
+                        all_batches[n_k] = c_v
             unlocked_ref_batches = DB["USER_DATA"].get(user_key, {}).get("unlocked_batches", [])
 
             async def check_member(cid, name):
@@ -4098,11 +4341,18 @@ async def general_callback(client: Client, q: CallbackQuery):
                 source_dict = DB.get("SPECIAL_CHANNELS", {})
                 prefix, btn_style = "✨", rp.Style.SUCCESS
 
-            filtered_batches = [
-                (cid, name)
-                for cid, name in source_dict.items()
-                if DB.get("BATCH_CATEGORIES", {}).get(str(cid), "Other Batches") == cat_name
-            ]
+            filtered_batches = []
+            seen_cids = set()
+            for cid, name in source_dict.items():
+                try:
+                    norm_cid = int(str(cid).strip())
+                except Exception:
+                    norm_cid = cid
+                if norm_cid in seen_cids:
+                    continue
+                seen_cids.add(norm_cid)
+                if DB.get("BATCH_CATEGORIES", {}).get(str(norm_cid), "Other Batches") == cat_name:
+                    filtered_batches.append((norm_cid, name))
 
             if not filtered_batches:
                 empty_msg = rp.message(
@@ -4729,6 +4979,7 @@ def build_database_panel_msg():
             rp.bold("• "), "📋 ", rp.bold("Active Vouchers"), " — ", rp.italic("Sabhi active redeem codes ki list dekhein\n\n"),
             rp.bold("• "), "🎁 ", rp.bold("Gift Coin"), " — ", rp.italic("User ke wallet me free coins credit karein\n\n"),
             rp.bold("• "), "🚫 ", rp.bold("Ban / Unban"), " — ", rp.italic("User access control manage karein\n\n"),
+            rp.bold("• "), "📥 ", rp.bold("Restore Old Batches"), " — ", rp.italic("Old backup JSON se missing batches aur bot rights restore karein\n\n"),
             rp.bold("• "), "☢️ ", rp.bold("Hard Delete User"), " — ", rp.italic("User ka saara record database se delete karein")
         ]),
         rp.buttons(
@@ -4751,7 +5002,10 @@ def build_database_panel_msg():
             rp.btn("🚫 Ban User", "input_ban", style=rp.Style.DANGER),
             rp.btn("✅ Unban User", "input_unban", style=rp.Style.SUCCESS)
         ),
-        rp.buttons(rp.btn("📋 Demands Tracker & Checklist", "view_batch_requests", style=rp.Style.SUCCESS)),
+        rp.buttons(
+            rp.btn("📥 Restore Batches", "act_restorebatches", style=rp.Style.DEFAULT),
+            rp.btn("📋 Demands Tracker", "view_batch_requests", style=rp.Style.SUCCESS)
+        ),
         rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DANGER))
     )
 
