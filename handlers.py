@@ -12,7 +12,7 @@ from config import *
 import richpyro as rp
 import pyrogram
 from pyrogram import Client, filters
-from pyrogram.enums import ChatMemberStatus, ChatType, ParseMode
+from pyrogram.enums import ButtonStyle, ChatMemberStatus, ChatType, ParseMode
 from pyrogram.errors import (
     ChatAdminRequired,
     FloodWait,
@@ -1101,7 +1101,7 @@ def build_batch_requests_msg(page: int = 0):
         return rp.message(
             rp.heading("📋 Batch Demands & Checklist"),
             rp.divider(),
-            rp.quote(
+            rp.blockquote(
                 ce("INFO", "ℹ️"), " ", rp.bold("Abhi tak koi batch requests nahi aayi hain."), "\n\n",
                 rp.italic("Jab users 'Request Batch' button se demand submit karenge, wo yahan checkbox checklist format me dikhengi.")
             ),
@@ -2717,8 +2717,8 @@ async def get_batch_broadcast_kb(client: Client, cid: int, cname: str):
     share_text = f"🔥 Check out new batch: {cname} on our Bot!"
     share_url = f"https://t.me/share/url?url={urllib.parse.quote(deep_link)}&text={urllib.parse.quote(share_text)}"
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🚀 Get Access Here", url=deep_link)],
-        [InlineKeyboardButton("📢 Share Batch", url=share_url)],
+        [InlineKeyboardButton("🚀 Get Access Here", url=deep_link, style=ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton("📢 Share Batch", url=share_url, style=ButtonStyle.SUCCESS)],
     ])
 
 async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: str, category: str, coin_cost: int = None, price: str = None):
@@ -2739,8 +2739,8 @@ async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: s
     share_url = f"https://t.me/share/url?url={urllib.parse.quote(deep_link)}&text={urllib.parse.quote(share_text)}"
 
     kb = [
-        [InlineKeyboardButton("🚀 Get Access Here", url=deep_link)],
-        [InlineKeyboardButton("📢 Share Batch", url=share_url)],
+        [InlineKeyboardButton("🚀 Get Access Here", url=deep_link, style=ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton("📢 Share Batch", url=share_url, style=ButtonStyle.SUCCESS)],
     ]
 
     type_badge = b_type.upper()
@@ -2795,7 +2795,7 @@ async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: s
 
     for target_uid in matched_uids:
         try:
-            notify_kb = [[InlineKeyboardButton("🚀 Open Your Requested Batch", url=deep_link)]]
+            notify_kb = [[InlineKeyboardButton("🚀 Open Your Requested Batch", url=deep_link, style=ButtonStyle.PRIMARY)]]
             await client.send_message(
                 target_uid,
                 f"🎉 **Great News! Aapka Requested Batch Live Ho Chuka Hai!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
