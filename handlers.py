@@ -1692,24 +1692,48 @@ async def cmd_delbatch(client: Client, message: Message):
         await save_data_async()
         await message.reply_text("  Batch poori tarah database se Delete ho gaya.")
 
-async def cmd_addbatch_start(client: Client, message: Message):
-    if not message.from_user or not is_admin(message.from_user.id):
-        return
-    ADMIN_WIZARD[message.from_user.id] = {"step": "ask_cat"}
-    kb = []
+def build_addbatch_category_msg(uid: int = None):
     categories = DB.get("CATEGORIES", DEFAULT_CATEGORIES)
-    for i in range(0, len(categories), 2):
-        row = [InlineKeyboardButton(f"📁 {categories[i]}", callback_data=f"wcat_{i}")]
-        if i + 1 < len(categories):
-            row.append(
-                InlineKeyboardButton(f"📁 {categories[i + 1]}", callback_data=f"wcat_{i+1}")
-            )
-        kb.append(row)
-    await message.reply_text(
-        "  **Add Batch Wizard**\nSelect Category:",
-        reply_markup=InlineKeyboardMarkup(kb),
-        parse_mode=ParseMode.MARKDOWN,
+    cat_rows = []
+    row = []
+    for i, cat in enumerate(categories):
+        row.append(rp.btn(f"📁 {cat}", f"wcat_{i}", style=rp.Style.DEFAULT))
+        if len(row) == 2:
+            cat_rows.append(rp.buttons(*row))
+            row = []
+    if row:
+        cat_rows.append(rp.buttons(*row))
+
+    return rp.message(
+        rp.heading("➕ Add Batch Wizard"),
+        rp.para("Naya batch catalog me add karne ke liye pehle uski ", rp.bold("Category"), " chunein:"),
+        rp.divider(),
+        *cat_rows,
+        rp.divider(),
+        rp.buttons(
+            rp.btn("❌ Cancel / Back", "wiz_cancel", style=rp.Style.DANGER)
+        )
     )
+
+async def cmd_addbatch_start(client: Client, message: Message, user_id: int = None, callback_query: CallbackQuery = None, back_cb: str = None):
+    uid = user_id or (callback_query.from_user.id if callback_query and callback_query.from_user else None) or (message.from_user.id if message and message.from_user else None)
+    if not uid or not is_admin(uid):
+        return
+    
+    if not back_cb:
+        back_cb = "dash_home" if is_owner(uid) else "goto_admin_panel"
+
+    ADMIN_WIZARD[uid] = {
+        "step": "ask_cat",
+        "back_cb": back_cb
+    }
+    
+    msg = build_addbatch_category_msg(uid)
+    if callback_query and callback_query.message:
+        await rp.edit(client, callback_query.message.chat.id, callback_query.message.id, msg)
+    else:
+        await rp.send(client, message.chat.id, msg)
+
 
 async def cmd_broadcast_start(client: Client, message: Message):
     if not message.from_user:
@@ -2521,6 +2545,23 @@ async def run_advanced_caption_changer(bot_client: Client, message: Message, cha
             pass
 
 # --- WIZARDS, MENUS & CALLBACKS ---
+async def get_batch_broadcast_kb(client: Client, cid: int, cname: str):
+    import config
+    import urllib.parse
+    bot_username = getattr(config, 'BOT_USERNAME', None)
+    if not bot_username:
+        try:
+            bot_username = (await client.get_me()).username
+        except Exception:
+            bot_username = "bot"
+    deep_link = f"https://t.me/{bot_username}?start=batch_{cid}"
+    share_text = f"🔥 Check out new batch: {cname} on our Bot!"
+    share_url = f"https://t.me/share/url?url={urllib.parse.quote(deep_link)}&text={urllib.parse.quote(share_text)}"
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🚀 Get Access Here", url=deep_link)],
+        [InlineKeyboardButton("📢 Share Batch", url=share_url)],
+    ])
+
 async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: str, category: str, coin_cost: int = None, price: str = None):
     import config
     import os
@@ -2539,38 +2580,26 @@ async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: s
     share_url = f"https://t.me/share/url?url={urllib.parse.quote(deep_link)}&text={urllib.parse.quote(share_text)}"
 
     kb = [
-        [InlineKeyboardButton("🚀 Get Direct Access via Bot", url=deep_link)],
-        [InlineKeyboardButton("📢 Share with Friends", url=share_url)],
+        [InlineKeyboardButton("🚀 Get Access Here", url=deep_link)],
+        [InlineKeyboardButton("📢 Share Batch", url=share_url)],
     ]
 
-    type_badge = "FREE BATCH" if b_type.lower() == "free" else ("PAID BATCH" if b_type.lower() == "paid" else "SPECIAL BATCH")
+    type_badge = b_type.upper()
     paid_price = price or DB.get("BATCH_PRICES", {}).get(str(cid))
     if b_type.lower() == 'special' and coin_cost:
-        cost_line = f"\n💰 <b>Coin Cost:</b> <code>{coin_cost} Coins</code>"
+        cost_line = f"\n💰 <b>Cost:</b> <code>{coin_cost} Coins</code>"
     elif b_type.lower() == 'paid' and paid_price:
-        cost_line = f"\n💰 <b>Price / Fee:</b> <code>{paid_price}</code>"
+        cost_line = f"\n💰 <b>Price:</b> <code>{paid_price}</code>"
     else:
         cost_line = ""
 
     caption = (
-        "🌟 ━━━━━━━━━━━━━━━━━━━━━ 🌟\n"
-        "⚡ <b>NEW BATCH OFFICIALLY ADDED!</b> ⚡\n"
-        "🌟 ━━━━━━━━━━━━━━━━━━━━━ 🌟\n\n"
-        f"📦 <b>Batch Name:</b> <code>{cname}</code>\n"
-        f"🏷️ <b>Access Level:</b> <code>{type_badge}</code>\n"
-        f"📁 <b>Category:</b> <code>{category}</code>"
+        "🎉 <b>NEW BATCH ADDED!</b>\n\n"
+        f"📦 <b>Name:</b> <code>{cname}</code>\n"
+        f"🏷️ <b>Type:</b> <code>{type_badge}</code>\n"
+        f"📂 <b>Category:</b> <code>{category}</code>"
         f"{cost_line}\n\n"
-        "```diff\n"
-        "+ [STATUS: 100% VERIFIED & ACTIVE]\n"
-        "+ [INSTANT BOT DELIVERY ENABLED]\n"
-        "! [TAP BUTTON BELOW TO ENROLL]\n"
-        "```\n\n"
-        "📌 <b>Batch Features & Highlights:</b>\n"
-        "➤ <b>Complete High-Quality Lectures</b> & Study Material\n"
-        "➤ <b>Chapter-wise DPPs</b>, Hand-written Notes & Test Papers\n"
-        "➤ <b>24x7 Discussion Community</b> & Doubt Sessions\n"
-        "➤ <b>Direct instant access</b> without wait or verification delay!\n\n"
-        "👉 <i>Neeche button par tap karke turant access unlock karein!</i>"
+        "👉 <i>Click the button below to get direct access via our Bot!</i>"
     )
 
     photo_path = None
@@ -2652,32 +2681,94 @@ async def process_updatepost(client: Client, message: Message):
 async def wizard_callback(client: Client, q: CallbackQuery):
     uid = q.from_user.id
     if uid not in ADMIN_WIZARD:
-        return await q.answer("Expired")
+        return await q.answer("Wizard session expired.", show_alert=False)
+
+    if q.data == "wiz_cancel":
+        back_cb = ADMIN_WIZARD.get(uid, {}).get("back_cb", "dash_home" if is_owner(uid) else "goto_admin_panel")
+        ADMIN_WIZARD.pop(uid, None)
+        await q.answer("Add Batch Cancelled!")
+        msg = build_batches_panel_msg(back_cb=back_cb)
+        return await rp.edit(client, q.message.chat.id, q.message.id, msg)
+
+    if q.data == "wiz_back_cat":
+        ADMIN_WIZARD[uid]["step"] = "ask_cat"
+        msg = build_addbatch_category_msg(uid)
+        return await rp.edit(client, q.message.chat.id, q.message.id, msg)
+
+    if q.data == "wiz_back_type":
+        cat_idx = ADMIN_WIZARD.get(uid, {}).get("cat_idx", 0)
+        selected_cat = ADMIN_WIZARD.get(uid, {}).get("category", DB.get("CATEGORIES", DEFAULT_CATEGORIES)[cat_idx])
+        ADMIN_WIZARD[uid]["step"] = "ask_type"
+        msg = rp.message(
+            rp.heading("🏷️ Select Batch Type"),
+            rp.para("Selected Category: ", rp.bold(f"📁 {selected_cat}")),
+            rp.divider(),
+            rp.para("Batch ka access level chunein:"),
+            rp.buttons(
+                rp.btn("🆓 Free Batch", "wiz_free", style=rp.Style.SUCCESS),
+                rp.btn("💵 Paid Batch", "wiz_paid", style=rp.Style.DEFAULT),
+                rp.btn("✨ Special Batch", "wiz_special", style=rp.Style.SUCCESS),
+            ),
+            rp.divider(),
+            rp.buttons(
+                rp.btn("🔙 Back to Categories", "wiz_back_cat", style=rp.Style.DEFAULT),
+                rp.btn("❌ Cancel", "wiz_cancel", style=rp.Style.DANGER)
+            )
+        )
+        return await rp.edit(client, q.message.chat.id, q.message.id, msg)
+
     if q.data.startswith("wcat_"):
         cat_idx = int(q.data.split("_")[1])
-        ADMIN_WIZARD[uid]["category"] = DB.get("CATEGORIES", DEFAULT_CATEGORIES)[cat_idx]
+        selected_cat = DB.get("CATEGORIES", DEFAULT_CATEGORIES)[cat_idx]
+        ADMIN_WIZARD[uid]["category"] = selected_cat
+        ADMIN_WIZARD[uid]["cat_idx"] = cat_idx
         ADMIN_WIZARD[uid]["step"] = "ask_type"
-        kb = [
-            [
-                InlineKeyboardButton("🆓 Free", callback_data="wiz_free"),
-                InlineKeyboardButton("💵 Paid", callback_data="wiz_paid"),
-                InlineKeyboardButton("✨ Special", callback_data="wiz_special"),
-            ]
-        ]
-        return await q.edit_message_text(
-            f"  Category: **{ADMIN_WIZARD[uid]['category']}**\n\n  **Step 2:** Select Batch Type:",
-            reply_markup=InlineKeyboardMarkup(kb),
-            parse_mode=ParseMode.MARKDOWN,
+        msg = rp.message(
+            rp.heading("🏷️ Select Batch Type"),
+            rp.para("Selected Category: ", rp.bold(f"📁 {selected_cat}")),
+            rp.divider(),
+            rp.para("Batch ka access level chunein:"),
+            rp.buttons(
+                rp.btn("🆓 Free Batch", "wiz_free", style=rp.Style.SUCCESS),
+                rp.btn("💵 Paid Batch", "wiz_paid", style=rp.Style.DEFAULT),
+                rp.btn("✨ Special Batch", "wiz_special", style=rp.Style.SUCCESS),
+            ),
+            rp.divider(),
+            rp.buttons(
+                rp.btn("🔙 Back to Categories", "wiz_back_cat", style=rp.Style.DEFAULT),
+                rp.btn("❌ Cancel", "wiz_cancel", style=rp.Style.DANGER)
+            )
         )
+        return await rp.edit(client, q.message.chat.id, q.message.id, msg)
+
     if q.data in ["wiz_free", "wiz_paid", "wiz_special"]:
         if "category" not in ADMIN_WIZARD[uid]:
             return await q.answer("Start again")
-        ADMIN_WIZARD[uid]["type"] = q.data.replace("wiz_", "")
+        btype = q.data.replace("wiz_", "")
+        ADMIN_WIZARD[uid]["type"] = btype
         ADMIN_WIZARD[uid]["step"] = "ask_id"
-        return await q.edit_message_text(
-            f"  **Step 3:** Send **Channel ID** for {ADMIN_WIZARD[uid]['type'].upper()}:",
-            parse_mode=ParseMode.MARKDOWN,
+        ADMIN_WIZARD[uid]["msg_id"] = q.message.id
+        ADMIN_WIZARD[uid]["chat_id"] = q.message.chat.id
+
+        badge = "🆓 FREE" if btype == "free" else ("💵 PAID" if btype == "paid" else "✨ SPECIAL")
+        msg = rp.message(
+            rp.heading("🆔 Enter Channel / Group ID"),
+            rp.para("Category: ", rp.bold(f"📁 {ADMIN_WIZARD[uid]['category']}")),
+            rp.para("Batch Type: ", rp.bold(badge)),
+            rp.divider(),
+            rp.para("👉 Kripya us Channel ya Group ka ", rp.bold("Numeric ID"), " chat me bhejein:"),
+            rp.expandable_quote([
+                rp.bold("📌 Example:\n"),
+                rp.code("-1002345678901"), "\n\n",
+                rp.italic("Bot us channel/group me Admin hona chahiye taaki members manage ho sakein.")
+            ]),
+            rp.divider(),
+            rp.buttons(
+                rp.btn("🔙 Back to Types", "wiz_back_type", style=rp.Style.DEFAULT),
+                rp.btn("❌ Cancel", "wiz_cancel", style=rp.Style.DANGER)
+            )
         )
+        return await rp.edit(client, q.message.chat.id, q.message.id, msg)
 
     if q.data.startswith("wiz_dup_update_"):
         cid = int(q.data.replace("wiz_dup_update_", ""))
@@ -2712,9 +2803,11 @@ async def wizard_callback(client: Client, q: CallbackQuery):
             ADMIN_WIZARD[uid]["step"] = "ask_price"
             ADMIN_WIZARD[uid]["cid"] = cid
             ADMIN_WIZARD[uid]["cname"] = cname
+            cancel_kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel Wizard", callback_data="wiz_cancel")]])
             await q.edit_message_text(
                 f"✅ **Batch Moved to PAID!**\n\n"
-                f"💰 **Step 4:** '{cname}' ki Price / Fee kitni hai?\n(Example: `₹499`, `₹199 / Month`, etc.):",
+                f"💰 **Step 4:** '{cname}' ki Price / Fee kitni hai?\n(Example: `₹499`, `₹199 / Month`, etc.):\n\n*(Type /cancel to abort)*",
+                reply_markup=cancel_kb,
                 parse_mode=ParseMode.MARKDOWN,
             )
             return
@@ -2722,9 +2815,11 @@ async def wizard_callback(client: Client, q: CallbackQuery):
             ADMIN_WIZARD[uid]["step"] = "ask_coin"
             ADMIN_WIZARD[uid]["cid"] = cid
             ADMIN_WIZARD[uid]["cname"] = cname
+            cancel_kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel Wizard", callback_data="wiz_cancel")]])
             await q.edit_message_text(
                 f"✅ **Batch Moved to SPECIAL!**\n\n"
-                f"  **Step 4:** '{cname}' ko unlock karne ke liye kitne Coins chahiye?\nSirf number bhejein (e.g. `3`):",
+                f"  **Step 4:** '{cname}' ko unlock karne ke liye kitne Coins chahiye?\nSirf number bhejein (e.g. `3`):\n\n*(Type /cancel to abort)*",
+                reply_markup=cancel_kb,
                 parse_mode=ParseMode.MARKDOWN,
             )
             return
@@ -2742,20 +2837,33 @@ async def wizard_callback(client: Client, q: CallbackQuery):
         return
 
     if q.data == "wiz_dup_cancel":
+        back_cb = ADMIN_WIZARD.get(uid, {}).get("back_cb", "dash_home" if is_owner(uid) else "goto_admin_panel")
         ADMIN_WIZARD.pop(uid, None)
         await q.answer("Cancelled! No duplicate created.")
-        return await q.edit_message_text("❌ **Add Batch Cancelled.** Batch pehle jaisa hi surakshit hai.")
+        msg = build_batches_panel_msg(back_cb=back_cb)
+        return await rp.edit(client, q.message.chat.id, q.message.id, msg)
+
 
 async def wizard_message(client: Client, message: Message):
     if not message.from_user or message.from_user.id not in ADMIN_WIZARD:
         return False
     uid, state = message.from_user.id, ADMIN_WIZARD[message.from_user.id]
+
+    if message.text and message.text.strip().lower() in ["/cancel", "cancel"]:
+        ADMIN_WIZARD.pop(uid, None)
+        return await message.reply_text("❌ **Add Batch Cancelled.**", parse_mode=ParseMode.MARKDOWN)
+
     if state["step"] == "ask_id":
         try:
             raw_text = message.text.strip()
             cid = int(raw_text)
         except ValueError:
-            await message.reply_text("❌ Error: Valid numeric Channel ID bhejein (jaise `-1001234567890`).")
+            cancel_kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel Wizard", callback_data="wiz_cancel")]])
+            await message.reply_text(
+                "❌ Error: Valid numeric Channel ID bhejein (jaise `-1001234567890`).\n\n*(Type /cancel to abort)*",
+                reply_markup=cancel_kb,
+                parse_mode=ParseMode.MARKDOWN
+            )
             return True
 
         # --- DUPLICATE BATCH CHECK ---
@@ -2830,8 +2938,10 @@ async def wizard_message(client: Client, message: Message):
                 ADMIN_WIZARD[uid]["step"] = "ask_price"
                 ADMIN_WIZARD[uid]["cid"] = cid
                 ADMIN_WIZARD[uid]["cname"] = cname
+                cancel_kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel Wizard", callback_data="wiz_cancel")]])
                 await message.reply_text(
-                    f"💰 **Step 4:** '{cname}' ki Price / Fee kitni hai?\n(Example: `₹499`, `₹199 / Month`, etc.):",
+                    f"💰 **Step 4:** '{cname}' ki Price / Fee kitni hai?\n(Example: `₹499`, `₹199 / Month`, etc.):\n\n*(Type /cancel to abort)*",
+                    reply_markup=cancel_kb,
                     parse_mode=ParseMode.MARKDOWN,
                 )
                 return True
@@ -2841,8 +2951,10 @@ async def wizard_message(client: Client, message: Message):
                 ADMIN_WIZARD[uid]["step"] = "ask_coin"
                 ADMIN_WIZARD[uid]["cid"] = cid
                 ADMIN_WIZARD[uid]["cname"] = cname
+                cancel_kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel Wizard", callback_data="wiz_cancel")]])
                 await message.reply_text(
-                    f"  **Step 4:** '{cname}' ko unlock karne ke liye kitne Coins chahiye?\nSirf number bhejein (e.g. `3`):",
+                    f"🪙 **Step 4:** '{cname}' ko unlock karne ke liye kitne Coins chahiye?\nSirf number bhejein (e.g. `3`):\n\n*(Type /cancel to abort)*",
+                    reply_markup=cancel_kb,
                     parse_mode=ParseMode.MARKDOWN,
                 )
                 return True
@@ -2860,12 +2972,17 @@ async def wizard_message(client: Client, message: Message):
                 await message.reply_text(
                     f"📡 Sending Auto-Broadcast for {state['type'].upper()} batch...", parse_mode=ParseMode.MARKDOWN
                 )
+                broadcast_kb = await get_batch_broadcast_kb(client, cid, cname)
                 for t_cid in list(DB.get("ALL_CHATS", {}).keys()):
                     if t_cid != cid:
                         try:
                             sent_msg = await client.send_message(
                                 int(t_cid),
-                                f"🎉 <b>NEW FREE BATCH ADDED!</b>\n🆓 Name: {cname}\n📲 Join via Bot Menu!",
+                                f"🎉 <b>NEW FREE BATCH ADDED!</b>\n\n"
+                                f"🆓 <b>Name:</b> {cname}\n"
+                                f"📂 <b>Category:</b> {state['category']}\n\n"
+                                f"👉 <i>Click below to get direct access via our Bot:</i>",
+                                reply_markup=broadcast_kb,
                                 parse_mode=ParseMode.HTML,
                             )
                             DB.setdefault("SCHEDULED_DELETES", []).append({
@@ -2900,6 +3017,36 @@ async def wizard_message(client: Client, message: Message):
             )
 
             await send_batch_update_post(client, cid, cname, "paid", state["category"], price=price)
+
+            b_count = 0
+            await message.reply_text("📡 Sending Auto-Broadcast for PAID batch...", parse_mode=ParseMode.MARKDOWN)
+            broadcast_kb = await get_batch_broadcast_kb(client, cid, cname)
+            for t_cid in list(DB.get("ALL_CHATS", {}).keys()):
+                if t_cid != cid:
+                    try:
+                        sent_msg = await client.send_message(
+                            int(t_cid),
+                            f"💎 <b>NEW PAID BATCH ADDED!</b>\n\n"
+                            f"📦 <b>Name:</b> {cname}\n"
+                            f"📂 <b>Category:</b> {state['category']}\n"
+                            f"💰 <b>Price / Fee:</b> {price}\n\n"
+                            f"👉 <i>Click below to get direct access via our Bot:</i>",
+                            reply_markup=broadcast_kb,
+                            parse_mode=ParseMode.HTML,
+                        )
+                        DB.setdefault("SCHEDULED_DELETES", []).append({
+                            "c": int(t_cid),
+                            "m": sent_msg.id,
+                            "t": time.time() + 10800,
+                        })
+                        b_count += 1
+                        await asyncio.sleep(0.05)
+                    except FloodWait as e:
+                        await asyncio.sleep(e.value + 1)
+                    except Exception:
+                        pass
+            await message.reply_text(f"✅ Broadcast sent to {b_count} chats.")
+            await save_data_async()
             del ADMIN_WIZARD[uid]
         except Exception as e:
             await message.reply_text(f"  Error: {e}")
@@ -2926,12 +3073,18 @@ async def wizard_message(client: Client, message: Message):
 
             b_count = 0
             await message.reply_text("📡 Sending Auto-Broadcast for SPECIAL batch...", parse_mode=ParseMode.MARKDOWN)
+            broadcast_kb = await get_batch_broadcast_kb(client, cid, cname)
             for t_cid in list(DB.get("ALL_CHATS", {}).keys()):
                 if t_cid != cid:
                     try:
                         sent_msg = await client.send_message(
                             int(t_cid),
-                            f"✨ <b>NEW SPECIAL BATCH ADDED!</b>\n🌟 Name: {cname}\n🔓 Unlock via Referral in Bot Menu! (Cost: 💰 {coin_cost} Coin{'s' if coin_cost != 1 else ''})",
+                            f"✨ <b>NEW SPECIAL BATCH ADDED!</b>\n\n"
+                            f"🌟 <b>Name:</b> {cname}\n"
+                            f"📂 <b>Category:</b> {state['category']}\n"
+                            f"💰 <b>Unlock Cost:</b> {coin_cost} Coin{'s' if coin_cost != 1 else ''}\n\n"
+                            f"👉 <i>Click below to get direct access via our Bot:</i>",
+                            reply_markup=broadcast_kb,
                             parse_mode=ParseMode.HTML,
                         )
                         DB.setdefault("SCHEDULED_DELETES", []).append({
@@ -3643,7 +3796,8 @@ async def general_callback(client: Client, q: CallbackQuery):
             await cmd_batch_stats(client, q.message)
         elif data == "act_addbatch":
             await q.answer()
-            await cmd_addbatch_start(client, q.message)
+            back_cb = "dash_home" if is_owner(q.from_user.id) else "goto_admin_panel"
+            await cmd_addbatch_start(client, q.message, user_id=q.from_user.id, callback_query=q, back_cb=back_cb)
         elif data == "act_delcat":
             await q.answer()
             await cmd_delcat(client, q.message)
