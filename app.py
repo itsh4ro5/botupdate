@@ -388,6 +388,48 @@ async def api_study_complete():
         "sessions_completed": u_info["study_sessions_completed"]
     })
 
+@app.route('/api/study/complete-quiz', methods=['POST'])
+async def api_study_complete_quiz():
+    data = await request.get_json() or {}
+    uid = data.get("user_id") or session.get("user_id")
+    score = int(data.get("score", 0))
+    total = int(data.get("total", 5))
+
+    if uid is None or str(uid).strip() == "":
+        return jsonify({"success": False, "error": "Missing user ID"}), 400
+
+    user_key = uid if uid in DB.get("USER_DATA", {}) else str(uid)
+    u_info = DB.setdefault("USER_DATA", {}).setdefault(user_key, {})
+
+    today_str = time.strftime("%Y-%m-%d")
+    if u_info.get("last_quiz_date") == today_str:
+        return jsonify({"success": False, "error": "You have already claimed today's practice quiz reward! Come back tomorrow."}), 400
+
+    reward = 1.0 if score >= 3 else 0.5
+    u_info["referral_count"] = round(u_info.get("referral_count", 0) + reward, 2)
+    u_info["last_quiz_date"] = today_str
+    u_info["quizzes_completed"] = u_info.get("quizzes_completed", 0) + 1
+    await save_data_async()
+
+    if hasattr(config, "bot_app") and config.bot_app:
+        try:
+            await config.bot_app.send_message(
+                int(uid),
+                f"🧠 **Daily Quiz Completed!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📊 **Score:** `{score}/{total}`\n"
+                f"🎁 **Reward:** `+{reward} Study Coins`\n"
+                f"💎 **New Balance:** `{u_info['referral_count']} Coins`"
+            )
+        except Exception:
+            pass
+
+    return jsonify({
+        "success": True,
+        "reward": reward,
+        "new_balance": u_info["referral_count"],
+        "quizzes_completed": u_info["quizzes_completed"]
+    })
+
 @app.route('/api/study/claim-streak', methods=['POST'])
 async def api_study_claim_streak():
     data = await request.get_json() or {}

@@ -999,7 +999,7 @@ async def cmd_start(client: Client, message: Message):
     await start(client, message)
 
 async def cmd_webapp(client: Client, message: Message):
-    url = getattr(config, "WEB_APP_URL", "") or "https://itsh4ro5-botupdate.hf.space"
+    url = getattr(config, "WEB_APP_URL", "") or "https://itsh4r01-user-manager.hf.space"
     uid = message.from_user.id if message.from_user else message.chat.id
     direct_app_url = f"{url}?uid={uid}"
     
@@ -5138,7 +5138,7 @@ def build_home_menu(user_key, user):
                 rp.url_btn("📢 Updates", BATCH_UPDATE_CHANNEL_LINK, style=rp.Style.LINK)
             ),
             rp.buttons(
-                rp.url_btn("📱 WebApp & Study Hub", getattr(config, "WEB_APP_URL", "https://itsh4ro5-botupdate.hf.space"), style=rp.Style.SUCCESS),
+                rp.url_btn("📱 WebApp & Study Hub", getattr(config, "WEB_APP_URL", "https://itsh4r01-user-manager.hf.space"), style=rp.Style.SUCCESS),
                 rp.url_btn("🎥 Video Tutorial", VIDEO_TUTORIAL_LINK, style=rp.Style.LINK)
             )
         )
@@ -5181,7 +5181,7 @@ def build_home_menu(user_key, user):
                 rp.url_btn("📢 Updates", BATCH_UPDATE_CHANNEL_LINK, style=rp.Style.LINK)
             ),
             rp.buttons(
-                rp.url_btn("📱 WebApp & Study Hub", getattr(config, "WEB_APP_URL", "https://itsh4ro5-botupdate.hf.space"), style=rp.Style.SUCCESS),
+                rp.url_btn("📱 WebApp & Study Hub", getattr(config, "WEB_APP_URL", "https://itsh4r01-user-manager.hf.space"), style=rp.Style.SUCCESS),
                 rp.url_btn("🎥 Video Tutorial", VIDEO_TUTORIAL_LINK, style=rp.Style.LINK)
             )
         )
