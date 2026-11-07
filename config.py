@@ -61,6 +61,8 @@ if not TELEGRAM_BOT_TOKEN:
 MANDATORY_CHANNEL_LINK = os.environ.get("MANDATORY_CHANNEL_LINK", "https://t.me/YourChannel")
 VIDEO_TUTORIAL_LINK = os.environ.get("VIDEO_TUTORIAL_LINK", BATCH_UPDATE_CHANNEL_LINK)
 DATA_FILE = os.environ.get("DATA_FILE", "bot_data.json")
+BOT_USERNAME = os.environ.get("BOT_USERNAME", "YourBot")
+WEB_APP_URL = os.environ.get("WEB_APP_URL") or (f"https://{os.environ['SPACE_HOST']}" if "SPACE_HOST" in os.environ else (os.environ.get("RENDER_EXTERNAL_URL") or "https://itsh4ro5-botupdate.hf.space"))
 
 DEFAULT_CATEGORIES = ["Civil Engg.", "Electrical Engg.", "Mechanical Engg.", "Electronics Engg.", "CSE", "Competition (Math, Reas, GK/GS)", "Skill Improvement", "Other Batches"]
 
@@ -78,7 +80,8 @@ DB = {
     "USERBOT_SESSION": None, "USERBOT_PHONE": None,
     "VIP_MATERIALS_LINK": None, "VIP_STICKER_ID": None, "VIP_STICKER_TYPE": None,
     "BATCH_UPDATE_CHANNEL_ID": BATCH_UPDATE_CHANNEL_ID,
-    "BATCH_UPDATE_CHANNEL_LINK": BATCH_UPDATE_CHANNEL_LINK
+    "BATCH_UPDATE_CHANNEL_LINK": BATCH_UPDATE_CHANNEL_LINK,
+    "STUDY_TASKS": {}
 }
 
 class BoundedDict(dict):

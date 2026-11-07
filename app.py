@@ -62,18 +62,55 @@ async def root():
 
 @app.route('/webapp')
 @app.route('/store')
+@app.route('/app')
 async def student_store():
     batches = _get_active_batches()
     categories = DB.get("CATEGORIES", config.DEFAULT_CATEGORIES)
     leaderboard = _get_leaderboard()
     bot_username = getattr(config, "BOT_USERNAME", "YourBot")
+
+    user_data = DB.get("USER_DATA", {})
+    total_coins = sum(round(u.get("referral_count", 0), 2) for u in user_data.values())
+    pending_demands = sum(1 for st in DB.get("BATCH_REQUEST_STATUS", {}).values() if st != "done")
+
+    stats = {
+        "total_users": len(user_data),
+        "total_batches": len(DB.get("ALL_CHATS", {})),
+        "total_coins": round(total_coins, 2),
+        "pending_demands": pending_demands
+    }
+
+    settings = {
+        "NEW_USERS_ALLOWED": DB.get("NEW_USERS_ALLOWED", True),
+        "FREE_LOCKED": DB.get("FREE_LOCKED", False),
+        "PAID_LOCKED": DB.get("PAID_LOCKED", False),
+        "MAINTENANCE_MODE": DB.get("MAINTENANCE_MODE", False)
+    }
+
+    reqs = DB.get("BATCH_REQUESTS", {})
+    statuses = DB.get("BATCH_REQUEST_STATUS", {})
+    demands = []
+    for bname, uids in reqs.items():
+        demands.append({
+            "name": bname,
+            "count": len(uids),
+            "status": statuses.get(bname, "pending"),
+            "uids": uids[:5]
+        })
+    demands.sort(key=lambda x: (x["status"] == "done", -x["count"]))
+
     return await render_template(
         "webapp.html",
         batches=batches,
         categories=categories,
         leaderboard=leaderboard,
         bot_username=bot_username,
-        bot_title="Educational Batch Store"
+        bot_title="Educational Batch Store & Study Hub",
+        owner_id=str(config.OWNER_ID),
+        admin_ids=[str(x) for x in DB.get("ADMIN_IDS", [])],
+        stats=stats,
+        settings=settings,
+        demands=demands
     )
 
 # --- AUTHENTICATION ---
@@ -104,12 +141,20 @@ async def logout():
     session.clear()
     return redirect('/login')
 
-def is_auth(role="admin"):
-    if not session.get('authenticated'):
-        return False
-    if role == "owner" and session.get('role') != "owner":
-        return False
-    return True
+def is_auth(role="admin", uid=None):
+    if session.get('authenticated'):
+        if role == "owner" and session.get('role') != "owner":
+            return False
+        return True
+    
+    check_id = uid or request.headers.get("X-Telegram-User-Id")
+    if check_id:
+        uid_str = str(check_id).strip()
+        if uid_str == str(config.OWNER_ID).strip():
+            return True
+        if role == "admin" and uid_str in [str(x).strip() for x in DB.get("ADMIN_IDS", [])]:
+            return True
+    return False
 
 # --- ADMIN OPERATIONAL DESK ---
 @app.route('/admin')
@@ -170,6 +215,201 @@ async def owner_portal():
         settings=settings
     )
 
+# --- TELEGRAM MINI APP (TWA) & STUDY APIS ---
+@app.route('/api/twa/session', methods=['POST'])
+async def api_twa_session():
+    data = await request.get_json() or {}
+    uid = data.get("user_id")
+    first_name = (data.get("first_name") or "").strip()
+    username = (data.get("username") or "").strip()
+    
+    if uid is None or str(uid).strip() == "":
+        return jsonify({"success": False, "error": "No user ID provided"}), 400
+
+    uid_str = str(uid).strip()
+    owner_id_str = str(config.OWNER_ID).strip()
+    admin_ids = [str(x).strip() for x in DB.get("ADMIN_IDS", [])]
+
+    if uid_str == owner_id_str:
+        role = "owner"
+        session['authenticated'] = True
+        session['role'] = 'owner'
+    elif uid_str in admin_ids:
+        role = "admin"
+        session['authenticated'] = True
+        session['role'] = 'admin'
+    else:
+        role = "user"
+        session['role'] = 'user'
+    
+    session['user_id'] = uid_str
+
+    # Retrieve or register student profile
+    user_key = uid if uid in DB.get("USER_DATA", {}) else (uid_str if uid_str in DB.get("USER_DATA", {}) else uid)
+    if user_key not in DB.setdefault("USER_DATA", {}):
+        DB["USER_DATA"][user_key] = {
+            "name": first_name or f"Student {uid_str}",
+            "username": username,
+            "joined_at": time.time(),
+            "demos": {},
+            "unlocked_batches": [],
+            "referral_count": 0,
+            "total_invited": 0,
+            "streak": 0,
+            "study_minutes": 0,
+            "study_sessions_completed": 0,
+            "study_tasks": []
+        }
+        await save_data_async()
+
+    u_info = DB["USER_DATA"][user_key]
+    user_summary = {
+        "user_id": uid_str,
+        "name": u_info.get("name") or first_name or f"Student {uid_str}",
+        "username": u_info.get("username") or username,
+        "coins": round(u_info.get("referral_count", 0), 2),
+        "streak": u_info.get("streak", 0),
+        "unlocked_batches": u_info.get("unlocked_batches", []),
+        "study_minutes": u_info.get("study_minutes", 0),
+        "study_sessions": u_info.get("study_sessions_completed", 0),
+        "study_tasks": u_info.get("study_tasks", []),
+        "tier": u_info.get("tier", "free")
+    }
+
+    resp = {
+        "success": True,
+        "role": role,
+        "user_id": uid_str,
+        "user": user_summary
+    }
+
+    if role == "owner":
+        user_data = DB.get("USER_DATA", {})
+        total_coins = sum(round(u.get("referral_count", 0), 2) for u in user_data.values())
+        pending_demands = sum(1 for st in DB.get("BATCH_REQUEST_STATUS", {}).values() if st != "done")
+        resp["stats"] = {
+            "total_users": len(user_data),
+            "total_batches": len(DB.get("ALL_CHATS", {})),
+            "total_coins": round(total_coins, 2),
+            "pending_demands": pending_demands
+        }
+        resp["settings"] = {
+            "NEW_USERS_ALLOWED": DB.get("NEW_USERS_ALLOWED", True),
+            "FREE_LOCKED": DB.get("FREE_LOCKED", False),
+            "PAID_LOCKED": DB.get("PAID_LOCKED", False),
+            "MAINTENANCE_MODE": DB.get("MAINTENANCE_MODE", False)
+        }
+
+    if role in ["owner", "admin"]:
+        reqs = DB.get("BATCH_REQUESTS", {})
+        statuses = DB.get("BATCH_REQUEST_STATUS", {})
+        demands = []
+        for bname, uids in reqs.items():
+            demands.append({
+                "name": bname,
+                "count": len(uids),
+                "status": statuses.get(bname, "pending"),
+                "uids": uids[:5]
+            })
+        demands.sort(key=lambda x: (x["status"] == "done", -x["count"]))
+        resp["demands"] = demands
+
+    return jsonify(resp)
+
+@app.route('/api/study/complete-session', methods=['POST'])
+async def api_study_complete():
+    data = await request.get_json() or {}
+    uid = data.get("user_id") or session.get("user_id")
+    minutes = int(data.get("minutes", 25))
+    subject = (data.get("subject") or "General Study").strip()
+
+    if uid is None or str(uid).strip() == "":
+        return jsonify({"success": False, "error": "Missing user ID"}), 400
+
+    user_key = uid if uid in DB.get("USER_DATA", {}) else str(uid)
+    u_info = DB.setdefault("USER_DATA", {}).setdefault(user_key, {})
+    
+    # Reward 0.5 coins for focus completion
+    reward = 0.5
+    u_info["referral_count"] = round(u_info.get("referral_count", 0) + reward, 2)
+    u_info["study_minutes"] = u_info.get("study_minutes", 0) + minutes
+    u_info["study_sessions_completed"] = u_info.get("study_sessions_completed", 0) + 1
+    await save_data_async()
+
+    # Optional Telegram bot notification
+    if hasattr(config, "bot_app") and config.bot_app:
+        try:
+            await config.bot_app.send_message(
+                int(uid),
+                f"🎯 **Study Focus Completed!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📖 **Subject:** `{subject}`\n"
+                f"⏱️ **Duration:** `{minutes} Minutes`\n"
+                f"🎁 **Reward:** `+{reward} Coins`\n"
+                f"💎 **Total Balance:** `{u_info['referral_count']} Coins`\n\n"
+                f"Great job! Keep the momentum going! 🚀"
+            )
+        except Exception:
+            pass
+
+    return jsonify({
+        "success": True,
+        "reward": reward,
+        "new_balance": u_info["referral_count"],
+        "total_minutes": u_info["study_minutes"],
+        "sessions_completed": u_info["study_sessions_completed"]
+    })
+
+@app.route('/api/study/claim-streak', methods=['POST'])
+async def api_study_claim_streak():
+    data = await request.get_json() or {}
+    uid = data.get("user_id") or session.get("user_id")
+    if uid is None or str(uid).strip() == "":
+        return jsonify({"success": False, "error": "Missing user ID"}), 400
+
+    user_key = uid if uid in DB.get("USER_DATA", {}) else str(uid)
+    u_info = DB.setdefault("USER_DATA", {}).setdefault(user_key, {})
+
+    today_str = time.strftime("%Y-%m-%d")
+    last_streak = u_info.get("last_streak_date")
+
+    if last_streak == today_str:
+        return jsonify({"success": False, "error": "Already claimed today! Keep studying and return tomorrow."}), 400
+
+    current_streak = u_info.get("streak", 0) + 1
+    u_info["streak"] = current_streak
+    u_info["last_streak_date"] = today_str
+    
+    bonus = 1.0 if current_streak < 7 else 2.0
+    u_info["referral_count"] = round(u_info.get("referral_count", 0) + bonus, 2)
+    await save_data_async()
+
+    return jsonify({
+        "success": True,
+        "streak": current_streak,
+        "bonus": bonus,
+        "new_balance": u_info["referral_count"]
+    })
+
+@app.route('/api/study/tasks', methods=['GET', 'POST'])
+async def api_study_tasks():
+    if request.method == 'GET':
+        uid = request.args.get("user_id") or session.get("user_id")
+        if not uid:
+            return jsonify({"success": False, "tasks": []})
+        user_key = uid if uid in DB.get("USER_DATA", {}) else str(uid)
+        tasks = DB.get("USER_DATA", {}).get(user_key, {}).get("study_tasks", [])
+        return jsonify({"success": True, "tasks": tasks})
+    else:
+        data = await request.get_json() or {}
+        uid = data.get("user_id") or session.get("user_id")
+        tasks = data.get("tasks", [])
+        if not uid:
+            return jsonify({"success": False, "error": "Missing user ID"}), 400
+        user_key = uid if uid in DB.get("USER_DATA", {}) else str(uid)
+        DB.setdefault("USER_DATA", {}).setdefault(user_key, {})["study_tasks"] = tasks
+        await save_data_async()
+        return jsonify({"success": True})
+
 # --- PUBLIC CLIENT API ---
 @app.route('/api/redeem', methods=['POST'])
 async def api_redeem():
@@ -177,7 +417,7 @@ async def api_redeem():
     code = (data.get("code") or "").strip().upper()
     uid = data.get("user_id")
 
-    if not code or not uid:
+    if not code or uid is None or str(uid).strip() == "":
         return jsonify({"success": False, "error": "Missing code or user ID"}), 400
 
     vouchers = DB.get("VOUCHERS", {})
@@ -207,7 +447,7 @@ async def api_request_batch():
     name = (data.get("name") or "").strip()
     uid = data.get("user_id")
 
-    if not name or not uid:
+    if not name or uid is None or str(uid).strip() == "":
         return jsonify({"success": False, "error": "Missing batch name or user ID"}), 400
 
     DB.setdefault("BATCH_REQUESTS", {}).setdefault(name, [])
@@ -261,7 +501,7 @@ async def api_user_lookup():
 
     data = await request.get_json() or {}
     uid = data.get("user_id")
-    if not uid:
+    if uid is None or str(uid).strip() == "":
         return jsonify({"success": False, "error": "Missing user ID"}), 400
 
     user_key = uid if uid in DB.get("USER_DATA", {}) else str(uid)

@@ -37,6 +37,7 @@ from pyrogram.types import (
     InputMediaPhoto,
     InputMediaVideo,
     Message,
+    WebAppInfo,
 )
 
 logger = logging.getLogger(__name__)
@@ -986,6 +987,32 @@ async def cmd_id(client: Client, message: Message):
 
 async def cmd_start(client: Client, message: Message):
     await start(client, message)
+
+async def cmd_webapp(client: Client, message: Message):
+    url = getattr(config, "WEB_APP_URL", "") or "https://itsh4ro5-botupdate.hf.space"
+    uid = message.from_user.id if message.from_user else message.chat.id
+    direct_app_url = f"{url}?uid={uid}"
+    
+    kb = [
+        [InlineKeyboardButton("🚀 Launch Mini App (TWA)", web_app=WebAppInfo(url=direct_app_url))],
+        [InlineKeyboardButton("🌐 Open in Web Browser", url=direct_app_url)]
+    ]
+    role_text = "👑 **Owner Console**" if str(uid) == str(config.OWNER_ID) else ("⚡ **Admin Desk**" if is_admin(uid) else "🎓 **Student Study Hub**")
+    await message.reply_text(
+        f"📱 **Telegram Mini App & Study Companion**\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"Detected Role: {role_text}\n\n"
+        f"✨ **Smart Features Inside Mini App:**\n"
+        f"• 👑 **Owner**: Real-time Kill Switches, Telemetry & Broadcasts\n"
+        f"• ⚡ **Admin**: Demands Kanban, Batch Catalog & Coin Gifting\n"
+        f"• 🎓 **Student**: Complete Courses Store, Pomodoro Study Timer, Revision Checklist & Formula Deck!\n\n"
+        f"👇 *Click below to open the Mini App seamlessly inside Telegram:*",
+        reply_markup=InlineKeyboardMarkup(kb),
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+async def cmd_study(client: Client, message: Message):
+    await cmd_webapp(client, message)
 
 async def cmd_backup(client: Client, message: Message):
     if not is_owner_msg(message):
@@ -5101,6 +5128,7 @@ def build_home_menu(user_key, user):
                 rp.url_btn("📢 Updates", BATCH_UPDATE_CHANNEL_LINK, style=rp.Style.LINK)
             ),
             rp.buttons(
+                rp.url_btn("📱 WebApp & Study Hub", getattr(config, "WEB_APP_URL", "https://itsh4ro5-botupdate.hf.space"), style=rp.Style.SUCCESS),
                 rp.url_btn("🎥 Video Tutorial", VIDEO_TUTORIAL_LINK, style=rp.Style.LINK)
             )
         )
@@ -5143,6 +5171,7 @@ def build_home_menu(user_key, user):
                 rp.url_btn("📢 Updates", BATCH_UPDATE_CHANNEL_LINK, style=rp.Style.LINK)
             ),
             rp.buttons(
+                rp.url_btn("📱 WebApp & Study Hub", getattr(config, "WEB_APP_URL", "https://itsh4ro5-botupdate.hf.space"), style=rp.Style.SUCCESS),
                 rp.url_btn("🎥 Video Tutorial", VIDEO_TUTORIAL_LINK, style=rp.Style.LINK)
             )
         )

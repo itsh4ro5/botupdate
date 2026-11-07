@@ -71,6 +71,11 @@ async def _patched_send(client, chat_id, text=None, parse_mode=None, reply_marku
     if "rich_message" in kwargs:
         return await _old_send(client, chat_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
 
+    # If any button is a Telegram WebApp button, preserve native Pyrogram markup
+    if reply_markup and hasattr(reply_markup, "inline_keyboard") and reply_markup.inline_keyboard:
+        if any(getattr(b, "web_app", None) is not None for row in reply_markup.inline_keyboard for b in row):
+            return await _old_send(client, chat_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
+
     if reply_markup and hasattr(reply_markup, "inline_keyboard") and reply_markup.inline_keyboard:
         try:
             rp_rows = []
@@ -119,6 +124,8 @@ async def _patched_edit(client, chat_id, message_id, text=None, parse_mode=None,
         return await _old_edit(client, chat_id, message_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
 
     if reply_markup and hasattr(reply_markup, "inline_keyboard") and reply_markup.inline_keyboard:
+        if any(getattr(b, "web_app", None) is not None for row in reply_markup.inline_keyboard for b in row):
+            return await _old_edit(client, chat_id, message_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
         try:
             rp_rows = []
             for row in reply_markup.inline_keyboard:
@@ -310,6 +317,7 @@ async def _run_pyrogram_engine():
         "setvipmaterials": H.cmd_set_vip_materials, "setvipsticker": H.cmd_set_vip_sticker,
         "genvoucher": H.cmd_genvoucher, "batchrequests": H.cmd_batchrequests, "requestbatches": H.cmd_batchrequests, "vouchers": H.cmd_list_vouchers,
         "setprice": H.cmd_set_batch_price, "setrequestnote": H.cmd_set_request_note,
+        "webapp": H.cmd_webapp, "app": H.cmd_webapp, "portal": H.cmd_webapp, "study": H.cmd_study,
     }
 
     @app.on_message(filters.command(list(all_commands.keys())))
