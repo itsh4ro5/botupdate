@@ -45,6 +45,23 @@ def _get_leaderboard():
     ranked.sort(key=lambda x: x["invites"], reverse=True)
     return ranked[:10]
 
+def _get_study_leaderboard():
+    ranked = []
+    for u_k, u_d in DB.get("USER_DATA", {}).items():
+        mins = int(u_d.get("study_minutes", 0))
+        sess = int(u_d.get("study_sessions_completed", 0))
+        streak = int(u_d.get("streak", 0))
+        if mins > 0 or sess > 0 or streak > 0:
+            ranked.append({
+                "id": u_k,
+                "name": u_d.get("name") or f"Student {u_k}",
+                "minutes": mins,
+                "sessions": sess,
+                "streak": streak
+            })
+    ranked.sort(key=lambda x: (x["minutes"], x["sessions"], x["streak"]), reverse=True)
+    return ranked[:15]
+
 # --- HEALTH CHECK & PUBLIC ROUTES ---
 @app.route('/health')
 async def health_check():
@@ -104,6 +121,7 @@ async def student_store():
         batches=batches,
         categories=categories,
         leaderboard=leaderboard,
+        study_leaderboard=_get_study_leaderboard(),
         bot_username=bot_username,
         bot_title="Educational Batch Store & Study Hub",
         owner_id=str(config.OWNER_ID),
@@ -314,7 +332,18 @@ async def api_twa_session():
         demands.sort(key=lambda x: (x["status"] == "done", -x["count"]))
         resp["demands"] = demands
 
+    resp["study_leaderboard"] = _get_study_leaderboard()
+    resp["referral_leaderboard"] = _get_leaderboard()
+
     return jsonify(resp)
+
+@app.route('/api/study/leaderboard')
+async def api_study_leaderboard():
+    return jsonify({
+        "success": True,
+        "study_leaderboard": _get_study_leaderboard(),
+        "referral_leaderboard": _get_leaderboard()
+    })
 
 @app.route('/api/study/complete-session', methods=['POST'])
 async def api_study_complete():

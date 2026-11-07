@@ -208,8 +208,10 @@ async def set_role_based_commands(user_id: int, client: Client):
     try:
         user_cmds = [
             BotCommand("start", "Open Main Menu"),
+            BotCommand("study", "Launch Study Hub & Pomodoro"),
+            BotCommand("webapp", "Open Mini App Store"),
+            BotCommand("myinfo", "Check Active Demos & Wallet"),
             BotCommand("id", "Get Telegram ID"),
-            BotCommand("myinfo", "Check Active Demos"),
         ]
         if str(user_id) == str(OWNER_ID) or is_admin(user_id):
             admin_cmds = user_cmds + [
@@ -226,8 +228,16 @@ async def set_role_based_commands(user_id: int, client: Client):
                 user_cmds, scope=BotCommandScopeChat(chat_id=user_id)
             )
         try:
-            from pyrogram.types import MenuButtonCommands
-            await client.set_chat_menu_button(chat_id=user_id, menu_button=MenuButtonCommands())
+            web_url = getattr(config, "WEB_APP_URL", "")
+            if web_url and web_url.startswith("https://"):
+                from pyrogram.types import MenuButtonWebApp, WebAppInfo
+                await client.set_chat_menu_button(
+                    chat_id=user_id,
+                    menu_button=MenuButtonWebApp(text="🚀 Open App", web_app=WebAppInfo(url=f"{web_url}?uid={user_id}"))
+                )
+            else:
+                from pyrogram.types import MenuButtonCommands
+                await client.set_chat_menu_button(chat_id=user_id, menu_button=MenuButtonCommands())
         except Exception:
             pass
     except Exception:
