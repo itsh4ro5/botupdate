@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Operations Desk - Telegram Bot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Plus Jakarta Sans', sans-serif; }</style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+
+    <!-- Navbar -->
+    <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <span class="w-10 h-10 rounded-xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center font-bold text-lg border border-indigo-500/30">
+                    🛡️
+                </span>
+                <div>
+                    <h1 class="text-lg font-bold text-white tracking-tight">Admin Operations Desk</h1>
+                    <p class="text-xs text-slate-400">Batch Demands • Student Approvals • Catalog</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                {% if is_owner %}
+                <a href="/owner" class="text-xs bg-purple-600/20 text-purple-300 hover:bg-purple-600/30 border border-purple-500/30 px-3 py-1.5 rounded-lg font-semibold transition">
+                    👑 Switch to Owner Terminal
+                </a>
+                {% endif %}
+                <a href="/webapp" target="_blank" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700 transition">
+                    View Student WebApp
+                </a>
+                <a href="/logout" class="text-xs text-rose-400 hover:text-rose-300 transition">
+                    Logout
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Body -->
+    <main class="max-w-7xl mx-auto w-full px-6 py-6 flex-1 space-y-6">
+
+        <!-- Navigation Tabs -->
+        <div class="flex border-b border-slate-800 space-x-6 text-sm font-semibold">
+            <button onclick="switchAdminTab('demands')" id="tab-btn-demands" class="tab-btn pb-3 border-b-2 border-indigo-500 text-indigo-400 flex items-center gap-2">
+                📋 Demands Checklist (Kanban)
+                <span class="bg-indigo-500/20 text-indigo-300 text-xs px-2 py-0.5 rounded-full border border-indigo-500/30">{{ demands | length }}</span>
+            </button>
+            <button onclick="switchAdminTab('catalog')" id="tab-btn-catalog" class="tab-btn pb-3 text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center gap-2">
+                📦 Batch Catalog ({{ batches | length }})
+            </button>
+            <button onclick="switchAdminTab('students')" id="tab-btn-students" class="tab-btn pb-3 text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center gap-2">
+                🔍 Student Dossier Lookup
+            </button>
+        </div>
+
+        <!-- Tab 1: Demands Checklist -->
+        <div id="view-demands" class="admin-view space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-base font-bold text-white">Student Batch Demands</h2>
+                    <p class="text-xs text-slate-400">Mark uploaded batches to trigger automated private DM notifications to all waiting students.</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {% for d in demands %}
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between hover:border-slate-700 transition">
+                    <div>
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md 
+                                {% if d.status == 'done' %}bg-emerald-500/20 text-emerald-400 border border-emerald-500/30
+                                {% else %}bg-amber-500/20 text-amber-400 border border-amber-500/30{% endif %}">
+                                {% if d.status == 'done' %}✅ Uploaded & Notified{% else %}⏳ Pending Demand{% endif %}
+                            </span>
+                            <span class="text-xs font-bold text-indigo-400">{{ d.count }} Students Waiting</span>
+                        </div>
+                        <h3 class="text-sm font-bold text-white mb-2 leading-snug">{{ d.name }}</h3>
+                        <p class="text-[11px] text-slate-400 mb-4 truncate">Requested by: {{ d.uids | join(', ') }}</p>
+                    </div>
+
+                    <div class="pt-3 border-t border-slate-800/80 flex items-center gap-2">
+                        {% if d.status != 'done' %}
+                        <button onclick="toggleDemand('{{ d.name }}', 'done')" 
+                                class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Mark Uploaded & Notify Students
+                        </button>
+                        {% else %}
+                        <button onclick="toggleDemand('{{ d.name }}', 'pending')" 
+                                class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-2 px-3 rounded-xl text-xs transition">
+                            Revert to Pending
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="col-span-3 bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-400 text-sm">
+                    📭 Abhi tak koi student demands record nahi hui hain.
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Tab 2: Batch Catalog -->
+        <div id="view-catalog" class="admin-view hidden space-y-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+                <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+                    <h3 class="text-sm font-bold text-white">All Active Batches in Ecosystem</h3>
+                    <input type="text" id="catalogSearch" placeholder="Filter by title / ID..." oninput="filterCatalog()"
+                           class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-950/80 text-slate-400 font-semibold uppercase tracking-wider border-b border-slate-800">
+                            <tr>
+                                <th class="p-3.5">Channel ID</th>
+                                <th class="p-3.5">Batch Name</th>
+                                <th class="p-3.5">Category</th>
+                                <th class="p-3.5">Type</th>
+                                <th class="p-3.5">Price / Cost</th>
+                                <th class="p-3.5 text-right">Direct Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="catalogTableBody" class="divide-y divide-slate-800/60">
+                            {% for b in batches %}
+                            <tr class="hover:bg-slate-800/30 transition catalog-row" data-search="{{ b.id }} {{ b.name | lower }} {{ b.category | lower }}">
+                                <td class="p-3.5 font-mono text-slate-400 select-all">{{ b.id }}</td>
+                                <td class="p-3.5 font-semibold text-white">{{ b.name }}</td>
+                                <td class="p-3.5 text-slate-300">📁 {{ b.category }}</td>
+                                <td class="p-3.5">
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase
+                                        {% if b.type == 'free' %}bg-emerald-500/20 text-emerald-400
+                                        {% elif b.type == 'paid' %}bg-amber-500/20 text-amber-400
+                                        {% else %}bg-purple-500/20 text-purple-400{% endif %}">
+                                        {{ b.type }}
+                                    </span>
+                                </td>
+                                <td class="p-3.5 text-slate-300">{{ b.price or (b.coins ~ ' Coins' if b.type == 'special' else 'Free') }}</td>
+                                <td class="p-3.5 text-right">
+                                    <a href="https://t.me/{{ bot_username }}?start=batch_{{ b.id }}" target="_blank"
+                                       class="inline-block text-[11px] bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30 border border-indigo-500/30 px-2.5 py-1 rounded-lg font-medium transition">
+                                        Open in Telegram
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 3: Student Dossier Lookup -->
+        <div id="view-students" class="admin-view hidden space-y-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-xl mx-auto">
+                <h3 class="text-base font-bold text-white mb-2">Student 360° Profile Dossier</h3>
+                <p class="text-xs text-slate-400 mb-4">Enter user's Telegram ID to inspect wallet, enrolled batches, and grant adjustments.</p>
+
+                <div class="flex gap-2 mb-4">
+                    <input type="number" id="lookupUserId" placeholder="Enter Telegram User ID (e.g. 59281920)"
+                           class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+                    <button onclick="lookupStudent()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-5 py-2.5 rounded-xl text-xs transition">
+                        Lookup
+                    </button>
+                </div>
+
+                <div id="studentDetailsCard" class="hidden pt-4 border-t border-slate-800 space-y-4 text-xs">
+                    <div class="grid grid-cols-2 gap-3 bg-slate-950 p-4 rounded-xl border border-slate-800">
+                        <div>
+                            <span class="text-slate-500 block">Name:</span>
+                            <span id="st-name" class="font-bold text-white text-sm"></span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block">Username:</span>
+                            <span id="st-username" class="font-mono text-indigo-400"></span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block">Wallet Balance:</span>
+                            <span id="st-coins" class="font-bold text-emerald-400 text-sm"></span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block">Total Invites:</span>
+                            <span id="st-invites" class="font-bold text-purple-400 text-sm"></span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block">VIP Tier:</span>
+                            <span id="st-tier" class="font-bold"></span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block">Daily Streak:</span>
+                            <span id="st-streak" class="font-bold text-amber-400"></span>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                        <h4 class="font-bold text-white text-xs uppercase tracking-wider">Quick Adjustments</h4>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="giftCoinsAmount" placeholder="Coin Amount" class="w-32 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white">
+                            <button onclick="giftCoins()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-1.5 rounded-lg text-xs transition">
+                                🎁 Gift Coins
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        function switchAdminTab(tab) {
+            document.querySelectorAll('.admin-view').forEach(v => v.classList.add('hidden'));
+            document.getElementById(`view-${tab}`).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                b.classList.remove('border-indigo-500', 'text-indigo-400');
+                b.classList.add('border-transparent', 'text-slate-400');
+            });
+            document.getElementById(`tab-btn-${tab}`).classList.remove('border-transparent', 'text-slate-400');
+            document.getElementById(`tab-btn-${tab}`).classList.add('border-indigo-500', 'text-indigo-400');
+        }
+
+        async function toggleDemand(name, status) {
+            if (!confirm(`Confirm mark demand as '${status}'? This will notify all waiting students!`)) return;
+            try {
+                const res = await fetch('/api/admin/demand/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, status })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed'));
+                }
+            } catch (err) {
+                alert('Network error');
+            }
+        }
+
+        function filterCatalog() {
+            const query = document.getElementById('catalogSearch').value.toLowerCase().trim();
+            document.querySelectorAll('.catalog-row').forEach(row => {
+                const text = row.dataset.search || '';
+                row.style.display = !query || text.includes(query) ? '' : 'none';
+            });
+        }
+
+        let currentLookupUid = null;
+        async function lookupStudent() {
+            const uid = document.getElementById('lookupUserId').value.trim();
+            if (!uid) return alert('Enter a User ID');
+            try {
+                const res = await fetch('/api/admin/user/lookup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: uid })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    currentLookupUid = uid;
+                    const u = data.user;
+                    document.getElementById('st-name').innerText = u.name || 'Telegram User';
+                    document.getElementById('st-username').innerText = u.username ? '@' + u.username : 'None';
+                    document.getElementById('st-coins').innerText = (u.referral_count || 0) + ' Coins';
+                    document.getElementById('st-invites').innerText = (u.total_invited || 0) + ' Users';
+                    document.getElementById('st-tier').innerText = u.tier === 'vip' ? '👑 VIP Elite' : 'Standard User';
+                    document.getElementById('st-streak').innerText = (u.streak || 0) + ' Days';
+                    document.getElementById('studentDetailsCard').classList.remove('hidden');
+                } else {
+                    alert('User not found in bot database.');
+                }
+            } catch (err) {
+                alert('Lookup failed.');
+            }
+        }
+
+        async function giftCoins() {
+            const amount = parseFloat(document.getElementById('giftCoinsAmount').value);
+            if (!currentLookupUid || isNaN(amount) || amount <= 0) return alert('Enter a valid coin amount');
+            try {
+                const res = await fetch('/api/admin/user/gift-coins', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: currentLookupUid, amount })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ Successfully added +${amount} coins!`);
+                    lookupStudent();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (err) {
+                alert('Gift failed.');
+            }
+        }
+    </script>
+</body>
+</html>

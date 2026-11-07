@@ -59,6 +59,7 @@ if not TELEGRAM_BOT_TOKEN:
     logger.warning("TELEGRAM_BOT_TOKEN is empty! Bot engine will not start until this Space secret is set. Web dashboard will still run.")
 
 MANDATORY_CHANNEL_LINK = os.environ.get("MANDATORY_CHANNEL_LINK", "https://t.me/YourChannel")
+VIDEO_TUTORIAL_LINK = os.environ.get("VIDEO_TUTORIAL_LINK", BATCH_UPDATE_CHANNEL_LINK)
 DATA_FILE = os.environ.get("DATA_FILE", "bot_data.json")
 
 DEFAULT_CATEGORIES = ["Civil Engg.", "Electrical Engg.", "Mechanical Engg.", "Electronics Engg.", "CSE", "Competition (Math, Reas, GK/GS)", "Skill Improvement", "Other Batches"]
@@ -73,10 +74,28 @@ DB = {
     "CATEGORIES": DEFAULT_CATEGORIES.copy(), "MAINTENANCE_MODE": False,
     "BATCH_COINS": {}, "BATCH_REQUESTS": {}, "BATCH_REQUEST_STATUS": {}, "VOUCHERS": {},
     "BATCH_PRICES": {},
-    "BATCH_REQUEST_NOTE": "🙏 **Important Note from Admin:**\nMain abhi regular active nahi reh pata hu isliye batch upload/add hone me thoda waqt lag sakta hai. Aap bilkul chinta na karein aur thoda dhairya (patience) rakhein. Jaise hi yeh batch bot me add hoga, bot aapko direct notification bhej dega! Tab tak ke liye dhanyawad."
+    "BATCH_REQUEST_NOTE": "🙏 **Important Note from Admin:**\nMain abhi regular active nahi reh pata hu isliye batch upload/add hone me thoda waqt lag sakta hai. Aap bilkul chinta na karein aur thoda dhairya (patience) rakhein. Jaise hi yeh batch bot me add hoga, bot aapko direct notification bhej dega! Tab tak ke liye dhanyawad.",
+    "USERBOT_SESSION": None, "USERBOT_PHONE": None,
+    "VIP_MATERIALS_LINK": None, "VIP_STICKER_ID": None, "VIP_STICKER_TYPE": None,
+    "BATCH_UPDATE_CHANNEL_ID": BATCH_UPDATE_CHANNEL_ID,
+    "BATCH_UPDATE_CHANNEL_LINK": BATCH_UPDATE_CHANNEL_LINK
 }
 
-MESSAGE_MAP = {} 
+class BoundedDict(dict):
+    """Memory-safe LRU dict that automatically purges oldest entries when exceeding maxlen."""
+    def __init__(self, maxlen=5000, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.maxlen = maxlen
+    def __setitem__(self, key, value):
+        if len(self) >= self.maxlen and key not in self:
+            try:
+                oldest_key = next(iter(self))
+                del self[oldest_key]
+            except Exception:
+                pass
+        super().__setitem__(key, value)
+
+MESSAGE_MAP = BoundedDict(maxlen=5000) 
 ADMIN_WIZARD = {} 
 BROADCAST_STATE = {} 
 TOPIC_CREATION_LOCK = set()
@@ -93,8 +112,8 @@ def get_flood_wait_status():
         return True, int(remaining) + 1
     return False, 0
 
-# --- MONGODB SETUP (WITH 5-SECOND TIMEOUT SAFETY) ---
-if MONGO_URL:
+# --- MONGODB SETUP (WITH TIMEOUT SAFETY) ---
+if MONGO_URL and os.environ.get("SKIP_MONGO") != "1":
     try:
         logger.info("  Connecting to MongoDB Atlas...")
         from pymongo import MongoClient
@@ -287,7 +306,9 @@ def save_data_sync():
             "BATCH_REQUEST_STATUS": DB.get("BATCH_REQUEST_STATUS", {}),
             "VOUCHERS": DB.get("VOUCHERS", {}),
             "BATCH_PRICES": {str(k): v for k, v in DB.get("BATCH_PRICES", {}).items()},
-            "BATCH_REQUEST_NOTE": DB.get("BATCH_REQUEST_NOTE", "")
+            "BATCH_REQUEST_NOTE": DB.get("BATCH_REQUEST_NOTE", ""),
+            "BATCH_UPDATE_CHANNEL_ID": DB.get("BATCH_UPDATE_CHANNEL_ID", -1004304703943),
+            "BATCH_UPDATE_CHANNEL_LINK": DB.get("BATCH_UPDATE_CHANNEL_LINK", "https://t.me/c/4304703943")
         }
         if MONGO_URL and mongo_collection is not None:
             try: 

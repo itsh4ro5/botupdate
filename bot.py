@@ -498,6 +498,7 @@ async def _run_pyrogram_engine():
     # Background Tasks Scheduler
     async def run_jobs():
         sync_counter = 0
+        backup_counter = 0
         while True:
             try:
                 await asyncio.sleep(60)
@@ -510,6 +511,13 @@ async def _run_pyrogram_engine():
                     sync_counter = 0
                     if hasattr(H, "background_sync"):
                         await H.background_sync(app)
+
+                # Automated database backup every 60 minutes
+                backup_counter += 1
+                if backup_counter >= 60:
+                    backup_counter = 0
+                    if hasattr(H, "auto_backup_db"):
+                        await H.auto_backup_db(app)
             except asyncio.CancelledError:
                 break
             except Exception as e:

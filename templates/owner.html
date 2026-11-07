@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Owner Executive Command - Telegram Bot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Plus Jakarta Sans', sans-serif; }</style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+
+    <!-- Topbar -->
+    <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <span class="w-10 h-10 rounded-xl bg-purple-600/20 text-purple-400 flex items-center justify-center font-bold text-lg border border-purple-500/30">
+                    👑
+                </span>
+                <div>
+                    <h1 class="text-lg font-bold text-white tracking-tight">Owner Command Center</h1>
+                    <p class="text-xs text-slate-400">Live Telemetry • Kill Switches • Cloud Backups</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <a href="/admin" class="text-xs bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30 border border-indigo-500/30 px-3.5 py-1.5 rounded-lg font-semibold transition">
+                    🛡️ Admin Operations Desk
+                </a>
+                <a href="/webapp" target="_blank" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700 transition">
+                    Student Store
+                </a>
+                <a href="/logout" class="text-xs text-rose-400 hover:text-rose-300 transition">
+                    Logout
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Content -->
+    <main class="max-w-7xl mx-auto w-full px-6 py-6 flex-1 space-y-6">
+
+        <!-- Telemetry Stats Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+                <span class="text-xs text-slate-400 block mb-1">Registered Users</span>
+                <span class="text-2xl font-bold text-white">{{ stats.total_users }}</span>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+                <span class="text-xs text-slate-400 block mb-1">Total Batches</span>
+                <span class="text-2xl font-bold text-indigo-400">{{ stats.total_batches }}</span>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+                <span class="text-xs text-slate-400 block mb-1">Coins in Circulation</span>
+                <span class="text-2xl font-bold text-emerald-400">{{ stats.total_coins }} 💎</span>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+                <span class="text-xs text-slate-400 block mb-1">Pending Course Demands</span>
+                <span class="text-2xl font-bold text-amber-400">{{ stats.pending_demands }}</span>
+            </div>
+        </div>
+
+        <!-- Section: Emergency Kill-Switches -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+            <div class="border-b border-slate-800 pb-3">
+                <h3 class="text-base font-bold text-white">⚡ Emergency Operational Controls & Locks</h3>
+                <p class="text-xs text-slate-400">Clicking any toggle modifies the live bot state and synchronizes to MongoDB Atlas instantly.</p>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+                
+                <!-- Toggle 1: Global Lockdown -->
+                <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-bold text-white block">New Users Entry</span>
+                        <span class="text-[11px] text-slate-400">
+                            {{ "🟢 Open" if settings.NEW_USERS_ALLOWED else "🔴 Locked" }}
+                        </span>
+                    </div>
+                    <button onclick="toggleSwitch('NEW_USERS_ALLOWED')" 
+                            class="px-3 py-1.5 rounded-lg text-xs font-bold transition
+                            {{ 'bg-emerald-600 text-white' if settings.NEW_USERS_ALLOWED else 'bg-rose-600 text-white' }}">
+                        {{ "Allowed" if settings.NEW_USERS_ALLOWED else "Blocked" }}
+                    </button>
+                </div>
+
+                <!-- Toggle 2: Free Batch Lock -->
+                <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-bold text-white block">Free Batches</span>
+                        <span class="text-[11px] text-slate-400">
+                            {{ "🔴 Locked" if settings.FREE_LOCKED else "🟢 Unlocked" }}
+                        </span>
+                    </div>
+                    <button onclick="toggleSwitch('FREE_LOCKED')" 
+                            class="px-3 py-1.5 rounded-lg text-xs font-bold transition
+                            {{ 'bg-rose-600 text-white' if settings.FREE_LOCKED else 'bg-slate-800 text-slate-300 hover:bg-slate-700' }}">
+                        {{ "Locked" if settings.FREE_LOCKED else "Unlocked" }}
+                    </button>
+                </div>
+
+                <!-- Toggle 3: Paid Batch Lock -->
+                <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-bold text-white block">Paid Batches</span>
+                        <span class="text-[11px] text-slate-400">
+                            {{ "🔴 Locked" if settings.PAID_LOCKED else "🟢 Unlocked" }}
+                        </span>
+                    </div>
+                    <button onclick="toggleSwitch('PAID_LOCKED')" 
+                            class="px-3 py-1.5 rounded-lg text-xs font-bold transition
+                            {{ 'bg-rose-600 text-white' if settings.PAID_LOCKED else 'bg-slate-800 text-slate-300 hover:bg-slate-700' }}">
+                        {{ "Locked" if settings.PAID_LOCKED else "Unlocked" }}
+                    </button>
+                </div>
+
+                <!-- Toggle 4: Maintenance Mode -->
+                <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-bold text-white block">Maintenance Mode</span>
+                        <span class="text-[11px] text-slate-400">
+                            {{ "🛠️ Active" if settings.MAINTENANCE_MODE else "🟢 Normal" }}
+                        </span>
+                    </div>
+                    <button onclick="toggleSwitch('MAINTENANCE_MODE')" 
+                            class="px-3 py-1.5 rounded-lg text-xs font-bold transition
+                            {{ 'bg-amber-600 text-white' if settings.MAINTENANCE_MODE else 'bg-slate-800 text-slate-300 hover:bg-slate-700' }}">
+                        {{ "Active" if settings.MAINTENANCE_MODE else "Disabled" }}
+                    </button>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Section: Cloud Database Operations & Broadcast Studio -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <!-- Database Operations -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+                <div class="border-b border-slate-800 pb-3">
+                    <h3 class="text-base font-bold text-white">💾 Cloud Database & Backup Center</h3>
+                    <p class="text-xs text-slate-400">Download snapshots or trigger a cloud synchronization.</p>
+                </div>
+
+                <div class="space-y-3 pt-2">
+                    <a href="/api/owner/backup/download" 
+                       class="w-full bg-slate-950 hover:bg-slate-800 border border-slate-800 text-white font-semibold py-3 px-4 rounded-xl text-xs flex items-center justify-between transition">
+                        <span class="flex items-center gap-2">
+                            <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                            </svg>
+                            Download Full JSON Backup (`bot_data.json`)
+                        </span>
+                        <span class="text-[11px] text-slate-500">Instant Export</span>
+                    </a>
+
+                    <button onclick="forceSync()" 
+                            class="w-full bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 font-semibold py-3 px-4 rounded-xl text-xs flex items-center justify-between transition">
+                        <span class="flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                            Force MongoDB Atlas Cloud Sync
+                        </span>
+                        <span class="text-[11px] text-indigo-400">Sync Memory</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Web Broadcast Studio -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+                <div class="border-b border-slate-800 pb-3">
+                    <h3 class="text-base font-bold text-white">📢 Web Broadcast Studio</h3>
+                    <p class="text-xs text-slate-400">Draft an announcement to blast to all registered bot students.</p>
+                </div>
+
+                <div class="space-y-3 pt-2">
+                    <textarea id="broadcastText" rows="4" placeholder="Enter broadcast message text (Markdown supported)..."
+                              class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition"></textarea>
+
+                    <button onclick="sendWebBroadcast()" id="bcBtn"
+                            class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 px-4 rounded-xl text-xs transition duration-200">
+                        🚀 Send Broadcast to All Users
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <script>
+        async function toggleSwitch(settingKey) {
+            try {
+                const res = await fetch('/api/owner/toggle-setting', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: settingKey })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Toggle failed: ' + data.error);
+                }
+            } catch (err) {
+                alert('Network error');
+            }
+        }
+
+        async function forceSync() {
+            try {
+                const res = await fetch('/api/owner/sync', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    alert('✅ Database successfully synchronized to MongoDB Atlas!');
+                } else {
+                    alert('Sync error: ' + data.error);
+                }
+            } catch (err) {
+                alert('Sync failed.');
+            }
+        }
+
+        async function sendWebBroadcast() {
+            const text = document.getElementById('broadcastText').value.trim();
+            if (!text) return alert('Enter broadcast message text.');
+            if (!confirm('Are you sure you want to broadcast this message to ALL bot users?')) return;
+
+            const btn = document.getElementById('bcBtn');
+            btn.disabled = true;
+            btn.innerText = 'Broadcasting in background...';
+
+            try {
+                const res = await fetch('/api/owner/broadcast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ Broadcast initiated! Total recipients: ${data.total_recipients}`);
+                    document.getElementById('broadcastText').value = '';
+                } else {
+                    alert('Broadcast error: ' + data.error);
+                }
+            } catch (err) {
+                alert('Broadcast failed.');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = '🚀 Send Broadcast to All Users';
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>{{ bot_title or "Course Ecosystem Store" }}</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col pb-24">
+
+    <!-- Top Navigation Bar -->
+    <header class="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 px-4 py-3">
+        <div class="max-w-5xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-base font-bold text-white tracking-tight leading-tight">Course Store</h1>
+                    <p class="text-[11px] text-slate-400">Educational Batches & Lectures</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <a href="/login" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700 transition">
+                    Staff Login
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-5xl mx-auto w-full px-4 pt-4 flex-1">
+        
+        <!-- Search and Quick Filter Bar -->
+        <div class="mb-4 space-y-3">
+            <div class="relative">
+                <svg class="w-5 h-5 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input type="text" id="searchInput" placeholder="Search batch, subject, exam..." 
+                       class="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition">
+            </div>
+
+            <!-- Tier Pills -->
+            <div class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+                <button onclick="setTierFilter('all')" id="tier-all" class="tier-btn px-3.5 py-1.5 rounded-full text-xs font-semibold bg-indigo-600 text-white shadow-sm transition flex-shrink-0">
+                    All Batches
+                </button>
+                <button onclick="setTierFilter('free')" id="tier-free" class="tier-btn px-3.5 py-1.5 rounded-full text-xs font-semibold bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800 transition flex-shrink-0">
+                    🆓 Free Batches
+                </button>
+                <button onclick="setTierFilter('paid')" id="tier-paid" class="tier-btn px-3.5 py-1.5 rounded-full text-xs font-semibold bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800 transition flex-shrink-0">
+                    💵 Paid Batches
+                </button>
+                <button onclick="setTierFilter('special')" id="tier-special" class="tier-btn px-3.5 py-1.5 rounded-full text-xs font-semibold bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800 transition flex-shrink-0">
+                    ✨ Special (Coins)
+                </button>
+            </div>
+
+            <!-- Categories Horizontal Scroll -->
+            <div class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 text-xs">
+                <button onclick="setCatFilter('all')" id="cat-all" class="cat-btn px-3 py-1 rounded-lg font-medium bg-slate-800 text-indigo-400 border border-indigo-500/30 flex-shrink-0">
+                    All Categories
+                </button>
+                {% for cat in categories %}
+                <button onclick="setCatFilter('{{ cat }}')" id="cat-{{ loop.index }}" class="cat-btn px-3 py-1 rounded-lg font-medium bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800/80 flex-shrink-0 transition">
+                    📁 {{ cat }}
+                </button>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Tab Content: Courses View -->
+        <div id="tab-courses" class="tab-panel">
+            <div id="batchesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {% for b in batches %}
+                <div class="batch-card bg-slate-900 border border-slate-800/90 hover:border-indigo-500/50 rounded-2xl p-4 transition-all duration-200 flex flex-col justify-between"
+                     data-name="{{ b.name | lower }}" data-cat="{{ b.category }}" data-type="{{ b.type }}">
+                    <div>
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-md 
+                                {% if b.type == 'free' %}bg-emerald-500/10 text-emerald-400 border border-emerald-500/20
+                                {% elif b.type == 'paid' %}bg-amber-500/10 text-amber-400 border border-amber-500/20
+                                {% else %}bg-purple-500/10 text-purple-400 border border-purple-500/20{% endif %}">
+                                {% if b.type == 'free' %}🆓 Free
+                                {% elif b.type == 'paid' %}👑 Paid
+                                {% else %}✨ Special{% endif %}
+                            </span>
+                            <span class="text-[11px] text-slate-400 truncate max-w-[150px]">📁 {{ b.category }}</span>
+                        </div>
+                        <h3 class="text-sm font-bold text-white line-clamp-2 leading-snug mb-2">{{ b.name }}</h3>
+                        
+                        <div class="text-xs text-slate-400 mb-4">
+                            {% if b.type == 'paid' %}
+                            <span class="text-amber-300 font-semibold">💰 {{ b.price or "Contact Admin" }}</span>
+                            {% elif b.type == 'special' %}
+                            <span class="text-purple-300 font-semibold">💎 {{ b.coins or 1 }} Coins to Unlock</span>
+                            {% else %}
+                            <span class="text-emerald-400 font-semibold">⚡ Instant Access Available</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div>
+                        <a href="https://t.me/{{ bot_username }}?start=batch_{{ b.id }}" target="_blank"
+                           class="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl font-semibold text-xs transition duration-200
+                           {% if b.type == 'free' %}bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm shadow-emerald-600/20
+                           {% elif b.type == 'paid' %}bg-amber-600 hover:bg-amber-500 text-white shadow-sm shadow-amber-600/20
+                           {% else %}bg-purple-600 hover:bg-purple-500 text-white shadow-sm shadow-purple-600/20{% endif %}">
+                            <span>Open in Telegram</span>
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Empty Search State -->
+            <div id="noResults" class="hidden text-center py-16">
+                <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-800 text-slate-400 mb-3">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <h4 class="text-base font-semibold text-white">No Batches Found</h4>
+                <p class="text-xs text-slate-400 mt-1 mb-4">Aapki search query se koi batch match nahi hua.</p>
+                <button onclick="switchTab('request')" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-2 rounded-xl transition">
+                    Request This Batch
+                </button>
+            </div>
+        </div>
+
+        <!-- Tab Content: Leaderboard -->
+        <div id="tab-leaderboard" class="tab-panel hidden space-y-3">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 text-center">
+                <h3 class="text-base font-bold text-white">🏆 Referral Champions Leaderboard</h3>
+                <p class="text-xs text-slate-400 mt-1">Dosto ko invite karein, coins kamayein aur top rankings par aakar VIP banein!</p>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden divide-y divide-slate-800/80">
+                {% for champion in leaderboard %}
+                <div class="flex items-center justify-between p-3.5 hover:bg-slate-800/40 transition">
+                    <div class="flex items-center gap-3">
+                        <span class="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs
+                            {% if loop.index == 1 %}bg-amber-400/20 text-amber-300 border border-amber-400/30
+                            {% elif loop.index == 2 %}bg-slate-300/20 text-slate-200 border border-slate-300/30
+                            {% elif loop.index == 3 %}bg-amber-700/20 text-amber-500 border border-amber-700/30
+                            {% else %}text-slate-500{% endif %}">
+                            {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% elif loop.index == 3 %}🥉{% else %}{{ loop.index }}{% endif %}
+                        </span>
+                        <div>
+                            <p class="text-sm font-semibold text-white">{{ champion.name }}</p>
+                            <p class="text-[11px] text-slate-400">ID: {{ champion.id }}</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs font-bold text-indigo-400">{{ champion.invites }} Invites</span>
+                    </div>
+                </div>
+                {% else %}
+                <div class="p-8 text-center text-xs text-slate-400">Abhi tak koi referrals record nahi hue. Pehle champion banein!</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Tab Content: Redeem Voucher -->
+        <div id="tab-redeem" class="tab-panel hidden space-y-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center max-w-lg mx-auto">
+                <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center mx-auto mb-3 border border-indigo-500/20">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/>
+                    </svg>
+                </div>
+                <h3 class="text-base font-bold text-white">Redeem Promo Voucher</h3>
+                <p class="text-xs text-slate-400 mt-1 mb-5">Enter your gift promo code to claim free coins into your wallet.</p>
+
+                <div class="space-y-3">
+                    <input type="text" id="voucherCode" placeholder="Enter Code (e.g. DIWALI2026)" 
+                           class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-center uppercase tracking-wider font-mono text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition">
+                    <input type="number" id="voucherUserId" placeholder="Your Telegram User ID" 
+                           class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-center text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition">
+                    
+                    <button onclick="redeemVoucher()" id="redeemBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 px-4 rounded-xl text-xs transition duration-200">
+                        Claim Coins Now
+                    </button>
+                </div>
+                <div id="redeemAlert" class="mt-4 hidden p-3 rounded-xl text-xs"></div>
+            </div>
+        </div>
+
+        <!-- Tab Content: Request Batch -->
+        <div id="tab-request" class="tab-panel hidden space-y-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-lg mx-auto">
+                <div class="text-center mb-5">
+                    <h3 class="text-base font-bold text-white">🙋 Request a Batch / Course</h3>
+                    <p class="text-xs text-slate-400 mt-1">Jo course aapko chahiye uska naam submit karein. Admin review karke use upload karenge!</p>
+                </div>
+
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1.5">Batch / Course Name</label>
+                        <input type="text" id="requestBatchName" placeholder="e.g. PW Yakeen NEET 2026 / Civil Booster" 
+                               class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1.5">Your Telegram User ID</label>
+                        <input type="number" id="requestUserId" placeholder="e.g. 123456789" 
+                               class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition">
+                    </div>
+                    <button onclick="submitBatchRequest()" id="reqBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 px-4 rounded-xl text-xs transition duration-200">
+                        Submit Request
+                    </button>
+                </div>
+                <div id="requestAlert" class="mt-4 hidden p-3 rounded-xl text-xs"></div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Bottom Tab Bar -->
+    <nav class="fixed bottom-0 left-0 right-0 z-30 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 px-4 py-2">
+        <div class="max-w-md mx-auto grid grid-cols-4 gap-1 text-center">
+            <button onclick="switchTab('courses')" id="nav-courses" class="nav-btn py-1 text-indigo-400 flex flex-col items-center gap-1">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                </svg>
+                <span class="text-[10px] font-semibold">Courses</span>
+            </button>
+            <button onclick="switchTab('leaderboard')" id="nav-leaderboard" class="nav-btn py-1 text-slate-400 hover:text-slate-200 flex flex-col items-center gap-1">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>
+                </svg>
+                <span class="text-[10px] font-semibold">Top Rank</span>
+            </button>
+            <button onclick="switchTab('redeem')" id="nav-redeem" class="nav-btn py-1 text-slate-400 hover:text-slate-200 flex flex-col items-center gap-1">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/>
+                </svg>
+                <span class="text-[10px] font-semibold">Redeem</span>
+            </button>
+            <button onclick="switchTab('request')" id="nav-request" class="nav-btn py-1 text-slate-400 hover:text-slate-200 flex flex-col items-center gap-1">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span class="text-[10px] font-semibold">Request</span>
+            </button>
+        </div>
+    </nav>
+
+    <script>
+        // Initialize Telegram WebApp if available
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand();
+            const initUser = window.Telegram.WebApp.initDataUnsafe?.user;
+            if (initUser && initUser.id) {
+                const uidFields = ['voucherUserId', 'requestUserId'];
+                uidFields.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.value = initUser.id;
+                });
+            }
+        }
+
+        let currentTier = 'all';
+        let currentCat = 'all';
+
+        function filterCards() {
+            const query = document.getElementById('searchInput').value.toLowerCase().trim();
+            const cards = document.querySelectorAll('.batch-card');
+            let visibleCount = 0;
+
+            cards.forEach(card => {
+                const name = card.dataset.name || '';
+                const cat = card.dataset.cat || '';
+                const type = card.dataset.type || '';
+
+                const matchesQuery = !query || name.includes(query) || cat.toLowerCase().includes(query);
+                const matchesTier = currentTier === 'all' || type === currentTier;
+                const matchesCat = currentCat === 'all' || cat === currentCat;
+
+                if (matchesQuery && matchesTier && matchesCat) {
+                    card.style.display = 'flex';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+
+            document.getElementById('noResults').style.display = visibleCount === 0 ? 'block' : 'none';
+        }
+
+        document.getElementById('searchInput').addEventListener('input', filterCards);
+
+        function setTierFilter(tier) {
+            currentTier = tier;
+            document.querySelectorAll('.tier-btn').forEach(b => {
+                b.classList.remove('bg-indigo-600', 'text-white');
+                b.classList.add('bg-slate-900', 'text-slate-300');
+            });
+            const active = document.getElementById(`tier-${tier}`);
+            if (active) {
+                active.classList.remove('bg-slate-900', 'text-slate-300');
+                active.classList.add('bg-indigo-600', 'text-white');
+            }
+            filterCards();
+        }
+
+        function setCatFilter(cat) {
+            currentCat = cat;
+            document.querySelectorAll('.cat-btn').forEach(b => {
+                b.classList.remove('bg-slate-800', 'text-indigo-400', 'border-indigo-500/30');
+                b.classList.add('bg-slate-900', 'text-slate-400');
+            });
+            event.target.classList.remove('bg-slate-900', 'text-slate-400');
+            event.target.classList.add('bg-slate-800', 'text-indigo-400', 'border-indigo-500/30');
+            filterCards();
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+            document.getElementById(`tab-${tab}`).classList.remove('hidden');
+
+            document.querySelectorAll('.nav-btn').forEach(b => {
+                b.classList.remove('text-indigo-400');
+                b.classList.add('text-slate-400');
+            });
+            document.getElementById(`nav-${tab}`).classList.remove('text-slate-400');
+            document.getElementById(`nav-${tab}`).classList.add('text-indigo-400');
+        }
+
+        async function redeemVoucher() {
+            const code = document.getElementById('voucherCode').value.trim();
+            const uid = document.getElementById('voucherUserId').value.trim();
+            const alertBox = document.getElementById('redeemAlert');
+            const btn = document.getElementById('redeemBtn');
+
+            if (!code || !uid) {
+                alertBox.className = "mt-4 p-3 rounded-xl text-xs bg-rose-500/20 text-rose-300 border border-rose-500/30";
+                alertBox.innerText = "Please enter both Voucher Code and your Telegram User ID.";
+                alertBox.classList.remove('hidden');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = "Processing...";
+            try {
+                const res = await fetch('/api/redeem', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code, user_id: uid })
+                });
+                const data = await res.json();
+                alertBox.classList.remove('hidden');
+                if (data.success) {
+                    alertBox.className = "mt-4 p-3 rounded-xl text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+                    alertBox.innerText = `🎉 Success! +${data.points} Coins added to your wallet!`;
+                    confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                    document.getElementById('voucherCode').value = '';
+                } else {
+                    alertBox.className = "mt-4 p-3 rounded-xl text-xs bg-rose-500/20 text-rose-300 border border-rose-500/30";
+                    alertBox.innerText = `❌ ${data.error || 'Failed to redeem'}`;
+                }
+            } catch (err) {
+                alertBox.className = "mt-4 p-3 rounded-xl text-xs bg-rose-500/20 text-rose-300 border border-rose-500/30";
+                alertBox.innerText = "Network error. Please try again.";
+                alertBox.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Claim Coins Now";
+            }
+        }
+
+        async function submitBatchRequest() {
+            const name = document.getElementById('requestBatchName').value.trim();
+            const uid = document.getElementById('requestUserId').value.trim();
+            const alertBox = document.getElementById('requestAlert');
+            const btn = document.getElementById('reqBtn');
+
+            if (!name || !uid) {
+                alertBox.className = "mt-4 p-3 rounded-xl text-xs bg-rose-500/20 text-rose-300 border border-rose-500/30";
+                alertBox.innerText = "Please provide both Batch Name and User ID.";
+                alertBox.classList.remove('hidden');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = "Submitting...";
+            try {
+                const res = await fetch('/api/request-batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, user_id: uid })
+                });
+                const data = await res.json();
+                alertBox.classList.remove('hidden');
+                if (data.success) {
+                    alertBox.className = "mt-4 p-3 rounded-xl text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+                    alertBox.innerText = "✅ Batch Demand Registered! Added to Admin Task Checklist.";
+                    document.getElementById('requestBatchName').value = '';
+                } else {
+                    alertBox.className = "mt-4 p-3 rounded-xl text-xs bg-rose-500/20 text-rose-300 border border-rose-500/30";
+                    alertBox.innerText = `❌ ${data.error || 'Submission failed'}`;
+                }
+            } catch (err) {
+                alertBox.className = "mt-4 p-3 rounded-xl text-xs bg-rose-500/20 text-rose-300 border border-rose-500/30";
+                alertBox.innerText = "Network error. Please try again.";
+                alertBox.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Submit Request";
+            }
+        }
+    </script>
+</body>
+</html>

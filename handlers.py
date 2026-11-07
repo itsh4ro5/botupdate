@@ -874,11 +874,11 @@ async def cmd_joinall(client: Client, message: Message):
     session_string = DB.get("USERBOT_SESSION")
     if not session_string or not API_ID:
         return await message.reply_text(
-            "  Error: Userbot not logged in. Owner dashboard se login karein."
+            "⚠️ Error: Userbot not logged in. Owner dashboard se login karein."
         )
-    msg = await message.reply_text("  Auto-joining userbot...")
+    msg = await message.reply_text("⏳ **Auto-joining Userbot & Promoting...**")
     userbot = Client(
-        "temp_bot",
+        "temp_join_bot",
         api_id=API_ID,
         api_hash=API_HASH,
         session_string=session_string,
@@ -886,32 +886,72 @@ async def cmd_joinall(client: Client, message: Message):
     )
     try:
         await userbot.start()
-        userbot_id = (await userbot.get_me()).id
-        await userbot.stop()
+        userbot_me = await userbot.get_me()
+        userbot_id = userbot_me.id
     except Exception as e:
-        return await msg.edit_text(f"  Error: {e}")
+        return await msg.edit_text(f"❌ Userbot connection failed: {e}")
+
     all_chats = (
-        [MANDATORY_CHANNEL_ID]
+        ([MANDATORY_CHANNEL_ID] if MANDATORY_CHANNEL_ID else [])
         + list(DB.get("FREE_CHANNELS", {}).keys())
         + list(DB.get("PAID_CHANNELS", {}).keys())
         + list(DB.get("SPECIAL_CHANNELS", {}).keys())
     )
     success = failed = 0
-    for cid in all_chats:
+    full_privs = pyrogram.types.ChatPrivileges(
+        can_manage_chat=True,
+        can_post_messages=True,
+        can_edit_messages=True,
+        can_delete_messages=True,
+        can_invite_users=True,
+        can_restrict_members=True,
+        can_pin_messages=True,
+        can_promote_members=False
+    )
+
+    try:
+        for cid in all_chats:
+            try:
+                chat_id_int = int(cid)
+                # 1. Check if userbot already in channel
+                is_member = False
+                try:
+                    m = await client.get_chat_member(chat_id_int, userbot_id)
+                    is_member = m.status not in [ChatMemberStatus.LEFT, ChatMemberStatus.BANNED]
+                except Exception:
+                    is_member = False
+
+                if not is_member:
+                    # Create 1-time direct join link from bot and join via userbot
+                    try:
+                        inv = await client.create_chat_invite_link(chat_id_int, creates_join_request=False, member_limit=1)
+                        await userbot.join_chat(inv.invite_link)
+                    except Exception as join_err:
+                        logger.warning(f"Userbot join failed for {cid}: {join_err}")
+
+                # 2. Promote userbot with privileges
+                await client.promote_chat_member(
+                    chat_id=chat_id_int,
+                    user_id=userbot_id,
+                    privileges=full_privs
+                )
+                success += 1
+                await asyncio.sleep(0.5)
+            except FloodWait as fw:
+                await asyncio.sleep(fw.value + 1)
+            except Exception as e:
+                logger.error(f"Failed to auto-join/promote in {cid}: {e}")
+                failed += 1
+    finally:
         try:
-            await client.promote_chat_member(
-                chat_id=int(cid),
-                user_id=userbot_id,
-                privileges=pyrogram.types.ChatPrivileges(
-                    can_invite_users=True, can_manage_chat=True
-                ),
-            )
-            success += 1
-            await asyncio.sleep(0.5)
-        except Exception:
-            failed += 1
+            await userbot.stop()
+        except:
+            pass
+
     await msg.edit_text(
-        f"  **Auto-Join Process Pura Hua!**\nSuccess: `{success}`\nFailed: `{failed}`",
+        f"✅ **Auto-Join Process Complete!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"✨ **Success:** `{success}`\n"
+        f"⚠️ **Failed:** `{failed}`",
         parse_mode=ParseMode.MARKDOWN,
     )
 
@@ -1204,8 +1244,39 @@ async def cmd_batchrequests(client: Client, message: Message):
         await message.reply_text(txt, parse_mode=ParseMode.MARKDOWN)
 
 async def cmd_restorebatches(client: Client, message: Message):
-    # Backward compatibility redirect to batch requests
-    await cmd_batchrequests(client, message)
+    if not is_admin_msg(message):
+        return
+    doc = message.document or (message.reply_to_message.document if message.reply_to_message else None)
+    if not doc:
+        return await message.reply_text(
+            "📥 **RESTORE BATCHES GUIDE**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "Kripya apna MongoDB/JSON backup file chat me **Document (📎 File)** ke roop me bhejein aur caption me `/restorebatches` likhein.\n"
+            "Ya fir kisi pehle se bheje gaye backup file par reply karke `/restorebatches` bhejein."
+        )
+    status_msg = await message.reply_text("⏳ **Downloading and inspecting backup file...**")
+    temp_path = f"temp_restore_{message.id}.json"
+    try:
+        await message.download(file_name=temp_path) if message.document else await message.reply_to_message.download(file_name=temp_path)
+        import restore_batches
+        await status_msg.edit_text("⏳ **Restoring missing batches & syncing permissions...**")
+        res = await restore_batches.run_batch_restore(temp_path)
+        if res.get("success"):
+            txt = (
+                f"✅ **BATCH RESTORATION COMPLETE!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"📦 **Restored Batches:** `{res.get('restored_count', 0)}`\n"
+                f"⏩ **Skipped (Already Active):** `{res.get('skipped_count', 0)}`\n"
+                f"❌ **Failed:** `{res.get('failed_count', 0)}`\n\n"
+                f"✨ All missing batches restored into categories and database synced successfully!"
+            )
+        else:
+            txt = f"❌ **Restoration Failed:** `{res.get('error')}`"
+        await status_msg.edit_text(txt)
+    except Exception as e:
+        await status_msg.edit_text(f"❌ **Error during restore:** `{e}`")
+    finally:
+        if os.path.exists(temp_path):
+            try: os.remove(temp_path)
+            except: pass
 
 async def cmd_list_vouchers(client: Client, message: Message):
     if not is_admin_msg(message):
@@ -1515,11 +1586,15 @@ async def cmd_extend_demo(client: Client, message: Message):
         return
     args = get_args(message)
     if len(args) < 3:
-        return
-    uid, bid, hours = int(args[0]), str(args[1]), float(args[2])
-    if uid in DB["USER_DATA"] and bid in DB["USER_DATA"].get(uid, {}).get("demos", {}):
-        d = DB["USER_DATA"][uid]["demos"][bid]
-        DB["USER_DATA"][uid]["demos"][bid] = {
+        return await message.reply_text("Usage: /extend <user_id> <batch_id> <hours>\nExample: `/extend 12345678 -10012345678 24`", parse_mode=ParseMode.MARKDOWN)
+    try:
+        uid, bid, hours = int(args[0]), str(args[1]), float(args[2])
+    except ValueError:
+        return await message.reply_text("❌ Error: Numbers invalid hain. Example: `/extend 12345678 -10012345678 24`", parse_mode=ParseMode.MARKDOWN)
+    user_key = uid if uid in DB["USER_DATA"] else (str(uid) if str(uid) in DB["USER_DATA"] else None)
+    if user_key and bid in DB["USER_DATA"].get(user_key, {}).get("demos", {}):
+        d = DB["USER_DATA"][user_key]["demos"][bid]
+        DB["USER_DATA"][user_key]["demos"][bid] = {
             "expiry": max(
                 (d["expiry"] if isinstance(d, dict) else float(d)), time.time()
             )
@@ -1527,24 +1602,30 @@ async def cmd_extend_demo(client: Client, message: Message):
             "warned": False,
         }
         await save_data_async()
-        await message.reply_text("  Extended.")
+        await message.reply_text(f"✅ Demo extended by `{hours} Hours` for user `{uid}` in batch `{bid}`.", parse_mode=ParseMode.MARKDOWN)
+    else:
+        await message.reply_text(f"⚠️ User `{uid}` ka batch `{bid}` me koi active demo nahi mila.", parse_mode=ParseMode.MARKDOWN)
 
 async def cmd_kick_user(client: Client, message: Message):
     if not is_admin_msg(message):
         return
     args = get_args(message)
     if len(args) < 2:
-        return await message.reply_text("  Usage: /kick <user_id> <batch_id>")
-    uid, bid = int(args[0]), int(args[1])
+        return await message.reply_text("Usage: /kick <user_id> <batch_id>", parse_mode=ParseMode.MARKDOWN)
+    try:
+        uid, bid = int(args[0]), int(args[1])
+    except ValueError:
+        return await message.reply_text("❌ Error: Valid User ID aur Batch ID bhejein.", parse_mode=ParseMode.MARKDOWN)
     try:
         await client.ban_chat_member(bid, uid)
         await client.unban_chat_member(bid, uid)
-        if uid in DB["USER_DATA"] and str(bid) in DB["USER_DATA"].get(uid, {}).get("demos", {}):
-            del DB["USER_DATA"][uid]["demos"][str(bid)]
+        user_key = uid if uid in DB["USER_DATA"] else (str(uid) if str(uid) in DB["USER_DATA"] else None)
+        if user_key and str(bid) in DB["USER_DATA"].get(user_key, {}).get("demos", {}):
+            del DB["USER_DATA"][user_key]["demos"][str(bid)]
             await save_data_async()
-        await message.reply_text("  Kicked successfully.")
+        await message.reply_text(f"✅ User `{uid}` kicked from batch `{bid}`.", parse_mode=ParseMode.MARKDOWN)
     except Exception as e:
-        await message.reply_text(f"  Kick failed: {e}")
+        await message.reply_text(f"❌ Kick failed: {e}")
 
 async def cmd_myinfo(client: Client, message: Message):
     if not message.from_user:
@@ -2602,106 +2683,6 @@ async def run_super_forwarder(bot_client: Client, message: Message, source_str: 
         await msg.edit_text(f"❌ **Userbot Error:** `{err}`")
         try: await userbot.stop()
         except: pass
-            
-async def cmd_advcap_start(client: Client, message: Message):
-    channel_id = message.text.strip()
-    uid = message.from_user.id
-
-async def run_advanced_caption_changer(bot_client: Client, message: Message, channel_id_str: str, start_msg_id: int, end_msg_id: int, mode: str, data_text: str):
-    try:
-        channel_id = int(channel_id_str)
-    except ValueError:
-        return await message.reply_text("❌ Error: Channel ID number me nahi hai.")
-
-    session_string = DB.get("USERBOT_SESSION")
-    if not session_string or not API_ID:
-        return await message.reply_text("❌ **Userbot Not Logged In!** Dashboard se login karein.", parse_mode=ParseMode.MARKDOWN)
-
-    msg = await message.reply_text(f"⏳ **Step 1:** Fetching messages from `{start_msg_id}` to `{end_msg_id}`...")
-    userbot = Client("advcap_bot", api_id=API_ID, api_hash=API_HASH, session_string=session_string, in_memory=True)
-    
-    try:
-        await userbot.start()
-        min_id = min(start_msg_id, end_msg_id)
-        max_id = max(start_msg_id, end_msg_id)
-
-        all_messages = []
-        async for m in userbot.get_chat_history(channel_id, offset_id=max_id + 1):
-            if m.id < min_id: break
-            if m.id <= max_id: all_messages.append(m)
-        
-        total_msgs = len(all_messages)
-        if total_msgs == 0:
-            await userbot.stop()
-            return await msg.edit_text(f"❌ Error: Range `{min_id}` - `{max_id}` me koi message nahi mila.")
-            
-        await msg.edit_text(f"✅ Total `{total_msgs}` messages loaded!\n⏳ **Step 2:** Advanced Changer Running...")
-        
-        edited_count = 0
-        checked_count = 0
-
-        for m in all_messages:
-            checked_count += 1
-            if m.caption or mode == "1":
-                old_cap = m.caption or ""
-                new_cap = old_cap
-                
-                if mode == "1":   # Full Replace
-                    new_cap = data_text
-                elif mode == "2": # Word Replace
-                    if "|" in data_text:
-                        old_word, new_word = data_text.split("|", 1)
-                        new_cap = old_cap.replace(old_word.strip(), new_word.strip())
-                elif mode == "3": # Remove Word
-                    new_cap = old_cap.replace(data_text, "").strip()
-                elif mode == "4": # Add Prefix (Upar)
-                    new_cap = f"{data_text}\n\n{old_cap}"
-                elif mode == "5": # Add Suffix (Niche)
-                    new_cap = f"{old_cap}\n\n{data_text}"
-                elif mode == "6": # Smart Auto Format
-                    new_cap = smart_format_caption(old_cap)
-                
-                if new_cap != old_cap:
-                    try:
-                        await userbot.edit_message_caption(
-                            chat_id=channel_id,
-                            message_id=m.id,
-                            caption=new_cap
-                        )
-                        edited_count += 1
-                        await asyncio.sleep(2)  # API flood se bachne ke liye
-                    except FloodWait as fw:
-                        await asyncio.sleep(fw.value + 1)
-                        await userbot.edit_message_caption(chat_id=channel_id, message_id=m.id, caption=new_cap)
-                        edited_count += 1
-                    except Exception:
-                        pass
-                        
-            if checked_count % 30 == 0:
-                try:
-                    await msg.edit_text(
-                        f"⏳ **Advanced Changer Running...**\n\n"
-                        f"⚙️ **Mode Selected:** `{mode}`\n"
-                        f"🔍 **Scanned:** `{checked_count}/{total_msgs}`\n"
-                        f"✏️ **Successfully Edited:** `{edited_count}`"
-                    )
-                except: pass
-
-        await userbot.stop()
-        await msg.edit_text(
-            f"🎯 **Caption Changer Successful!**\n\n"
-            f"📈 **Range:** `{min_id}` to `{max_id}`\n"
-            f"✨ Total **{edited_count}** captions change ho gaye hain!",
-            parse_mode=ParseMode.MARKDOWN
-        )
-    except Exception as err:
-        import traceback
-        traceback.print_exc()
-        await msg.edit_text(f"❌ **Userbot Error:** `{err}`")
-        try:
-            await userbot.stop()
-        except:
-            pass
 
 # --- WIZARDS, MENUS & CALLBACKS ---
 async def get_batch_broadcast_kb(client: Client, cid: int, cname: str):
@@ -3496,6 +3477,7 @@ async def wizard_message(client: Client, message: Message):
                 "advcap": cmd_advcap_start,
                 "deluser": cmd_deluser,
                 "updatepost": process_updatepost,
+                "cleanbatch": cmd_cleanbatch,
                 "genvoucher": cmd_genvoucher_from_wizard,
                 "setreqnote": cmd_set_request_note,
                 "setprice": cmd_set_batch_price,
@@ -4421,35 +4403,51 @@ async def general_callback(client: Client, q: CallbackQuery):
             u_data = DB["USER_DATA"].get(user_key, {})
             unlocked_ref_batches = u_data.get("unlocked_batches", [])
             perm_batches = u_data.get("permanent_batches", [])
+            demos_batches = list(u_data.get("demos", {}).keys())
+            free_joined = u_data.get("free_batches_joined", [])
             combined_unlocked = set(
                 [int(x) for x in unlocked_ref_batches if str(x).lstrip('-').isdigit()] +
-                [int(x) for x in perm_batches if str(x).lstrip('-').isdigit()]
+                [int(x) for x in perm_batches if str(x).lstrip('-').isdigit()] +
+                [int(x) for x in demos_batches if str(x).lstrip('-').isdigit()]
             )
 
+            # Prioritize candidate batches to check: unlocked/demos/free_joined + free channels
+            candidate_cids = set(combined_unlocked)
+            for f_cid in free_joined:
+                try: candidate_cids.add(int(str(f_cid).strip()))
+                except: pass
+            for f_cid in DB.get("FREE_CHANNELS", {}).keys():
+                try: candidate_cids.add(int(str(f_cid).strip()))
+                except: pass
+
+            batches_to_check = {cid: all_batches[cid] for cid in candidate_cids if cid in all_batches}
+            sem = asyncio.Semaphore(5)
+
             async def check_member(cid, name):
-                try:
-                    cid_int = int(cid)
-                except Exception:
-                    cid_int = None
-                is_unlocked = cid_int in combined_unlocked or str(cid) in [str(x) for x in combined_unlocked]
-                try:
-                    m = await client.get_chat_member(int(cid), uid)
-                    if m.status in [
-                        ChatMemberStatus.MEMBER,
-                        ChatMemberStatus.ADMINISTRATOR,
-                        ChatMemberStatus.OWNER,
-                        ChatMemberStatus.RESTRICTED,
-                    ]:
-                        return (cid, name, "Joined")
-                except Exception:
-                    pass
+                async with sem:
+                    try:
+                        cid_int = int(cid)
+                    except Exception:
+                        cid_int = None
+                    is_unlocked = cid_int in combined_unlocked or str(cid) in [str(x) for x in combined_unlocked]
+                    try:
+                        m = await client.get_chat_member(int(cid), uid)
+                        if m.status in [
+                            ChatMemberStatus.MEMBER,
+                            ChatMemberStatus.ADMINISTRATOR,
+                            ChatMemberStatus.OWNER,
+                            ChatMemberStatus.RESTRICTED,
+                        ]:
+                            return (cid, name, "Joined")
+                    except Exception:
+                        pass
 
-                if is_unlocked:
-                    return (cid, name, "Unlocked")
+                    if is_unlocked:
+                        return (cid, name, "Unlocked")
 
-                return None
+                    return None
 
-            results = await asyncio.gather(*[check_member(cid, name) for cid, name in all_batches.items()])
+            results = await asyncio.gather(*[check_member(cid, name) for cid, name in batches_to_check.items()])
             joined_batches = [r for r in results if r is not None]
 
             if not joined_batches:
@@ -5103,7 +5101,7 @@ def build_home_menu(user_key, user):
                 rp.url_btn("📢 Updates", BATCH_UPDATE_CHANNEL_LINK, style=rp.Style.LINK)
             ),
             rp.buttons(
-                rp.url_btn("🎥 Video Tutorial", "https://t.me/c/2836314734/1244", style=rp.Style.LINK)
+                rp.url_btn("🎥 Video Tutorial", VIDEO_TUTORIAL_LINK, style=rp.Style.LINK)
             )
         )
     else:
@@ -5145,7 +5143,7 @@ def build_home_menu(user_key, user):
                 rp.url_btn("📢 Updates", BATCH_UPDATE_CHANNEL_LINK, style=rp.Style.LINK)
             ),
             rp.buttons(
-                rp.url_btn("🎥 Video Tutorial", "https://t.me/c/2836314734/1244", style=rp.Style.LINK)
+                rp.url_btn("🎥 Video Tutorial", VIDEO_TUTORIAL_LINK, style=rp.Style.LINK)
             )
         )
 
@@ -5812,10 +5810,10 @@ async def handle_user_flow_messages(client: Client, message: Message) -> bool:
     text = (message.text or "").strip()
 
     if state == "wait_batch_req":
-        USER_FLOW_STATE.pop(uid, None)
         if not text:
-            await message.reply_text("⚠️ Kripya valid text message me batch ka naam bhejein.")
+            await message.reply_text("⚠️ Kripya valid text message me batch ka naam bhejein.\n*(Agar cancel karna ho toh /cancel likhein)*")
             return True
+        USER_FLOW_STATE.pop(uid, None)
         DB.setdefault("BATCH_REQUESTS", {}).setdefault(text, [])
         if uid not in DB["BATCH_REQUESTS"][text]:
             DB["BATCH_REQUESTS"][text].append(uid)
@@ -5856,6 +5854,9 @@ async def handle_user_flow_messages(client: Client, message: Message) -> bool:
         return True
 
     elif state == "wait_voucher_code":
+        if not text:
+            await message.reply_text("⚠️ Kripya text message me voucher code bhejein.\n*(Agar cancel karna ho toh /cancel likhein)*")
+            return True
         USER_FLOW_STATE.pop(uid, None)
         code = text.upper()
         vouchers = DB.get("VOUCHERS", {})
@@ -6192,11 +6193,32 @@ async def handle_join_request(client: Client, req: ChatJoinRequest):
             return
 
     # Free Channels handling
-    if chat.id in DB.get("FREE_CHANNELS", {}):
+    if chat.id in DB.get("FREE_CHANNELS", {}) or str(chat.id) in DB.get("FREE_CHANNELS", {}):
+        if DB.get("FREE_LOCKED", False) or not DB.get("NEW_USERS_ALLOWED", True):
+            try:
+                await client.send_message(user.id, "⚠️ **Notice:** Free Batches ya Bot Entry currently locked hai.")
+                await client.decline_chat_join_request(chat.id, user.id)
+            except Exception:
+                pass
+            return
+
+        user_rec = DB.get("USER_DATA", {}).get(target_key, {})
+        joined_free = user_rec.get("free_batches_joined", [])
+        if not is_vip_user(user.id) and not user_rec.get("free_unlocked", False) and len(joined_free) >= 3 and (chat_id_int not in joined_free and chat_id_str not in joined_free):
+            try:
+                await client.send_message(user.id, "🔒 **Free Limit Reached!**\nAapne 3 free batches use kar li hain. Agli batch ke liye bot me `/start` karke 1 Coin se unlock karein.")
+                await client.decline_chat_join_request(chat.id, user.id)
+            except Exception:
+                pass
+            return
+
         if await check_membership_pyro(user.id, client):
             try:
                 await client.approve_chat_join_request(chat.id, user.id)
                 invalidate_membership_cache(user.id, chat.id)
+                if chat_id_int not in joined_free and chat_id_str not in joined_free:
+                    DB.setdefault("USER_DATA", {}).setdefault(target_key, {}).setdefault("free_batches_joined", []).append(chat_id_int)
+                    await save_data_async()
                 welcome_str = DB.get("CUSTOM_WELCOMES", {}).get(
                     chat.id, f"🎉 **Approved!**\nWelcome to {chat.title}!"
                 )
