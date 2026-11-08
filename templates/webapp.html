@@ -171,6 +171,9 @@
                 <button onclick="switchMainTab('admin')" id="pbtn-admin" class="hidden role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap">
                     ⚡ Admin Desk
                 </button>
+                <button onclick="switchMainTab('dashboard')" id="pbtn-dashboard" class="role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-indigo-600 text-white shadow-sm transition whitespace-nowrap">
+                    🏠 Dashboard
+                </button>
                 <button onclick="switchMainTab('courses')" id="pbtn-courses" class="role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap">
                     📚 Store
                 </button>
@@ -349,6 +352,275 @@
                     {% else %}
                     <p class="text-xs text-slate-400 text-center py-5">No pending course demands.</p>
                     {% endfor %}
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- VIEW 2.5: STUDENT DASHBOARD (Default Main Entry Point)         -->
+        <!-- ============================================================== -->
+        <section id="view-dashboard" class="view-panel space-y-4">
+            
+            <!-- Hero Profile & Identity Banner -->
+            <div class="glass-panel bg-gradient-to-br from-indigo-950/60 via-slate-900 to-purple-950/50 border border-indigo-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-5 glow-indigo relative overflow-hidden">
+                <div class="absolute -top-12 -right-12 w-40 h-40 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+                <div class="flex items-center justify-between gap-3 flex-wrap relative z-10">
+                    <div class="flex items-center gap-3">
+                        <div class="relative flex-shrink-0">
+                            <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 p-0.5 shadow-lg shadow-indigo-600/30">
+                                <div class="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center text-xl sm:text-2xl font-extrabold text-white" id="dashAvatar">
+                                    🎓
+                                </div>
+                            </div>
+                            <span class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2 border-slate-950 rounded-full" title="Online Active"></span>
+                        </div>
+
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <h2 class="text-sm sm:text-base font-extrabold text-white truncate max-w-[170px] sm:max-w-xs" id="dashStudentName">
+                                    Student Scholar
+                                </h2>
+                                <span id="dashRolePill" class="text-[9px] sm:text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 uppercase tracking-wide">
+                                    🎓 Student
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-2 text-[10px] sm:text-[11px] text-slate-400 mt-1 flex-wrap">
+                                <span id="dashStudentUsername" class="text-indigo-400 font-semibold truncate max-w-[120px]">@student</span>
+                                <span>•</span>
+                                <span class="font-mono bg-slate-950/80 px-2 py-0.5 rounded-md border border-slate-800 text-slate-300">
+                                    ID: <span id="dashUserIdText">...</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-1.5 flex-shrink-0 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800/60">
+                        <button onclick="copyReferralLink()" id="btnCopyRef" class="bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 font-bold text-[10px] sm:text-xs px-3 py-1.5 rounded-xl transition flex items-center gap-1.5">
+                            <span>🔗</span> <span id="btnCopyRefText">Copy Invite Link</span>
+                        </button>
+                        <button onclick="shareReferralTelegram()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] sm:text-xs px-3 py-1.5 rounded-xl transition shadow-md shadow-indigo-600/20 flex items-center gap-1">
+                            <span>✈️</span> <span>Share</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4 Core Metric Telemetry Cards -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+                <!-- 1. Coins Card -->
+                <div class="glass-card rounded-2xl p-3.5 border border-slate-800 hover:border-amber-500/40 transition group">
+                    <div class="flex items-center justify-between text-slate-400 mb-1">
+                        <span class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">Study Coins</span>
+                        <span class="text-base group-hover:scale-110 transition-transform">💎</span>
+                    </div>
+                    <div class="flex items-baseline gap-1 mt-0.5">
+                        <span id="dashCoins" class="text-lg sm:text-xl font-extrabold text-amber-300 font-mono">0.00</span>
+                    </div>
+                    <div class="mt-2 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px]">
+                        <span class="text-slate-400">1 Coin = 1 Batch</span>
+                        <button onclick="switchTab('redeem')" class="text-amber-400 font-bold hover:underline">Redeem ↗</button>
+                    </div>
+                </div>
+
+                <!-- 2. Streak Card -->
+                <div class="glass-card rounded-2xl p-3.5 border border-slate-800 hover:border-rose-500/40 transition group">
+                    <div class="flex items-center justify-between text-slate-400 mb-1">
+                        <span class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">Daily Streak</span>
+                        <span class="text-base group-hover:scale-110 transition-transform">🔥</span>
+                    </div>
+                    <div class="flex items-baseline gap-1 mt-0.5">
+                        <span id="dashStreak" class="text-lg sm:text-xl font-extrabold text-rose-400 font-mono">0</span>
+                        <span class="text-[11px] font-semibold text-slate-400">Days</span>
+                    </div>
+                    <div class="mt-2 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px]">
+                        <span class="text-slate-400">Focus Habit</span>
+                        <button onclick="claimStreakBonus()" class="text-rose-400 font-bold hover:underline">Claim +0.25</button>
+                    </div>
+                </div>
+
+                <!-- 3. Study Time Card -->
+                <div class="glass-card rounded-2xl p-3.5 border border-slate-800 hover:border-emerald-500/40 transition group">
+                    <div class="flex items-center justify-between text-slate-400 mb-1">
+                        <span class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">Logged Focus</span>
+                        <span class="text-base group-hover:scale-110 transition-transform">⏱️</span>
+                    </div>
+                    <div class="flex items-baseline gap-1 mt-0.5">
+                        <span id="dashMinutes" class="text-lg sm:text-xl font-extrabold text-emerald-400 font-mono">0</span>
+                        <span class="text-[11px] font-semibold text-slate-400">Mins</span>
+                    </div>
+                    <div class="mt-2 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px]">
+                        <span class="text-slate-400"><span id="dashSessions" class="font-mono">0</span> Sessions</span>
+                        <button onclick="switchTab('study')" class="text-emerald-400 font-bold hover:underline">Timer ↗</button>
+                    </div>
+                </div>
+
+                <!-- 4. Unlocked Batches Card -->
+                <div class="glass-card rounded-2xl p-3.5 border border-slate-800 hover:border-indigo-500/40 transition group">
+                    <div class="flex items-center justify-between text-slate-400 mb-1">
+                        <span class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">My Courses</span>
+                        <span class="text-base group-hover:scale-110 transition-transform">📚</span>
+                    </div>
+                    <div class="flex items-baseline gap-1 mt-0.5">
+                        <span id="dashBatchCount" class="text-lg sm:text-xl font-extrabold text-indigo-400 font-mono">0</span>
+                        <span class="text-[11px] font-semibold text-slate-400">Active</span>
+                    </div>
+                    <div class="mt-2 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px]">
+                        <span class="text-slate-400">Instant Access</span>
+                        <button onclick="switchTab('courses')" class="text-indigo-400 font-bold hover:underline">Store ↗</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- My Enrolled Study Batches Section (Instant Access) -->
+            <div class="glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-800/80">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center text-sm border border-emerald-500/30">
+                            🎓
+                        </div>
+                        <div>
+                            <h3 class="text-xs sm:text-sm font-extrabold text-white">My Enrolled Study Batches</h3>
+                            <p class="text-[10px] text-slate-400">Your unlocked courses & study channels</p>
+                        </div>
+                    </div>
+                    <button onclick="switchTab('courses')" class="text-[11px] text-indigo-400 font-bold hover:text-indigo-300 transition">
+                        Browse Store →
+                    </button>
+                </div>
+                <div id="dashEnrolledBatches" class="space-y-2">
+                    <!-- Populated dynamically by JS -->
+                </div>
+            </div>
+
+            <!-- Today's Study Targets & Planner Preview -->
+            <div class="glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-800/80">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 rounded-lg bg-indigo-500/15 text-indigo-400 flex items-center justify-center text-sm border border-indigo-500/30">
+                            📝
+                        </div>
+                        <div>
+                            <h3 class="text-xs sm:text-sm font-extrabold text-white">Today's Study Targets</h3>
+                            <p class="text-[10px] text-slate-400" id="dashTaskSummaryText">Loading targets...</p>
+                        </div>
+                    </div>
+                    <button onclick="switchTab('study')" class="text-[11px] text-indigo-400 font-bold hover:text-indigo-300 transition">
+                        Full Planner →
+                    </button>
+                </div>
+
+                <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden mb-3 border border-slate-800/80 p-0.5">
+                    <div id="dashTaskProgressBar" class="bg-gradient-to-r from-indigo-500 to-emerald-400 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+
+                <div id="dashTasksPreviewList" class="space-y-2">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <!-- Daily Concept MCQ Quiz & Reward Banner -->
+            <div class="glass-panel bg-gradient-to-r from-purple-950/40 via-slate-900 to-indigo-950/40 border border-purple-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-5 glow-indigo">
+                <div class="flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-xl sm:text-2xl shadow-sm text-amber-300 flex-shrink-0">
+                            🧠
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h4 class="text-xs sm:text-sm font-extrabold text-white">Daily Concept Practice Quiz</h4>
+                                <span class="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                    +1.0 COIN
+                                </span>
+                            </div>
+                            <p class="text-[10px] sm:text-[11px] text-slate-300 mt-0.5">Solve 5 quick MCQs (Polity, CSAT, History, Geography) & earn free coins.</p>
+                        </div>
+                    </div>
+                    <button onclick="switchTab('study')" class="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-xs px-4 py-2 rounded-xl transition shadow-md shadow-amber-500/20 flex-shrink-0 whitespace-nowrap">
+                        🎯 Play Quiz Now
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quick Services & Hub Shortcuts -->
+            <div class="glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-800/80">
+                <h3 class="text-xs sm:text-sm font-bold text-white mb-3 flex items-center gap-2">
+                    <span>⚡</span> Quick Services & Hub Shortcuts
+                </h3>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    <button onclick="switchTab('courses')" class="glass-card hover:bg-slate-800/60 p-3 rounded-2xl border border-slate-800/80 text-left transition group">
+                        <div class="w-8 h-8 rounded-xl bg-indigo-500/15 text-indigo-400 flex items-center justify-center text-base mb-2 group-hover:scale-105 transition-transform">
+                            📚
+                        </div>
+                        <p class="text-xs font-bold text-white">Course Store</p>
+                        <p class="text-[10px] text-slate-400 mt-0.5">Browse 100+ Batches</p>
+                    </button>
+
+                    <button onclick="switchTab('study')" class="glass-card hover:bg-slate-800/60 p-3 rounded-2xl border border-slate-800/80 text-left transition group">
+                        <div class="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center text-base mb-2 group-hover:scale-105 transition-transform">
+                            ⏱️
+                        </div>
+                        <p class="text-xs font-bold text-white">Study Hub</p>
+                        <p class="text-[10px] text-slate-400 mt-0.5">Focus Timer & Notes</p>
+                    </button>
+
+                    <button onclick="switchTab('leaderboard')" class="glass-card hover:bg-slate-800/60 p-3 rounded-2xl border border-slate-800/80 text-left transition group">
+                        <div class="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center text-base mb-2 group-hover:scale-105 transition-transform">
+                            🏆
+                        </div>
+                        <p class="text-xs font-bold text-white">Leaderboard</p>
+                        <p class="text-[10px] text-slate-400 mt-0.5">Study & Referral Ranks</p>
+                    </button>
+
+                    <button onclick="switchTab('redeem')" class="glass-card hover:bg-slate-800/60 p-3 rounded-2xl border border-slate-800/80 text-left transition group">
+                        <div class="w-8 h-8 rounded-xl bg-purple-500/15 text-purple-400 flex items-center justify-center text-base mb-2 group-hover:scale-105 transition-transform">
+                            🎟️
+                        </div>
+                        <p class="text-xs font-bold text-white">Redeem Code</p>
+                        <p class="text-[10px] text-slate-400 mt-0.5">Claim Gift Vouchers</p>
+                    </button>
+
+                    <button onclick="switchTab('request')" class="glass-card hover:bg-slate-800/60 p-3 rounded-2xl border border-slate-800/80 text-left transition group">
+                        <div class="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-400 flex items-center justify-center text-base mb-2 group-hover:scale-105 transition-transform">
+                            🙋
+                        </div>
+                        <p class="text-xs font-bold text-white">Request Course</p>
+                        <p class="text-[10px] text-slate-400 mt-0.5">Submit Missing Batch</p>
+                    </button>
+
+                    <button onclick="copyReferralLink()" class="glass-card hover:bg-slate-800/60 p-3 rounded-2xl border border-slate-800/80 text-left transition group">
+                        <div class="w-8 h-8 rounded-xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center text-base mb-2 group-hover:scale-105 transition-transform">
+                            👥
+                        </div>
+                        <p class="text-xs font-bold text-white">Refer & Earn</p>
+                        <p class="text-[10px] text-slate-400 mt-0.5">+1 Coin per Friend</p>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Referral Program & Wallet Overview -->
+            <div class="glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-800/80">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                        <span>🎁</span> Invite Friends & Earn Free Coins
+                    </h3>
+                    <span class="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/20">
+                        Unlimited Free Coins
+                    </span>
+                </div>
+                <p class="text-[11px] text-slate-300 mb-3">
+                    Share your referral link with classmates. Whenever a new student starts the bot, you instantly get <strong>1.0 Study Coin</strong> to unlock any premium batch.
+                </p>
+                <div class="flex gap-2">
+                    <input type="text" id="dashRefLinkInput" readonly value="Loading referral link..." 
+                           class="flex-1 bg-slate-950/90 border border-slate-800 rounded-xl px-3 py-2 text-[11px] font-mono text-slate-300 focus:outline-none">
+                    <button onclick="copyReferralLink()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition flex-shrink-0">
+                        Copy
+                    </button>
+                </div>
+                <div class="mt-3 pt-2.5 border-t border-slate-800/70 flex items-center justify-between text-[11px] text-slate-400">
+                    <div>Total Friends Joined: <span id="dashInvitedCount" class="font-extrabold text-white font-mono">0</span></div>
+                    <div>Coins Earned: <span id="dashTotalCoinsEarned" class="font-extrabold text-amber-300 font-mono">0.00</span> 💎</div>
                 </div>
             </div>
         </section>
@@ -649,9 +921,9 @@
         </section>
 
         <!-- ============================================================== -->
-        <!-- VIEW 4: COURSES & STORE VIEW (Default Student Catalog)         -->
+        <!-- VIEW 4: COURSES & STORE VIEW (Student Catalog)                 -->
         <!-- ============================================================== -->
-        <section id="view-courses" class="view-panel space-y-3.5">
+        <section id="view-courses" class="view-panel hidden space-y-3.5">
             
             <!-- Unlocked Batches Banner (Shown if student already enrolled) -->
             <div id="unlockedBatchesSection" class="hidden glass-panel bg-emerald-950/40 border border-emerald-500/30 rounded-3xl p-5">
@@ -908,7 +1180,13 @@
     <!-- Floating Glass Bottom Navigation Bar (With Safe-Area Inset) -->
     <nav class="fixed bottom-0 left-0 right-0 z-40 glass-panel border-t border-slate-800/80 px-2 app-bottom-nav">
         <div class="max-w-md mx-auto grid grid-cols-5 gap-0.5 text-center">
-            <button onclick="switchTab('courses')" id="nav-courses" class="nav-btn py-1.5 text-indigo-400 flex flex-col items-center justify-center gap-1 transition-colors">
+            <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-btn py-1.5 text-indigo-400 flex flex-col items-center justify-center gap-1 transition-colors">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                </svg>
+                <span class="text-[10px] sm:text-[11px] font-bold">Home</span>
+            </button>
+            <button onclick="switchTab('courses')" id="nav-courses" class="nav-btn py-1.5 text-slate-400 hover:text-slate-200 flex flex-col items-center justify-center gap-1 transition-colors">
                 <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
                 </svg>
@@ -918,7 +1196,7 @@
                 <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
                 </svg>
-                <span class="text-[10px] sm:text-[11px] font-bold">Study Hub</span>
+                <span class="text-[10px] sm:text-[11px] font-bold">Study</span>
             </button>
             <button onclick="switchTab('leaderboard')" id="nav-leaderboard" class="nav-btn py-1.5 text-slate-400 hover:text-slate-200 flex flex-col items-center justify-center gap-1 transition-colors">
                 <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -932,12 +1210,6 @@
                 </svg>
                 <span class="text-[10px] sm:text-[11px] font-bold">Redeem</span>
             </button>
-            <button onclick="switchTab('request')" id="nav-request" class="nav-btn py-1.5 text-slate-400 hover:text-slate-200 flex flex-col items-center justify-center gap-1 transition-colors">
-                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-                <span class="text-[10px] sm:text-[11px] font-bold">Demand</span>
-            </button>
         </div>
     </nav>
 
@@ -948,9 +1220,58 @@
         let currentUserRole = 'user';
         let currentTier = 'all';
         let currentCat = 'all';
-        let activeTab = 'courses';
+        let activeTab = 'dashboard';
         let activeTaskTypeChoice = 'daily';
         let currentTaskFilter = 'all';
+
+        // Helper: Get Referral URL
+        function getReferralUrl() {
+            const uid = currentUserId || localStorage.getItem('tg_user_id') || '';
+            const botUser = '{{ bot_username }}' || 'H4R_Contact_bot';
+            return uid ? `https://t.me/${botUser}?start=ref_${uid}` : `https://t.me/${botUser}`;
+        }
+
+        function copyReferralLink() {
+            const url = getReferralUrl();
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(() => {
+                    const btnText = document.getElementById('btnCopyRefText');
+                    if (btnText) {
+                        const original = btnText.innerText;
+                        btnText.innerText = 'Copied! ✅';
+                        setTimeout(() => { btnText.innerText = original; }, 2000);
+                    }
+                    if (window.Telegram?.WebApp?.showPopup) {
+                        window.Telegram.WebApp.showPopup({ title: "Invite Link Copied!", message: "Your invite link has been copied! Share with friends to earn +1.0 Study Coin per join.", buttons: [{ type: "ok" }] });
+                    } else {
+                        alert("Invite link copied to clipboard!");
+                    }
+                }).catch(() => fallbackCopy(url));
+            } else {
+                fallbackCopy(url);
+            }
+        }
+
+        function fallbackCopy(text) {
+            const temp = document.createElement('textarea');
+            temp.value = text;
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+            alert("Invite link copied to clipboard!");
+        }
+
+        function shareReferralTelegram() {
+            const url = getReferralUrl();
+            const shareText = encodeURIComponent("🚀 Join H4R Educational Hub on Telegram! Access 100+ free UPSC, NEET, JEE & SSC batches, deep focus Pomodoro timer, and daily quizzes!\n\n" + url);
+            const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${shareText}`;
+            if (window.Telegram?.WebApp?.openTelegramLink) {
+                window.Telegram.WebApp.openTelegramLink(tgUrl);
+            } else {
+                window.open(tgUrl, '_blank');
+            }
+        }
 
         // 1. TELEGRAM WEBAPP AUTO-DETECTION & ROLE HANDSHAKE
         async function initTelegramApp() {
@@ -1029,6 +1350,8 @@
                 document.getElementById('roleBadge').innerText = 'Student Guest';
                 document.getElementById('userGreeting').innerText = 'Connect Telegram to earn study coins';
                 loadStudyTasks();
+                renderDashboardBatches([]);
+                switchMainTab('dashboard');
             }
         }
 
@@ -1041,14 +1364,59 @@
             const pbtnAdmin = document.getElementById('pbtn-admin');
 
             if (data.user) {
+                // Header indicators
                 document.getElementById('headerCoins').innerText = data.user.coins || 0;
                 document.getElementById('headerStreak').innerText = data.user.streak || 0;
                 document.getElementById('studyStreakDays').innerText = data.user.streak || 0;
                 greeting.innerText = `Namaste, ${data.user.name || 'Student'}!`;
 
-                if (data.user.unlocked_batches && data.user.unlocked_batches.length > 0) {
-                    renderUnlockedBatches(data.user.unlocked_batches);
+                // Dashboard personal data
+                const nameEl = document.getElementById('dashStudentName');
+                if (nameEl) nameEl.innerText = data.user.name || 'Student Scholar';
+
+                const unameEl = document.getElementById('dashStudentUsername');
+                if (unameEl) unameEl.innerText = data.user.username ? `@${data.user.username}` : 'Telegram Student';
+
+                const uidEl = document.getElementById('dashUserIdText');
+                if (uidEl) uidEl.innerText = data.user.user_id || '---';
+
+                const avatarEl = document.getElementById('dashAvatar');
+                if (avatarEl && data.user.name) {
+                    const firstLetter = data.user.name.trim().charAt(0).toUpperCase();
+                    avatarEl.innerText = firstLetter || '🎓';
                 }
+
+                const rolePill = document.getElementById('dashRolePill');
+                if (rolePill) {
+                    if (data.role === 'owner') rolePill.innerText = '👑 Owner';
+                    else if (data.role === 'admin') rolePill.innerText = '⚡ Admin';
+                    else rolePill.innerText = '🎓 Student Scholar';
+                }
+
+                const coinsEl = document.getElementById('dashCoins');
+                if (coinsEl) coinsEl.innerText = data.user.coins || '0.00';
+
+                const streakEl = document.getElementById('dashStreak');
+                if (streakEl) streakEl.innerText = data.user.streak || 0;
+
+                const minsEl = document.getElementById('dashMinutes');
+                if (minsEl) minsEl.innerText = data.user.study_minutes || 0;
+
+                const sessEl = document.getElementById('dashSessions');
+                if (sessEl) sessEl.innerText = data.user.study_sessions || 0;
+
+                const refLinkEl = document.getElementById('dashRefLinkInput');
+                if (refLinkEl) refLinkEl.value = getReferralUrl();
+
+                const invitedEl = document.getElementById('dashInvitedCount');
+                if (invitedEl) invitedEl.innerText = data.user.total_invited || 0;
+
+                const coinsEarnedEl = document.getElementById('dashTotalCoinsEarned');
+                if (coinsEarnedEl) coinsEarnedEl.innerText = data.user.coins || '0.00';
+
+                // Render batches in both store and dashboard
+                renderDashboardBatches(data.user.unlocked_batches || []);
+                renderUnlockedBatches(data.user.unlocked_batches || []);
 
                 loadStudyTasks(data.user.study_tasks);
             }
@@ -1069,7 +1437,65 @@
             } else {
                 badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 uppercase tracking-wider";
                 badge.innerText = '🎓 STUDENT';
-                switchMainTab('courses');
+                switchMainTab('dashboard');
+            }
+        }
+
+        function renderDashboardBatches(unlockedIds) {
+            const container = document.getElementById('dashEnrolledBatches');
+            const countEl = document.getElementById('dashBatchCount');
+            if (!container) return;
+
+            const cards = document.querySelectorAll('.batch-card');
+            let count = 0;
+            let html = '';
+
+            cards.forEach(card => {
+                const cid = card.dataset.id;
+                if (unlockedIds.includes(Number(cid)) || unlockedIds.includes(String(cid))) {
+                    count++;
+                    const name = card.querySelector('h4')?.innerText || 'Study Batch';
+                    const cat = card.dataset.cat || 'General';
+                    
+                    html += `
+                        <div class="glass-card rounded-2xl p-3 sm:p-3.5 flex items-center justify-between gap-3 border border-emerald-500/30 hover:border-emerald-500/50 transition">
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-1.5 mb-1">
+                                    <span class="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase">
+                                        Active
+                                    </span>
+                                    <span class="text-[10px] text-slate-400 font-semibold truncate max-w-[120px]">
+                                        📁 ${cat}
+                                    </span>
+                                </div>
+                                <h4 class="text-xs font-bold text-white truncate max-w-[190px] sm:max-w-xs">${name}</h4>
+                            </div>
+                            <a href="https://t.me/{{ bot_username }}?start=batch_${cid}" target="_blank"
+                               class="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[11px] px-3.5 py-1.5 rounded-xl transition shadow-sm shadow-emerald-600/20 flex items-center gap-1 flex-shrink-0">
+                                <span>Study Now</span> <span>↗</span>
+                            </a>
+                        </div>
+                    `;
+                }
+            });
+
+            if (countEl) countEl.innerText = count;
+
+            if (count > 0) {
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = `
+                    <div class="glass-card rounded-2xl p-4 sm:p-5 text-center border border-slate-800/80">
+                        <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-lg text-slate-400 mb-2">
+                            📚
+                        </div>
+                        <h4 class="text-xs font-bold text-white">No Batches Unlocked Yet</h4>
+                        <p class="text-[11px] text-slate-400 mt-0.5 mb-3">Explore our free batches or use study coins to unlock premium courses.</p>
+                        <button onclick="switchTab('courses')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-md shadow-indigo-600/20 inline-flex items-center gap-1.5">
+                            <span>Browse Course Store</span> <span>→</span>
+                        </button>
+                    </div>
+                `;
             }
         }
 
@@ -1302,6 +1728,9 @@
                         document.getElementById('headerCoins').innerText = d.new_balance;
                         document.getElementById('statSessionsToday').innerText = d.sessions_completed;
                         document.getElementById('statMinutesToday').innerText = d.total_minutes;
+                        const dashCoins = document.getElementById('dashCoins'); if (dashCoins) dashCoins.innerText = d.new_balance;
+                        const dashMins = document.getElementById('dashMinutes'); if (dashMins) dashMins.innerText = d.total_minutes;
+                        const dashSess = document.getElementById('dashSessions'); if (dashSess) dashSess.innerText = d.sessions_completed;
                         alert(`🎉 Great Focus! You completed ${mins} mins of study and earned +0.5 Study Coins!`);
                     }
                 } catch (e) {
@@ -1337,6 +1766,8 @@
                     document.getElementById('headerCoins').innerText = d.new_balance;
                     document.getElementById('headerStreak').innerText = d.streak;
                     document.getElementById('studyStreakDays').innerText = d.streak;
+                    const dashCoins = document.getElementById('dashCoins'); if (dashCoins) dashCoins.innerText = d.new_balance;
+                    const dashStreak = document.getElementById('dashStreak'); if (dashStreak) dashStreak.innerText = d.streak;
                     btn.innerText = "✅ Claimed Today";
                     btn.className = "text-xs font-bold bg-slate-800 text-slate-400 px-4 py-2.5 rounded-2xl flex-shrink-0 cursor-not-allowed";
                 } else {
@@ -1477,6 +1908,41 @@
             const pct = countAll === 0 ? 0 : Math.round((countDone / countAll) * 100);
             document.getElementById('taskProgressPercent').innerText = `${pct}% Done (${countDone}/${countAll})`;
             document.getElementById('taskProgressBar').style.width = `${pct}%`;
+
+            // Dashboard Tasks Sync
+            const dashBar = document.getElementById('dashTaskProgressBar');
+            if (dashBar) dashBar.style.width = `${pct}%`;
+            const dashSummary = document.getElementById('dashTaskSummaryText');
+            if (dashSummary) dashSummary.innerText = countAll === 0 ? "No targets set for today" : `${countDone} of ${countAll} targets completed (${pct}%)`;
+            
+            const dashPreviewList = document.getElementById('dashTasksPreviewList');
+            if (dashPreviewList) {
+                if (studyTasks.length === 0) {
+                    dashPreviewList.innerHTML = `
+                        <div class="text-center py-3 text-slate-500 text-xs">
+                            No study targets yet. Tap <button onclick="switchTab('study')" class="text-indigo-400 font-bold hover:underline">Study Hub</button> to add your daily goals!
+                        </div>
+                    `;
+                } else {
+                    const topTasks = studyTasks.slice(0, 3);
+                    let tHtml = '';
+                    topTasks.forEach(t => {
+                        tHtml += `
+                            <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80">
+                                <div class="flex items-center gap-2.5 min-w-0">
+                                    <input type="checkbox" onchange="toggleTask(${t.id})" ${t.done ? 'checked' : ''} 
+                                           class="w-4 h-4 rounded text-indigo-600 bg-slate-900 border-slate-700 cursor-pointer">
+                                    <span class="text-xs ${t.done ? 'line-through text-slate-500' : 'text-slate-200 font-medium'} truncate">${t.text}</span>
+                                </div>
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-900 text-slate-400 border border-slate-800 flex-shrink-0">
+                                    ${t.tag || 'Study'}
+                                </span>
+                            </div>
+                        `;
+                    });
+                    dashPreviewList.innerHTML = tHtml;
+                }
+            }
 
             if (pct === 100 && countAll > 0) {
                 try { confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } }); } catch (e) {}
@@ -1751,6 +2217,8 @@
                     try { confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } }); } catch (e) {}
                     const coinsHeader = document.getElementById('headerCoins');
                     if (coinsHeader) coinsHeader.innerText = d.new_balance;
+                    const dashCoins = document.getElementById('dashCoins');
+                    if (dashCoins) dashCoins.innerText = d.new_balance;
                     const claimArea = document.getElementById('quizClaimArea');
                     if (claimArea) {
                         claimArea.innerHTML = `
@@ -1864,6 +2332,8 @@
                     alertBox.className = "mt-3.5 p-3 rounded-2xl text-xs bg-emerald-500/10 text-emerald-300 border border-emerald-500/20";
                     alertBox.innerText = `🎉 Success! +${data.points} Coins added! New Balance: ${data.balance}`;
                     document.getElementById('headerCoins').innerText = data.balance;
+                    const dashCoins = document.getElementById('dashCoins');
+                    if (dashCoins) dashCoins.innerText = data.balance;
                     codeInput.value = '';
                 } else {
                     alertBox.className = "mt-3.5 p-3 rounded-2xl text-xs bg-rose-500/10 text-rose-300 border border-rose-500/20";

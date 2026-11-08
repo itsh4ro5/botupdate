@@ -286,12 +286,14 @@ async def api_twa_session():
         "name": u_info.get("name") or first_name or f"Student {uid_str}",
         "username": u_info.get("username") or username,
         "coins": round(u_info.get("referral_count", 0), 2),
+        "total_invited": u_info.get("total_invited", 0),
         "streak": u_info.get("streak", 0),
         "unlocked_batches": u_info.get("unlocked_batches", []),
         "study_minutes": u_info.get("study_minutes", 0),
         "study_sessions": u_info.get("study_sessions_completed", 0),
         "study_tasks": u_info.get("study_tasks", []),
-        "tier": u_info.get("tier", "free")
+        "tier": u_info.get("tier", "free"),
+        "joined_at": u_info.get("joined_at", time.time())
     }
 
     resp = {
