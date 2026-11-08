@@ -8,6 +8,7 @@ import asyncio
 import time
 import urllib.parse
 import logging
+import config
 from config import *
 import richpyro as rp
 import pyrogram
