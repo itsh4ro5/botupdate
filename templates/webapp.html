@@ -36,6 +36,11 @@
     </script>
 
     <style>
+        :root {
+            --tg-safe-top: 0px;
+            --tg-safe-bottom: 0px;
+        }
+
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
             -webkit-tap-highlight-color: transparent;
@@ -44,6 +49,30 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
+        /* Mobile Safe-Area Clearance: Lower header to prevent overlap with phone clock/notch & Telegram top bar */
+        .app-header {
+            padding-top: calc(max(env(safe-area-inset-top, 0px), var(--tg-safe-top, 0px), var(--tg-safe-area-inset-top, 0px), var(--tg-content-safe-area-inset-top, 0px), 28px) + 12px);
+            padding-bottom: 10px;
+            padding-left: 14px;
+            padding-right: 14px;
+        }
+
+        /* Mobile Safe-Area Clearance for Bottom Dock */
+        .app-bottom-nav {
+            padding-bottom: calc(max(env(safe-area-inset-bottom, 0px), var(--tg-safe-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px), var(--tg-content-safe-area-inset-bottom, 0px), 8px) + 4px);
+            padding-top: 6px;
+        }
+
+        /* Prevent unwanted horizontal swipe wobble on mobile */
+        html, body {
+            overflow-x: hidden;
+            width: 100%;
+        }
+
+        button, a, input, select, textarea {
+            touch-action: manipulation;
+        }
+
         .timer-circle {
             transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1);
             transform: rotate(-90deg);
@@ -51,15 +80,16 @@
         }
         
         .glass-panel {
-            background: rgba(15, 23, 42, 0.75);
+            background: rgba(15, 23, 42, 0.82);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.08);
         }
 
         .glass-card {
-            background: rgba(15, 23, 42, 0.6);
+            background: rgba(15, 23, 42, 0.65);
             backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.06);
         }
 
@@ -91,59 +121,60 @@
         }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col pb-24 ambient-bg selection:bg-indigo-500/30 selection:text-indigo-200">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col pb-28 ambient-bg selection:bg-indigo-500/30 selection:text-indigo-200">
 
-    <!-- Top Sticky Glass Header -->
-    <header class="sticky top-0 z-40 glass-panel border-b border-slate-800/80 px-4 py-3 transition-all duration-300">
-        <div class="max-w-5xl mx-auto flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="relative w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25 ring-1 ring-white/20">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <!-- Top Sticky Glass Header (Lowered with Native Status-Bar Clearance) -->
+    <header class="sticky top-0 z-40 glass-panel border-b border-slate-800/80 app-header transition-all duration-300">
+        <div class="max-w-4xl mx-auto flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2.5 min-w-0">
+                <div class="relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/25 ring-1 ring-white/20 flex-shrink-0">
+                    <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
                     </svg>
-                    <span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-slate-950"></span>
+                    <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-950"></span>
                 </div>
-                <div>
-                    <div class="flex items-center gap-2">
-                        <h1 class="text-sm font-extrabold text-white tracking-tight leading-none text-gradient">Study Ecosystem</h1>
-                        <span id="roleBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800/90 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <h1 class="text-xs sm:text-sm font-extrabold text-white tracking-tight leading-none text-gradient whitespace-nowrap">Study Ecosystem</h1>
+                        <span id="roleBadge" class="text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-800/90 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
                             Detecting...
                         </span>
                     </div>
-                    <p id="userGreeting" class="text-[11px] text-slate-400 font-medium mt-0.5">Connecting Telegram profile...</p>
+                    <p id="userGreeting" class="text-[10px] sm:text-[11px] text-slate-400 font-medium mt-0.5 truncate max-w-[125px] sm:max-w-xs">Connecting Telegram profile...</p>
                 </div>
             </div>
             
             <!-- Quick Stats in Header -->
-            <div class="flex items-center gap-2">
-                <div class="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/25 px-2.5 py-1.5 rounded-xl text-xs font-bold text-amber-300 shadow-sm shadow-amber-500/10">
-                    <span class="text-sm">💎</span>
+            <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                <div class="flex items-center gap-1 bg-amber-500/10 border border-amber-500/25 px-2 py-1 rounded-xl text-[11px] sm:text-xs font-bold text-amber-300 shadow-sm shadow-amber-500/10">
+                    <span>💎</span>
                     <span id="headerCoins" class="font-mono">0</span>
                 </div>
-                <div class="flex items-center gap-1.5 bg-rose-500/10 border border-rose-500/25 px-2.5 py-1.5 rounded-xl text-xs font-bold text-rose-400 shadow-sm shadow-rose-500/10">
-                    <span class="text-sm">🔥</span>
+                <div class="flex items-center gap-1 bg-rose-500/10 border border-rose-500/25 px-2 py-1 rounded-xl text-[11px] sm:text-xs font-bold text-rose-400 shadow-sm shadow-rose-500/10">
+                    <span>🔥</span>
                     <span id="headerStreak" class="font-mono">0</span>
                 </div>
-                <a href="/login" id="loginBtn" class="text-[11px] font-semibold bg-slate-800/80 hover:bg-slate-700 text-slate-300 px-2.5 py-1.5 rounded-xl border border-slate-700/80 transition">
-                    Passcode
+                <a href="/login" id="loginBtn" class="flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold bg-slate-800/80 hover:bg-slate-700 text-slate-300 px-2 py-1 sm:px-2.5 sm:py-1 rounded-xl border border-slate-700/80 transition" title="Login with Passcode">
+                    <span>🔑</span>
+                    <span class="hidden sm:inline">Passcode</span>
                 </a>
             </div>
         </div>
 
         <!-- Role Selector Header Tabs (Shown for Owner / Admin) -->
-        <div id="roleBar" class="hidden mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
-            <span class="text-slate-400 text-[11px] font-semibold tracking-wide uppercase">Workspace:</span>
-            <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-                <button onclick="switchMainTab('owner')" id="pbtn-owner" class="hidden role-pbtn px-3 py-1 rounded-lg text-[11px] font-bold bg-indigo-600 text-white shadow-sm transition">
+        <div id="roleBar" class="hidden mt-2 pt-2 border-t border-slate-800/70 flex items-center justify-between text-xs gap-2">
+            <span class="text-slate-400 text-[10px] font-bold tracking-wide uppercase flex-shrink-0">Workspace:</span>
+            <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                <button onclick="switchMainTab('owner')" id="pbtn-owner" class="hidden role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-indigo-600 text-white shadow-sm transition whitespace-nowrap">
                     👑 Owner Console
                 </button>
-                <button onclick="switchMainTab('admin')" id="pbtn-admin" class="hidden role-pbtn px-3 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+                <button onclick="switchMainTab('admin')" id="pbtn-admin" class="hidden role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap">
                     ⚡ Admin Desk
                 </button>
-                <button onclick="switchMainTab('courses')" id="pbtn-courses" class="role-pbtn px-3 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+                <button onclick="switchMainTab('courses')" id="pbtn-courses" class="role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap">
                     📚 Store
                 </button>
-                <button onclick="switchMainTab('study')" id="pbtn-study" class="role-pbtn px-3 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+                <button onclick="switchMainTab('study')" id="pbtn-study" class="role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap">
                     📖 Study Hub
                 </button>
             </div>
@@ -151,93 +182,93 @@
     </header>
 
     <!-- Main Workspace -->
-    <main class="max-w-5xl mx-auto w-full px-4 pt-4 flex-1">
+    <main class="max-w-4xl mx-auto w-full px-3.5 sm:px-4 pt-3 flex-1">
         
         <!-- ============================================================== -->
         <!-- VIEW 1: OWNER COMMAND CONSOLE (Auto-shown for Owner)           -->
         <!-- ============================================================== -->
         <section id="view-owner" class="view-panel hidden space-y-4">
-            <div class="glass-panel bg-gradient-to-r from-indigo-950/60 via-purple-950/40 to-slate-900 border border-indigo-500/30 rounded-3xl p-5 glow-indigo">
-                <div class="flex items-center justify-between mb-4">
-                    <div class="flex items-center gap-3">
-                        <div class="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-xl shadow-md">
+            <div class="glass-panel bg-gradient-to-r from-indigo-950/60 via-purple-950/40 to-slate-900 border border-indigo-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-5 glow-indigo">
+                <div class="flex items-center justify-between mb-3.5 gap-2 flex-wrap">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-lg shadow-md flex-shrink-0">
                             👑
                         </div>
                         <div>
-                            <h2 class="text-base font-extrabold text-white">Owner Master Console</h2>
-                            <p class="text-xs text-slate-400">Telegram Bot Sockets & Realtime Server Kill-Switches</p>
+                            <h2 class="text-xs sm:text-sm font-extrabold text-white">Owner Master Console</h2>
+                            <p class="text-[10px] sm:text-xs text-slate-400">Bot Sockets & Realtime Kill-Switches</p>
                         </div>
                     </div>
-                    <div class="flex gap-2">
-                        <button onclick="triggerSync()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition shadow-md shadow-indigo-500/20">
+                    <div class="flex gap-1.5 flex-shrink-0">
+                        <button onclick="triggerSync()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] sm:text-xs font-bold px-3 py-1.5 rounded-xl transition shadow-md shadow-indigo-500/20">
                             ☁️ Sync Atlas
                         </button>
-                        <a href="/api/owner/backup/download" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold px-3.5 py-2 rounded-xl transition">
+                        <a href="/api/owner/backup/download" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] sm:text-xs font-bold px-3 py-1.5 rounded-xl transition">
                             📥 DB JSON
                         </a>
                     </div>
                 </div>
 
                 <!-- Telemetry Cards -->
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div class="glass-card rounded-2xl p-3.5 border border-slate-800">
-                        <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Registered Students</p>
-                        <p class="text-xl font-extrabold text-white mt-1 font-mono" id="ownerStatUsers">{{ stats.total_users if stats else '0' }}</p>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+                    <div class="glass-card rounded-xl sm:rounded-2xl p-3 border border-slate-800">
+                        <p class="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Registered</p>
+                        <p class="text-lg sm:text-xl font-extrabold text-white mt-0.5 font-mono" id="ownerStatUsers">{{ stats.total_users if stats else '0' }}</p>
                     </div>
-                    <div class="glass-card rounded-2xl p-3.5 border border-slate-800">
-                        <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Active Batches</p>
-                        <p class="text-xl font-extrabold text-indigo-400 mt-1 font-mono" id="ownerStatBatches">{{ stats.total_batches if stats else '0' }}</p>
+                    <div class="glass-card rounded-xl sm:rounded-2xl p-3 border border-slate-800">
+                        <p class="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Batches</p>
+                        <p class="text-lg sm:text-xl font-extrabold text-indigo-400 mt-0.5 font-mono" id="ownerStatBatches">{{ stats.total_batches if stats else '0' }}</p>
                     </div>
-                    <div class="glass-card rounded-2xl p-3.5 border border-slate-800">
-                        <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Economy Coins</p>
-                        <p class="text-xl font-extrabold text-amber-300 mt-1 font-mono" id="ownerStatCoins">💎 {{ stats.total_coins if stats else '0' }}</p>
+                    <div class="glass-card rounded-xl sm:rounded-2xl p-3 border border-slate-800">
+                        <p class="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Total Coins</p>
+                        <p class="text-lg sm:text-xl font-extrabold text-amber-300 mt-0.5 font-mono" id="ownerStatCoins">💎 {{ stats.total_coins if stats else '0' }}</p>
                     </div>
-                    <div class="glass-card rounded-2xl p-3.5 border border-slate-800">
-                        <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Pending Demands</p>
-                        <p class="text-xl font-extrabold text-rose-400 mt-1 font-mono" id="ownerStatDemands">{{ stats.pending_demands if stats else '0' }}</p>
+                    <div class="glass-card rounded-xl sm:rounded-2xl p-3 border border-slate-800">
+                        <p class="text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Demands</p>
+                        <p class="text-lg sm:text-xl font-extrabold text-rose-400 mt-0.5 font-mono" id="ownerStatDemands">{{ stats.pending_demands if stats else '0' }}</p>
                     </div>
                 </div>
             </div>
 
             <!-- Emergency Kill Switches -->
-            <div class="glass-panel rounded-3xl p-5 border border-slate-800/80">
-                <h3 class="text-sm font-bold text-white mb-3.5 flex items-center gap-2">
+            <div class="glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-800/80">
+                <h3 class="text-xs sm:text-sm font-bold text-white mb-3 flex items-center gap-2">
                     <span>🛡️</span> Emergency Operational Switches
                 </h3>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div class="flex items-center justify-between p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800/80">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div class="flex items-center justify-between p-3 rounded-xl sm:rounded-2xl bg-slate-950/70 border border-slate-800/80">
                         <div>
                             <p class="text-xs font-bold text-white">New Users Entry</p>
-                            <p class="text-[11px] text-slate-400 mt-0.5">Allow new students to start the bot</p>
+                            <p class="text-[10px] text-slate-400 mt-0.5">Allow new students to start the bot</p>
                         </div>
-                        <button onclick="toggleSetting('NEW_USERS_ALLOWED')" id="btn-switch-NEW_USERS_ALLOWED" class="text-xs px-3.5 py-1.5 rounded-xl font-bold bg-emerald-600 text-white transition">
+                        <button onclick="toggleSetting('NEW_USERS_ALLOWED')" id="btn-switch-NEW_USERS_ALLOWED" class="text-xs px-3 py-1.5 rounded-xl font-bold bg-emerald-600 text-white transition flex-shrink-0">
                             Active
                         </button>
                     </div>
-                    <div class="flex items-center justify-between p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800/80">
+                    <div class="flex items-center justify-between p-3 rounded-xl sm:rounded-2xl bg-slate-950/70 border border-slate-800/80">
                         <div>
                             <p class="text-xs font-bold text-white">Free Batches Lock</p>
-                            <p class="text-[11px] text-slate-400 mt-0.5">Restrict free batches to existing users</p>
+                            <p class="text-[10px] text-slate-400 mt-0.5">Restrict free batches to existing users</p>
                         </div>
-                        <button onclick="toggleSetting('FREE_LOCKED')" id="btn-switch-FREE_LOCKED" class="text-xs px-3.5 py-1.5 rounded-xl font-bold bg-slate-800 text-slate-300 transition">
+                        <button onclick="toggleSetting('FREE_LOCKED')" id="btn-switch-FREE_LOCKED" class="text-xs px-3 py-1.5 rounded-xl font-bold bg-slate-800 text-slate-300 transition flex-shrink-0">
                             Unlocked
                         </button>
                     </div>
-                    <div class="flex items-center justify-between p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800/80">
+                    <div class="flex items-center justify-between p-3 rounded-xl sm:rounded-2xl bg-slate-950/70 border border-slate-800/80">
                         <div>
                             <p class="text-xs font-bold text-white">Paid Batches Lock</p>
-                            <p class="text-[11px] text-slate-400 mt-0.5">Prevent new paid batch approvals</p>
+                            <p class="text-[10px] text-slate-400 mt-0.5">Prevent new paid batch approvals</p>
                         </div>
-                        <button onclick="toggleSetting('PAID_LOCKED')" id="btn-switch-PAID_LOCKED" class="text-xs px-3.5 py-1.5 rounded-xl font-bold bg-slate-800 text-slate-300 transition">
+                        <button onclick="toggleSetting('PAID_LOCKED')" id="btn-switch-PAID_LOCKED" class="text-xs px-3 py-1.5 rounded-xl font-bold bg-slate-800 text-slate-300 transition flex-shrink-0">
                             Unlocked
                         </button>
                     </div>
-                    <div class="flex items-center justify-between p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800/80">
+                    <div class="flex items-center justify-between p-3 rounded-xl sm:rounded-2xl bg-slate-950/70 border border-slate-800/80">
                         <div>
                             <p class="text-xs font-bold text-white">Maintenance Mode</p>
-                            <p class="text-[11px] text-slate-400 mt-0.5">Display maintenance banner to non-admins</p>
+                            <p class="text-[10px] text-slate-400 mt-0.5">Display maintenance banner to students</p>
                         </div>
-                        <button onclick="toggleSetting('MAINTENANCE_MODE')" id="btn-switch-MAINTENANCE_MODE" class="text-xs px-3.5 py-1.5 rounded-xl font-bold bg-slate-800 text-slate-300 transition">
+                        <button onclick="toggleSetting('MAINTENANCE_MODE')" id="btn-switch-MAINTENANCE_MODE" class="text-xs px-3 py-1.5 rounded-xl font-bold bg-slate-800 text-slate-300 transition flex-shrink-0">
                             Off
                         </button>
                     </div>
@@ -245,15 +276,15 @@
             </div>
 
             <!-- Broadcast Studio -->
-            <div class="glass-panel rounded-3xl p-5 border border-slate-800/80">
-                <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-2">
+            <div class="glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-800/80">
+                <h3 class="text-xs sm:text-sm font-bold text-white mb-1.5 flex items-center gap-2">
                     <span>📢</span> Telegram Web Broadcast Studio
                 </h3>
-                <p class="text-xs text-slate-400 mb-3">Send Markdown announcements directly to all active Telegram students.</p>
+                <p class="text-[11px] text-slate-400 mb-2.5">Send announcements directly to all active Telegram students.</p>
                 <textarea id="broadcastText" rows="3" placeholder="Type announcement or notification here..." 
-                          class="w-full bg-slate-950/90 border border-slate-800 rounded-2xl p-3.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition font-sans"></textarea>
-                <div class="mt-3 flex justify-end">
-                    <button onclick="sendBroadcast()" id="bcastBtn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-indigo-600/30">
+                          class="w-full bg-slate-950/90 border border-slate-800 rounded-xl sm:rounded-2xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition font-sans"></textarea>
+                <div class="mt-2.5 flex justify-end">
+                    <button onclick="sendBroadcast()" id="bcastBtn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-md shadow-indigo-600/30">
                         Broadcast to All Students
                     </button>
                 </div>
@@ -264,39 +295,39 @@
         <!-- VIEW 2: ADMIN OPERATIONS DESK (Auto-shown for Admin/Owner)     -->
         <!-- ============================================================== -->
         <section id="view-admin" class="view-panel hidden space-y-4">
-            <div class="glass-panel bg-gradient-to-r from-violet-950/60 to-slate-900 border border-violet-500/30 rounded-3xl p-5">
+            <div class="glass-panel bg-gradient-to-r from-violet-950/60 to-slate-900 border border-violet-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-5">
                 <div class="flex items-center justify-between">
                     <div>
-                        <h2 class="text-base font-extrabold text-white flex items-center gap-2">
+                        <h2 class="text-xs sm:text-sm font-extrabold text-white flex items-center gap-2">
                             <span>⚡</span> Admin Operations Desk
                         </h2>
-                        <p class="text-xs text-slate-400 mt-0.5">Demands Checklist, Course Catalog & Student Coin Grants</p>
+                        <p class="text-[10px] sm:text-xs text-slate-400 mt-0.5">Demands Checklist, Course Catalog & Student Coin Grants</p>
                     </div>
                 </div>
             </div>
 
             <!-- Student Dossier & Coin Gifting -->
-            <div class="glass-panel rounded-3xl p-5 border border-slate-800/80">
-                <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-2">
+            <div class="glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-800/80">
+                <h3 class="text-xs sm:text-sm font-bold text-white mb-2 flex items-center gap-2">
                     <span>🔍</span> Student Dossier Lookup & Coin Gifting
                 </h3>
                 <div class="flex gap-2">
                     <input type="number" id="lookupUid" placeholder="Enter Telegram User ID (e.g. 12345678)" 
-                           class="flex-1 bg-slate-950/90 border border-slate-800 rounded-2xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
-                    <button onclick="lookupUser()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-5 py-2.5 rounded-2xl transition shadow-md shadow-indigo-600/20">
+                           class="flex-1 bg-slate-950/90 border border-slate-800 rounded-xl px-3 sm:px-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+                    <button onclick="lookupUser()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-md shadow-indigo-600/20 flex-shrink-0">
                         Inspect
                     </button>
                 </div>
-                <div id="lookupResult" class="mt-3 hidden p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs"></div>
+                <div id="lookupResult" class="mt-3 hidden p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-slate-950 border border-slate-800 text-xs"></div>
             </div>
 
             <!-- Demands Kanban -->
-            <div class="glass-panel rounded-3xl p-5 border border-slate-800/80">
-                <h3 class="text-sm font-bold text-white mb-2 flex items-center justify-between">
+            <div class="glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-800/80">
+                <h3 class="text-xs sm:text-sm font-bold text-white mb-2 flex items-center justify-between">
                     <span class="flex items-center gap-2"><span>📋</span> Student Course Demands</span>
-                    <span class="text-xs text-slate-400">1-Click Notify on Upload</span>
+                    <span class="text-[10px] sm:text-xs text-slate-400">1-Click Notify</span>
                 </h3>
-                <div class="space-y-2 mt-3.5" id="adminDemandsList">
+                <div class="space-y-2 mt-3" id="adminDemandsList">
                     {% for d in demands %}
                     <div class="flex items-center justify-between p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800/80">
                         <div>
@@ -328,102 +359,105 @@
         <section id="view-study" class="view-panel hidden space-y-4">
             
             <!-- Daily Motivation & Streak Banner -->
-            <div class="glass-panel bg-gradient-to-r from-indigo-950/70 via-slate-900 to-purple-950/70 border border-indigo-500/30 rounded-3xl p-5 glow-indigo">
-                <div class="flex items-center justify-between gap-4">
-                    <div class="flex items-center gap-3.5">
-                        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 flex items-center justify-center text-2xl shadow-lg shadow-amber-500/25 ring-1 ring-white/20">
+            <div class="glass-panel bg-gradient-to-r from-indigo-950/70 via-slate-900 to-purple-950/70 border border-indigo-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-5 glow-indigo">
+                <div class="flex items-center justify-between gap-3 sm:gap-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 flex items-center justify-center text-xl sm:text-2xl shadow-md shadow-amber-500/25 ring-1 ring-white/20 flex-shrink-0">
                             🔥
                         </div>
-                        <div>
+                        <div class="min-w-0">
                             <div class="flex items-center gap-2">
-                                <h3 class="text-sm font-extrabold text-white">Daily Focus Streak: <span id="studyStreakDays" class="text-amber-300 font-mono">0</span> Days</h3>
+                                <h3 class="text-xs sm:text-sm font-extrabold text-white">Focus Streak: <span id="studyStreakDays" class="text-amber-300 font-mono">0</span> Days</h3>
                             </div>
-                            <p id="motivationalQuote" class="text-xs text-slate-300 italic mt-0.5 font-medium leading-relaxed">
+                            <p id="motivationalQuote" class="text-[11px] sm:text-xs text-slate-300 italic mt-0.5 font-medium leading-relaxed line-clamp-2">
                                 "The secret of getting ahead is getting started. Consistency turns dreams into ranks."
                             </p>
                         </div>
                     </div>
-                    <button onclick="claimStreakBonus()" id="btnClaimStreak" class="text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2.5 rounded-2xl transition shadow-lg shadow-amber-500/25 flex-shrink-0 flex items-center gap-1.5">
+                    <button onclick="claimStreakBonus()" id="btnClaimStreak" class="text-[11px] sm:text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl transition shadow-md shadow-amber-500/25 flex-shrink-0 flex items-center gap-1.5 whitespace-nowrap">
                         <span>🎁</span> <span>Claim Bonus</span>
                     </button>
                 </div>
             </div>
 
             <!-- Interactive Pomodoro & Deep Study Focus Timer -->
-            <div class="glass-panel rounded-3xl p-6 text-center border border-slate-800/80">
-                <div class="flex items-center justify-between mb-5">
-                    <h3 class="text-sm font-bold text-white flex items-center gap-2">
-                        <span>⏱️</span> Pomodoro Focus & Deep Study Timer
+            <div class="glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-center border border-slate-800/80">
+                <div class="flex items-center justify-between mb-4 sm:mb-5">
+                    <h3 class="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                        <span>⏱️</span> Pomodoro Focus & Deep Study
                     </h3>
-                    <span class="text-[11px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full shadow-sm">
+                    <span class="text-[10px] sm:text-[11px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full shadow-sm">
                         +0.5 Coins / Session
                     </span>
                 </div>
 
                 <!-- Timer Presets -->
-                <div class="flex items-center justify-center gap-2 mb-6">
-                    <button onclick="setTimerDuration(25, 'Pomodoro')" id="tmode-25" class="timer-mode-btn px-4 py-2 rounded-2xl text-xs font-bold bg-indigo-600 text-white shadow-md shadow-indigo-600/20 transition">
-                        🍅 25m Pomodoro
+                <div class="flex items-center justify-center gap-1.5 sm:gap-2 mb-5 sm:mb-6 flex-wrap">
+                    <button onclick="setTimerDuration(25, 'Pomodoro')" id="tmode-25" class="timer-mode-btn px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl text-[11px] sm:text-xs font-bold bg-indigo-600 text-white shadow-md shadow-indigo-600/20 transition">
+                        🍅 25m<span class="hidden sm:inline"> Pomodoro</span>
                     </button>
-                    <button onclick="setTimerDuration(50, 'Deep Study')" id="tmode-50" class="timer-mode-btn px-4 py-2 rounded-2xl text-xs font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition">
-                        ⚡ 50m Deep Study
+                    <button onclick="setTimerDuration(50, 'Deep Study')" id="tmode-50" class="timer-mode-btn px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl text-[11px] sm:text-xs font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition">
+                        ⚡ 50m<span class="hidden sm:inline"> Deep Study</span>
                     </button>
-                    <button onclick="setTimerDuration(5, 'Short Break')" id="tmode-5" class="timer-mode-btn px-4 py-2 rounded-2xl text-xs font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition">
-                        ☕ 5m Refresh
+                    <button onclick="setTimerDuration(5, 'Short Break')" id="tmode-5" class="timer-mode-btn px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl text-[11px] sm:text-xs font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition">
+                        ☕ 5m<span class="hidden sm:inline"> Refresh</span>
                     </button>
                 </div>
 
                 <!-- Circular Timer Display with Ambient Glow -->
-                <div class="relative w-52 h-52 mx-auto flex items-center justify-center mb-6">
+                <div class="relative w-44 h-44 sm:w-52 sm:h-52 mx-auto flex items-center justify-center mb-5 sm:mb-6">
                     <svg class="w-full h-full glow-timer" viewBox="0 0 100 100">
                         <circle cx="50" cy="50" r="44" stroke="#1e293b" stroke-width="5.5" fill="transparent" />
                         <circle id="timerRing" class="timer-circle" cx="50" cy="50" r="44" stroke="#6366f1" stroke-width="5.5" stroke-linecap="round" fill="transparent" stroke-dasharray="276.46" stroke-dashoffset="0" />
                     </svg>
                     <div class="absolute inset-0 flex flex-col items-center justify-center">
-                        <span id="timerDisplay" class="text-4xl font-extrabold text-white tracking-widest font-mono">25:00</span>
-                        <span id="timerLabel" class="text-[11px] font-bold text-indigo-400 mt-1 uppercase tracking-wider">Focus Session</span>
+                        <span id="timerDisplay" class="text-3xl sm:text-4xl font-extrabold text-white tracking-widest font-mono">25:00</span>
+                        <span id="timerLabel" class="text-[10px] sm:text-[11px] font-bold text-indigo-400 mt-1 uppercase tracking-wider">Focus Session</span>
                     </div>
                 </div>
 
                 <!-- Timer Controls -->
-                <div class="flex items-center justify-center gap-3">
-                    <button onclick="toggleTimer()" id="btnTimerStart" class="bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs px-8 py-3 rounded-2xl transition shadow-xl shadow-indigo-600/30 flex items-center gap-2">
+                <div class="flex items-center justify-center gap-2 sm:gap-3 flex-wrap">
+                    <button onclick="toggleTimer()" id="btnTimerStart" class="bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl transition shadow-lg shadow-indigo-600/30 flex items-center gap-2">
                         <span id="timerPlayIcon">▶</span> <span id="timerPlayText">Start Focus</span>
                     </button>
-                    <button onclick="resetTimer()" class="bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-xs px-5 py-3 rounded-2xl border border-slate-800 transition">
+                    <button onclick="resetTimer()" class="bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-xs px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-slate-800 transition">
                         ↺ Reset
+                    </button>
+                    <button onclick="toggleSound()" id="btnSoundToggle" class="bg-slate-900 hover:bg-slate-800 text-indigo-400 font-bold text-xs px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-indigo-500/30 transition flex items-center gap-1.5" title="Toggle Chime Sound">
+                        <span id="soundIcon">🔔</span> <span class="hidden sm:inline">Sound</span>
                     </button>
                 </div>
 
-                <div class="mt-5 pt-4 border-t border-slate-800/80 flex items-center justify-center gap-8 text-xs text-slate-400">
-                    <div>Completed Today: <span id="statSessionsToday" class="font-extrabold text-white font-mono">0</span> Sessions</div>
+                <div class="mt-4 sm:mt-5 pt-3.5 border-t border-slate-800/80 flex items-center justify-center gap-6 sm:gap-8 text-[11px] sm:text-xs text-slate-400">
+                    <div>Done Today: <span id="statSessionsToday" class="font-extrabold text-white font-mono">0</span> Sessions</div>
                     <div>Focus Logged: <span id="statMinutesToday" class="font-extrabold text-emerald-400 font-mono">0</span> Mins</div>
                 </div>
             </div>
 
             <!-- Smart Revision Planner & Daily Checklist (Daily / Once / Custom Date Support!) -->
-            <div class="glass-panel rounded-3xl p-5 border border-slate-800/80">
-                <div class="flex items-center justify-between mb-3.5">
+            <div class="glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-800/80">
+                <div class="flex items-center justify-between mb-3">
                     <div>
-                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                        <h3 class="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
                             <span>📝</span> Smart Study & Revision Planner
                         </h3>
-                        <p class="text-[11px] text-slate-400 mt-0.5">Plan Daily Habits, One-Off Tasks & Exam Deadlines</p>
+                        <p class="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">Plan Daily Habits, One-Off Tasks & Exam Deadlines</p>
                     </div>
-                    <span id="taskProgressPercent" class="text-xs font-extrabold text-indigo-400 font-mono bg-indigo-500/10 px-2.5 py-1 rounded-xl border border-indigo-500/20">0% Done</span>
+                    <span id="taskProgressPercent" class="text-[11px] sm:text-xs font-extrabold text-indigo-400 font-mono bg-indigo-500/10 px-2.5 py-1 rounded-xl border border-indigo-500/20">0% Done</span>
                 </div>
 
                 <!-- Progress Bar -->
-                <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden mb-4 border border-slate-800/80 p-0.5">
+                <div class="w-full bg-slate-950 h-2 sm:h-2.5 rounded-full overflow-hidden mb-3.5 border border-slate-800/80 p-0.5">
                     <div id="taskProgressBar" class="bg-gradient-to-r from-indigo-500 via-violet-500 to-emerald-400 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
                 </div>
 
                 <!-- Add Task Bar with Frequency & Custom Date -->
-                <div class="glass-card rounded-2xl p-3 border border-slate-800 space-y-2.5 mb-4">
+                <div class="glass-card rounded-2xl p-3 border border-slate-800 space-y-2.5 mb-3.5">
                     <div class="flex gap-2">
                         <input type="text" id="newTaskInput" placeholder="Add study target (e.g. Laxmikanth Ch 5, CSAT 20 Qs)..." 
-                               class="flex-1 bg-slate-950/90 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
-                        <select id="newTaskTag" class="bg-slate-950 border border-slate-800 text-xs text-slate-300 rounded-xl px-2.5 py-2 focus:outline-none">
+                               class="flex-1 bg-slate-950/90 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+                        <select id="newTaskTag" class="bg-slate-950 border border-slate-800 text-xs text-slate-300 rounded-xl px-2 py-2 focus:outline-none">
                             <option value="Polity">🏛️ Polity</option>
                             <option value="CSAT">📐 CSAT</option>
                             <option value="History">📜 History</option>
@@ -434,58 +468,122 @@
                         </select>
                     </div>
 
-                    <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/60 text-xs">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-1.5 border-t border-slate-800/60 text-xs">
                         <!-- Frequency Selector -->
-                        <div class="flex items-center gap-1.5">
-                            <span class="text-slate-400 text-[11px]">Type:</span>
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Type:</span>
                             <div class="flex items-center gap-1">
-                                <button type="button" onclick="setTaskTypeChoice('daily')" id="choice-type-daily" class="task-type-choice px-2.5 py-1 rounded-lg text-[10px] font-bold bg-indigo-600 text-white transition">
+                                <button type="button" onclick="setTaskTypeChoice('daily')" id="choice-type-daily" class="task-type-choice px-2.5 py-1 rounded-lg text-[10px] font-bold bg-indigo-600 text-white transition whitespace-nowrap">
                                     🔄 Daily Habit
                                 </button>
-                                <button type="button" onclick="setTaskTypeChoice('once')" id="choice-type-once" class="task-type-choice px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition">
+                                <button type="button" onclick="setTaskTypeChoice('once')" id="choice-type-once" class="task-type-choice px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition whitespace-nowrap">
                                     🎯 Once
                                 </button>
-                                <button type="button" onclick="setTaskTypeChoice('custom')" id="choice-type-custom" class="task-type-choice px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition">
+                                <button type="button" onclick="setTaskTypeChoice('custom')" id="choice-type-custom" class="task-type-choice px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition whitespace-nowrap">
                                     📅 Custom Date
                                 </button>
                             </div>
                         </div>
 
-                        <!-- Custom Date Picker (Hidden unless 'custom' chosen) -->
-                        <div id="customDateContainer" class="hidden flex items-center gap-1">
-                            <input type="date" id="newTaskDueDate" class="bg-slate-950 border border-slate-800 text-slate-300 text-[11px] rounded-lg px-2 py-1 focus:outline-none">
-                        </div>
+                        <div class="flex items-center justify-end gap-2">
+                            <!-- Custom Date Picker (Hidden unless 'custom' chosen) -->
+                            <div id="customDateContainer" class="hidden flex items-center gap-1">
+                                <input type="date" id="newTaskDueDate" class="bg-slate-950 border border-slate-800 text-slate-300 text-[11px] rounded-lg px-2 py-1 focus:outline-none">
+                            </div>
 
-                        <button onclick="addNewTask()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 py-1.5 rounded-xl transition shadow-md shadow-indigo-600/20">
-                            + Add Target
-                        </button>
+                            <button onclick="addNewTask()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 py-1.5 rounded-xl transition shadow-md shadow-indigo-600/20 whitespace-nowrap flex-shrink-0">
+                                + Add Target
+                            </button>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Task Filter Tabs -->
-                <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-2 text-xs">
-                    <button onclick="setTaskFilter('all')" id="tfilter-all" class="tfilter-btn px-3 py-1 rounded-xl font-bold bg-indigo-600 text-white transition">
+                <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 text-xs">
+                    <button onclick="setTaskFilter('all')" id="tfilter-all" class="tfilter-btn px-2.5 py-1 rounded-xl text-[11px] font-bold bg-indigo-600 text-white transition whitespace-nowrap">
                         All (<span id="count-all">0</span>)
                     </button>
-                    <button onclick="setTaskFilter('daily')" id="tfilter-daily" class="tfilter-btn px-3 py-1 rounded-xl font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition">
-                        🔄 Daily Habits (<span id="count-daily">0</span>)
+                    <button onclick="setTaskFilter('daily')" id="tfilter-daily" class="tfilter-btn px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition whitespace-nowrap">
+                        🔄 Daily (<span id="count-daily">0</span>)
                     </button>
-                    <button onclick="setTaskFilter('custom')" id="tfilter-custom" class="tfilter-btn px-3 py-1 rounded-xl font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition">
+                    <button onclick="setTaskFilter('custom')" id="tfilter-custom" class="tfilter-btn px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition whitespace-nowrap">
                         📅 Due Dates (<span id="count-custom">0</span>)
                     </button>
-                    <button onclick="setTaskFilter('done')" id="tfilter-done" class="tfilter-btn px-3 py-1 rounded-xl font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition">
+                    <button onclick="setTaskFilter('done')" id="tfilter-done" class="tfilter-btn px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition whitespace-nowrap">
                         ✅ Done (<span id="count-done">0</span>)
                     </button>
                 </div>
 
                 <!-- Tasks List -->
-                <div id="tasksList" class="space-y-2.5 mt-2">
+                <div id="tasksList" class="space-y-2 mt-2">
                     <!-- Populated dynamically -->
                 </div>
             </div>
 
+            <!-- Interactive Daily High-Yield MCQ Practice Quiz Widget -->
+            <div class="glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-800/80">
+                <div class="flex items-center justify-between mb-3.5">
+                    <div>
+                        <h3 class="text-xs sm:text-sm font-extrabold text-white flex items-center gap-2">
+                            <span>🧠</span> Daily High-Yield MCQ Practice Quiz
+                        </h3>
+                        <p class="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">Test Core Concepts & Earn +1.0 Study Coins</p>
+                    </div>
+                    <span id="quizCoinBadge" class="text-[10px] sm:text-[11px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/25 px-2.5 py-1 rounded-full shadow-sm flex-shrink-0">
+                        🎁 +1.0 Coins / Day
+                    </span>
+                </div>
+
+                <!-- Quiz Card Container -->
+                <div id="quizContainer" class="glass-card rounded-2xl p-4 border border-slate-800 space-y-3.5">
+                    <div class="flex items-center justify-between text-xs">
+                        <span id="quizProgressTag" class="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
+                            Question 1 of 5
+                        </span>
+                        <span id="quizScoreTracker" class="text-[11px] font-mono font-bold text-emerald-400">
+                            Score: 0/0
+                        </span>
+                    </div>
+
+                    <p id="quizQuestionText" class="text-xs sm:text-sm font-bold text-white leading-relaxed">
+                        Loading questions...
+                    </p>
+
+                    <!-- Options Grid -->
+                    <div id="quizOptionsList" class="space-y-2">
+                        <!-- Populated by JS -->
+                    </div>
+
+                    <!-- Explanation Box -->
+                    <div id="quizExplanation" class="hidden p-3 rounded-xl bg-slate-950/90 border border-slate-800 text-[11px] text-slate-300 leading-relaxed">
+                        <!-- Populated by JS -->
+                    </div>
+
+                    <!-- Next Button -->
+                    <div class="flex justify-end pt-1">
+                        <button onclick="nextQuizQuestion()" id="btnNextQuiz" class="hidden bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-md shadow-indigo-600/25 flex items-center gap-1.5">
+                            <span>Next Question</span> <span>→</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quiz Finished State -->
+                <div id="quizFinishedState" class="hidden glass-card rounded-2xl p-5 text-center border border-indigo-500/30 space-y-3">
+                    <div class="w-11 h-11 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center mx-auto text-2xl border border-amber-500/20">
+                        🎯
+                    </div>
+                    <h4 class="text-sm font-extrabold text-white">Daily Quiz Completed!</h4>
+                    <p id="quizFinalScoreMsg" class="text-xs text-slate-300"></p>
+                    <div id="quizClaimArea" class="pt-1">
+                        <button onclick="claimQuizReward()" id="btnClaimQuizReward" class="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-xs px-6 py-2.5 rounded-xl transition shadow-lg shadow-amber-500/25">
+                            🎁 Claim Study Coins Reward
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- High-Yield Cheatsheets & Formula Deck -->
-            <div class="glass-panel rounded-3xl p-5 border border-slate-800/80">
+            <div class="glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-800/80">
                 <h3 class="text-sm font-bold text-white mb-3.5 flex items-center gap-2">
                     <span>📖</span> High-Yield Formulae & Rapid Revision Deck
                 </h3>
@@ -569,38 +667,38 @@
             </div>
 
             <!-- Search and Quick Filter Bar -->
-            <div class="space-y-3">
+            <div class="space-y-2.5">
                 <div class="relative">
-                    <svg class="w-4 h-4 text-slate-500 absolute left-4 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                     </svg>
                     <input type="text" id="searchInput" oninput="filterCards()" placeholder="Search batch, subject, faculty, exam..." 
-                           class="w-full glass-card border border-slate-800 rounded-2xl pl-11 pr-4 py-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition shadow-sm">
+                           class="w-full glass-card border border-slate-800 rounded-xl sm:rounded-2xl pl-10 pr-3.5 py-2.5 sm:py-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition shadow-sm">
                 </div>
 
                 <!-- Tier Pills -->
-                <div class="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
-                    <button onclick="setTierFilter('all')" id="tier-all" class="tier-btn px-4 py-1.5 rounded-full text-xs font-bold bg-indigo-600 text-white shadow-md shadow-indigo-600/20 transition flex-shrink-0">
+                <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                    <button onclick="setTierFilter('all')" id="tier-all" class="tier-btn px-3.5 py-1.5 rounded-full text-xs font-bold bg-indigo-600 text-white shadow-md shadow-indigo-600/20 transition flex-shrink-0">
                         All Batches
                     </button>
-                    <button onclick="setTierFilter('free')" id="tier-free" class="tier-btn px-4 py-1.5 rounded-full text-xs font-bold bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800 transition flex-shrink-0">
-                        🆓 Free Batches
+                    <button onclick="setTierFilter('free')" id="tier-free" class="tier-btn px-3.5 py-1.5 rounded-full text-xs font-bold bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800 transition flex-shrink-0">
+                        🆓 Free
                     </button>
-                    <button onclick="setTierFilter('paid')" id="tier-paid" class="tier-btn px-4 py-1.5 rounded-full text-xs font-bold bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800 transition flex-shrink-0">
-                        💵 Paid Batches
+                    <button onclick="setTierFilter('paid')" id="tier-paid" class="tier-btn px-3.5 py-1.5 rounded-full text-xs font-bold bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800 transition flex-shrink-0">
+                        💵 Paid
                     </button>
-                    <button onclick="setTierFilter('special')" id="tier-special" class="tier-btn px-4 py-1.5 rounded-full text-xs font-bold bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800 transition flex-shrink-0">
-                        ✨ Special (Coins)
+                    <button onclick="setTierFilter('special')" id="tier-special" class="tier-btn px-3.5 py-1.5 rounded-full text-xs font-bold bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800 transition flex-shrink-0">
+                        ✨ Coins
                     </button>
                 </div>
 
                 <!-- Categories Horizontal Scroll -->
                 <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 text-xs">
-                    <button onclick="setCatFilter('all')" id="cat-all" class="cat-btn px-3 py-1.5 rounded-xl font-bold bg-slate-800 text-indigo-300 border border-indigo-500/30 flex-shrink-0">
+                    <button onclick="setCatFilter('all')" id="cat-all" class="cat-btn px-3 py-1 rounded-xl text-[11px] font-bold bg-slate-800 text-indigo-300 border border-indigo-500/30 flex-shrink-0">
                         All Categories
                     </button>
                     {% for cat in categories %}
-                    <button onclick="setCatFilter('{{ cat }}')" id="cat-{{ loop.index }}" class="cat-btn px-3 py-1.5 rounded-xl font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800/80 flex-shrink-0 transition">
+                    <button onclick="setCatFilter('{{ cat }}')" id="cat-{{ loop.index }}" class="cat-btn px-3 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800/80 flex-shrink-0 transition">
                         📁 {{ cat }}
                     </button>
                     {% endfor %}
@@ -608,13 +706,13 @@
             </div>
 
             <!-- Batches Grid -->
-            <div id="batchesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-2">
+            <div id="batchesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
                 {% for b in batches %}
-                <div class="batch-card glass-panel border border-slate-800/90 hover:border-indigo-500/50 rounded-3xl p-4 transition-all duration-300 flex flex-col justify-between hover:shadow-lg hover:shadow-indigo-500/10 group"
+                <div class="batch-card glass-panel border border-slate-800/90 hover:border-indigo-500/50 rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 transition-all duration-300 flex flex-col justify-between hover:shadow-lg hover:shadow-indigo-500/10 group"
                      data-id="{{ b.id }}" data-name="{{ b.name | lower }}" data-cat="{{ b.category }}" data-type="{{ b.type }}">
                     <div>
-                        <div class="flex items-center justify-between gap-2 mb-2.5">
-                            <span class="text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg 
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <span class="text-[9px] sm:text-[10px] font-extrabold px-2 py-0.5 rounded-md 
                                 {% if b.type == 'free' %}bg-emerald-500/10 text-emerald-400 border border-emerald-500/20
                                 {% elif b.type == 'paid' %}bg-amber-500/10 text-amber-400 border border-amber-500/20
                                 {% else %}bg-purple-500/10 text-purple-400 border border-purple-500/20{% endif %}">
@@ -622,11 +720,11 @@
                                 {% elif b.type == 'paid' %}👑 Paid
                                 {% else %}✨ Special{% endif %}
                             </span>
-                            <span class="text-[10px] font-semibold text-slate-400 truncate max-w-[140px]">📁 {{ b.category }}</span>
+                            <span class="text-[10px] font-semibold text-slate-400 truncate max-w-[130px]">📁 {{ b.category }}</span>
                         </div>
-                        <h4 class="text-xs font-bold text-white line-clamp-2 leading-snug mb-2 group-hover:text-indigo-300 transition-colors">{{ b.name }}</h4>
+                        <h4 class="text-xs font-bold text-white line-clamp-2 leading-snug mb-1.5 group-hover:text-indigo-300 transition-colors">{{ b.name }}</h4>
                         
-                        <div class="text-[11px] text-slate-400 mb-3.5">
+                        <div class="text-[11px] text-slate-400 mb-3">
                             {% if b.type == 'paid' %}
                             <span class="text-amber-300 font-bold">💰 {{ b.price or "Contact Admin" }}</span>
                             {% elif b.type == 'special' %}
@@ -639,7 +737,7 @@
 
                     <div>
                         <a href="https://t.me/{{ bot_username }}?start=batch_{{ b.id }}" target="_blank"
-                           class="w-full inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-2xl font-bold text-xs transition duration-200
+                           class="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl font-bold text-xs transition duration-200
                            {% if b.type == 'free' %}bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20
                            {% elif b.type == 'paid' %}bg-amber-600 hover:bg-amber-500 text-white shadow-md shadow-amber-600/20
                            {% else %}bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-600/20{% endif %}">
@@ -654,15 +752,15 @@
             </div>
 
             <!-- Empty Search State -->
-            <div id="noResults" class="hidden text-center py-14">
-                <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-slate-900 text-slate-400 mb-3 border border-slate-800">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div id="noResults" class="hidden text-center py-12">
+                <div class="inline-flex items-center justify-center w-11 h-11 rounded-2xl bg-slate-900 text-slate-400 mb-2.5 border border-slate-800">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                 </div>
-                <h4 class="text-sm font-bold text-white">No Batches Found</h4>
-                <p class="text-xs text-slate-400 mt-1 mb-3.5">Aapki search se koi course match nahi hua.</p>
-                <button onclick="switchTab('request')" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-5 py-2.5 rounded-2xl transition shadow-lg shadow-indigo-600/30">
+                <h4 class="text-xs sm:text-sm font-bold text-white">No Batches Found</h4>
+                <p class="text-[11px] text-slate-400 mt-0.5 mb-3">Aapki search se koi course match nahi hua.</p>
+                <button onclick="switchTab('request')" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2 rounded-xl transition shadow-md shadow-indigo-600/30">
                     Submit Demand for this Course
                 </button>
             </div>
@@ -672,51 +770,51 @@
         <!-- VIEW 5: DUAL LEADERBOARD (Study Champions + Referral Rank)    -->
         <!-- ============================================================== -->
         <section id="view-leaderboard" class="view-panel hidden space-y-4">
-            <div class="glass-panel rounded-3xl p-5 text-center">
-                <h3 class="text-base font-extrabold text-white text-gradient">🏆 Hall of Fame & Rankings</h3>
-                <p class="text-xs text-slate-400 mt-0.5">Top dedicated students and community champions</p>
+            <div class="glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-5 text-center">
+                <h3 class="text-sm sm:text-base font-extrabold text-white text-gradient">🏆 Hall of Fame & Rankings</h3>
+                <p class="text-[11px] sm:text-xs text-slate-400 mt-0.5">Top dedicated students and community champions</p>
 
                 <!-- Leaderboard Switcher Tabs -->
-                <div class="inline-flex items-center gap-1.5 bg-slate-950 p-1.5 rounded-2xl border border-slate-800/80 mt-4">
-                    <button onclick="switchLeaderboardType('study')" id="lbbtn-study" class="lb-switch-btn px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow-sm transition">
-                        ⏱️ Study & Focus Rank
+                <div class="inline-flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl sm:rounded-2xl border border-slate-800/80 mt-3 sm:mt-4">
+                    <button onclick="switchLeaderboardType('study')" id="lbbtn-study" class="lb-switch-btn px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold bg-indigo-600 text-white shadow-sm transition">
+                        ⏱️ Study Focus
                     </button>
-                    <button onclick="switchLeaderboardType('referral')" id="lbbtn-referral" class="lb-switch-btn px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 text-slate-400 hover:text-white transition">
-                        👥 Referral Champions
+                    <button onclick="switchLeaderboardType('referral')" id="lbbtn-referral" class="lb-switch-btn px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold bg-slate-900 text-slate-400 hover:text-white transition">
+                        👥 Champions
                     </button>
                 </div>
             </div>
 
             <!-- Tab A: Study Leaderboard -->
-            <div id="lb-tab-study" class="space-y-3">
-                <div class="glass-panel rounded-3xl overflow-hidden divide-y divide-slate-800/80 border border-slate-800/80">
+            <div id="lb-tab-study" class="space-y-2.5">
+                <div class="glass-panel rounded-2xl sm:rounded-3xl overflow-hidden divide-y divide-slate-800/80 border border-slate-800/80">
                     {% for student in study_leaderboard %}
-                    <div class="flex items-center justify-between p-4 hover:bg-slate-800/40 transition">
-                        <div class="flex items-center gap-3">
-                            <span class="w-8 h-8 rounded-2xl flex items-center justify-center font-extrabold text-xs shadow-sm
+                    <div class="flex items-center justify-between p-3 sm:p-3.5 hover:bg-slate-800/40 transition">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center font-extrabold text-xs shadow-sm flex-shrink-0
                                 {% if loop.index == 1 %}bg-amber-400/20 text-amber-300 border border-amber-400/40 shadow-amber-500/20
                                 {% elif loop.index == 2 %}bg-slate-300/20 text-slate-200 border border-slate-300/40
                                 {% elif loop.index == 3 %}bg-amber-700/20 text-amber-500 border border-amber-700/40
                                 {% else %}bg-slate-900 text-slate-500 border border-slate-800{% endif %}">
                                 {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% elif loop.index == 3 %}🥉{% else %}{{ loop.index }}{% endif %}
                             </span>
-                            <div>
-                                <p class="text-xs font-bold text-white">{{ student.name }}</p>
-                                <div class="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
-                                    <span>🔥 {{ student.streak }} Day Streak</span>
+                            <div class="min-w-0">
+                                <p class="text-xs font-bold text-white truncate max-w-[150px] sm:max-w-xs">{{ student.name }}</p>
+                                <div class="flex items-center gap-1.5 text-[10px] text-slate-400 mt-0.5">
+                                    <span>🔥 {{ student.streak }}d Streak</span>
                                     <span>•</span>
                                     <span>🎯 {{ student.sessions }} Sessions</span>
                                 </div>
                             </div>
                         </div>
-                        <div class="text-right">
+                        <div class="text-right flex-shrink-0">
                             <span class="text-xs font-extrabold text-emerald-400 font-mono">{{ student.minutes }} Mins</span>
                             <p class="text-[10px] text-slate-400 font-medium">Logged Focus</p>
                         </div>
                     </div>
                     {% else %}
-                    <div class="p-8 text-center text-xs text-slate-400">
-                        <p class="text-sm font-bold text-white mb-1">Be the First Study Champion!</p>
+                    <div class="p-6 text-center text-xs text-slate-400">
+                        <p class="text-xs sm:text-sm font-bold text-white mb-1">Be the First Study Champion!</p>
                         Study Hub me Pomodoro Timer start karein aur top rank achieve karein.
                     </div>
                     {% endfor %}
@@ -724,30 +822,30 @@
             </div>
 
             <!-- Tab B: Referral Leaderboard -->
-            <div id="lb-tab-referral" class="hidden space-y-3">
-                <div class="glass-panel rounded-3xl overflow-hidden divide-y divide-slate-800/80 border border-slate-800/80">
+            <div id="lb-tab-referral" class="hidden space-y-2.5">
+                <div class="glass-panel rounded-2xl sm:rounded-3xl overflow-hidden divide-y divide-slate-800/80 border border-slate-800/80">
                     {% for champion in leaderboard %}
-                    <div class="flex items-center justify-between p-4 hover:bg-slate-800/40 transition">
-                        <div class="flex items-center gap-3">
-                            <span class="w-8 h-8 rounded-2xl flex items-center justify-center font-extrabold text-xs shadow-sm
+                    <div class="flex items-center justify-between p-3 sm:p-3.5 hover:bg-slate-800/40 transition">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center font-extrabold text-xs shadow-sm flex-shrink-0
                                 {% if loop.index == 1 %}bg-amber-400/20 text-amber-300 border border-amber-400/40 shadow-amber-500/20
                                 {% elif loop.index == 2 %}bg-slate-300/20 text-slate-200 border border-slate-300/40
                                 {% elif loop.index == 3 %}bg-amber-700/20 text-amber-500 border border-amber-700/40
                                 {% else %}bg-slate-900 text-slate-500 border border-slate-800{% endif %}">
                                 {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% elif loop.index == 3 %}🥉{% else %}{{ loop.index }}{% endif %}
                             </span>
-                            <div>
-                                <p class="text-xs font-bold text-white">{{ champion.name }}</p>
+                            <div class="min-w-0">
+                                <p class="text-xs font-bold text-white truncate max-w-[150px] sm:max-w-xs">{{ champion.name }}</p>
                                 <p class="text-[10px] text-slate-400 mt-0.5">ID: {{ champion.id }}</p>
                             </div>
                         </div>
-                        <div class="text-right">
+                        <div class="text-right flex-shrink-0">
                             <span class="text-xs font-extrabold text-indigo-400 font-mono">{{ champion.invites }} Invites</span>
                             <p class="text-[10px] text-slate-400 font-medium">Community Rank</p>
                         </div>
                     </div>
                     {% else %}
-                    <div class="p-8 text-center text-xs text-slate-400">Abhi tak koi referrals record nahi hue.</div>
+                    <div class="p-6 text-center text-xs text-slate-400">Abhi tak koi referrals record nahi hue.</div>
                     {% endfor %}
                 </div>
             </div>
@@ -755,90 +853,90 @@
 
         <!-- VIEW 6: REDEEM VOUCHER -->
         <section id="view-redeem" class="view-panel hidden space-y-4">
-            <div class="glass-panel rounded-3xl p-6 text-center max-w-md mx-auto border border-slate-800/80">
-                <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center mx-auto mb-3 border border-indigo-500/20 text-2xl shadow-sm">
+            <div class="glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-center max-w-sm mx-auto border border-slate-800/80">
+                <div class="w-11 h-11 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center mx-auto mb-2.5 border border-indigo-500/20 text-xl shadow-sm">
                     🎟️
                 </div>
-                <h3 class="text-sm font-extrabold text-white">Redeem Promo Voucher</h3>
-                <p class="text-xs text-slate-400 mt-0.5 mb-5">Promo code enter karke free coins instantly claim karein.</p>
+                <h3 class="text-xs sm:text-sm font-extrabold text-white">Redeem Promo Voucher</h3>
+                <p class="text-[11px] text-slate-400 mt-0.5 mb-4">Promo code enter karke free coins instantly claim karein.</p>
 
-                <div class="space-y-3">
+                <div class="space-y-2.5">
                     <input type="text" id="voucherCode" placeholder="Enter Code (e.g. DIWALI2026)" 
-                           class="w-full bg-slate-950/90 border border-slate-700 rounded-2xl px-4 py-3 text-center uppercase tracking-widest font-mono text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition">
+                           class="w-full bg-slate-950/90 border border-slate-700 rounded-xl px-3.5 py-2.5 text-center uppercase tracking-widest font-mono text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition">
                     <input type="number" id="voucherUserId" placeholder="Telegram User ID (Auto-detected)" 
-                           class="w-full bg-slate-950/90 border border-slate-700 rounded-2xl px-4 py-2.5 text-center text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition">
+                           class="w-full bg-slate-950/90 border border-slate-700 rounded-xl px-3.5 py-2 text-center text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition">
                     
-                    <button onclick="redeemVoucher()" id="redeemBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold py-3 px-4 rounded-2xl text-xs transition duration-200 shadow-lg shadow-indigo-600/30">
+                    <button onclick="redeemVoucher()" id="redeemBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold py-2.5 px-4 rounded-xl text-xs transition duration-200 shadow-md shadow-indigo-600/30">
                         Claim Coins Now
                     </button>
                 </div>
-                <div id="redeemAlert" class="mt-3.5 hidden p-3 rounded-2xl text-xs"></div>
+                <div id="redeemAlert" class="mt-3 hidden p-2.5 rounded-xl text-xs"></div>
             </div>
         </section>
 
         <!-- VIEW 7: REQUEST BATCH -->
         <section id="view-request" class="view-panel hidden space-y-4">
-            <div class="glass-panel rounded-3xl p-6 max-w-md mx-auto border border-slate-800/80">
-                <div class="text-center mb-5">
-                    <h3 class="text-sm font-extrabold text-white flex items-center justify-center gap-2">
+            <div class="glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-6 max-w-sm mx-auto border border-slate-800/80">
+                <div class="text-center mb-4">
+                    <h3 class="text-xs sm:text-sm font-extrabold text-white flex items-center justify-center gap-2">
                         <span>🙋</span> Request a Batch / Course
                     </h3>
-                    <p class="text-xs text-slate-400 mt-0.5">Jo course catalog me nahi hai uska naam submit karein.</p>
+                    <p class="text-[11px] text-slate-400 mt-0.5">Jo course catalog me nahi hai uska naam submit karein.</p>
                 </div>
 
-                <div class="space-y-3">
+                <div class="space-y-2.5">
                     <div>
-                        <label class="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-wide">Course / Batch Name</label>
-                        <input type="text" id="requestBatchName" placeholder="e.g. PW Yakeen NEET / Civil Booster / Drishti IAS" 
-                               class="w-full bg-slate-950/90 border border-slate-700 rounded-2xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition">
+                        <label class="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wide">Course / Batch Name</label>
+                        <input type="text" id="requestBatchName" placeholder="e.g. PW Yakeen NEET / Drishti IAS" 
+                               class="w-full bg-slate-950/90 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition">
                     </div>
                     <div>
-                        <label class="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-wide">Your Telegram User ID</label>
+                        <label class="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wide">Telegram User ID</label>
                         <input type="number" id="requestUserId" placeholder="Auto-detected from Telegram" 
-                               class="w-full bg-slate-950/90 border border-slate-700 rounded-2xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition">
+                               class="w-full bg-slate-950/90 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition">
                     </div>
-                    <button onclick="submitBatchRequest()" id="reqBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold py-3 px-4 rounded-2xl text-xs transition duration-200 shadow-lg shadow-indigo-600/30">
+                    <button onclick="submitBatchRequest()" id="reqBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold py-2.5 px-4 rounded-xl text-xs transition duration-200 shadow-md shadow-indigo-600/30">
                         Submit Demand Request
                     </button>
                 </div>
-                <div id="requestAlert" class="mt-3.5 hidden p-3 rounded-2xl text-xs"></div>
+                <div id="requestAlert" class="mt-3 hidden p-2.5 rounded-xl text-xs"></div>
             </div>
         </section>
 
     </main>
 
-    <!-- Floating Glass Bottom Navigation Bar -->
-    <nav class="fixed bottom-0 left-0 right-0 z-40 glass-panel border-t border-slate-800/80 px-4 py-2.5">
-        <div class="max-w-md mx-auto grid grid-cols-5 gap-1 text-center">
-            <button onclick="switchTab('courses')" id="nav-courses" class="nav-btn py-1 text-indigo-400 flex flex-col items-center gap-1 transition-colors">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <!-- Floating Glass Bottom Navigation Bar (With Safe-Area Inset) -->
+    <nav class="fixed bottom-0 left-0 right-0 z-40 glass-panel border-t border-slate-800/80 px-2 app-bottom-nav">
+        <div class="max-w-md mx-auto grid grid-cols-5 gap-0.5 text-center">
+            <button onclick="switchTab('courses')" id="nav-courses" class="nav-btn py-1.5 text-indigo-400 flex flex-col items-center justify-center gap-1 transition-colors">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
                 </svg>
-                <span class="text-[10px] font-bold">Store</span>
+                <span class="text-[10px] sm:text-[11px] font-bold">Store</span>
             </button>
-            <button onclick="switchTab('study')" id="nav-study" class="nav-btn py-1 text-slate-400 hover:text-slate-200 flex flex-col items-center gap-1 transition-colors">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button onclick="switchTab('study')" id="nav-study" class="nav-btn py-1.5 text-slate-400 hover:text-slate-200 flex flex-col items-center justify-center gap-1 transition-colors">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
                 </svg>
-                <span class="text-[10px] font-bold">Study Hub</span>
+                <span class="text-[10px] sm:text-[11px] font-bold">Study Hub</span>
             </button>
-            <button onclick="switchTab('leaderboard')" id="nav-leaderboard" class="nav-btn py-1 text-slate-400 hover:text-slate-200 flex flex-col items-center gap-1 transition-colors">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button onclick="switchTab('leaderboard')" id="nav-leaderboard" class="nav-btn py-1.5 text-slate-400 hover:text-slate-200 flex flex-col items-center justify-center gap-1 transition-colors">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138z"/>
                 </svg>
-                <span class="text-[10px] font-bold">Rank</span>
+                <span class="text-[10px] sm:text-[11px] font-bold">Rank</span>
             </button>
-            <button onclick="switchTab('redeem')" id="nav-redeem" class="nav-btn py-1 text-slate-400 hover:text-slate-200 flex flex-col items-center gap-1 transition-colors">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button onclick="switchTab('redeem')" id="nav-redeem" class="nav-btn py-1.5 text-slate-400 hover:text-slate-200 flex flex-col items-center justify-center gap-1 transition-colors">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/>
                 </svg>
-                <span class="text-[10px] font-bold">Redeem</span>
+                <span class="text-[10px] sm:text-[11px] font-bold">Redeem</span>
             </button>
-            <button onclick="switchTab('request')" id="nav-request" class="nav-btn py-1 text-slate-400 hover:text-slate-200 flex flex-col items-center gap-1 transition-colors">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button onclick="switchTab('request')" id="nav-request" class="nav-btn py-1.5 text-slate-400 hover:text-slate-200 flex flex-col items-center justify-center gap-1 transition-colors">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
-                <span class="text-[10px] font-bold">Demand</span>
+                <span class="text-[10px] sm:text-[11px] font-bold">Demand</span>
             </button>
         </div>
     </nav>
@@ -863,8 +961,28 @@
                 try {
                     window.Telegram.WebApp.ready();
                     window.Telegram.WebApp.expand();
-                    window.Telegram.WebApp.setHeaderColor?.('#0f172a');
-                    window.Telegram.WebApp.setBackgroundColor?.('#020617');
+                    window.Telegram.WebApp.enableClosingConfirmation?.();
+                    window.Telegram.WebApp.setHeaderColor?.('#030712');
+                    window.Telegram.WebApp.setBackgroundColor?.('#030712');
+
+                    // Retrieve Telegram safe area insets on modern clients
+                    const safeTop = window.Telegram.WebApp.safeAreaInset?.top || window.Telegram.WebApp.contentSafeAreaInset?.top || 0;
+                    if (safeTop > 0) {
+                        document.documentElement.style.setProperty('--tg-safe-top', `${safeTop}px`);
+                    }
+                    const safeBottom = window.Telegram.WebApp.safeAreaInset?.bottom || window.Telegram.WebApp.contentSafeAreaInset?.bottom || 0;
+                    if (safeBottom > 0) {
+                        document.documentElement.style.setProperty('--tg-safe-bottom', `${safeBottom}px`);
+                    }
+
+                    // Listen to viewport changes (rotation/resize)
+                    window.Telegram.WebApp.onEvent?.('viewportChanged', () => {
+                        const updatedTop = window.Telegram.WebApp.safeAreaInset?.top || window.Telegram.WebApp.contentSafeAreaInset?.top || 0;
+                        if (updatedTop > 0) {
+                            document.documentElement.style.setProperty('--tg-safe-top', `${updatedTop}px`);
+                        }
+                    });
+
                     tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
                     initDataString = window.Telegram.WebApp.initData || "";
                 } catch (e) {
@@ -1118,7 +1236,33 @@
             updateTimerDisplay();
         }
 
+        let isSoundEnabled = localStorage.getItem('study_sound_enabled') !== 'false';
+
+        function toggleSound() {
+            isSoundEnabled = !isSoundEnabled;
+            localStorage.setItem('study_sound_enabled', isSoundEnabled);
+            updateSoundButtonUI();
+        }
+
+        function updateSoundButtonUI() {
+            const btn = document.getElementById('btnSoundToggle');
+            const icon = document.getElementById('soundIcon');
+            if (icon) {
+                icon.innerText = isSoundEnabled ? '🔔' : '🔕';
+            }
+            if (btn) {
+                if (isSoundEnabled) {
+                    btn.classList.add('text-indigo-400', 'border-indigo-500/30');
+                    btn.classList.remove('text-slate-500', 'border-slate-800');
+                } else {
+                    btn.classList.remove('text-indigo-400', 'border-indigo-500/30');
+                    btn.classList.add('text-slate-500', 'border-slate-800');
+                }
+            }
+        }
+
         function playSessionEndTone() {
+            if (!isSoundEnabled) return;
             try {
                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
                 const osc = ctx.createOscillator();
@@ -1389,7 +1533,249 @@
             }
         }
 
-        // 6. FILTER CARDS (STORE)
+        // 6. DAILY HIGH-YIELD MCQ PRACTICE QUIZ
+        const dailyQuizQuestions = [
+            {
+                subject: "Indian Polity",
+                question: "Which Article of the Indian Constitution was termed as the 'Heart and Soul' of the Constitution by Dr. B.R. Ambedkar?",
+                options: [
+                    "Article 14 (Equality before Law)",
+                    "Article 19 (Six Freedoms)",
+                    "Article 21 (Right to Life)",
+                    "Article 32 (Constitutional Remedies)"
+                ],
+                answer: 3,
+                explanation: "Dr. B.R. Ambedkar termed Article 32 the 'Heart and Soul' because it guarantees the fundamental right to approach the Supreme Court directly for enforcement of rights via 5 prerogative writs."
+            },
+            {
+                subject: "Geography",
+                question: "Which among the following is a west-flowing peninsular river flowing through a rift valley?",
+                options: [
+                    "Godavari",
+                    "Mahanadi",
+                    "Narmada",
+                    "Krishna"
+                ],
+                answer: 2,
+                explanation: "The Narmada river originates at Amarkantak and flows westward through a rift valley between the Vindhya and Satpura ranges, emptying into the Arabian Sea."
+            },
+            {
+                subject: "CSAT Aptitude",
+                question: "If a 150-metre long train crosses a telegraph post in 10 seconds, what is its speed in km/h?",
+                options: [
+                    "45 km/h",
+                    "54 km/h",
+                    "60 km/h",
+                    "72 km/h"
+                ],
+                answer: 1,
+                explanation: "Speed = Distance / Time = 150m / 10s = 15 m/s. To convert m/s into km/h, multiply by 18/5: 15 × (18/5) = 54 km/h."
+            },
+            {
+                subject: "Modern History",
+                question: "Who was the Governor-General of India during the Revolt of 1857?",
+                options: [
+                    "Lord Dalhousie",
+                    "Lord Canning",
+                    "Lord Curzon",
+                    "Lord Wellesley"
+                ],
+                answer: 1,
+                explanation: "Lord Canning was the Governor-General of India during the 1857 revolt and subsequently became the first Viceroy under the Government of India Act 1858."
+            },
+            {
+                subject: "Indian Economy",
+                question: "In India, which index is currently used by the Reserve Bank of India (RBI) as the key measure of Headline Inflation?",
+                options: [
+                    "CPI Combined (All India)",
+                    "Wholesale Price Index (WPI)",
+                    "Index of Industrial Production (IIP)",
+                    "GDP Deflator"
+                ],
+                answer: 0,
+                explanation: "Following the recommendations of the Urjit Patel Committee, the RBI adopted Consumer Price Index - Combined (CPI-C) as its headline inflation anchor."
+            }
+        ];
+
+        let quizCurrentIndex = 0;
+        let quizScore = 0;
+        let quizAnswered = false;
+
+        function initQuiz() {
+            quizCurrentIndex = 0;
+            quizScore = 0;
+            quizAnswered = false;
+            renderQuizQuestion();
+        }
+
+        function renderQuizQuestion() {
+            if (quizCurrentIndex >= dailyQuizQuestions.length) {
+                showQuizFinishedState();
+                return;
+            }
+
+            const q = dailyQuizQuestions[quizCurrentIndex];
+            quizAnswered = false;
+
+            const quizCont = document.getElementById('quizContainer');
+            const quizFin = document.getElementById('quizFinishedState');
+            const btnNext = document.getElementById('btnNextQuiz');
+            const expBox = document.getElementById('quizExplanation');
+
+            if (quizCont) quizCont.classList.remove('hidden');
+            if (quizFin) quizFin.classList.add('hidden');
+            if (btnNext) btnNext.classList.add('hidden');
+            if (expBox) expBox.classList.add('hidden');
+
+            const tagEl = document.getElementById('quizProgressTag');
+            if (tagEl) tagEl.innerText = `Question ${quizCurrentIndex + 1} of ${dailyQuizQuestions.length} • ${q.subject}`;
+
+            const trackerEl = document.getElementById('quizScoreTracker');
+            if (trackerEl) trackerEl.innerText = `Score: ${quizScore}/${quizCurrentIndex}`;
+
+            const qText = document.getElementById('quizQuestionText');
+            if (qText) qText.innerText = q.question;
+
+            const optsList = document.getElementById('quizOptionsList');
+            if (!optsList) return;
+            optsList.innerHTML = '';
+
+            q.options.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = "w-full text-left p-3 rounded-xl border border-slate-800 bg-slate-950/80 hover:bg-slate-900 text-xs font-semibold text-slate-200 transition flex items-center justify-between";
+                btn.innerHTML = `<span><strong class="text-indigo-400 mr-2">${String.fromCharCode(65 + idx)})</strong> ${opt}</span> <span id="opt-icon-${idx}"></span>`;
+                btn.onclick = () => selectQuizOption(idx);
+                optsList.appendChild(btn);
+            });
+        }
+
+        function selectQuizOption(selectedIdx) {
+            if (quizAnswered) return;
+            quizAnswered = true;
+
+            const q = dailyQuizQuestions[quizCurrentIndex];
+            const optsList = document.getElementById('quizOptionsList');
+            const buttons = optsList.querySelectorAll('button');
+
+            if (selectedIdx === q.answer) {
+                quizScore++;
+                buttons[selectedIdx].className = "w-full text-left p-3 rounded-xl border border-emerald-500/50 bg-emerald-950/40 text-xs font-bold text-emerald-300 transition flex items-center justify-between";
+                const iconSpan = buttons[selectedIdx].querySelector('span:last-child');
+                if (iconSpan) iconSpan.innerText = '✅';
+            } else {
+                buttons[selectedIdx].className = "w-full text-left p-3 rounded-xl border border-rose-500/50 bg-rose-950/40 text-xs font-bold text-rose-300 transition flex items-center justify-between";
+                const iconSpan = buttons[selectedIdx].querySelector('span:last-child');
+                if (iconSpan) iconSpan.innerText = '❌';
+
+                buttons[q.answer].className = "w-full text-left p-3 rounded-xl border border-emerald-500/50 bg-emerald-950/40 text-xs font-bold text-emerald-300 transition flex items-center justify-between";
+                const correctIcon = buttons[q.answer].querySelector('span:last-child');
+                if (correctIcon) correctIcon.innerText = '✅';
+            }
+
+            const expBox = document.getElementById('quizExplanation');
+            if (expBox) {
+                expBox.innerHTML = `<strong class="text-indigo-400">💡 Concept Note:</strong> ${q.explanation}`;
+                expBox.classList.remove('hidden');
+            }
+
+            const trackerEl = document.getElementById('quizScoreTracker');
+            if (trackerEl) trackerEl.innerText = `Score: ${quizScore}/${quizCurrentIndex + 1}`;
+
+            const btnNext = document.getElementById('btnNextQuiz');
+            if (btnNext) btnNext.classList.remove('hidden');
+        }
+
+        function nextQuizQuestion() {
+            quizCurrentIndex++;
+            renderQuizQuestion();
+        }
+
+        function showQuizFinishedState() {
+            const quizCont = document.getElementById('quizContainer');
+            const fin = document.getElementById('quizFinishedState');
+            if (quizCont) quizCont.classList.add('hidden');
+            if (fin) fin.classList.remove('hidden');
+
+            const scoreMsg = document.getElementById('quizFinalScoreMsg');
+            if (scoreMsg) {
+                scoreMsg.innerHTML = `You answered <strong class="text-emerald-400 font-mono text-sm">${quizScore} / ${dailyQuizQuestions.length}</strong> questions correctly!`;
+            }
+
+            const claimArea = document.getElementById('quizClaimArea');
+            if (claimArea) {
+                if (quizScore >= 3) {
+                    claimArea.innerHTML = `
+                        <p class="text-[11px] text-amber-300 font-semibold mb-2">🎉 Outstanding! You passed the daily cutoff (≥3) and qualify for +1.0 Study Coins!</p>
+                        <button onclick="claimQuizReward()" id="btnClaimQuizReward" class="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-xs px-6 py-2.5 rounded-xl transition shadow-lg shadow-amber-500/25">
+                            🎁 Claim +1.0 Study Coins
+                        </button>
+                    `;
+                } else {
+                    claimArea.innerHTML = `
+                        <p class="text-[11px] text-slate-400 mb-2">You need at least 3 correct answers to earn the bonus coin.</p>
+                        <button onclick="initQuiz()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-5 py-2 rounded-xl transition">
+                            ↺ Retake Quiz
+                        </button>
+                    `;
+                }
+            }
+        }
+
+        async function claimQuizReward() {
+            if (!currentUserId) {
+                alert("Please open this app inside Telegram to claim your quiz coins!");
+                return;
+            }
+            const btn = document.getElementById('btnClaimQuizReward');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerText = "Claiming...";
+            }
+
+            try {
+                const res = await fetch('/api/study/complete-quiz', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Telegram-User-Id': String(currentUserId)
+                    },
+                    body: JSON.stringify({
+                        user_id: currentUserId,
+                        score: quizScore,
+                        total: dailyQuizQuestions.length
+                    })
+                });
+                const d = await res.json();
+                if (d.success) {
+                    try { confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } }); } catch (e) {}
+                    const coinsHeader = document.getElementById('headerCoins');
+                    if (coinsHeader) coinsHeader.innerText = d.new_balance;
+                    const claimArea = document.getElementById('quizClaimArea');
+                    if (claimArea) {
+                        claimArea.innerHTML = `
+                            <div class="text-emerald-400 text-xs font-bold p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                                ✅ Claimed +${d.reward} Coins! New Balance: 💎 ${d.new_balance} Coins
+                            </div>
+                        `;
+                    }
+                } else {
+                    alert(d.error || "Quiz reward already claimed today!");
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerText = "🎁 Claim Study Coins Reward";
+                    }
+                }
+            } catch (err) {
+                alert("Network error while claiming quiz reward.");
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerText = "🎁 Claim Study Coins Reward";
+                }
+            }
+        }
+
+        // 7. FILTER CARDS (STORE)
         function filterCards() {
             const query = document.getElementById('searchInput').value.toLowerCase().trim();
             const cards = document.querySelectorAll('.batch-card');
@@ -1680,6 +2066,8 @@
         document.addEventListener('DOMContentLoaded', () => {
             initTelegramApp();
             setTimerDuration(25, 'Pomodoro');
+            updateSoundButtonUI();
+            initQuiz();
         });
     </script>
 </body>
