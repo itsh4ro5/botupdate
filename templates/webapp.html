@@ -121,166 +121,181 @@
         }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col pb-28 ambient-bg selection:bg-indigo-500/30 selection:text-indigo-200">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col ambient-bg selection:bg-indigo-500/30 selection:text-indigo-200">
 
-    <!-- Top Sticky Glass Header (Lowered with Native Status-Bar Clearance) -->
-    <header class="sticky top-0 z-40 glass-panel border-b border-slate-800/80 app-header transition-all duration-300">
-        <div class="max-w-4xl mx-auto flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2.5 min-w-0">
-                <div class="relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/25 ring-1 ring-white/20 flex-shrink-0">
-                    <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-                    </svg>
-                    <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-950"></span>
-                </div>
-                <div class="min-w-0">
-                    <div class="flex items-center gap-1.5 flex-wrap">
-                        <h1 class="text-xs sm:text-sm font-extrabold text-white tracking-tight leading-none text-gradient whitespace-nowrap">Study Ecosystem</h1>
-                        <span id="roleBadge" class="text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-800/90 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
-                            Detecting...
-                        </span>
-                    </div>
-                    <p id="userGreeting" class="text-[10px] sm:text-[11px] text-slate-400 font-medium mt-0.5 truncate max-w-[125px] sm:max-w-xs">Connecting Telegram profile...</p>
-                </div>
-            </div>
-            
-            <!-- Quick Stats in Header -->
-            <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-                <div class="flex items-center gap-1 bg-amber-500/10 border border-amber-500/25 px-2 py-1 rounded-xl text-[11px] sm:text-xs font-bold text-amber-300 shadow-sm shadow-amber-500/10">
-                    <span>💎</span>
-                    <span id="headerCoins" class="font-mono">0</span>
-                </div>
-                <div class="flex items-center gap-1 bg-rose-500/10 border border-rose-500/25 px-2 py-1 rounded-xl text-[11px] sm:text-xs font-bold text-rose-400 shadow-sm shadow-rose-500/10">
-                    <span>🔥</span>
-                    <span id="headerStreak" class="font-mono">0</span>
-                </div>
-                <a href="/login" id="loginBtn" class="flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold bg-slate-800/80 hover:bg-slate-700 text-slate-300 px-2 py-1 sm:px-2.5 sm:py-1 rounded-xl border border-slate-700/80 transition" title="Login with Passcode">
-                    <span>🔑</span>
-                    <span class="hidden sm:inline">Passcode</span>
-                </a>
-            </div>
-        </div>
+    <!-- ============================================================== -->
+    <!-- DEDICATED FULLSCREEN MAINTENANCE VIEW (Shown to Regular Users) -->
+    <!-- ============================================================== -->
+    <div id="maintenanceView" class="{% if settings.MAINTENANCE_MODE and session_role not in ['owner', 'admin', 'tester'] %}flex{% else %}hidden{% endif %} flex-col items-center justify-between min-h-[95vh] max-w-lg mx-auto w-full px-4 py-8 text-center animate-fade-in relative z-50">
+        <!-- Top Spacer -->
+        <div class="h-2"></div>
 
-        <!-- Role Selector Header Tabs (Shown for Owner / Admin) -->
-        <div id="roleBar" class="hidden mt-2 pt-2 border-t border-slate-800/70 flex items-center justify-between text-xs gap-2">
-            <span class="text-slate-400 text-[10px] font-bold tracking-wide uppercase flex-shrink-0">Workspace:</span>
-            <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-                <button onclick="switchMainTab('owner')" id="pbtn-owner" class="hidden role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-indigo-600 text-white shadow-sm transition whitespace-nowrap">
-                    👑 Owner Console
-                </button>
-                <button onclick="switchMainTab('admin')" id="pbtn-admin" class="hidden role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap">
-                    ⚡ Admin Desk
-                </button>
-                <button onclick="switchMainTab('dashboard')" id="pbtn-dashboard" class="role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-indigo-600 text-white shadow-sm transition whitespace-nowrap">
-                    🏠 Dashboard
-                </button>
-                <button onclick="switchMainTab('vacancies')" id="pbtn-vacancies" class="role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap">
-                    📢 Vacancies
-                </button>
-                <button onclick="switchMainTab('courses')" id="pbtn-courses" class="role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap">
-                    📚 Store
-                </button>
-                <button onclick="switchMainTab('study')" id="pbtn-study" class="role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap">
-                    📖 Study Hub
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <!-- Maintenance Mode Bypass Notice (Visible only for Owner, Admin, Tester) -->
-    <div id="maintenanceBypassBanner" class="hidden max-w-4xl mx-auto w-full px-3.5 sm:px-4 pt-2">
-        <div class="bg-gradient-to-r from-amber-500/20 via-orange-500/15 to-yellow-500/10 border border-amber-500/40 rounded-2xl p-2.5 sm:p-3 flex items-center justify-between gap-2 shadow-lg shadow-amber-500/10">
-            <div class="flex items-center gap-2 min-w-0">
-                <span class="text-base sm:text-lg animate-pulse flex-shrink-0">🛠️</span>
-                <div class="min-w-0">
-                    <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="text-xs font-extrabold text-amber-200">Maintenance Mode ACTIVE</span>
-                        <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/30 text-amber-300 border border-amber-500/50 uppercase tracking-wide">
-                            <span id="maintBypassRole">PRIVILEGED</span> BYPASS
-                        </span>
-                    </div>
-                    <p class="text-[10px] text-amber-300/80 truncate">Regular students see ONLY the Maintenance Screen. You have full testing access.</p>
-                </div>
-            </div>
-            <a href="#view-owner" onclick="switchMainTab('owner')" class="text-[10px] sm:text-[11px] font-bold px-2.5 py-1 bg-amber-500/30 hover:bg-amber-500/40 text-amber-200 border border-amber-500/40 rounded-xl transition flex-shrink-0">
-                Manage
-            </a>
-        </div>
-    </div>
-
-    <!-- Main Workspace -->
-    <main class="max-w-4xl mx-auto w-full px-3.5 sm:px-4 pt-3 flex-1">
-        
-        <!-- ============================================================== -->
-        <!-- UNDER MAINTENANCE SCREEN (Shown to Regular Students)           -->
-        <!-- ============================================================== -->
-        <div id="maintenanceScreen" class="{% if settings.MAINTENANCE_MODE and session_role not in ['owner', 'admin', 'tester'] %}flex{% else %}hidden{% endif %} flex-col items-center justify-center min-h-[65vh] px-4 py-8 max-w-md mx-auto text-center">
-            <!-- Glowing Maintenance Badge -->
-            <div class="relative mb-5">
-                <div class="absolute -inset-3 bg-gradient-to-r from-amber-500 to-indigo-600 rounded-full blur-xl opacity-40 animate-pulse"></div>
-                <div class="relative w-20 h-20 rounded-3xl bg-slate-900 border-2 border-amber-500/50 flex items-center justify-center text-4xl shadow-2xl shadow-amber-500/20">
+        <!-- Center Card -->
+        <div class="flex flex-col items-center w-full my-auto">
+            <!-- Animated Glowing Maintenance Badge -->
+            <div class="relative mb-6">
+                <div class="absolute -inset-4 bg-gradient-to-r from-amber-500 via-orange-500 to-indigo-600 rounded-full blur-2xl opacity-40 animate-pulse"></div>
+                <div class="relative w-24 h-24 rounded-3xl bg-slate-900/90 border-2 border-amber-500/50 flex items-center justify-center text-5xl shadow-2xl shadow-amber-500/25 ring-4 ring-amber-500/10">
                     🛠️
                 </div>
-                <span class="absolute -top-1 -right-1 flex h-4 w-4">
+                <span class="absolute -top-1.5 -right-1.5 flex h-5 w-5">
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-4 w-4 bg-amber-500 border-2 border-slate-950"></span>
+                    <span class="relative inline-flex rounded-full h-5 w-5 bg-amber-500 border-2 border-slate-950"></span>
                 </span>
             </div>
 
-            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold uppercase tracking-wider mb-3">
-                <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-                Scheduled Maintenance & Upgrades
+            <!-- Status Badge -->
+            <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold uppercase tracking-wider mb-4 shadow-sm">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+                Under Scheduled Upgrades
             </div>
 
-            <h2 class="text-xl sm:text-2xl font-black text-white tracking-tight mb-2">
+            <!-- Main Heading -->
+            <h1 class="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight mb-3">
                 Platform Under Maintenance
-            </h2>
+            </h1>
 
-            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed mb-6 max-w-md">
-                Hum server infrastructure upgrade kar rahe hain aur <b>2026 ke fresh exam modules, pyq test series aur study notes</b> load kar rahe hain. Jald hi poora platform sabhi students ke liye live hoga!
+            <!-- Subtitle -->
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed mb-6 max-w-sm sm:max-w-md mx-auto">
+                Hum server cloud infrastructure upgrade kar rahe hain aur <span class="text-amber-200 font-semibold">2026 exam modules, PYQ mock test series aur study content</span> load kar rahe hain. Platform jald hi sabhi students ke liye live hoga!
             </p>
 
-            <!-- Realtime System Matrix -->
-            <div class="w-full glass-panel rounded-2xl p-3.5 mb-6 border border-slate-800 text-left space-y-2">
-                <div class="flex items-center justify-between text-xs">
-                    <span class="text-slate-400 flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Telegram Bot Sockets
+            <!-- Realtime Telemetry Grid -->
+            <div class="w-full glass-panel rounded-2xl p-4 mb-6 border border-slate-800 text-left space-y-2.5 shadow-lg">
+                <div class="flex items-center justify-between text-xs sm:text-[13px]">
+                    <span class="text-slate-400 flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50"></span> Telegram Bot Sockets
                     </span>
-                    <span class="font-mono font-bold text-emerald-400">Operational</span>
+                    <span class="font-mono font-bold text-emerald-400">Operational (100%)</span>
                 </div>
-                <div class="flex items-center justify-between text-xs">
-                    <span class="text-slate-400 flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Web App Study Portal
+                <div class="flex items-center justify-between text-xs sm:text-[13px]">
+                    <span class="text-slate-400 flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse shadow-sm shadow-amber-400/50"></span> Web App Study Portal
                     </span>
-                    <span class="font-mono font-bold text-amber-300">Under Upgrade</span>
+                    <span class="font-mono font-bold text-amber-300">Upgrading Servers</span>
                 </div>
-                <div class="flex items-center justify-between text-xs">
-                    <span class="text-slate-400 flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full bg-indigo-400"></span> Access Mode
+                <div class="flex items-center justify-between text-xs sm:text-[13px]">
+                    <span class="text-slate-400 flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-indigo-400"></span> Access Status
                     </span>
-                    <span class="font-mono font-bold text-cyan-300">Owner, Admin & Testers</span>
+                    <span class="font-mono font-bold text-cyan-300">Authorized Testers & Admin</span>
                 </div>
             </div>
 
-            <!-- Call to Action Buttons -->
-            <div class="flex flex-col sm:flex-row gap-2.5 w-full max-w-xs mb-5">
+            <!-- Action Buttons -->
+            <div class="flex flex-col sm:flex-row gap-3 w-full max-w-xs sm:max-w-sm mb-4">
                 <a href="{{ settings.BATCH_UPDATE_CHANNEL_LINK or 'https://t.me/H4R_Contact_bot' }}" target="_blank" 
-                   class="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2">
+                   class="w-full bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold text-xs sm:text-sm py-3 px-4 rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2">
                     <span>📢</span>
                     <span>Join Official Channel</span>
                 </a>
                 <button onclick="location.reload()" 
-                        class="w-full bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs sm:text-sm py-3 px-4 rounded-xl transition flex items-center justify-center gap-2">
+                        class="w-full bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 font-bold text-xs sm:text-sm py-3 px-4 rounded-xl transition flex items-center justify-center gap-2">
                     <span>🔄</span>
                     <span>Refresh Status</span>
                 </button>
             </div>
+        </div>
 
-            <div class="pt-2 border-t border-slate-800/80 w-full flex items-center justify-center gap-2 text-[11px] text-slate-500">
-                <span>Authorized Admin or Tester?</span>
-                <a href="/login" class="text-indigo-400 hover:text-indigo-300 font-semibold underline underline-offset-2">Passcode Login ↗</a>
+        <!-- Footer Passcode link -->
+        <div class="pt-4 border-t border-slate-800/80 w-full flex items-center justify-center gap-2 text-xs text-slate-500">
+            <span>Owner, Admin or Tester?</span>
+            <a href="/login" class="text-indigo-400 hover:text-indigo-300 font-semibold underline underline-offset-2">Passcode Login ↗</a>
+        </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- MAIN APPLICATION WRAPPER (HIDDEN DURING MAINTENANCE MODE)      -->
+    <!-- ============================================================== -->
+    <div id="appContainer" class="{% if settings.MAINTENANCE_MODE and session_role not in ['owner', 'admin', 'tester'] %}hidden{% endif %} flex flex-col flex-1 pb-28">
+
+        <!-- Top Sticky Glass Header (Lowered with Native Status-Bar Clearance) -->
+        <header class="sticky top-0 z-40 glass-panel border-b border-slate-800/80 app-header transition-all duration-300">
+            <div class="max-w-4xl mx-auto flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <div class="relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/25 ring-1 ring-white/20 flex-shrink-0">
+                        <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                        </svg>
+                        <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-950"></span>
+                    </div>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <h1 class="text-xs sm:text-sm font-extrabold text-white tracking-tight leading-none text-gradient whitespace-nowrap">Study Ecosystem</h1>
+                            <span id="roleBadge" class="text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-800/90 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
+                                Detecting...
+                            </span>
+                        </div>
+                        <p id="userGreeting" class="text-[10px] sm:text-[11px] text-slate-400 font-medium mt-0.5 truncate max-w-[125px] sm:max-w-xs">Connecting Telegram profile...</p>
+                    </div>
+                </div>
+                
+                <!-- Quick Stats in Header -->
+                <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                    <div class="flex items-center gap-1 bg-amber-500/10 border border-amber-500/25 px-2 py-1 rounded-xl text-[11px] sm:text-xs font-bold text-amber-300 shadow-sm shadow-amber-500/10">
+                        <span>💎</span>
+                        <span id="headerCoins" class="font-mono">0</span>
+                    </div>
+                    <div class="flex items-center gap-1 bg-rose-500/10 border border-rose-500/25 px-2 py-1 rounded-xl text-[11px] sm:text-xs font-bold text-rose-400 shadow-sm shadow-rose-500/10">
+                        <span>🔥</span>
+                        <span id="headerStreak" class="font-mono">0</span>
+                    </div>
+                    <a href="/login" id="loginBtn" class="flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold bg-slate-800/80 hover:bg-slate-700 text-slate-300 px-2 py-1 sm:px-2.5 sm:py-1 rounded-xl border border-slate-700/80 transition" title="Login with Passcode">
+                        <span>🔑</span>
+                        <span class="hidden sm:inline">Passcode</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Role Selector Header Tabs (Shown for Owner / Admin) -->
+            <div id="roleBar" class="hidden mt-2 pt-2 border-t border-slate-800/70 flex items-center justify-between text-xs gap-2">
+                <span class="text-slate-400 text-[10px] font-bold tracking-wide uppercase flex-shrink-0">Workspace:</span>
+                <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                    <button onclick="switchMainTab('owner')" id="pbtn-owner" class="hidden role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-indigo-600 text-white shadow-sm transition whitespace-nowrap">
+                        👑 Owner Console
+                    </button>
+                    <button onclick="switchMainTab('admin')" id="pbtn-admin" class="hidden role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap">
+                        ⚡ Admin Desk
+                    </button>
+                    <button onclick="switchMainTab('dashboard')" id="pbtn-dashboard" class="role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-indigo-600 text-white shadow-sm transition whitespace-nowrap">
+                        🏠 Dashboard
+                    </button>
+                    <button onclick="switchMainTab('vacancies')" id="pbtn-vacancies" class="role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap">
+                        📢 Vacancies
+                    </button>
+                    <button onclick="switchMainTab('courses')" id="pbtn-courses" class="role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap">
+                        📚 Store
+                    </button>
+                    <button onclick="switchMainTab('study')" id="pbtn-study" class="role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap">
+                        📖 Study Hub
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Maintenance Mode Bypass Notice (Visible only for Owner, Admin, Tester) -->
+        <div id="maintenanceBypassBanner" class="hidden max-w-4xl mx-auto w-full px-3.5 sm:px-4 pt-2">
+            <div class="bg-gradient-to-r from-amber-500/20 via-orange-500/15 to-yellow-500/10 border border-amber-500/40 rounded-2xl p-2.5 sm:p-3 flex items-center justify-between gap-2 shadow-lg shadow-amber-500/10">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="text-base sm:text-lg animate-pulse flex-shrink-0">🛠️</span>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="text-xs font-extrabold text-amber-200">Maintenance Mode ACTIVE</span>
+                            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/30 text-amber-300 border border-amber-500/50 uppercase tracking-wide">
+                                <span id="maintBypassRole">PRIVILEGED</span> BYPASS
+                            </span>
+                        </div>
+                        <p class="text-[10px] text-amber-300/80 truncate">Regular students see ONLY the Maintenance Screen. You have full testing access.</p>
+                    </div>
+                </div>
+                <a href="#view-owner" onclick="switchMainTab('owner')" class="text-[10px] sm:text-[11px] font-bold px-2.5 py-1 bg-amber-500/30 hover:bg-amber-500/40 text-amber-200 border border-amber-500/40 rounded-xl transition flex-shrink-0">
+                    Manage
+                </a>
             </div>
         </div>
+
+        <!-- Main Workspace -->
+        <main class="max-w-4xl mx-auto w-full px-3.5 sm:px-4 pt-3 flex-1">
         
         <!-- ============================================================== -->
         <!-- VIEW 1: OWNER COMMAND CONSOLE (Auto-shown for Owner)           -->
@@ -502,7 +517,7 @@
         <!-- ============================================================== -->
         <!-- VIEW 2.5: STUDENT DASHBOARD (Default Main Entry Point)         -->
         <!-- ============================================================== -->
-        <section id="view-dashboard" class="view-panel space-y-4">
+        <section id="view-dashboard" class="view-panel hidden space-y-4">
             
             <!-- Hero Profile & Identity Banner -->
             <div class="glass-panel bg-gradient-to-br from-indigo-950/60 via-slate-900 to-purple-950/50 border border-indigo-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-5 glow-indigo relative overflow-hidden">
@@ -1745,6 +1760,7 @@
             </button>
         </div>
     </nav>
+    </div> <!-- /#appContainer -->
 
     <!-- Client-Side App Logic -->
     <script>
@@ -1875,9 +1891,12 @@
                     const data = await res.json();
                     if (data.success) {
                         applyRoleProfile(data);
+                    } else {
+                        applyRoleProfile({ role: 'user', maintenance_mode: true });
                     }
                 } catch (err) {
                     console.error("Session handshake error:", err);
+                    applyRoleProfile({ role: 'user', maintenance_mode: true });
                 }
             } else {
                 const serverRole = "{{ session_role or '' }}";
@@ -1903,34 +1922,33 @@
             const roleBar = document.getElementById('roleBar');
             const pbtnOwner = document.getElementById('pbtn-owner');
             const pbtnAdmin = document.getElementById('pbtn-admin');
-            const maintScreen = document.getElementById('maintenanceScreen');
+            const maintView = document.getElementById('maintenanceView');
+            const appContainer = document.getElementById('appContainer');
             const maintBanner = document.getElementById('maintenanceBypassBanner');
-            const bottomNav = document.querySelector('nav.app-bottom-nav');
 
             const isPrivileged = ['owner', 'admin', 'tester'].includes(data.role);
-            const isMaint = (typeof data.maintenance_mode !== 'undefined') ? !!data.maintenance_mode : {{ 'true' if settings.MAINTENANCE_MODE else 'false' }};
+            const isMaint = (typeof data.maintenance_mode !== 'undefined') ? !!data.maintenance_mode : true;
 
             // STRICT MAINTENANCE LOCK FOR REGULAR STUDENTS
             if (isMaint && !isPrivileged) {
-                if (maintScreen) maintScreen.classList.remove('hidden');
-                if (bottomNav) bottomNav.classList.add('hidden');
-                if (roleBar) roleBar.classList.add('hidden');
-                if (maintBanner) maintBanner.classList.add('hidden');
-                
-                // Hide all standard workspace panels
-                document.querySelectorAll('.view-panel').forEach(p => p.classList.add('hidden'));
-
-                if (badge) {
-                    badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase tracking-wider";
-                    badge.innerText = '🛠️ MAINTENANCE';
+                if (maintView) {
+                    maintView.classList.remove('hidden');
+                    maintView.classList.add('flex');
                 }
-                if (greeting) greeting.innerText = 'System undergoing scheduled upgrades';
+                if (appContainer) {
+                    appContainer.classList.add('hidden');
+                }
                 return;
             }
 
             // Privileged (Owner, Admin, Tester) OR Maintenance is OFF:
-            if (maintScreen) maintScreen.classList.add('hidden');
-            if (bottomNav) bottomNav.classList.remove('hidden');
+            if (maintView) {
+                maintView.classList.add('hidden');
+                maintView.classList.remove('flex');
+            }
+            if (appContainer) {
+                appContainer.classList.remove('hidden');
+            }
 
             // Show bypass ribbon if maintenance is ON
             if (isMaint && isPrivileged) {

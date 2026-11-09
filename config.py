@@ -760,6 +760,9 @@ def load_data():
                     val = _get_val(loaded, k)
                     if val is not None: DB[k] = val
                 
+                # Active Maintenance Lock (Only Owner/Admin/Tester bypass)
+                DB["MAINTENANCE_MODE"] = True
+                
                 for k in ["CUSTOM_WELCOMES", "FREE_CHANNELS", "PAID_CHANNELS", "SPECIAL_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
                     val = _get_val(loaded, k)
                     if val is not None: 
@@ -801,6 +804,8 @@ def load_data():
             for k in keys_to_load:
                 val = _get_val(loaded, k)
                 if val is not None: DB[k] = val
+            
+            DB["MAINTENANCE_MODE"] = True
             
             for k in ["CUSTOM_WELCOMES", "FREE_CHANNELS", "PAID_CHANNELS", "SPECIAL_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
                 val = _get_val(loaded, k)
