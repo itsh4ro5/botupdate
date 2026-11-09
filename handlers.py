@@ -389,6 +389,52 @@ async def cmd_del_admin(client: Client, message: Message):
     except Exception as e:
         await message.reply_text(f"  Error removing admin: {e}")
 
+async def cmd_add_tester(client: Client, message: Message):
+    if not is_owner_msg(message):
+        return
+    args = get_args(message)
+    if not args:
+        return await message.reply_text("🧪 Usage: /addtester <user_id>")
+    try:
+        new_tester = int(args[0])
+        testers = DB.setdefault("TESTER_IDS", [])
+        if new_tester not in testers:
+            testers.append(new_tester)
+            await save_data_async()
+            await message.reply_text(f"✅ User `{new_tester}` added as Authorized Tester (Can bypass Maintenance Mode).", parse_mode=ParseMode.MARKDOWN)
+        else:
+            await message.reply_text(f"ℹ️ User `{new_tester}` is already an Authorized Tester.", parse_mode=ParseMode.MARKDOWN)
+    except Exception as e:
+        await message.reply_text(f"❌ Error adding tester: {e}")
+
+async def cmd_del_tester(client: Client, message: Message):
+    if not is_owner_msg(message):
+        return
+    args = get_args(message)
+    if not args:
+        return await message.reply_text("🧪 Usage: /deltester <user_id>")
+    try:
+        target = int(args[0])
+        testers = DB.setdefault("TESTER_IDS", [])
+        if target in testers:
+            testers.remove(target)
+            await save_data_async()
+            await message.reply_text(f"🗑️ User `{target}` removed from Authorized Testers.", parse_mode=ParseMode.MARKDOWN)
+        else:
+            await message.reply_text("ℹ️ User is not in Testers list.")
+    except Exception as e:
+        await message.reply_text(f"❌ Error removing tester: {e}")
+
+async def cmd_testers(client: Client, message: Message):
+    if not is_owner_msg(message):
+        return
+    testers = DB.get("TESTER_IDS", [])
+    if not testers:
+        return await message.reply_text("🧪 No authorized testers configured yet.\nUse `/addtester <user_id>` to add one.")
+    t_list = "\n".join([f"• `{uid}`" for uid in testers])
+    await message.reply_text(f"🧪 **Authorized Testers List ({len(testers)}):**\n\n{t_list}\n\n*Testers have full bypass access when Maintenance Mode is ON.*", parse_mode=ParseMode.MARKDOWN)
+
+
 async def cmd_gendemo(client: Client, message: Message):
     if not is_admin_msg(message):
         return
@@ -3574,6 +3620,8 @@ async def wizard_message(client: Client, message: Message):
             cmds = {
                 "addadmin": cmd_add_admin,
                 "deladmin": cmd_del_admin,
+                "addtester": cmd_add_tester,
+                "deltester": cmd_del_tester,
                 "ban": cmd_ban,
                 "unban": cmd_unban,
                 "kick": cmd_kick_user,
@@ -3768,6 +3816,12 @@ async def general_callback(client: Client, q: CallbackQuery):
             await q.answer()
             msg = build_database_panel_msg()
             await rp.edit(client, q.message.chat.id, q.message.id, msg)
+        elif data == "dash_testers":
+            await q.answer()
+            if not is_owner(uid):
+                return await q.answer("❌ Only Owner can manage testers.", show_alert=True)
+            msg = build_testers_panel_msg()
+            await rp.edit(client, q.message.chat.id, q.message.id, msg)
         elif data in ["dash_batches", "adash_batches"]:
             await q.answer()
             back_cb = "goto_admin_panel" if data.startswith("adash_") else "dash_home"
@@ -3817,6 +3871,8 @@ async def general_callback(client: Client, q: CallbackQuery):
             prompts = {
                 "addadmin": "Send User ID to make Admin:",
                 "deladmin": "Send User ID to remove from Admin:",
+                "addtester": "🧪 Send User ID to add as Authorized Tester (Bypasses Maintenance Mode):",
+                "deltester": "🧪 Send User ID to remove from Authorized Testers:",
                 "ban": "Send User ID to Ban:",
                 "unban": "Send User ID to Unban:",
                 "kick": "Send User ID and Batch ID\nFormat: `uid bid`",
@@ -5424,6 +5480,7 @@ def build_database_panel_msg():
             rp.bold("• "), "📋 ", rp.bold("Active Vouchers"), " — ", rp.italic("Sabhi active redeem codes ki list dekhein\n\n"),
             rp.bold("• "), "🎁 ", rp.bold("Gift Coin"), " — ", rp.italic("User ke wallet me free coins credit karein\n\n"),
             rp.bold("• "), "🚫 ", rp.bold("Ban / Unban"), " — ", rp.italic("User access control manage karein\n\n"),
+            rp.bold("• "), "🧪 ", rp.bold("Authorized Testers"), " — ", rp.italic("WebApp Maintenance Mode bypass ke liye tester IDs manage karein\n\n"),
             rp.bold("• "), "📋 ", rp.bold("Request Batches"), " — ", rp.italic("User-requested batches ki complete checklist aur interactive status dekhein\n\n"),
             rp.bold("• "), "☢️ ", rp.bold("Hard Delete User"), " — ", rp.italic("User ka saara record database se delete karein")
         ]),
@@ -5448,9 +5505,34 @@ def build_database_panel_msg():
             rp.btn("✅ Unban User", "input_unban", style=rp.Style.SUCCESS)
         ),
         rp.buttons(
+            rp.btn("🧪 Manage Testers", "dash_testers", style=rp.Style.PRIMARY),
             rp.btn("📋 Request Batches", "view_batch_requests", style=rp.Style.SUCCESS)
         ),
         rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DANGER))
+    )
+
+def build_testers_panel_msg():
+    testers = DB.get("TESTER_IDS", [])
+    if testers:
+        t_list = "\n".join([f"• `{uid}`" for uid in testers])
+    else:
+        t_list = "*(Abhi koi authorized tester add nahi hai)*"
+    return rp.message(
+        rp.heading("🧪 Authorized Testers Management"),
+        rp.divider(),
+        rp.expandable_quote([
+            rp.bold("📌 Authorized Testers Info:\n\n"),
+            "In sabhi users ko WebApp me **Maintenance Mode** bypass karke test karne ki poori permission milti hai.\n\n",
+            rp.bold(f"📋 Total Active Testers ({len(testers)}):\n"),
+            t_list,
+            "\n\n",
+            rp.italic("Use the buttons below to add or remove Telegram user IDs:")
+        ]),
+        rp.buttons(
+            rp.btn("➕ Add Tester", "input_addtester", style=rp.Style.SUCCESS),
+            rp.btn("🗑️ Remove Tester", "input_deltester", style=rp.Style.DANGER)
+        ),
+        rp.buttons(rp.btn("🔙 Back to Database Tools", "dash_db", style=rp.Style.DANGER))
     )
 
 def build_batches_panel_msg(back_cb="dash_home"):

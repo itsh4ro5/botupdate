@@ -299,6 +299,7 @@ async def _run_pyrogram_engine():
     # Saare 40+ Admin, Owner aur General Commands Mapping
     all_commands = {
         "myinfo": H.cmd_myinfo, "addadmin": H.cmd_add_admin, "deladmin": H.cmd_del_admin,
+        "addtester": H.cmd_add_tester, "deltester": H.cmd_del_tester, "testers": H.cmd_testers,
         "backup": H.cmd_backup, "allusers": H.cmd_all_users, "ban": H.cmd_ban,
         "unban": H.cmd_unban, "resetuser": H.cmd_reset_user, "find": H.cmd_find_user,
         "extend": H.cmd_extend_demo, "kick": H.cmd_kick_user, "batchstats": H.cmd_batch_stats,

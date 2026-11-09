@@ -187,8 +187,100 @@
         </div>
     </header>
 
+    <!-- Maintenance Mode Bypass Notice (Visible only for Owner, Admin, Tester) -->
+    <div id="maintenanceBypassBanner" class="hidden max-w-4xl mx-auto w-full px-3.5 sm:px-4 pt-2">
+        <div class="bg-gradient-to-r from-amber-500/20 via-orange-500/15 to-yellow-500/10 border border-amber-500/40 rounded-2xl p-2.5 sm:p-3 flex items-center justify-between gap-2 shadow-lg shadow-amber-500/10">
+            <div class="flex items-center gap-2 min-w-0">
+                <span class="text-base sm:text-lg animate-pulse flex-shrink-0">🛠️</span>
+                <div class="min-w-0">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="text-xs font-extrabold text-amber-200">Maintenance Mode ACTIVE</span>
+                        <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/30 text-amber-300 border border-amber-500/50 uppercase tracking-wide">
+                            <span id="maintBypassRole">PRIVILEGED</span> BYPASS
+                        </span>
+                    </div>
+                    <p class="text-[10px] text-amber-300/80 truncate">Regular students see ONLY the Maintenance Screen. You have full testing access.</p>
+                </div>
+            </div>
+            <a href="#view-owner" onclick="switchMainTab('owner')" class="text-[10px] sm:text-[11px] font-bold px-2.5 py-1 bg-amber-500/30 hover:bg-amber-500/40 text-amber-200 border border-amber-500/40 rounded-xl transition flex-shrink-0">
+                Manage
+            </a>
+        </div>
+    </div>
+
     <!-- Main Workspace -->
     <main class="max-w-4xl mx-auto w-full px-3.5 sm:px-4 pt-3 flex-1">
+        
+        <!-- ============================================================== -->
+        <!-- UNDER MAINTENANCE SCREEN (Shown to Regular Students)           -->
+        <!-- ============================================================== -->
+        <div id="maintenanceScreen" class="{% if settings.MAINTENANCE_MODE and session_role not in ['owner', 'admin', 'tester'] %}flex{% else %}hidden{% endif %} flex-col items-center justify-center min-h-[65vh] px-4 py-8 max-w-md mx-auto text-center">
+            <!-- Glowing Maintenance Badge -->
+            <div class="relative mb-5">
+                <div class="absolute -inset-3 bg-gradient-to-r from-amber-500 to-indigo-600 rounded-full blur-xl opacity-40 animate-pulse"></div>
+                <div class="relative w-20 h-20 rounded-3xl bg-slate-900 border-2 border-amber-500/50 flex items-center justify-center text-4xl shadow-2xl shadow-amber-500/20">
+                    🛠️
+                </div>
+                <span class="absolute -top-1 -right-1 flex h-4 w-4">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-4 w-4 bg-amber-500 border-2 border-slate-950"></span>
+                </span>
+            </div>
+
+            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold uppercase tracking-wider mb-3">
+                <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                Scheduled Maintenance & Upgrades
+            </div>
+
+            <h2 class="text-xl sm:text-2xl font-black text-white tracking-tight mb-2">
+                Platform Under Maintenance
+            </h2>
+
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed mb-6 max-w-md">
+                Hum server infrastructure upgrade kar rahe hain aur <b>2026 ke fresh exam modules, pyq test series aur study notes</b> load kar rahe hain. Jald hi poora platform sabhi students ke liye live hoga!
+            </p>
+
+            <!-- Realtime System Matrix -->
+            <div class="w-full glass-panel rounded-2xl p-3.5 mb-6 border border-slate-800 text-left space-y-2">
+                <div class="flex items-center justify-between text-xs">
+                    <span class="text-slate-400 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Telegram Bot Sockets
+                    </span>
+                    <span class="font-mono font-bold text-emerald-400">Operational</span>
+                </div>
+                <div class="flex items-center justify-between text-xs">
+                    <span class="text-slate-400 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Web App Study Portal
+                    </span>
+                    <span class="font-mono font-bold text-amber-300">Under Upgrade</span>
+                </div>
+                <div class="flex items-center justify-between text-xs">
+                    <span class="text-slate-400 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-indigo-400"></span> Access Mode
+                    </span>
+                    <span class="font-mono font-bold text-cyan-300">Owner, Admin & Testers</span>
+                </div>
+            </div>
+
+            <!-- Call to Action Buttons -->
+            <div class="flex flex-col sm:flex-row gap-2.5 w-full max-w-xs mb-5">
+                <a href="{{ settings.BATCH_UPDATE_CHANNEL_LINK or 'https://t.me/H4R_Contact_bot' }}" target="_blank" 
+                   class="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2">
+                    <span>📢</span>
+                    <span>Join Official Channel</span>
+                </a>
+                <button onclick="location.reload()" 
+                        class="w-full bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs sm:text-sm py-3 px-4 rounded-xl transition flex items-center justify-center gap-2">
+                    <span>🔄</span>
+                    <span>Refresh Status</span>
+                </button>
+            </div>
+
+            <div class="pt-2 border-t border-slate-800/80 w-full flex items-center justify-center gap-2 text-[11px] text-slate-500">
+                <span>Authorized Admin or Tester?</span>
+                <a href="/login" class="text-indigo-400 hover:text-indigo-300 font-semibold underline underline-offset-2">Passcode Login ↗</a>
+            </div>
+        </div>
         
         <!-- ============================================================== -->
         <!-- VIEW 1: OWNER COMMAND CONSOLE (Auto-shown for Owner)           -->
@@ -272,12 +364,60 @@
                     <div class="flex items-center justify-between p-3 rounded-xl sm:rounded-2xl bg-slate-950/70 border border-slate-800/80">
                         <div>
                             <p class="text-xs font-bold text-white">Maintenance Mode</p>
-                            <p class="text-[10px] text-slate-400 mt-0.5">Display maintenance banner to students</p>
+                            <p class="text-[10px] text-slate-400 mt-0.5">Restrict student access to maintenance screen</p>
                         </div>
-                        <button onclick="toggleSetting('MAINTENANCE_MODE')" id="btn-switch-MAINTENANCE_MODE" class="text-xs px-3 py-1.5 rounded-xl font-bold bg-slate-800 text-slate-300 transition flex-shrink-0">
-                            Off
+                        <button onclick="toggleSetting('MAINTENANCE_MODE')" id="btn-switch-MAINTENANCE_MODE" class="text-xs px-3 py-1.5 rounded-xl font-bold transition flex-shrink-0 {% if settings.MAINTENANCE_MODE %}bg-amber-600 text-white{% else %}bg-slate-800 text-slate-300{% endif %}">
+                            {{ 'Active (ON)' if settings.MAINTENANCE_MODE else 'Off' }}
                         </button>
                     </div>
+                </div>
+            </div>
+
+            <!-- Authorized Testers Management & Access Control -->
+            <div class="glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-800/80">
+                <div class="flex items-center justify-between mb-3.5 gap-2 flex-wrap">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base sm:text-lg">🧪</span>
+                        <div>
+                            <h3 class="text-xs sm:text-sm font-bold text-white">Authorized Testers & Access Control</h3>
+                            <p class="text-[10px] sm:text-[11px] text-slate-400">Add Telegram chat IDs to grant full bypass access during Maintenance Mode</p>
+                        </div>
+                    </div>
+                    <button onclick="loadOwnerTesters()" class="text-[11px] sm:text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 transition">
+                        🔄 Refresh List
+                    </button>
+                </div>
+
+                <!-- Add Tester Input Form -->
+                <div class="flex flex-col sm:flex-row gap-2 mb-3.5">
+                    <input type="number" id="newTesterIdInput" placeholder="Enter Telegram User ID (e.g. 123456789)" 
+                           class="flex-1 bg-slate-950/90 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono transition">
+                    <button onclick="addOwnerTester()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-md shadow-indigo-600/30 flex items-center justify-center gap-1.5 flex-shrink-0">
+                        <span>➕</span>
+                        <span>Add Authorized Tester</span>
+                    </button>
+                </div>
+
+                <!-- Testers List Container -->
+                <div id="ownerTestersListContainer" class="space-y-2">
+                    {% if tester_ids and tester_ids|length > 0 %}
+                        {% for tid in tester_ids %}
+                        <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/70 text-xs">
+                            <div class="flex items-center gap-2">
+                                <span class="text-base">🧪</span>
+                                <div>
+                                    <span class="font-mono font-bold text-cyan-300">{{ tid }}</span>
+                                    <span class="ml-2 text-[9px] px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-semibold">BYPASS ALLOWED</span>
+                                </div>
+                            </div>
+                            <button onclick="deleteOwnerTester('{{ tid }}')" class="text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 px-2 py-1 rounded-lg text-[10px] font-bold transition">
+                                🗑️ Remove
+                            </button>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-[11px] text-slate-500 italic py-2" id="noTestersText">No authorized testers added yet. Use the form above or send <code>/addtester &lt;uid&gt;</code> in bot.</p>
+                    {% endif %}
                 </div>
             </div>
 
@@ -1740,11 +1880,19 @@
                     console.error("Session handshake error:", err);
                 }
             } else {
-                document.getElementById('roleBadge').innerText = 'Student Guest';
-                document.getElementById('userGreeting').innerText = 'Connect Telegram to earn study coins';
-                loadStudyTasks();
-                renderDashboardBatches([]);
-                switchMainTab('dashboard');
+                const serverRole = "{{ session_role or '' }}";
+                const isMaint = {{ 'true' if settings.MAINTENANCE_MODE else 'false' }};
+                if (serverRole && ['owner', 'admin', 'tester'].includes(serverRole)) {
+                    applyRoleProfile({ success: true, role: serverRole, maintenance_mode: isMaint });
+                } else if (isMaint) {
+                    applyRoleProfile({ success: true, role: 'user', maintenance_mode: true });
+                } else {
+                    document.getElementById('roleBadge').innerText = 'Student Guest';
+                    document.getElementById('userGreeting').innerText = 'Connect Telegram to earn study coins';
+                    loadStudyTasks();
+                    renderDashboardBatches([]);
+                    switchMainTab('dashboard');
+                }
             }
         }
 
@@ -1755,6 +1903,45 @@
             const roleBar = document.getElementById('roleBar');
             const pbtnOwner = document.getElementById('pbtn-owner');
             const pbtnAdmin = document.getElementById('pbtn-admin');
+            const maintScreen = document.getElementById('maintenanceScreen');
+            const maintBanner = document.getElementById('maintenanceBypassBanner');
+            const bottomNav = document.querySelector('nav.app-bottom-nav');
+
+            const isPrivileged = ['owner', 'admin', 'tester'].includes(data.role);
+            const isMaint = (typeof data.maintenance_mode !== 'undefined') ? !!data.maintenance_mode : {{ 'true' if settings.MAINTENANCE_MODE else 'false' }};
+
+            // STRICT MAINTENANCE LOCK FOR REGULAR STUDENTS
+            if (isMaint && !isPrivileged) {
+                if (maintScreen) maintScreen.classList.remove('hidden');
+                if (bottomNav) bottomNav.classList.add('hidden');
+                if (roleBar) roleBar.classList.add('hidden');
+                if (maintBanner) maintBanner.classList.add('hidden');
+                
+                // Hide all standard workspace panels
+                document.querySelectorAll('.view-panel').forEach(p => p.classList.add('hidden'));
+
+                if (badge) {
+                    badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase tracking-wider";
+                    badge.innerText = '🛠️ MAINTENANCE';
+                }
+                if (greeting) greeting.innerText = 'System undergoing scheduled upgrades';
+                return;
+            }
+
+            // Privileged (Owner, Admin, Tester) OR Maintenance is OFF:
+            if (maintScreen) maintScreen.classList.add('hidden');
+            if (bottomNav) bottomNav.classList.remove('hidden');
+
+            // Show bypass ribbon if maintenance is ON
+            if (isMaint && isPrivileged) {
+                if (maintBanner) {
+                    maintBanner.classList.remove('hidden');
+                    const roleSpan = document.getElementById('maintBypassRole');
+                    if (roleSpan) roleSpan.innerText = (data.role || 'tester').toUpperCase();
+                }
+            } else {
+                if (maintBanner) maintBanner.classList.add('hidden');
+            }
 
             if (data.user) {
                 // Header indicators
@@ -1783,6 +1970,7 @@
                 if (rolePill) {
                     if (data.role === 'owner') rolePill.innerText = '👑 Owner';
                     else if (data.role === 'admin') rolePill.innerText = '⚡ Admin';
+                    else if (data.role === 'tester') rolePill.innerText = '🧪 Authorized Tester';
                     else rolePill.innerText = '🎓 Student Scholar';
                 }
 
@@ -1837,6 +2025,10 @@
                 roleBar.classList.remove('hidden');
                 pbtnAdmin.classList.remove('hidden');
                 switchMainTab('admin');
+            } else if (data.role === 'tester') {
+                badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 uppercase tracking-wider";
+                badge.innerText = '🧪 TESTER';
+                switchMainTab('dashboard');
             } else {
                 badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 uppercase tracking-wider";
                 badge.innerText = '🎓 STUDENT';
@@ -3325,12 +3517,107 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    const isAllowed = key === 'NEW_USERS_ALLOWED' ? data.value : !data.value;
-                    btn.className = `text-xs px-3.5 py-1.5 rounded-xl font-bold transition ${isAllowed ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`;
-                    btn.innerText = isAllowed ? (key === 'NEW_USERS_ALLOWED' ? 'Active' : 'Unlocked') : (key === 'NEW_USERS_ALLOWED' ? 'Blocked' : 'LOCKED');
+                    if (key === 'MAINTENANCE_MODE') {
+                        btn.className = `text-xs px-3.5 py-1.5 rounded-xl font-bold transition flex-shrink-0 ${data.value ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300'}`;
+                        btn.innerText = data.value ? 'Active (ON)' : 'Off';
+                        const maintBanner = document.getElementById('maintenanceBypassBanner');
+                        if (maintBanner) {
+                            if (data.value) maintBanner.classList.remove('hidden');
+                            else maintBanner.classList.add('hidden');
+                        }
+                    } else {
+                        const isAllowed = key === 'NEW_USERS_ALLOWED' ? data.value : !data.value;
+                        btn.className = `text-xs px-3.5 py-1.5 rounded-xl font-bold transition flex-shrink-0 ${isAllowed ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`;
+                        btn.innerText = isAllowed ? (key === 'NEW_USERS_ALLOWED' ? 'Active' : 'Unlocked') : (key === 'NEW_USERS_ALLOWED' ? 'Blocked' : 'LOCKED');
+                    }
                 }
             } catch (e) {
                 alert("Failed to toggle switch.");
+            }
+        }
+
+        // --- OWNER TESTER MANAGEMENT ---
+        async function loadOwnerTesters() {
+            const container = document.getElementById('ownerTestersListContainer');
+            if (!container) return;
+            try {
+                const res = await fetch('/api/owner/testers/list', {
+                    headers: { 'X-Telegram-User-Id': String(currentUserId) }
+                });
+                const d = await res.json();
+                if (d.success) {
+                    renderOwnerTestersList(d.testers || []);
+                }
+            } catch (e) {
+                console.error("Failed to load testers:", e);
+            }
+        }
+
+        function renderOwnerTestersList(testers) {
+            const container = document.getElementById('ownerTestersListContainer');
+            if (!container) return;
+            if (!testers || testers.length === 0) {
+                container.innerHTML = `<p class="text-[11px] text-slate-500 italic py-2" id="noTestersText">No authorized testers added yet. Use the form above or send <code>/addtester &lt;uid&gt;</code> in bot.</p>`;
+                return;
+            }
+            container.innerHTML = testers.map(tid => `
+                <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/70 text-xs">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base">🧪</span>
+                        <div>
+                            <span class="font-mono font-bold text-cyan-300">${tid}</span>
+                            <span class="ml-2 text-[9px] px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-semibold">BYPASS ALLOWED</span>
+                        </div>
+                    </div>
+                    <button onclick="deleteOwnerTester('${tid}')" class="text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 px-2 py-1 rounded-lg text-[10px] font-bold transition">
+                        🗑️ Remove
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        async function addOwnerTester() {
+            const input = document.getElementById('newTesterIdInput');
+            if (!input) return;
+            const uidVal = input.value.trim();
+            if (!uidVal) return alert("Please enter a valid Telegram User ID.");
+
+            try {
+                const res = await fetch('/api/owner/testers/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Telegram-User-Id': String(currentUserId) },
+                    body: JSON.stringify({ user_id: uidVal })
+                });
+                const d = await res.json();
+                if (d.success) {
+                    input.value = '';
+                    renderOwnerTestersList(d.testers || []);
+                    alert(`✅ Tester ${uidVal} added successfully! They can now bypass maintenance mode.`);
+                } else {
+                    alert(d.error || "Failed to add tester.");
+                }
+            } catch (e) {
+                alert("Error adding tester.");
+            }
+        }
+
+        async function deleteOwnerTester(tid) {
+            if (!confirm(`Are you sure you want to remove Tester ID: ${tid}?`)) return;
+            try {
+                const res = await fetch('/api/owner/testers/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Telegram-User-Id': String(currentUserId) },
+                    body: JSON.stringify({ user_id: tid })
+                });
+                const d = await res.json();
+                if (d.success) {
+                    renderOwnerTestersList(d.testers || []);
+                    alert(`🗑️ Tester ${tid} removed.`);
+                } else {
+                    alert(d.error || "Failed to remove tester.");
+                }
+            } catch (e) {
+                alert("Error removing tester.");
             }
         }
 

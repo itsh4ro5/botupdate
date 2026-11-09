@@ -205,6 +205,451 @@ DEFAULT_CURRENT_AFFAIRS = [
     }
 ]
 
+DEFAULT_AD_CONFIG = {
+    "ads_enabled": True,
+    "adsgram_block_id": "",
+    "rewarded_coins": 2.0,
+    "sponsor_banner_enabled": True,
+    "sponsor_banner_tag": "⚡ Official Partner Channel",
+    "sponsor_banner_title": "🚀 Join Official H4R Exam Channel for Free PDF Batches & Alerts",
+    "sponsor_banner_desc": "Get instant daily PDFs, class notes & live job notifications directly in Telegram.",
+    "sponsor_banner_btn": "Join Channel Free ↗",
+    "sponsor_banner_link": BATCH_UPDATE_CHANNEL_LINK or "https://t.me/H4R_Contact_bot"
+}
+
+DEFAULT_RECOMMENDED_RESOURCES = [
+    {
+        "id": "book_pinnacle_math",
+        "title": "Pinnacle SSC Maths 6800+ TCS MCQ (Bilingual)",
+        "author": "Pinnacle Publication",
+        "category": "SSC & Railways",
+        "badge": "🔥 Most Recommended by Toppers",
+        "rating": "4.8 ★",
+        "highlight": "Chapter-wise & Type-wise TCS questions with short video solutions & tricks.",
+        "link": "https://www.amazon.in/dp/B0CL5N5KGB?tag=h4r01-21",
+        "btn_text": "View on Amazon ↗"
+    },
+    {
+        "id": "book_blackbook_eng",
+        "title": "Black Book of English Vocabulary",
+        "author": "Nikhil Gupta",
+        "category": "SSC, CDS & Banking",
+        "badge": "⭐ 100% PYQ Vocab Coverage",
+        "rating": "4.9 ★",
+        "highlight": "One Word Substitutions, Idioms, Synonyms & Antonyms asked in all exams till 2025.",
+        "link": "https://www.amazon.in/dp/9355938833?tag=h4r01-21",
+        "btn_text": "View on Amazon ↗"
+    },
+    {
+        "id": "pass_testbook_pro",
+        "title": "Testbook Pass Pro (All Exams Mock Tests)",
+        "author": "Testbook Live Tests",
+        "category": "All Competitive Exams",
+        "badge": "🎯 70,000+ Mock Tests & PYQs",
+        "rating": "4.8 ★",
+        "highlight": "Unlimited re-attempt, exact TCS exam screen interface & All-India Rank analytics.",
+        "link": "https://testbook.com/invite/H4RPRO",
+        "btn_text": "Claim Student Discount ↗"
+    },
+    {
+        "id": "book_laxmikanth_polity",
+        "title": "Indian Polity by M. Laxmikanth (7th Edition)",
+        "author": "M. Laxmikanth (McGraw Hill)",
+        "category": "UPSC & State PSCs",
+        "badge": "🏛️ The Bible of Indian Polity",
+        "rating": "4.9 ★",
+        "highlight": "Covers complete constitutional articles, Supreme Court landmark cases & DPSP.",
+        "link": "https://www.amazon.in/dp/9355325858?tag=h4r01-21",
+        "btn_text": "View on Amazon ↗"
+    },
+    {
+        "id": "book_speedy_railway",
+        "title": "Speedy Railway Samanya Vigyan (General Science)",
+        "author": "Speedy Publications",
+        "category": "Railways RRB NTPC / Group D",
+        "badge": "🚂 Best for RRB CBT 1 & 2",
+        "rating": "4.7 ★",
+        "highlight": "Direct one-liner science questions asked across 25 years of railway recruitment.",
+        "link": "https://www.amazon.in/dp/B09XYZ1234?tag=h4r01-21",
+        "btn_text": "View on Amazon ↗"
+    }
+]
+
+DEFAULT_MOCK_TESTS = [
+    {
+        "id": "test_ssc_cgl_ga",
+        "title": "SSC CGL / CHSL Tier-1 General Awareness & Science Mock Test",
+        "category": "SSC",
+        "duration_minutes": 15,
+        "total_marks": 20,
+        "positive_mark": 2.0,
+        "negative_mark": 0.50,
+        "level": "Intermediate",
+        "instructions": "Each correct answer carries +2.0 marks. Negative marking of 0.50 marks for each incorrect response. Unattempted questions carry zero penalty.",
+        "questions": [
+            {
+                "id": 1,
+                "topic": "Indian Constitution",
+                "question": "Which Article of the Constitution of India provides for the creation of an all-India Public Service Commission for the Union and a Public Service Commission for each State?",
+                "options": ["Article 312", "Article 315", "Article 324", "Article 326"],
+                "answer": 1,
+                "explanation": "Article 315 provides for Public Service Commissions for the Union and for the States. Article 312 relates to All India Services."
+            },
+            {
+                "id": 2,
+                "topic": "Indian Economy",
+                "question": "Which institution releases the Multi-dimensional Poverty Index (MPI) for India in collaboration with UNDP and OPHI?",
+                "options": ["Reserve Bank of India", "NITI Aayog", "Ministry of Finance", "Central Statistics Office (CSO)"],
+                "answer": 1,
+                "explanation": "NITI Aayog publishes the National Multidimensional Poverty Index (MPI) based on NFHS surveys measuring health, education and standard of living."
+            },
+            {
+                "id": 3,
+                "topic": "Science - Chemistry",
+                "question": "What is the common chemical name of Plaster of Paris (PoP)?",
+                "options": ["Calcium Carbonate", "Calcium Sulphate Dihydrate", "Calcium Sulphate Hemihydrate", "Sodium Hydrogen Carbonate"],
+                "answer": 2,
+                "explanation": "Plaster of Paris is Calcium Sulphate Hemihydrate (CaSO4·½H2O), produced by heating Gypsum (CaSO4·2H2O) at 373 K."
+            },
+            {
+                "id": 4,
+                "topic": "History - Delhi Sultanate",
+                "question": "Which ruler of Delhi Sultanate introduced the 'Token Currency' system made of copper and brass in 1329–1330 CE?",
+                "options": ["Alauddin Khilji", "Muhammad bin Tughlaq", "Feroz Shah Tughlaq", "Balban"],
+                "answer": 1,
+                "explanation": "Muhammad bin Tughlaq introduced token bronze/copper currency equivalent to silver Tanka, though widespread counterfeiting led to its recall."
+            },
+            {
+                "id": 5,
+                "topic": "Geography",
+                "question": "Which river originates from the Mansarovar Lake region in Tibet and enters India through Arunachal Pradesh under the name 'Siang'?",
+                "options": ["Indus River", "Brahmaputra River", "Sutlej River", "Mahanadi River"],
+                "answer": 1,
+                "explanation": "The Yarlung Tsangpo in Tibet enters Arunachal Pradesh as Siang / Dihang, joining the Lohit and Dibang to become the Brahmaputra in Assam."
+            },
+            {
+                "id": 6,
+                "topic": "Science - Biology",
+                "question": "Which organelle is universally referred to as the 'Suicidal Bag' of a cell due to its hydrolytic digestive enzymes?",
+                "options": ["Ribosome", "Lysosome", "Centrosome", "Endoplasmic Reticulum"],
+                "answer": 1,
+                "explanation": "Lysosomes contain acidic hydrolases; when damaged, they rupture and digest their own cell, earning the title 'suicidal bags'."
+            },
+            {
+                "id": 7,
+                "topic": "Art & Culture",
+                "question": "The classical dance form 'Sattriya' originated in which Indian State under the bhakti movement of Srimanta Sankardev?",
+                "options": ["Manipur", "Odisha", "Assam", "Kerala"],
+                "answer": 2,
+                "explanation": "Sattriya was originated in the 15th century by Vaishnava saint Srimanta Sankardev in the Sattras (monasteries) of Assam."
+            },
+            {
+                "id": 8,
+                "topic": "Indian Geography",
+                "question": "The southernmost point of Indian territory, 'Indira Point' (Pygmalion Point), is located on which island?",
+                "options": ["North Andaman", "Little Andaman", "Great Nicobar", "Car Nicobar"],
+                "answer": 2,
+                "explanation": "Indira Point is situated at 6°45' N on Great Nicobar Island, facing the Great Channel."
+            },
+            {
+                "id": 9,
+                "topic": "Science - Physics",
+                "question": "A body floats in water with 1/3rd of its volume above the surface. What is the relative density of the body?",
+                "options": ["0.33", "0.67", "1.00", "1.33"],
+                "answer": 1,
+                "explanation": "By Archimedes' principle, fraction submerged = (1 - 1/3) = 2/3 ≈ 0.67. The relative density is equal to the fraction of volume submerged (0.67)."
+            },
+            {
+                "id": 10,
+                "topic": "Current Affairs & Sports",
+                "question": "The 2026 Commonwealth Games and major international Olympic qualification cycles follow the WADA anti-doping code. Where is the headquarters of WADA located?",
+                "options": ["Lausanne, Switzerland", "Montreal, Canada", "Vienna, Austria", "Geneva, Switzerland"],
+                "answer": 1,
+                "explanation": "The World Anti-Doping Agency (WADA) has its headquarters in Montreal, Canada."
+            }
+        ]
+    },
+    {
+        "id": "test_rrb_ntpc_science",
+        "title": "RRB NTPC & Group D General Science & Math Power Test",
+        "category": "Railways",
+        "duration_minutes": 15,
+        "total_marks": 10,
+        "positive_mark": 1.0,
+        "negative_mark": 0.33,
+        "level": "High-Yield",
+        "instructions": "Exam pattern: +1.0 for each correct answer, -0.33 penalty for each incorrect attempt.",
+        "questions": [
+            {
+                "id": 1,
+                "topic": "Physics - Optics",
+                "question": "Which type of mirror is utilized as a rearview mirror in motor vehicles for providing a wide field of view?",
+                "options": ["Concave Mirror", "Convex Mirror", "Plane Mirror", "Parabolic Mirror"],
+                "answer": 1,
+                "explanation": "Convex mirrors produce virtual, erect, and diminished images, offering an expansive field of view for vehicle rear inspection."
+            },
+            {
+                "id": 2,
+                "topic": "Chemistry - Metals",
+                "question": "Which non-metal is in liquid state at standard room temperature and pressure?",
+                "options": ["Mercury", "Bromine", "Phosphorus", "Chlorine"],
+                "answer": 1,
+                "explanation": "Bromine (Br) is the only liquid non-metal at standard room temperature. Mercury is a liquid metal."
+            },
+            {
+                "id": 3,
+                "topic": "Railways Math",
+                "question": "A train running at 72 km/h crosses a 200m platform in 20 seconds. What is the length of the train?",
+                "options": ["150 m", "200 m", "250 m", "300 m"],
+                "answer": 1,
+                "explanation": "Speed = 72 × (5/18) = 20 m/s. Total distance = Speed × Time = 20 × 20 = 400m. Length of train = 400 - 200 = 200m."
+            },
+            {
+                "id": 4,
+                "topic": "Biology - Human Body",
+                "question": "Which endocrine gland in the human body is termed the 'Master Gland' of the endocrine system?",
+                "options": ["Thyroid Gland", "Adrenal Gland", "Pituitary Gland", "Pancreas"],
+                "answer": 2,
+                "explanation": "The pituitary gland produces hormones (TSH, ACTH, GH, LH) regulating other endocrine glands, functioning as the master gland."
+            },
+            {
+                "id": 5,
+                "topic": "Physics - Energy",
+                "question": "What is the commercial unit of electrical energy commonly denoted as '1 Unit' in electricity meters?",
+                "options": ["1 Joule", "1 Watt-hour", "1 Kilowatt-hour (kWh)", "1 Megawatt"],
+                "answer": 2,
+                "explanation": "1 commercial unit = 1 kWh = 1000 Watts × 3600 seconds = 3.6 × 10^6 Joules."
+            },
+            {
+                "id": 6,
+                "topic": "Chemistry - Acids & Bases",
+                "question": "Which organic acid is naturally present in sour milk or curd?",
+                "options": ["Citric Acid", "Lactic Acid", "Oxalic Acid", "Tartaric Acid"],
+                "answer": 1,
+                "explanation": "Lactic acid is produced through the fermentation of lactose milk sugar by Lactobacillus bacteria."
+            },
+            {
+                "id": 7,
+                "topic": "Mathematics - Profit & Loss",
+                "question": "By selling an article for ₹720, a shopkeeper incurs a 20% loss. At what price must it be sold to gain 20% profit?",
+                "options": ["₹880", "₹960", "₹1,000", "₹1,080"],
+                "answer": 3,
+                "explanation": "CP = 720 / 0.8 = ₹900. Required SP with 20% gain = 900 × 1.2 = ₹1,080."
+            },
+            {
+                "id": 8,
+                "topic": "Physics - Sound",
+                "question": "What is the minimum distance between the sound source and reflecting surface required to hear a distinct echo in air (at 22°C)?",
+                "options": ["11.2 metres", "17.2 metres", "25.0 metres", "34.0 metres"],
+                "answer": 1,
+                "explanation": "Human ear persistence of hearing is 0.1s. Speed of sound in air ≈ 344 m/s. Distance = (344 × 0.1)/2 = 17.2 metres."
+            },
+            {
+                "id": 9,
+                "topic": "Biology - Vitamins",
+                "question": "Night blindness (Nyctalopia) and Xerophthalmia are deficiency disorders caused by lack of which vitamin?",
+                "options": ["Vitamin A (Retinol)", "Vitamin B1 (Thiamine)", "Vitamin C (Ascorbic Acid)", "Vitamin D (Calciferol)"],
+                "answer": 0,
+                "explanation": "Vitamin A (Retinol) is essential for rhodopsin synthesis in rod cells of retina; its deficiency causes night blindness."
+            },
+            {
+                "id": 10,
+                "topic": "Mathematics - Ratios",
+                "question": "The ratio of two numbers is 3:4 and their HCF is 4. What is the LCM of these two numbers?",
+                "options": ["24", "36", "48", "60"],
+                "answer": 2,
+                "explanation": "The numbers are 3×4 = 12 and 4×4 = 16. LCM(12, 16) = 48 (or 3 × 4 × HCF = 3 × 4 × 4 = 48)."
+            }
+        ]
+    },
+    {
+        "id": "test_upsc_prelims_gs",
+        "title": "UPSC Civil Services Prelims GS-1 High-Yield Practice Mock",
+        "category": "UPSC",
+        "duration_minutes": 20,
+        "total_marks": 20,
+        "positive_mark": 2.0,
+        "negative_mark": 0.66,
+        "level": "UPSC Standard",
+        "instructions": "Standard UPSC format: +2.0 Marks for each correct response, -0.66 deduction for each wrong answer.",
+        "questions": [
+            {
+                "id": 1,
+                "topic": "Indian Polity",
+                "question": "With reference to the Parliamentary system in India, which of the following is/are correct regarding the 'Motion of Thanks' on President's address?\n1. It is discussed and voted upon in both Houses of Parliament.\n2. The defeat of the Motion of Thanks in Lok Sabha amounts to the defeat of the Government.\nSelect the correct answer using the code given below:",
+                "options": ["1 only", "2 only", "Both 1 and 2", "Neither 1 nor 2"],
+                "answer": 2,
+                "explanation": "Both statements are correct. The Motion of Thanks is moved in both Houses; its defeat in the Lok Sabha signifies loss of majority and causes government resignation."
+            },
+            {
+                "id": 2,
+                "topic": "Environment & Ecology",
+                "question": "Consider the following statements regarding the 'Global Biodiversity Framework (Kunming-Montreal GBF)':\n1. It aims to protect at least 30% of planet's land, coastal areas and inland waters by 2030 (30x30 Target).\n2. It was adopted under the UN Framework Convention on Climate Change (UNFCCC).\nWhich of the statements given above is/are correct?",
+                "options": ["1 only", "2 only", "Both 1 and 2", "Neither 1 nor 2"],
+                "answer": 0,
+                "explanation": "Statement 1 is correct (30x30 target). Statement 2 is incorrect as it was adopted under the UN Convention on Biological Diversity (CBD) COP15, not UNFCCC."
+            },
+            {
+                "id": 3,
+                "topic": "Economic Geography",
+                "question": "The 'Kavach' automatic train protection (ATP) system implemented by Indian Railways operates on which principle technology?",
+                "options": ["Satellite laser radar (LiDAR)", "Radio Frequency Identification (RFID) and ultra-high frequency radio telemetry", "Ultrasonic rail Doppler sensors", "Acoustic optical fibre sensing"],
+                "answer": 1,
+                "explanation": "Kavach is an indigenously developed SIL-4 electronic system using RFID readers on tracks and UHF/VHF radio telemetry between locomotive and station."
+            },
+            {
+                "id": 4,
+                "topic": "Ancient & Medieval History",
+                "question": "With reference to ancient Indian temple architecture, the terms 'Garbhagriha', 'Mandapa', 'Shikhara' and 'Amalaka' are primarily characteristic features of:",
+                "options": ["Dravida Style only", "Nagara Style of North India", "Vesara Style exclusively", "Cave Rock-cut Architecture"],
+                "answer": 1,
+                "explanation": "The Nagara style of North Indian temple architecture is distinguished by the Amalaka (ribbed stone disc) crowning the curvilinear Shikhara over the Garbhagriha."
+            },
+            {
+                "id": 5,
+                "topic": "Modern History",
+                "question": "The 'Cabinet Mission' of 1946 rejected the demand for a sovereign Pakistan and proposed:",
+                "options": ["Immediate Partition into two dominions", "A three-tier federation with weak centre possessing defence, foreign affairs and communications", "Direct transfer of power to the Indian National Army", "Unitary unitary governance without provincial groupings"],
+                "answer": 1,
+                "explanation": "The Cabinet Mission (Pethick-Lawrence, Cripps, Alexander) proposed a loose 3-tier federation grouped into Sections A, B and C with residual powers in provinces."
+            },
+            {
+                "id": 6,
+                "topic": "Science & Space",
+                "question": "In the context of astronomy and deep space exploration, what does the term 'Lagrange Point 1 (L1)' signify, as utilized in ISRO's Aditya-L1 solar mission?",
+                "options": ["A point of zero gravitational acceleration in inter-galactic void", "An equilibrium position where gravitational forces of Sun and Earth produce an unobstructed solar view without occultation", "The nearest orbital approach of Moon to Earth", "A point of maximum geomagnetic solar flare impact"],
+                "answer": 1,
+                "explanation": "Lagrange Point 1 (L1), located 1.5 million km from Earth towards the Sun, provides an unhindered, continuous view of the Sun without eclipses."
+            },
+            {
+                "id": 7,
+                "topic": "Economy & Banking",
+                "question": "Which of the following constitutes the largest component of India's Foreign Exchange Reserves managed by the RBI?",
+                "options": ["Gold Holdings", "Foreign Currency Assets (FCA)", "Special Drawing Rights (SDRs)", "Reserve Tranche Position (RTP) in IMF"],
+                "answer": 1,
+                "explanation": "Foreign Currency Assets (FCA) held in major currencies (USD, EUR, GBP, JPY) comprise ~85% of total Indian forex reserves."
+            },
+            {
+                "id": 8,
+                "topic": "Indian Polity",
+                "question": "Which Constitutional Article guarantees that 'No person shall be prosecuted and punished for the same offence more than once' (Doctrine against Double Jeopardy)?",
+                "options": ["Article 20(1)", "Article 20(2)", "Article 20(3)", "Article 21"],
+                "answer": 1,
+                "explanation": "Article 20(2) incorporates the rule against double jeopardy: no person shall be prosecuted and punished for the same offence more than once."
+            },
+            {
+                "id": 9,
+                "topic": "Environment & Wetlands",
+                "question": "The 'Montreux Record' is a register under the Ramsar Convention. What does it maintain?",
+                "options": ["List of newly discovered wetland fish species", "Wetland sites where changes in ecological character have occurred, are occurring, or are likely to occur", "Commercial trade data of wetland peat minerals", "Global carbon tax rates on mangrove wetlands"],
+                "answer": 1,
+                "explanation": "Montreux Record lists Ramsar wetland sites facing acute ecological disturbance due to technological development, pollution or human interference (e.g. Keoladeo and Loktak in India)."
+            },
+            {
+                "id": 10,
+                "topic": "Geography & Oceanography",
+                "question": "Which of the following ocean currents is a Cold Ocean Current in the Atlantic Ocean?",
+                "options": ["Gulf Stream", "Benguela Current", "Brazil Current", "North Atlantic Drift"],
+                "answer": 1,
+                "explanation": "The Benguela Current is a cold ocean current that flows northward along the west coast of southern Africa into the South Atlantic Ocean."
+            }
+        ]
+    },
+    {
+        "id": "test_daily_ca_sprint",
+        "title": "Daily 9 AM High-Yield Current Affairs Sprint",
+        "category": "Daily Sprint",
+        "duration_minutes": 10,
+        "total_marks": 10,
+        "positive_mark": 1.0,
+        "negative_mark": 0.25,
+        "level": "Daily Routine",
+        "instructions": "Daily Morning 10-Question Sprint. Score 8+ to earn bonus study coins and maintain your focus streak!",
+        "questions": [
+            {
+                "id": 1,
+                "topic": "National Affairs",
+                "question": "Under PM GatiShakti National Master Plan 2.0, how many multimodal cargo hubs and dedicated freight terminals are targeted across India?",
+                "options": ["50 Hubs", "100+ Multimodal Hubs", "500 Hubs", "25 Hubs"],
+                "answer": 1,
+                "explanation": "Phase 2 emphasizes setting up 100+ Multimodal cargo logistic terminals to reduce national logistics cost to under 8% of GDP."
+            },
+            {
+                "id": 2,
+                "topic": "Monetary Policy",
+                "question": "What is the primary operational target of the RBI Monetary Policy Committee (MPC) under the Flexible Inflation Targeting (FIT) framework?",
+                "options": ["GDP growth rate of 8.0%", "CPI inflation target of 4.0% with +/- 2% tolerance band (2% to 6%)", "Fiscal deficit reduction to 3.0%", "Fixed currency exchange rate to USD"],
+                "answer": 1,
+                "explanation": "Section 45ZA of RBI Act mandates maintaining CPI inflation at 4% with a tolerance band of +/- 2% (i.e. 2% to 6%)."
+            },
+            {
+                "id": 3,
+                "topic": "Defence Tech",
+                "question": "What is the operational standoff range of the DRDO-developed 'Gaurav' Long-Range Glide Bomb?",
+                "options": ["20 to 30 km", "Nearly 100 km", "Over 500 km", "1000 km"],
+                "answer": 1,
+                "explanation": "Gaurav is a winged glide bomb capable of steering towards targets at standoff distances around 100 km using inertial navigation assisted by GPS/NavIC."
+            },
+            {
+                "id": 4,
+                "topic": "Environment",
+                "question": "Which international treaty celebrated World Wetlands Day on 2nd February and oversees the Ramsar List of Wetlands of International Importance?",
+                "options": ["Bonn Convention (CMS)", "Ramsar Convention (signed in Ramsar, Iran, 1971)", "Basel Convention", "Stockholm Convention"],
+                "answer": 1,
+                "explanation": "The Ramsar Convention was signed on 2 February 1971 in the Iranian city of Ramsar on the shores of the Caspian Sea."
+            },
+            {
+                "id": 5,
+                "topic": "Space Exploration",
+                "question": "ISRO's LVM3 (Launch Vehicle Mark 3), previously designated GSLV Mk III, is a 3-stage heavy-lift vehicle. What is its second stage?",
+                "options": ["Solid S200 Boosters", "Liquid L110 Vikas Engine Stage", "Cryogenic C25 Stage", "Semi-Cryogenic SC120 Stage"],
+                "answer": 1,
+                "explanation": "LVM3 consists of two S200 solid rocket boosters, an L110 core liquid stage (twin Vikas engines), and a C25 cryogenic upper stage."
+            },
+            {
+                "id": 6,
+                "topic": "Economy",
+                "question": "Which agency is responsible for calculating and publishing the Index of Eight Core Industries (ICI) in India?",
+                "options": ["Office of Economic Adviser (DPIIT), Ministry of Commerce", "NITI Aayog", "Ministry of Labour", "National Sample Survey Office (NSSO)"],
+                "answer": 0,
+                "explanation": "The Office of Economic Adviser under DPIIT, Ministry of Commerce and Industry releases the monthly Index of Eight Core Industries."
+            },
+            {
+                "id": 7,
+                "topic": "Judiciary & Rights",
+                "question": "In the landmark 'K.S. Puttaswamy v. Union of India (2017)' judgment, the Supreme Court declared which right as a Fundamental Right under Article 21?",
+                "options": ["Right to Free Internet", "Right to Privacy", "Right to Shelter", "Right to Free Legal Aid"],
+                "answer": 1,
+                "explanation": "A unanimous 9-judge constitutional bench ruled that the Right to Privacy is an intrinsic part of the Right to Life and Personal Liberty under Article 21."
+            },
+            {
+                "id": 8,
+                "topic": "International Groups",
+                "question": "Which country recently officially joined the BRICS grouping as new full member along with Egypt, Ethiopia, Iran and UAE?",
+                "options": ["Saudi Arabia", "Indonesia", "Argentina", "Singapore"],
+                "answer": 0,
+                "explanation": "Saudi Arabia, along with Egypt, Ethiopia, Iran, and UAE, were invited to join BRICS in its historic expansion."
+            },
+            {
+                "id": 9,
+                "topic": "Renewable Energy",
+                "question": "Under the PM Surya Ghar: Muft Bijli Yojana, what is the maximum monthly free solar electricity targeted for 1 crore households?",
+                "options": ["100 Units", "200 Units", "300 Units", "500 Units"],
+                "answer": 2,
+                "explanation": "PM Surya Ghar provides up to 300 units of free solar electricity monthly to 1 crore households through rooftop solar subsidies."
+            },
+            {
+                "id": 10,
+                "topic": "Cybersecurity & AI",
+                "question": "What is the name of India's national AI computing infrastructure initiative approved with a ₹10,372 crore outlay?",
+                "options": ["IndiaAI Mission", "Digital India AI", "Bharat GPT", "Vikshit AI 2047"],
+                "answer": 0,
+                "explanation": "The Union Cabinet approved the comprehensive IndiaAI Mission with a budget of ₹10,372 crore to establish 10,000+ GPU supercomputing capacity."
+            }
+        ]
+    }
+]
+
 # --- DATABASE & MEMORY ---
 DB = {
     "ADMIN_IDS": [], "FREE_CHANNELS": {}, "PAID_CHANNELS": {}, "SPECIAL_CHANNELS": {}, "ALL_CHATS": {},
@@ -212,7 +657,8 @@ DB = {
     "LINK_MAP": {}, "CUSTOM_WELCOMES": {}, "NEW_USERS_ALLOWED": True, 
     "FREE_LOCKED": False, "PAID_LOCKED": False, "TEST_BOT_LOCKED": False, 
     "SCHEDULED_DELETES": [], "TEST_BOT_LINK": "", "BATCH_CATEGORIES": {},
-    "CATEGORIES": DEFAULT_CATEGORIES.copy(), "MAINTENANCE_MODE": False,
+    "CATEGORIES": DEFAULT_CATEGORIES.copy(), "MAINTENANCE_MODE": True,
+    "TESTER_IDS": [],
     "BATCH_COINS": {}, "BATCH_REQUESTS": {}, "BATCH_REQUEST_STATUS": {}, "VOUCHERS": {},
     "BATCH_PRICES": {},
     "BATCH_REQUEST_NOTE": "🙏 **Important Note from Admin:**\nMain abhi regular active nahi reh pata hu isliye batch upload/add hone me thoda waqt lag sakta hai. Aap bilkul chinta na karein aur thoda dhairya (patience) rakhein. Jaise hi yeh batch bot me add hoga, bot aapko direct notification bhej dega! Tab tak ke liye dhanyawad.",
@@ -222,7 +668,11 @@ DB = {
     "BATCH_UPDATE_CHANNEL_LINK": BATCH_UPDATE_CHANNEL_LINK,
     "STUDY_TASKS": {},
     "EXAM_VACANCIES": DEFAULT_VACANCIES.copy(),
-    "CURRENT_AFFAIRS": DEFAULT_CURRENT_AFFAIRS.copy()
+    "CURRENT_AFFAIRS": DEFAULT_CURRENT_AFFAIRS.copy(),
+    "MOCK_TESTS": DEFAULT_MOCK_TESTS.copy(),
+    "MOCK_TEST_RESULTS": {},
+    "AD_CONFIG": DEFAULT_AD_CONFIG.copy(),
+    "GEMINI_API_KEY": os.environ.get("GEMINI_API_KEY", "")
 }
 
 class BoundedDict(dict):
@@ -287,6 +737,7 @@ def load_data():
         "VIP_MATERIALS_LINK", "VIP_STICKER_ID", "VIP_STICKER_TYPE", "BATCH_COINS",
         "BATCH_REQUESTS", "BATCH_REQUEST_STATUS", "VOUCHERS", "BATCH_PRICES", "BATCH_REQUEST_NOTE",
         "BATCH_UPDATE_CHANNEL_ID", "BATCH_UPDATE_CHANNEL_LINK", "EXAM_VACANCIES", "CURRENT_AFFAIRS",
+        "TESTER_IDS", "MOCK_TESTS", "MOCK_TEST_RESULTS", "AD_CONFIG",
     ]
     
     if MONGO_URL and mongo_collection is not None:
@@ -452,7 +903,13 @@ def save_data_sync():
             "BATCH_PRICES": {str(k): v for k, v in DB.get("BATCH_PRICES", {}).items()},
             "BATCH_REQUEST_NOTE": DB.get("BATCH_REQUEST_NOTE", ""),
             "BATCH_UPDATE_CHANNEL_ID": DB.get("BATCH_UPDATE_CHANNEL_ID", -1004304703943),
-            "BATCH_UPDATE_CHANNEL_LINK": DB.get("BATCH_UPDATE_CHANNEL_LINK", "https://t.me/c/4304703943")
+            "BATCH_UPDATE_CHANNEL_LINK": DB.get("BATCH_UPDATE_CHANNEL_LINK", "https://t.me/c/4304703943"),
+            "TESTER_IDS": DB.get("TESTER_IDS", []),
+            "EXAM_VACANCIES": DB.get("EXAM_VACANCIES", DEFAULT_VACANCIES),
+            "CURRENT_AFFAIRS": DB.get("CURRENT_AFFAIRS", DEFAULT_CURRENT_AFFAIRS),
+            "MOCK_TESTS": DB.get("MOCK_TESTS", DEFAULT_MOCK_TESTS),
+            "MOCK_TEST_RESULTS": DB.get("MOCK_TEST_RESULTS", {}),
+            "AD_CONFIG": DB.get("AD_CONFIG", DEFAULT_AD_CONFIG)
         }
         if MONGO_URL and mongo_collection is not None:
             try: 

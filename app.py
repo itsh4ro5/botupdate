@@ -97,11 +97,12 @@ async def student_store():
         "pending_demands": pending_demands
     }
 
+    maintenance_mode = DB.get("MAINTENANCE_MODE", True)
     settings = {
         "NEW_USERS_ALLOWED": DB.get("NEW_USERS_ALLOWED", True),
         "FREE_LOCKED": DB.get("FREE_LOCKED", False),
         "PAID_LOCKED": DB.get("PAID_LOCKED", False),
-        "MAINTENANCE_MODE": DB.get("MAINTENANCE_MODE", False)
+        "MAINTENANCE_MODE": maintenance_mode
     }
 
     reqs = DB.get("BATCH_REQUESTS", {})
@@ -124,10 +125,16 @@ async def student_store():
         study_leaderboard=_get_study_leaderboard(),
         vacancies=DB.get("EXAM_VACANCIES", config.DEFAULT_VACANCIES),
         current_affairs=DB.get("CURRENT_AFFAIRS", config.DEFAULT_CURRENT_AFFAIRS),
+        mock_tests=DB.get("MOCK_TESTS", config.DEFAULT_MOCK_TESTS),
+        ad_config=DB.get("AD_CONFIG", config.DEFAULT_AD_CONFIG),
+        recommended_resources=getattr(config, "DEFAULT_RECOMMENDED_RESOURCES", []),
         bot_username=bot_username,
         bot_title="Educational Batch Store & Study Hub",
         owner_id=str(config.OWNER_ID),
         admin_ids=[str(x) for x in DB.get("ADMIN_IDS", [])],
+        tester_ids=[str(x) for x in DB.get("TESTER_IDS", [])],
+        session_role=session.get('role', ''),
+        maintenance_mode=maintenance_mode,
         stats=stats,
         settings=settings,
         demands=demands
@@ -140,8 +147,9 @@ async def login():
     if request.method == 'POST':
         form = await request.form
         pwd = (form.get("password") or "").strip()
-        owner_id_str = str(config.OWNER_ID)
-        admin_ids = [str(x) for x in DB.get("ADMIN_IDS", [])]
+        owner_id_str = str(config.OWNER_ID).strip()
+        admin_ids = [str(x).strip() for x in DB.get("ADMIN_IDS", [])]
+        tester_ids = [str(x).strip() for x in DB.get("TESTER_IDS", [])]
 
         if pwd == WEB_PASSWORD or pwd == owner_id_str:
             session['authenticated'] = True
@@ -151,8 +159,12 @@ async def login():
             session['authenticated'] = True
             session['role'] = 'admin'
             return redirect('/admin')
+        elif pwd in tester_ids:
+            session['authenticated'] = True
+            session['role'] = 'tester'
+            return redirect('/webapp')
         else:
-            error = "Invalid passcode. Please enter a valid Owner ID or Admin key."
+            error = "Invalid passcode. Please enter a valid Owner ID, Admin key, or Tester ID."
 
     return await render_template("login.html", error=error)
 
@@ -163,8 +175,13 @@ async def logout():
 
 def is_auth(role="admin", uid=None):
     if session.get('authenticated'):
-        if role == "owner" and session.get('role') != "owner":
-            return False
+        s_role = session.get('role')
+        if role == "owner":
+            return s_role == "owner"
+        if role == "admin":
+            return s_role in ["owner", "admin"]
+        if role == "tester":
+            return s_role in ["owner", "admin", "tester"]
         return True
     
     check_id = uid or request.headers.get("X-Telegram-User-Id")
@@ -172,7 +189,9 @@ def is_auth(role="admin", uid=None):
         uid_str = str(check_id).strip()
         if uid_str == str(config.OWNER_ID).strip():
             return True
-        if role == "admin" and uid_str in [str(x).strip() for x in DB.get("ADMIN_IDS", [])]:
+        if role in ["admin", "tester"] and uid_str in [str(x).strip() for x in DB.get("ADMIN_IDS", [])]:
+            return True
+        if role == "tester" and uid_str in [str(x).strip() for x in DB.get("TESTER_IDS", [])]:
             return True
     return False
 
@@ -249,6 +268,7 @@ async def api_twa_session():
     uid_str = str(uid).strip()
     owner_id_str = str(config.OWNER_ID).strip()
     admin_ids = [str(x).strip() for x in DB.get("ADMIN_IDS", [])]
+    tester_ids = [str(x).strip() for x in DB.get("TESTER_IDS", [])]
 
     if uid_str == owner_id_str:
         role = "owner"
@@ -258,6 +278,10 @@ async def api_twa_session():
         role = "admin"
         session['authenticated'] = True
         session['role'] = 'admin'
+    elif uid_str in tester_ids:
+        role = "tester"
+        session['authenticated'] = True
+        session['role'] = 'tester'
     else:
         role = "user"
         session['role'] = 'user'
@@ -302,6 +326,8 @@ async def api_twa_session():
         "success": True,
         "role": role,
         "user_id": uid_str,
+        "maintenance_mode": DB.get("MAINTENANCE_MODE", True),
+        "is_tester": role in ["owner", "admin", "tester"],
         "user": user_summary
     }
 
@@ -778,3 +804,50 @@ async def api_owner_broadcast():
 
     asyncio.create_task(_broadcast_task())
     return jsonify({"success": True, "total_recipients": len(uids)})
+
+# --- OWNER TESTER MANAGEMENT APIS ---
+@app.route('/api/owner/testers/list')
+async def api_owner_testers_list():
+    if not is_auth("admin"):
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+    testers = DB.get("TESTER_IDS", [])
+    return jsonify({"success": True, "testers": testers})
+
+@app.route('/api/owner/testers/add', methods=['POST'])
+async def api_owner_testers_add():
+    if not is_auth("owner"):
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+    data = await request.get_json() or {}
+    raw_uid = data.get("user_id") or data.get("tester_id")
+    if not raw_uid:
+        return jsonify({"success": False, "error": "User ID is required"}), 400
+    try:
+        tester_id = int(str(raw_uid).strip())
+    except ValueError:
+        return jsonify({"success": False, "error": "User ID must be a numeric Telegram ID"}), 400
+
+    testers = DB.setdefault("TESTER_IDS", [])
+    if tester_id not in testers:
+        testers.append(tester_id)
+        await save_data_async()
+    return jsonify({"success": True, "message": f"Tester {tester_id} added successfully", "testers": testers})
+
+@app.route('/api/owner/testers/delete', methods=['POST'])
+async def api_owner_testers_delete():
+    if not is_auth("owner"):
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+    data = await request.get_json() or {}
+    raw_uid = data.get("user_id") or data.get("tester_id")
+    if not raw_uid:
+        return jsonify({"success": False, "error": "User ID is required"}), 400
+    try:
+        tester_id = int(str(raw_uid).strip())
+    except ValueError:
+        return jsonify({"success": False, "error": "User ID must be a numeric Telegram ID"}), 400
+
+    testers = DB.setdefault("TESTER_IDS", [])
+    if tester_id in testers:
+        testers.remove(tester_id)
+        await save_data_async()
+    return jsonify({"success": True, "message": f"Tester {tester_id} removed", "testers": testers})
+
