@@ -121,11 +121,21 @@ async def _patched_send(client, chat_id, text=None, parse_mode=None, reply_marku
 
 async def _patched_edit(client, chat_id, message_id, text=None, parse_mode=None, reply_markup=None, **kwargs):
     if "rich_message" in kwargs:
-        return await _old_edit(client, chat_id, message_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
+        try:
+            return await _old_edit(client, chat_id, message_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
+        except Exception as e:
+            if "MESSAGE_NOT_MODIFIED" in str(e) or e.__class__.__name__ == "MessageNotModified":
+                return True
+            raise
 
     if reply_markup and hasattr(reply_markup, "inline_keyboard") and reply_markup.inline_keyboard:
         if any(getattr(b, "web_app", None) is not None for row in reply_markup.inline_keyboard for b in row):
-            return await _old_edit(client, chat_id, message_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
+            try:
+                return await _old_edit(client, chat_id, message_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
+            except Exception as e:
+                if "MESSAGE_NOT_MODIFIED" in str(e) or e.__class__.__name__ == "MessageNotModified":
+                    return True
+                raise
         try:
             rp_rows = []
             for row in reply_markup.inline_keyboard:
@@ -157,9 +167,21 @@ async def _patched_edit(client, chat_id, message_id, text=None, parse_mode=None,
             
             return await rp.edit(client, chat_id, message_id, msg)
         except Exception as e:
+            if "MESSAGE_NOT_MODIFIED" in str(e) or e.__class__.__name__ == "MessageNotModified":
+                return True
             traceback.print_exc()
-            return await _old_edit(client, chat_id, message_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
-    return await _old_edit(client, chat_id, message_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
+            try:
+                return await _old_edit(client, chat_id, message_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
+            except Exception as e2:
+                if "MESSAGE_NOT_MODIFIED" in str(e2) or e2.__class__.__name__ == "MessageNotModified":
+                    return True
+                raise
+    try:
+        return await _old_edit(client, chat_id, message_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
+    except Exception as e:
+        if "MESSAGE_NOT_MODIFIED" in str(e) or e.__class__.__name__ == "MessageNotModified":
+            return True
+        raise
 
 async def _patched_reply(self, text, parse_mode=None, reply_markup=None, **kwargs):
     kwargs.pop("reply_to_message_id", None)
