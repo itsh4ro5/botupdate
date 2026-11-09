@@ -1025,6 +1025,89 @@ async def cmd_webapp(client: Client, message: Message):
 async def cmd_study(client: Client, message: Message):
     await cmd_webapp(client, message)
 
+async def cmd_vacancies(client: Client, message: Message):
+    url = getattr(config, "WEB_APP_URL", "") or "https://itsh4r01-user-manager.hf.space"
+    uid = message.from_user.id if message.from_user else message.chat.id
+    vac_app_url = f"{url}?uid={uid}&tab=vacancies"
+
+    vacs = DB.get("EXAM_VACANCIES", config.DEFAULT_VACANCIES)
+    txt = (
+        "📢 **2026 Active Government Exam Vacancies & Alerts**\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "⚡ *Live recruitment radar for competitive aspirants:*\n\n"
+    )
+
+    kb = []
+    for idx, v in enumerate(vacs[:5], 1):
+        txt += (
+            f"**{idx}. {v.get('title')}**\n"
+            f"🏛️ *Commission:* `{v.get('org')}`\n"
+            f"👥 *Posts:* `{v.get('total_posts')}`\n"
+            f"📅 *Last Date:* **{v.get('last_date')}**\n"
+            f"🎯 *Exam Date:* `{v.get('exam_date')}`\n\n"
+        )
+        if v.get("apply_link"):
+            kb.append([InlineKeyboardButton(f"🚀 Apply: {v.get('org')}", url=v.get("apply_link"))])
+
+    kb.append([InlineKeyboardButton("📱 Open Full Vacancy Radar (Mini App)", web_app=WebAppInfo(url=vac_app_url))])
+    kb.append([InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")])
+
+    await message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
+async def cmd_quiz(client: Client, message: Message):
+    url = getattr(config, "WEB_APP_URL", "") or "https://itsh4r01-user-manager.hf.space"
+    uid = message.from_user.id if message.from_user else message.chat.id
+    quiz_app_url = f"{url}?uid={uid}&tab=study"
+
+    kb = [
+        [InlineKeyboardButton("🧠 Launch Multi-Subject Quiz Arena", web_app=WebAppInfo(url=quiz_app_url))],
+        [InlineKeyboardButton("🏆 Top Leaderboard", callback_data="show_leaderboard")],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]
+    ]
+
+    txt = (
+        "🧠 **Multi-Subject Exam Practice Quiz Arena**\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🎯 *Subject Quizzes Available:*\n"
+        "• 🏛️ **Indian Polity** (Articles, Writs, Amendments)\n"
+        "• 📜 **Modern History** (Freedom Struggle & Movements)\n"
+        "• 🌍 **Geography** (Rivers, Passes, National Parks)\n"
+        "• 📈 **Indian Economy** (RBI, Inflation, Budget)\n"
+        "• 📐 **CSAT Math & Aptitude** (Speed Math, Ratios)\n"
+        "• 🧠 **Logical Reasoning** (Coding, Puzzles)\n"
+        "• 🧬 **General Science** (Physics, Bio, Space Tech)\n"
+        "• 📰 **Current Affairs** (High-Yield 2026 Milestones)\n\n"
+        "🎁 **Reward:** Score ≥3 to claim **+1.0 Study Coins** daily!\n\n"
+        "👇 *Tap below to launch the Quiz Arena:* "
+    )
+    await message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
+async def cmd_currentaffairs(client: Client, message: Message):
+    url = getattr(config, "WEB_APP_URL", "") or "https://itsh4r01-user-manager.hf.space"
+    uid = message.from_user.id if message.from_user else message.chat.id
+    ca_app_url = f"{url}?uid={uid}&tab=study"
+
+    ca_list = DB.get("CURRENT_AFFAIRS", config.DEFAULT_CURRENT_AFFAIRS)
+    txt = (
+        "📰 **Daily High-Yield Current Affairs Digest**\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "⚡ *Curated for UPSC, SSC, Railways & State PSCs:*\n\n"
+    )
+
+    for idx, item in enumerate(ca_list[:5], 1):
+        txt += (
+            f"**{idx}. [{item.get('topic')}]**\n"
+            f"📌 *{item.get('title')}*\n"
+            f"_{item.get('snippet')}_\n"
+            f"🗓️ `{item.get('date')}`\n\n"
+        )
+
+    kb = [
+        [InlineKeyboardButton("📖 Open Digest & Notes in Mini App", web_app=WebAppInfo(url=ca_app_url))],
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]
+    ]
+    await message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
 async def cmd_backup(client: Client, message: Message):
     if not is_owner_msg(message):
         return
@@ -4326,6 +4409,72 @@ async def general_callback(client: Client, q: CallbackQuery):
                 logger.error(f"Refer & Earn Error: {e}")
                 await q.answer("⚠️ Menu load hone me error aayi. Kripya wapas try karein.", show_alert=True)
 
+        # --- HOME MENU: VACANCIES & RECRUITMENT RADAR ---
+        elif data == "menu_vacancies":
+            try:
+                await q.answer()
+                url = getattr(config, "WEB_APP_URL", "") or "https://itsh4r01-user-manager.hf.space"
+                vac_app_url = f"{url}?uid={uid}&tab=vacancies"
+                vacs = DB.get("EXAM_VACANCIES", config.DEFAULT_VACANCIES)
+
+                txt = (
+                    "📢 **2026 Active Government Exam Vacancies & Alerts**\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "⚡ *Live recruitment radar for competitive aspirants:*\n\n"
+                )
+
+                kb = []
+                for idx, v in enumerate(vacs[:4], 1):
+                    txt += (
+                        f"**{idx}. {v.get('title')}**\n"
+                        f"🏛️ *Org:* `{v.get('org')}` | 👥 *Posts:* `{v.get('total_posts')}`\n"
+                        f"📅 *Last Date:* **{v.get('last_date')}**\n\n"
+                    )
+                    if v.get("apply_link"):
+                        kb.append([InlineKeyboardButton(f"🚀 Apply: {v.get('org')}", url=v.get("apply_link"))])
+
+                kb.append([InlineKeyboardButton("📱 Open Full Vacancy Radar (Mini App)", web_app=WebAppInfo(url=vac_app_url))])
+                kb.append([InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")])
+
+                await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+            except Exception as e_vac:
+                if "MESSAGE_NOT_MODIFIED" not in str(e_vac):
+                    logger.error(f"Menu Vacancies Error: {e_vac}")
+                    await q.answer("⚠️ Could not load vacancies.", show_alert=True)
+
+        # --- HOME MENU: EXAM PRACTICE QUIZZES ---
+        elif data == "menu_quizzes":
+            try:
+                await q.answer()
+                url = getattr(config, "WEB_APP_URL", "") or "https://itsh4r01-user-manager.hf.space"
+                quiz_app_url = f"{url}?uid={uid}&tab=study"
+
+                txt = (
+                    "🧠 **Multi-Subject Exam Practice Quiz Arena**\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "🎯 *Available Subject Arenas:*\n"
+                    "• 🏛️ **Indian Polity** (Articles, Writs, Amendments)\n"
+                    "• 📜 **Modern History** (Freedom Struggle & Movements)\n"
+                    "• 🌍 **Geography** (Rivers, Passes, National Parks)\n"
+                    "• 📈 **Indian Economy** (RBI, Inflation, Budget)\n"
+                    "• 📐 **CSAT Math & Aptitude** (Speed Math, Ratios)\n"
+                    "• 🧠 **Logical Reasoning** (Coding, Puzzles)\n"
+                    "• 🧬 **General Science** (Physics, Bio, Space Tech)\n"
+                    "• 📰 **Current Affairs** (High-Yield 2026 Milestones)\n\n"
+                    "🎁 **Daily Challenge:** Score ≥3 to claim **+1.0 Study Coins**!\n\n"
+                    "👇 *Tap below to launch the interactive Quiz Arena:* "
+                )
+                kb = [
+                    [InlineKeyboardButton("🧠 Launch Multi-Subject Quiz Arena", web_app=WebAppInfo(url=quiz_app_url))],
+                    [InlineKeyboardButton("🏆 Top Leaderboard", callback_data="show_leaderboard")],
+                    [InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]
+                ]
+                await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+            except Exception as e_quiz:
+                if "MESSAGE_NOT_MODIFIED" not in str(e_quiz):
+                    logger.error(f"Menu Quizzes Error: {e_quiz}")
+                    await q.answer("⚠️ Could not load quiz arena.", show_alert=True)
+
         # =====================================================================
         # 💎 VIP-ONLY: EXCLUSIVE COURSE MATERIALS
         # =====================================================================
@@ -5135,6 +5284,10 @@ def build_home_menu(user_key, user):
                 rp.btn("🤖 Test Bot", "test_bot", style=rp.Style.DEFAULT)
             ),
             rp.buttons(
+                rp.btn("📢 Govt Vacancies & Alerts", "menu_vacancies", style=rp.Style.SUCCESS),
+                rp.btn("🧠 Exam Practice Quizzes", "menu_quizzes", style=rp.Style.DEFAULT)
+            ),
+            rp.buttons(
                 rp.btn("ℹ️ My Profile", "my_info", style=rp.Style.DEFAULT),
                 rp.url_btn("📢 Updates", BATCH_UPDATE_CHANNEL_LINK, style=rp.Style.LINK)
             ),
@@ -5159,6 +5312,8 @@ def build_home_menu(user_key, user):
                 rp.bold("• "), "🎟️ ", rp.bold("Redeem Voucher"), " — ", rp.italic("Promo codes se free coins activate karein\n\n"),
                 rp.bold("• "), "🙋 ", rp.bold("Request Batch"), " — ", rp.italic("Apne manpasand batch ki request dalein\n\n"),
                 rp.bold("• "), "🤖 ", rp.bold("Test Bot"), " — ", rp.italic("Practice test series solve karein\n\n"),
+                rp.bold("• "), "📢 ", rp.bold("Govt Vacancies"), " — ", rp.italic("UPSC, SSC, Railways recruitment radar\n\n"),
+                rp.bold("• "), "🧠 ", rp.bold("Practice Quizzes"), " — ", rp.italic("Daily topic MCQs & earn study coins\n\n"),
                 rp.bold("• "), "ℹ️ ", rp.bold("Profile"), " — ", rp.italic("Wallet balance, streak & account details")
             ]),
             rp.buttons(
@@ -5176,6 +5331,10 @@ def build_home_menu(user_key, user):
             rp.buttons(
                 rp.btn("🙋 Request Batch", "req_batch_btn", style=rp.Style.DEFAULT),
                 rp.btn("🤖 Test Bot", "test_bot", style=rp.Style.DEFAULT)
+            ),
+            rp.buttons(
+                rp.btn("📢 Govt Vacancies & Alerts", "menu_vacancies", style=rp.Style.SUCCESS),
+                rp.btn("🧠 Exam Practice Quizzes", "menu_quizzes", style=rp.Style.DEFAULT)
             ),
             rp.buttons(
                 rp.btn("ℹ️ My Profile", "my_info", style=rp.Style.DEFAULT),

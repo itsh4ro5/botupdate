@@ -66,6 +66,145 @@ WEB_APP_URL = os.environ.get("WEB_APP_URL") or (f"https://{os.environ['SPACE_HOS
 
 DEFAULT_CATEGORIES = ["Civil Engg.", "Electrical Engg.", "Mechanical Engg.", "Electronics Engg.", "CSE", "Competition (Math, Reas, GK/GS)", "Skill Improvement", "Other Batches"]
 
+DEFAULT_VACANCIES = [
+    {
+        "id": "vac_upsc_cse_2026",
+        "title": "UPSC Civil Services (IAS/IPS) & IFS Prelims 2026",
+        "org": "Union Public Service Commission (UPSC)",
+        "category": "UPSC",
+        "total_posts": "1,056+ Posts",
+        "eligibility": "Graduation in any stream from recognized university",
+        "age_limit": "21 - 32 Years (OBC +3, SC/ST +5)",
+        "last_date": "04 March 2026",
+        "exam_date": "24 May 2026",
+        "status": "active",
+        "notif_link": "https://upsc.gov.in/examinations/active-exams",
+        "apply_link": "https://upsconline.nic.in"
+    },
+    {
+        "id": "vac_ssc_cgl_2026",
+        "title": "SSC CGL 2026 (Combined Graduate Level) Tier-1",
+        "org": "Staff Selection Commission (SSC)",
+        "category": "SSC",
+        "total_posts": "14,800+ Posts (ASO, Inspector, Auditor)",
+        "eligibility": "Bachelor's Degree in any discipline",
+        "age_limit": "18 - 30/32 Years as per post",
+        "last_date": "20 March 2026",
+        "exam_date": "June / July 2026",
+        "status": "active",
+        "notif_link": "https://ssc.gov.in/notices",
+        "apply_link": "https://ssc.gov.in"
+    },
+    {
+        "id": "vac_rrb_je_ntpc_2026",
+        "title": "RRB Junior Engineer & NTPC Graduate/Undergraduate 2026",
+        "org": "Railway Recruitment Board (RRB)",
+        "category": "Railways",
+        "total_posts": "11,558 Posts",
+        "eligibility": "Diploma / B.Tech (JE) or Any Degree / 12th (NTPC)",
+        "age_limit": "18 - 36 Years",
+        "last_date": "15 April 2026",
+        "exam_date": "August 2026",
+        "status": "active",
+        "notif_link": "https://indianrailways.gov.in",
+        "apply_link": "https://www.rrbapply.gov.in"
+    },
+    {
+        "id": "vac_sbi_po_clerk_2026",
+        "title": "SBI & IBPS Probationary Officers (PO) & Clerks 2026",
+        "org": "State Bank of India & IBPS",
+        "category": "Banking",
+        "total_posts": "9,800+ Posts",
+        "eligibility": "Any Graduate from a recognized University",
+        "age_limit": "20 - 30 Years",
+        "last_date": "28 March 2026",
+        "exam_date": "May / June 2026",
+        "status": "active",
+        "notif_link": "https://sbi.co.in/careers",
+        "apply_link": "https://ibps.in"
+    },
+    {
+        "id": "vac_neet_ug_2026",
+        "title": "NTA NEET UG 2026 Medical Entrance (MBBS/BDS)",
+        "org": "National Testing Agency (NTA)",
+        "category": "Medical",
+        "total_posts": "1,08,000+ MBBS & BDS Seats All India",
+        "eligibility": "10+2 with Physics, Chemistry, Biology & English (Min 50%)",
+        "age_limit": "Min 17 Years (No upper age limit)",
+        "last_date": "10 March 2026",
+        "exam_date": "03 May 2026",
+        "status": "active",
+        "notif_link": "https://neet.nta.nic.in",
+        "apply_link": "https://neet.nta.nic.in"
+    },
+    {
+        "id": "vac_nda_cds_2026",
+        "title": "UPSC NDA & NA (I) / CDS (I) Defence Academy 2026",
+        "org": "Union Public Service Commission (Defence)",
+        "category": "Defence",
+        "total_posts": "850+ Officer Cadet Vacancies (Army, Navy, Air Force)",
+        "eligibility": "12th Pass (PCM for Navy/AF) for NDA / Degree for CDS",
+        "age_limit": "16.5 - 19.5 (NDA) / 19 - 24 (CDS)",
+        "last_date": "18 February 2026",
+        "exam_date": "19 April 2026",
+        "status": "active",
+        "notif_link": "https://upsc.gov.in",
+        "apply_link": "https://upsconline.nic.in"
+    },
+    {
+        "id": "vac_ctet_teaching_2026",
+        "title": "CBSE CTET 2026 (Central Teacher Eligibility Test)",
+        "org": "Central Board of Secondary Education (CBSE)",
+        "category": "Teaching",
+        "total_posts": "National Eligibility for PRT, TGT & PGT Teaching Posts",
+        "eligibility": "D.El.Ed / B.Ed / Graduation with min 50% marks",
+        "age_limit": "No upper age limit",
+        "last_date": "25 March 2026",
+        "exam_date": "July 2026",
+        "status": "active",
+        "notif_link": "https://ctet.nic.in",
+        "apply_link": "https://ctet.nic.in"
+    }
+]
+
+DEFAULT_CURRENT_AFFAIRS = [
+    {
+        "id": "ca_1",
+        "date": "09 Nov 2026",
+        "topic": "National & Governance",
+        "title": "Cabinet approves PM GatiShakti Multi-Modal Connectivity Masterplan 2.0",
+        "snippet": "Union Cabinet has approved Phase 2 of PM GatiShakti National Master Plan to integrate high-speed freight corridors, inland waterways, and digital cargo hubs across 28 states, expediting supply-chain efficiency."
+    },
+    {
+        "id": "ca_2",
+        "date": "08 Nov 2026",
+        "topic": "Economy & RBI",
+        "title": "RBI Monetary Policy Committee maintains Repo Rate at 6.50% with 'Neutral' Stance",
+        "snippet": "The Reserve Bank of India MPC voted unanimously to keep the policy repo rate unchanged at 6.50% while emphasizing headline inflation convergence to the 4.0% median target."
+    },
+    {
+        "id": "ca_3",
+        "date": "07 Nov 2026",
+        "topic": "Science & Space Technology",
+        "title": "ISRO successfully conducts Hot-Test of Semi-Cryogenic Pre-Burner for LVM3",
+        "snippet": "ISRO's Propulsion Complex (IPRC) at Mahendragiri achieved successful hot-testing of the Semi-Cryogenic Engine pre-burner, augmenting payload delivery to Geo-Transfer Orbit (GTO) up to 6 tonnes."
+    },
+    {
+        "id": "ca_4",
+        "date": "06 Nov 2026",
+        "topic": "Environment & Biodiversity",
+        "title": "India adds two new Ramsar Wetland Sites, tally reaches 87",
+        "snippet": "The Ministry of Environment, Forest and Climate Change notified two new wetland reserves in Gujarat and Odisha as Ramsar Sites of International Importance, taking India's total Ramsar count to 87."
+    },
+    {
+        "id": "ca_5",
+        "date": "05 Nov 2026",
+        "topic": "Defence & Security",
+        "title": "DRDO test-fires Indigenous Long-Range Glide Bomb (Gaurav) from Su-30MKI",
+        "snippet": "The Defence Research and Development Organisation (DRDO) successfully completed flight trials of the 1,000 kg class Long Range Glide Bomb 'Gaurav' equipped with indigenous satellite navigation guidance."
+    }
+]
+
 # --- DATABASE & MEMORY ---
 DB = {
     "ADMIN_IDS": [], "FREE_CHANNELS": {}, "PAID_CHANNELS": {}, "SPECIAL_CHANNELS": {}, "ALL_CHATS": {},
@@ -81,7 +220,9 @@ DB = {
     "VIP_MATERIALS_LINK": None, "VIP_STICKER_ID": None, "VIP_STICKER_TYPE": None,
     "BATCH_UPDATE_CHANNEL_ID": BATCH_UPDATE_CHANNEL_ID,
     "BATCH_UPDATE_CHANNEL_LINK": BATCH_UPDATE_CHANNEL_LINK,
-    "STUDY_TASKS": {}
+    "STUDY_TASKS": {},
+    "EXAM_VACANCIES": DEFAULT_VACANCIES.copy(),
+    "CURRENT_AFFAIRS": DEFAULT_CURRENT_AFFAIRS.copy()
 }
 
 class BoundedDict(dict):
@@ -145,7 +286,7 @@ def load_data():
         "USERBOT_SESSION", "USERBOT_PHONE",
         "VIP_MATERIALS_LINK", "VIP_STICKER_ID", "VIP_STICKER_TYPE", "BATCH_COINS",
         "BATCH_REQUESTS", "BATCH_REQUEST_STATUS", "VOUCHERS", "BATCH_PRICES", "BATCH_REQUEST_NOTE",
-        "BATCH_UPDATE_CHANNEL_ID", "BATCH_UPDATE_CHANNEL_LINK",
+        "BATCH_UPDATE_CHANNEL_ID", "BATCH_UPDATE_CHANNEL_LINK", "EXAM_VACANCIES", "CURRENT_AFFAIRS",
     ]
     
     if MONGO_URL and mongo_collection is not None:

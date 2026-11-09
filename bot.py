@@ -318,6 +318,9 @@ async def _run_pyrogram_engine():
         "genvoucher": H.cmd_genvoucher, "batchrequests": H.cmd_batchrequests, "requestbatches": H.cmd_batchrequests, "vouchers": H.cmd_list_vouchers,
         "setprice": H.cmd_set_batch_price, "setrequestnote": H.cmd_set_request_note,
         "webapp": H.cmd_webapp, "app": H.cmd_webapp, "portal": H.cmd_webapp, "study": H.cmd_study,
+        "vacancies": H.cmd_vacancies, "jobs": H.cmd_vacancies, "alerts": H.cmd_vacancies,
+        "quiz": H.cmd_quiz, "quizzes": H.cmd_quiz,
+        "currentaffairs": H.cmd_currentaffairs, "news": H.cmd_currentaffairs,
     }
 
     @app.on_message(filters.command(list(all_commands.keys())))

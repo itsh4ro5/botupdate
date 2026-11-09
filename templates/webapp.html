@@ -174,6 +174,9 @@
                 <button onclick="switchMainTab('dashboard')" id="pbtn-dashboard" class="role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-indigo-600 text-white shadow-sm transition whitespace-nowrap">
                     🏠 Dashboard
                 </button>
+                <button onclick="switchMainTab('vacancies')" id="pbtn-vacancies" class="role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap">
+                    📢 Vacancies
+                </button>
                 <button onclick="switchMainTab('courses')" id="pbtn-courses" class="role-pbtn px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition whitespace-nowrap">
                     📚 Store
                 </button>
@@ -519,6 +522,44 @@
                 </div>
             </div>
 
+            <!-- 2026 Government Exam Vacancies Radar Preview -->
+            <div class="glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-800/80">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 rounded-lg bg-indigo-500/15 text-indigo-400 flex items-center justify-center text-sm border border-indigo-500/30">
+                            📢
+                        </div>
+                        <div>
+                            <h3 class="text-xs sm:text-sm font-extrabold text-white">Latest Exam Vacancy Radar</h3>
+                            <p class="text-[10px] text-slate-400">Active recruitments & application deadlines</p>
+                        </div>
+                    </div>
+                    <button onclick="switchTab('vacancies')" class="text-[11px] text-indigo-400 font-bold hover:text-indigo-300 transition">
+                        All Alerts →
+                    </button>
+                </div>
+
+                <div id="dashVacanciesPreview" class="space-y-2">
+                    {% for vac in (vacancies or [])[:3] %}
+                    <div class="p-3 rounded-xl bg-slate-950/70 border border-slate-800/80 flex items-center justify-between gap-2.5">
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-1.5 mb-0.5">
+                                <span class="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 uppercase">{{ vac.category }}</span>
+                                <span class="text-[10px] text-slate-400 truncate">{{ vac.org }}</span>
+                            </div>
+                            <p class="text-xs font-bold text-white truncate">{{ vac.title }}</p>
+                            <p class="text-[10px] text-slate-400 mt-0.5">👥 {{ vac.total_posts }} • ⏳ Last: <span class="text-amber-400 font-mono font-semibold">{{ vac.last_date }}</span></p>
+                        </div>
+                        <a href="{{ vac.apply_link }}" target="_blank" rel="noopener" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1.5 rounded-xl transition flex-shrink-0 shadow-sm">
+                            Apply ↗
+                        </a>
+                    </div>
+                    {% else %}
+                    <p class="text-xs text-slate-400 text-center py-3">No active vacancy alerts.</p>
+                    {% endfor %}
+                </div>
+            </div>
+
             <!-- Daily Concept MCQ Quiz & Reward Banner -->
             <div class="glass-panel bg-gradient-to-r from-purple-950/40 via-slate-900 to-indigo-950/40 border border-purple-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-5 glow-indigo">
                 <div class="flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
@@ -556,12 +597,20 @@
                         <p class="text-[10px] text-slate-400 mt-0.5">Browse 100+ Batches</p>
                     </button>
 
+                    <button onclick="switchTab('vacancies')" class="glass-card hover:bg-slate-800/60 p-3 rounded-2xl border border-slate-800/80 text-left transition group">
+                        <div class="w-8 h-8 rounded-xl bg-blue-500/15 text-blue-400 flex items-center justify-center text-base mb-2 group-hover:scale-105 transition-transform">
+                            📢
+                        </div>
+                        <p class="text-xs font-bold text-white">Govt Vacancies</p>
+                        <p class="text-[10px] text-slate-400 mt-0.5">2026 Recruitment Alerts</p>
+                    </button>
+
                     <button onclick="switchTab('study')" class="glass-card hover:bg-slate-800/60 p-3 rounded-2xl border border-slate-800/80 text-left transition group">
                         <div class="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center text-base mb-2 group-hover:scale-105 transition-transform">
                             ⏱️
                         </div>
                         <p class="text-xs font-bold text-white">Study Hub</p>
-                        <p class="text-[10px] text-slate-400 mt-0.5">Focus Timer & Notes</p>
+                        <p class="text-[10px] text-slate-400 mt-0.5">Focus Timer & Quiz</p>
                     </button>
 
                     <button onclick="switchTab('leaderboard')" class="glass-card hover:bg-slate-800/60 p-3 rounded-2xl border border-slate-800/80 text-left transition group">
@@ -572,28 +621,20 @@
                         <p class="text-[10px] text-slate-400 mt-0.5">Study & Referral Ranks</p>
                     </button>
 
+                    <button onclick="switchTab('study')" class="glass-card hover:bg-slate-800/60 p-3 rounded-2xl border border-slate-800/80 text-left transition group">
+                        <div class="w-8 h-8 rounded-xl bg-violet-500/15 text-violet-400 flex items-center justify-center text-base mb-2 group-hover:scale-105 transition-transform">
+                            📰
+                        </div>
+                        <p class="text-xs font-bold text-white">Current Affairs</p>
+                        <p class="text-[10px] text-slate-400 mt-0.5">Daily Exam Digest</p>
+                    </button>
+
                     <button onclick="switchTab('redeem')" class="glass-card hover:bg-slate-800/60 p-3 rounded-2xl border border-slate-800/80 text-left transition group">
-                        <div class="w-8 h-8 rounded-xl bg-purple-500/15 text-purple-400 flex items-center justify-center text-base mb-2 group-hover:scale-105 transition-transform">
+                        <div class="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-400 flex items-center justify-center text-base mb-2 group-hover:scale-105 transition-transform">
                             🎟️
                         </div>
                         <p class="text-xs font-bold text-white">Redeem Code</p>
                         <p class="text-[10px] text-slate-400 mt-0.5">Claim Gift Vouchers</p>
-                    </button>
-
-                    <button onclick="switchTab('request')" class="glass-card hover:bg-slate-800/60 p-3 rounded-2xl border border-slate-800/80 text-left transition group">
-                        <div class="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-400 flex items-center justify-center text-base mb-2 group-hover:scale-105 transition-transform">
-                            🙋
-                        </div>
-                        <p class="text-xs font-bold text-white">Request Course</p>
-                        <p class="text-[10px] text-slate-400 mt-0.5">Submit Missing Batch</p>
-                    </button>
-
-                    <button onclick="copyReferralLink()" class="glass-card hover:bg-slate-800/60 p-3 rounded-2xl border border-slate-800/80 text-left transition group">
-                        <div class="w-8 h-8 rounded-xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center text-base mb-2 group-hover:scale-105 transition-transform">
-                            👥
-                        </div>
-                        <p class="text-xs font-bold text-white">Refer & Earn</p>
-                        <p class="text-[10px] text-slate-400 mt-0.5">+1 Coin per Friend</p>
                     </button>
                 </div>
             </div>
@@ -621,6 +662,290 @@
                 <div class="mt-3 pt-2.5 border-t border-slate-800/70 flex items-center justify-between text-[11px] text-slate-400">
                     <div>Total Friends Joined: <span id="dashInvitedCount" class="font-extrabold text-white font-mono">0</span></div>
                     <div>Coins Earned: <span id="dashTotalCoinsEarned" class="font-extrabold text-amber-300 font-mono">0.00</span> 💎</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- VIEW 2.8: EXAM VACANCIES & RECRUITMENT RADAR                   -->
+        <!-- ============================================================== -->
+        <section id="view-vacancies" class="view-panel hidden space-y-4">
+            
+            <!-- Exam Countdown Bar -->
+            <div class="glass-panel bg-gradient-to-r from-blue-950/60 via-indigo-950/50 to-slate-900 border border-indigo-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-5 glow-indigo">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-lg">⏳</span>
+                        <div>
+                            <h3 class="text-xs sm:text-sm font-extrabold text-white">2026 Target Exam Clocks</h3>
+                            <p class="text-[10px] text-slate-400">Live countdown to major competitive exam milestones</p>
+                        </div>
+                    </div>
+                    <span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                        Live Sync
+                    </span>
+                </div>
+
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
+                    <div class="glass-card rounded-xl p-2.5 border border-slate-800 text-center">
+                        <p class="text-[10px] font-bold text-amber-400 uppercase">UPSC Prelims</p>
+                        <p class="text-base sm:text-lg font-black text-white font-mono mt-0.5" id="cd-upsc">--d --h</p>
+                        <p class="text-[9px] text-slate-400">24 May 2026</p>
+                    </div>
+                    <div class="glass-card rounded-xl p-2.5 border border-slate-800 text-center">
+                        <p class="text-[10px] font-bold text-emerald-400 uppercase">NEET UG</p>
+                        <p class="text-base sm:text-lg font-black text-white font-mono mt-0.5" id="cd-neet">--d --h</p>
+                        <p class="text-[9px] text-slate-400">03 May 2026</p>
+                    </div>
+                    <div class="glass-card rounded-xl p-2.5 border border-slate-800 text-center">
+                        <p class="text-[10px] font-bold text-indigo-400 uppercase">SSC CGL</p>
+                        <p class="text-base sm:text-lg font-black text-white font-mono mt-0.5" id="cd-ssc">--d --h</p>
+                        <p class="text-[9px] text-slate-400">Sep 2026</p>
+                    </div>
+                    <div class="glass-card rounded-xl p-2.5 border border-slate-800 text-center">
+                        <p class="text-[10px] font-bold text-rose-400 uppercase">RRB NTPC</p>
+                        <p class="text-base sm:text-lg font-black text-white font-mono mt-0.5" id="cd-rrb">--d --h</p>
+                        <p class="text-[9px] text-slate-400">Dec 2026</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Header & Search/Filter Controls -->
+            <div class="glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-800/80 space-y-3">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <div>
+                        <h2 class="text-xs sm:text-sm font-extrabold text-white flex items-center gap-2">
+                            <span>📢</span> 2026 Active Government Exam Vacancies & Alerts
+                        </h2>
+                        <p class="text-[10px] sm:text-xs text-slate-400 mt-0.5">Official notifications, total posts, eligibility criteria & direct 1-click apply portals</p>
+                    </div>
+                    <div id="adminVacancyActions" class="hidden">
+                        <button onclick="togglePostVacancyModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl transition shadow-md shadow-indigo-600/20 flex items-center gap-1.5">
+                            <span>➕</span> <span>Post Vacancy Alert</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Search Input -->
+                <div class="relative">
+                    <svg class="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    <input type="text" id="searchVacancyInput" oninput="filterVacancies()" placeholder="Search exam, commission, qualification, post name..." 
+                           class="w-full bg-slate-950/90 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+                </div>
+
+                <!-- Category Filters Bar -->
+                <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 text-xs">
+                    <button onclick="setVacFilter('all')" id="vcat-all" class="vcat-btn px-3 py-1 rounded-xl text-[11px] font-bold bg-indigo-600 text-white transition whitespace-nowrap">
+                        All Alerts
+                    </button>
+                    <button onclick="setVacFilter('upsc')" id="vcat-upsc" class="vcat-btn px-3 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition whitespace-nowrap">
+                        🏛️ UPSC
+                    </button>
+                    <button onclick="setVacFilter('ssc')" id="vcat-ssc" class="vcat-btn px-3 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition whitespace-nowrap">
+                        💼 SSC
+                    </button>
+                    <button onclick="setVacFilter('railways')" id="vcat-railways" class="vcat-btn px-3 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition whitespace-nowrap">
+                        🚂 Railways
+                    </button>
+                    <button onclick="setVacFilter('banking')" id="vcat-banking" class="vcat-btn px-3 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition whitespace-nowrap">
+                        🏦 Banking
+                    </button>
+                    <button onclick="setVacFilter('medical')" id="vcat-medical" class="vcat-btn px-3 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition whitespace-nowrap">
+                        🩺 Medical
+                    </button>
+                    <button onclick="setVacFilter('defence')" id="vcat-defence" class="vcat-btn px-3 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition whitespace-nowrap">
+                        🛡️ Defence
+                    </button>
+                    <button onclick="setVacFilter('teaching')" id="vcat-teaching" class="vcat-btn px-3 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition whitespace-nowrap">
+                        📖 Teaching
+                    </button>
+                </div>
+            </div>
+
+            <!-- Vacancy Cards List -->
+            <div id="vacanciesCardsContainer" class="space-y-3">
+                {% for vac in (vacancies or []) %}
+                <div class="vacancy-card glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-800 hover:border-slate-700 transition"
+                     data-id="{{ vac.id }}"
+                     data-category="{{ (vac.category or '') | lower }}"
+                     data-search="{{ (vac.title ~ ' ' ~ vac.org ~ ' ' ~ vac.category ~ ' ' ~ vac.eligibility ~ ' ' ~ vac.total_posts) | lower }}">
+                    
+                    <div class="flex items-start justify-between gap-3 flex-wrap sm:flex-nowrap">
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap mb-1">
+                                <span class="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
+                                    {{ vac.category or 'Govt Exam' }}
+                                </span>
+                                <span class="text-[10px] text-slate-400 font-medium">
+                                    {{ vac.org }}
+                                </span>
+                                {% if vac.status == 'closing_soon' %}
+                                <span class="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse">
+                                    ⚠️ Closing Soon
+                                </span>
+                                {% else %}
+                                <span class="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                    🟢 Active
+                                </span>
+                                {% endif %}
+                            </div>
+                            <h3 class="text-xs sm:text-sm font-extrabold text-white leading-snug">
+                                {{ vac.title }}
+                            </h3>
+                        </div>
+
+                        {% if role in ['admin', 'owner'] %}
+                        <button onclick="deleteVacancy('{{ vac.id }}')" class="text-slate-500 hover:text-rose-400 text-xs p-1.5 rounded-lg bg-slate-900 border border-slate-800 transition flex-shrink-0" title="Delete Vacancy">
+                            🗑️
+                        </button>
+                        {% endif %}
+                    </div>
+
+                    <!-- Specs Grid -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 pt-3 border-t border-slate-800/80 text-xs">
+                        <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                            <p class="text-[10px] text-slate-400 font-semibold">👥 Total Posts</p>
+                            <p class="text-xs font-bold text-white mt-0.5">{{ vac.total_posts }}</p>
+                        </div>
+                        <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                            <p class="text-[10px] text-slate-400 font-semibold">🎓 Eligibility</p>
+                            <p class="text-xs font-bold text-slate-200 mt-0.5 truncate" title="{{ vac.eligibility }}">{{ vac.eligibility }}</p>
+                        </div>
+                        <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                            <p class="text-[10px] text-slate-400 font-semibold">⏳ Age Limit</p>
+                            <p class="text-xs font-bold text-slate-200 mt-0.5">{{ vac.age_limit }}</p>
+                        </div>
+                        <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                            <p class="text-[10px] text-rose-400 font-semibold">📅 Last Date</p>
+                            <p class="text-xs font-bold text-amber-300 mt-0.5 font-mono">{{ vac.last_date }}</p>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex items-center justify-between gap-2 mt-3.5 pt-3 border-t border-slate-800/70 flex-wrap">
+                        <div class="text-[10px] text-slate-400 flex items-center gap-1.5">
+                            <span>🎯 Exam:</span>
+                            <span class="font-semibold text-slate-300">{{ vac.exam_date or 'To be announced' }}</span>
+                        </div>
+
+                        <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                            <button onclick="shareVacancyTelegram('{{ vac.title | escape }}', '{{ vac.org | escape }}', '{{ vac.last_date | escape }}', '{{ vac.apply_link | escape }}')" 
+                                    class="bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1">
+                                <span>✈️</span> <span class="hidden sm:inline">Share</span>
+                            </button>
+                            {% if vac.notif_link %}
+                            <a href="{{ vac.notif_link }}" target="_blank" rel="noopener" 
+                               class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1 border border-slate-700">
+                                <span>📄</span> <span>PDF Notif</span>
+                            </a>
+                            {% endif %}
+                            <a href="{{ vac.apply_link }}" target="_blank" rel="noopener" 
+                               class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold px-4 py-1.5 rounded-xl transition shadow-md shadow-emerald-600/20 flex items-center gap-1">
+                                <span>🚀</span> <span>Apply Portal</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-xs text-slate-400 text-center py-6">No exam vacancies posted yet.</p>
+                {% endfor %}
+            </div>
+
+            <!-- Empty Search Results State -->
+            <div id="vacanciesEmptyState" class="hidden glass-card rounded-2xl p-8 text-center border border-slate-800 space-y-2">
+                <div class="text-3xl">🔍</div>
+                <h4 class="text-xs font-bold text-white">No matching vacancies found</h4>
+                <p class="text-[11px] text-slate-400">Try clearing your search query or selecting "All Alerts".</p>
+            </div>
+
+            <!-- Modal: Post Vacancy Alert (Admin/Owner) -->
+            <div id="modalAddVacancy" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-3.5">
+                <div class="glass-panel bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-4 sm:p-6 space-y-3.5 max-h-[90vh] overflow-y-auto">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <h3 class="text-sm font-extrabold text-white flex items-center gap-2">
+                            <span>➕</span> Post New Govt Exam Vacancy
+                        </h3>
+                        <button onclick="togglePostVacancyModal()" class="text-slate-400 hover:text-white text-base">✕</button>
+                    </div>
+
+                    <div class="space-y-2.5 text-xs">
+                        <div>
+                            <label class="block text-slate-400 font-semibold mb-1">Exam / Recruitment Title *</label>
+                            <input type="text" id="vformTitle" placeholder="e.g. UPSC Civil Services Examination (CSE) 2026" 
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-slate-400 font-semibold mb-1">Organization / Commission *</label>
+                                <input type="text" id="vformOrg" placeholder="e.g. UPSC / SSC / RRB" 
+                                       class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 font-semibold mb-1">Category</label>
+                                <select id="vformCategory" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+                                    <option value="UPSC">🏛️ UPSC</option>
+                                    <option value="SSC">💼 SSC</option>
+                                    <option value="Railways">🚂 Railways</option>
+                                    <option value="Banking">🏦 Banking</option>
+                                    <option value="Medical">🩺 Medical</option>
+                                    <option value="Defence">🛡️ Defence</option>
+                                    <option value="Teaching">📖 Teaching</option>
+                                    <option value="State PSC">🏛️ State PSC</option>
+                                    <option value="General">📚 General</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-slate-400 font-semibold mb-1">Total Posts</label>
+                                <input type="text" id="vformPosts" placeholder="e.g. 1,056 Posts" 
+                                       class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 font-semibold mb-1">Age Limit</label>
+                                <input type="text" id="vformAge" placeholder="e.g. 21 - 32 Years" 
+                                       class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 font-semibold mb-1">Eligibility Criteria</label>
+                            <input type="text" id="vformEligibility" placeholder="e.g. Bachelor's Degree in any discipline from recognized university" 
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-slate-400 font-semibold mb-1">Last Date to Apply</label>
+                                <input type="text" id="vformLastDate" placeholder="e.g. 05 March 2026" 
+                                       class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 font-semibold mb-1">Exam Date</label>
+                                <input type="text" id="vformExamDate" placeholder="e.g. 24 May 2026" 
+                                       class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 font-semibold mb-1">Official Notification PDF Link</label>
+                            <input type="url" id="vformNotifLink" placeholder="https://upsc.gov.in/..." 
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 font-semibold mb-1">Direct Apply Link</label>
+                            <input type="url" id="vformApplyLink" placeholder="https://upsconline.nic.in/..." 
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                        <button onclick="togglePostVacancyModal()" class="px-4 py-2 rounded-xl text-slate-400 hover:text-white text-xs font-bold">
+                            Cancel
+                        </button>
+                        <button onclick="submitNewVacancy()" id="btnSubmitVacancy" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-5 py-2 rounded-xl transition shadow-md shadow-indigo-600/20">
+                            Publish Alert
+                        </button>
+                    </div>
                 </div>
             </div>
         </section>
@@ -792,18 +1117,49 @@
                 </div>
             </div>
 
-            <!-- Interactive Daily High-Yield MCQ Practice Quiz Widget -->
+            <!-- Interactive Multi-Subject MCQ Practice Quiz Arena -->
             <div class="glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-800/80">
-                <div class="flex items-center justify-between mb-3.5">
+                <div class="flex items-center justify-between mb-3">
                     <div>
                         <h3 class="text-xs sm:text-sm font-extrabold text-white flex items-center gap-2">
-                            <span>🧠</span> Daily High-Yield MCQ Practice Quiz
+                            <span>🧠</span> Multi-Subject Practice Quiz Arena
                         </h3>
                         <p class="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">Test Core Concepts & Earn +1.0 Study Coins</p>
                     </div>
                     <span id="quizCoinBadge" class="text-[10px] sm:text-[11px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/25 px-2.5 py-1 rounded-full shadow-sm flex-shrink-0">
                         🎁 +1.0 Coins / Day
                     </span>
+                </div>
+
+                <!-- Subject Selector Pills -->
+                <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 text-xs mb-3">
+                    <button onclick="switchQuizSubject('all')" id="qsub-all" class="qsub-btn px-2.5 py-1 rounded-xl text-[11px] font-bold bg-indigo-600 text-white transition whitespace-nowrap">
+                        🌐 Mixed Test
+                    </button>
+                    <button onclick="switchQuizSubject('polity')" id="qsub-polity" class="qsub-btn px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition whitespace-nowrap">
+                        🏛️ Polity
+                    </button>
+                    <button onclick="switchQuizSubject('history')" id="qsub-history" class="qsub-btn px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition whitespace-nowrap">
+                        📜 History
+                    </button>
+                    <button onclick="switchQuizSubject('geo')" id="qsub-geo" class="qsub-btn px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition whitespace-nowrap">
+                        🌍 Geography
+                    </button>
+                    <button onclick="switchQuizSubject('economy')" id="qsub-economy" class="qsub-btn px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition whitespace-nowrap">
+                        📈 Economy
+                    </button>
+                    <button onclick="switchQuizSubject('csat')" id="qsub-csat" class="qsub-btn px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition whitespace-nowrap">
+                        📐 CSAT Math
+                    </button>
+                    <button onclick="switchQuizSubject('reasoning')" id="qsub-reasoning" class="qsub-btn px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition whitespace-nowrap">
+                        🧠 Reasoning
+                    </button>
+                    <button onclick="switchQuizSubject('science')" id="qsub-science" class="qsub-btn px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition whitespace-nowrap">
+                        🧬 Science
+                    </button>
+                    <button onclick="switchQuizSubject('current_affairs')" id="qsub-current_affairs" class="qsub-btn px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800 transition whitespace-nowrap">
+                        📰 Current Affairs
+                    </button>
                 </div>
 
                 <!-- Quiz Card Container -->
@@ -916,6 +1272,43 @@
                             <p><strong class="text-purple-400">3. Conclusion (15%):</strong> Forward-looking "Way Forward", SDG goal linkage, or quote from leaders/Constitution preamble.</p>
                         </div>
                     </details>
+                </div>
+            </div>
+
+            <!-- Daily High-Yield Current Affairs Digest (Exam-Oriented) -->
+            <div class="glass-panel rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-800/80 space-y-3">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">📰</span>
+                        <div>
+                            <h3 class="text-xs sm:text-sm font-extrabold text-white">Daily High-Yield Current Affairs Digest</h3>
+                            <p class="text-[10px] text-slate-400">Curated bullet points for UPSC, SSC, Railways & Banking exams</p>
+                        </div>
+                    </div>
+                    <button onclick="copyCurrentAffairsDigest()" id="btnCopyCADigest" class="bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 flex-shrink-0">
+                        <span>📋</span> <span id="btnCopyCAText">Copy Notes</span>
+                    </button>
+                </div>
+
+                <div class="space-y-2.5">
+                    {% for item in (current_affairs or []) %}
+                    <div class="ca-item glass-card p-3.5 rounded-2xl border border-slate-800/80 space-y-1.5">
+                        <div class="flex items-center justify-between text-[10px] text-slate-400 flex-wrap gap-1">
+                            <span class="font-extrabold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 uppercase">
+                                {{ item.topic }}
+                            </span>
+                            <span class="font-mono text-slate-400">{{ item.date }}</span>
+                        </div>
+                        <h4 class="text-xs font-bold text-white leading-snug">
+                            {{ item.title }}
+                        </h4>
+                        <p class="text-[11px] text-slate-300 leading-relaxed">
+                            {{ item.snippet }}
+                        </p>
+                    </div>
+                    {% else %}
+                    <p class="text-xs text-slate-400 text-center py-4">No current affairs loaded today.</p>
+                    {% endfor %}
                 </div>
             </div>
         </section>
@@ -1186,6 +1579,12 @@
                 </svg>
                 <span class="text-[10px] sm:text-[11px] font-bold">Home</span>
             </button>
+            <button onclick="switchTab('vacancies')" id="nav-vacancies" class="nav-btn py-1.5 text-slate-400 hover:text-slate-200 flex flex-col items-center justify-center gap-1 transition-colors">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                </svg>
+                <span class="text-[10px] sm:text-[11px] font-bold">Alerts</span>
+            </button>
             <button onclick="switchTab('courses')" id="nav-courses" class="nav-btn py-1.5 text-slate-400 hover:text-slate-200 flex flex-col items-center justify-center gap-1 transition-colors">
                 <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
@@ -1203,12 +1602,6 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138z"/>
                 </svg>
                 <span class="text-[10px] sm:text-[11px] font-bold">Rank</span>
-            </button>
-            <button onclick="switchTab('redeem')" id="nav-redeem" class="nav-btn py-1.5 text-slate-400 hover:text-slate-200 flex flex-col items-center justify-center gap-1 transition-colors">
-                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/>
-                </svg>
-                <span class="text-[10px] sm:text-[11px] font-bold">Redeem</span>
             </button>
         </div>
     </nav>
@@ -1421,7 +1814,17 @@
                 loadStudyTasks(data.user.study_tasks);
             }
 
-            if (data.role === 'owner') {
+            if (data.role === 'owner' || data.role === 'admin') {
+                const vacActions = document.getElementById('adminVacancyActions');
+                if (vacActions) vacActions.classList.remove('hidden');
+            }
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const requestedTab = urlParams.get('tab');
+
+            if (requestedTab) {
+                switchMainTab(requestedTab);
+            } else if (data.role === 'owner') {
                 badge.className = "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase tracking-wider";
                 badge.innerText = '👑 OWNER';
                 roleBar.classList.remove('hidden');
@@ -1999,69 +2402,585 @@
             }
         }
 
-        // 6. DAILY HIGH-YIELD MCQ PRACTICE QUIZ
-        const dailyQuizQuestions = [
-            {
-                subject: "Indian Polity",
-                question: "Which Article of the Indian Constitution was termed as the 'Heart and Soul' of the Constitution by Dr. B.R. Ambedkar?",
-                options: [
-                    "Article 14 (Equality before Law)",
-                    "Article 19 (Six Freedoms)",
-                    "Article 21 (Right to Life)",
-                    "Article 32 (Constitutional Remedies)"
-                ],
-                answer: 3,
-                explanation: "Dr. B.R. Ambedkar termed Article 32 the 'Heart and Soul' because it guarantees the fundamental right to approach the Supreme Court directly for enforcement of rights via 5 prerogative writs."
-            },
-            {
-                subject: "Geography",
-                question: "Which among the following is a west-flowing peninsular river flowing through a rift valley?",
-                options: [
-                    "Godavari",
-                    "Mahanadi",
-                    "Narmada",
-                    "Krishna"
-                ],
-                answer: 2,
-                explanation: "The Narmada river originates at Amarkantak and flows westward through a rift valley between the Vindhya and Satpura ranges, emptying into the Arabian Sea."
-            },
-            {
-                subject: "CSAT Aptitude",
-                question: "If a 150-metre long train crosses a telegraph post in 10 seconds, what is its speed in km/h?",
-                options: [
-                    "45 km/h",
-                    "54 km/h",
-                    "60 km/h",
-                    "72 km/h"
-                ],
-                answer: 1,
-                explanation: "Speed = Distance / Time = 150m / 10s = 15 m/s. To convert m/s into km/h, multiply by 18/5: 15 × (18/5) = 54 km/h."
-            },
-            {
-                subject: "Modern History",
-                question: "Who was the Governor-General of India during the Revolt of 1857?",
-                options: [
-                    "Lord Dalhousie",
-                    "Lord Canning",
-                    "Lord Curzon",
-                    "Lord Wellesley"
-                ],
-                answer: 1,
-                explanation: "Lord Canning was the Governor-General of India during the 1857 revolt and subsequently became the first Viceroy under the Government of India Act 1858."
-            },
-            {
-                subject: "Indian Economy",
-                question: "In India, which index is currently used by the Reserve Bank of India (RBI) as the key measure of Headline Inflation?",
-                options: [
-                    "CPI Combined (All India)",
-                    "Wholesale Price Index (WPI)",
-                    "Index of Industrial Production (IIP)",
-                    "GDP Deflator"
-                ],
-                answer: 0,
-                explanation: "Following the recommendations of the Urjit Patel Committee, the RBI adopted Consumer Price Index - Combined (CPI-C) as its headline inflation anchor."
+        // 6. MULTI-SUBJECT MCQ PRACTICE QUIZ ARENA
+        const quizQuestionBanks = {
+            all: [
+                {
+                    subject: "Indian Polity",
+                    question: "Which Article of the Indian Constitution was termed as the 'Heart and Soul' of the Constitution by Dr. B.R. Ambedkar?",
+                    options: [
+                        "Article 14 (Equality before Law)",
+                        "Article 19 (Six Freedoms)",
+                        "Article 21 (Right to Life)",
+                        "Article 32 (Constitutional Remedies)"
+                    ],
+                    answer: 3,
+                    explanation: "Dr. B.R. Ambedkar termed Article 32 the 'Heart and Soul' because it guarantees the fundamental right to approach the Supreme Court directly for enforcement of rights via 5 prerogative writs."
+                },
+                {
+                    subject: "Modern History",
+                    question: "Who was the Governor-General of India during the Revolt of 1857?",
+                    options: [
+                        "Lord Dalhousie",
+                        "Lord Canning",
+                        "Lord Curzon",
+                        "Lord Wellesley"
+                    ],
+                    answer: 1,
+                    explanation: "Lord Canning was the Governor-General of India during the 1857 revolt and subsequently became the first Viceroy under the Government of India Act 1858."
+                },
+                {
+                    subject: "Geography",
+                    question: "Which among the following is a west-flowing peninsular river flowing through a rift valley?",
+                    options: [
+                        "Godavari",
+                        "Mahanadi",
+                        "Narmada",
+                        "Krishna"
+                    ],
+                    answer: 2,
+                    explanation: "The Narmada river originates at Amarkantak and flows westward through a rift valley between the Vindhya and Satpura ranges, emptying into the Arabian Sea."
+                },
+                {
+                    subject: "Indian Economy",
+                    question: "In India, which index is currently used by the Reserve Bank of India (RBI) as the key measure of Headline Inflation?",
+                    options: [
+                        "CPI Combined (All India)",
+                        "Wholesale Price Index (WPI)",
+                        "Index of Industrial Production (IIP)",
+                        "GDP Deflator"
+                    ],
+                    answer: 0,
+                    explanation: "Following the recommendations of the Urjit Patel Committee, the RBI adopted Consumer Price Index - Combined (CPI-C) as its headline inflation anchor."
+                },
+                {
+                    subject: "CSAT Math",
+                    question: "If a 150-metre long train crosses a telegraph post in 10 seconds, what is its speed in km/h?",
+                    options: [
+                        "45 km/h",
+                        "54 km/h",
+                        "60 km/h",
+                        "72 km/h"
+                    ],
+                    answer: 1,
+                    explanation: "Speed = Distance / Time = 150m / 10s = 15 m/s. Multiply by 18/5: 15 × (18/5) = 54 km/h."
+                }
+            ],
+            polity: [
+                {
+                    subject: "Indian Polity",
+                    question: "Which Constitutional Amendment Act added the Fundamental Duties into Part IVA of the Indian Constitution?",
+                    options: [
+                        "42nd Amendment Act, 1976",
+                        "44th Amendment Act, 1978",
+                        "86th Amendment Act, 2002",
+                        "73rd Amendment Act, 1992"
+                    ],
+                    answer: 0,
+                    explanation: "The 42nd Amendment Act 1976 introduced Article 51A (Fundamental Duties) on the recommendation of the Swaran Singh Committee."
+                },
+                {
+                    subject: "Indian Polity",
+                    question: "Under which Article does the President of India possess the constitutional power to grant pardons, reprieves, or remissions of punishment?",
+                    options: [
+                        "Article 61",
+                        "Article 72",
+                        "Article 123",
+                        "Article 143"
+                    ],
+                    answer: 1,
+                    explanation: "Article 72 empowers the President to grant pardons, reprieves, respites or remissions of punishment or to suspend, remit or commute sentences."
+                },
+                {
+                    subject: "Indian Polity",
+                    question: "The Anti-Defection Law was introduced into the Tenth Schedule of the Indian Constitution by which Amendment?",
+                    options: [
+                        "44th Amendment",
+                        "52nd Amendment",
+                        "61st Amendment",
+                        "91st Amendment"
+                    ],
+                    answer: 1,
+                    explanation: "The 52nd Constitutional Amendment Act of 1985 added the Tenth Schedule laying down disqualification criteria on grounds of defection."
+                },
+                {
+                    subject: "Indian Polity",
+                    question: "Which writ literally translates to 'We Command' and is issued to perform a mandatory public or statutory duty?",
+                    options: [
+                        "Habeas Corpus",
+                        "Mandamus",
+                        "Certiorari",
+                        "Quo-Warranto"
+                    ],
+                    answer: 1,
+                    explanation: "Mandamus is issued by higher courts to a public official or lower tribunal commanding them to perform an official duty they have failed or refused to do."
+                },
+                {
+                    subject: "Indian Polity",
+                    question: "Under Article 100(1), when does the Speaker of the Lok Sabha exercise their voting power?",
+                    options: [
+                        "On every constitutional amendment bill",
+                        "In the first instance on money bills",
+                        "Only in the case of an equality of votes (Casting Vote)",
+                        "Whenever the Prime Minister requests"
+                    ],
+                    answer: 2,
+                    explanation: "The Speaker does not vote in the first instance, but exercises a casting vote under Article 100(1) in the event of a tie."
+                }
+            ],
+            history: [
+                {
+                    subject: "Modern History",
+                    question: "The historic Poona Pact of September 1932 was signed between which two leaders?",
+                    options: [
+                        "Mahatma Gandhi & Lord Willingdon",
+                        "Mahatma Gandhi & Dr. B.R. Ambedkar",
+                        "Jawaharlal Nehru & Muhammad Ali Jinnah",
+                        "Subhas Chandra Bose & C.R. Das"
+                    ],
+                    answer: 1,
+                    explanation: "The Poona Pact (1932) was signed between Dr. B.R. Ambedkar and Mahatma Gandhi (represented by Madan Mohan Malaviya) abandoning separate electorates in favor of reserved joint seats."
+                },
+                {
+                    subject: "Modern History",
+                    question: "Who founded the Asiatic Society of Bengal in Calcutta in the year 1784?",
+                    options: [
+                        "Sir William Jones",
+                        "Warren Hastings",
+                        "James Prinsep",
+                        "Charles Wilkins"
+                    ],
+                    answer: 0,
+                    explanation: "Sir William Jones, a Supreme Court judge at Fort William, founded the Asiatic Society in 1784 to foster Oriental research and translation of Sanskrit manuscripts."
+                },
+                {
+                    subject: "Modern History",
+                    question: "The famous 'Ryotwari System' of land revenue was predominantly introduced in Madras and Bombay Presidencies by:",
+                    options: [
+                        "Lord Cornwallis",
+                        "Thomas Munro and Alexander Read",
+                        "Holt Mackenzie",
+                        "Lord Wellesley"
+                    ],
+                    answer: 1,
+                    explanation: "Captain Alexander Read and Sir Thomas Munro introduced the Ryotwari system where settlement was made directly with cultivating peasants (Ryots)."
+                },
+                {
+                    subject: "Modern History",
+                    question: "The historic 'Quit India Resolution' was formally passed on 8th August 1942 at which venue?",
+                    options: [
+                        "Ramgarh Congress Session",
+                        "Gowalia Tank Maidan (August Kranti Maidan), Bombay",
+                        "Sabarmati Ashram, Ahmedabad",
+                        "Lahore Session, Punjab"
+                    ],
+                    answer: 1,
+                    explanation: "The All-India Congress Committee ratified the Quit India Resolution at Gowalia Tank Maidan in Bombay, where Gandhiji gave the clarion call 'Do or Die'."
+                },
+                {
+                    subject: "Modern History",
+                    question: "Which socio-religious reform movement was founded by Swami Dayanand Saraswati in 1875 with the motto 'Go back to the Vedas'?",
+                    options: [
+                        "Brahmo Samaj",
+                        "Arya Samaj",
+                        "Prarthana Samaj",
+                        "Ramakrishna Mission"
+                    ],
+                    answer: 1,
+                    explanation: "Swami Dayanand Saraswati founded Arya Samaj at Bombay in 1875 to revive pristine Vedic values and reject idol worship and rigid caste barriers."
+                }
+            ],
+            geo: [
+                {
+                    subject: "Geography",
+                    question: "The Ten Degree Channel (10° Channel) in the Indian Ocean separates which two geographical entities?",
+                    options: [
+                        "India and Sri Lanka",
+                        "Andaman Islands and Nicobar Islands",
+                        "Lakshadweep and Maldives",
+                        "South Andaman and Little Andaman"
+                    ],
+                    answer: 1,
+                    explanation: "The Ten Degree Channel is a maritime passage that separates Little Andaman to the north from Car Nicobar to the south."
+                },
+                {
+                    subject: "Geography",
+                    question: "Loktak Lake, famous for its floating circular islands of vegetation termed 'Phumdis', is located in which state?",
+                    options: [
+                        "Assam",
+                        "Meghalaya",
+                        "Manipur",
+                        "Mizoram"
+                    ],
+                    answer: 2,
+                    explanation: "Loktak Lake in Manipur is the largest freshwater lake in Northeast India, housing Keibul Lamjao, the world's only floating national park (home to Sangai deer)."
+                },
+                {
+                    subject: "Geography",
+                    question: "Through how many Indian states does the Tropic of Cancer (23.5° N) pass?",
+                    options: [
+                        "6 States",
+                        "7 States",
+                        "8 States",
+                        "9 States"
+                    ],
+                    answer: 2,
+                    explanation: "The Tropic of Cancer passes through 8 Indian states: Gujarat, Rajasthan, Madhya Pradesh, Chhattisgarh, Jharkhand, West Bengal, Tripura, and Mizoram."
+                },
+                {
+                    subject: "Geography",
+                    question: "Majuli, recognized as the world's largest river island, is situated on which major river?",
+                    options: [
+                        "Ganga",
+                        "Brahmaputra",
+                        "Mahanadi",
+                        "Godavari"
+                    ],
+                    answer: 1,
+                    explanation: "Majuli island is situated on the Brahmaputra River in Assam, formed by the divergence and confluence of Brahmaputra and Subansiri rivers."
+                },
+                {
+                    subject: "Geography",
+                    question: "Which mountain pass connects Srinagar with Leh in Jammu & Kashmir / Ladakh?",
+                    options: [
+                        "Zoji La",
+                        "Nathu La",
+                        "Rohtang Pass",
+                        "Shipki La"
+                    ],
+                    answer: 0,
+                    explanation: "Zoji La is a high mountain pass in the Himalayas in Ladakh, connecting Srinagar with Leh on National Highway 1."
+                }
+            ],
+            economy: [
+                {
+                    subject: "Indian Economy",
+                    question: "Statutory Liquidity Ratio (SLR) mandates commercial banks to park a percentage of their Net Demand & Time Liabilities (NDTL) in which assets?",
+                    options: [
+                        "Only Liquid Cash with RBI",
+                        "Cash, Gold and Approved Government Securities",
+                        "Foreign Exchange Reserves only",
+                        "Corporate Equity Shares"
+                    ],
+                    answer: 1,
+                    explanation: "SLR can be maintained by commercial banks in liquid assets like unencumbered cash balance, physical gold, and sovereign government securities (T-Bills, G-Secs)."
+                },
+                {
+                    subject: "Indian Economy",
+                    question: "The Lorenz Curve and the Gini Coefficient are universally employed in economic analysis to measure:",
+                    options: [
+                        "Industrial Productivity",
+                        "Income Inequality & Wealth Concentration",
+                        "Unemployment Rate",
+                        "Foreign Trade Balance"
+                    ],
+                    answer: 1,
+                    explanation: "The Lorenz curve graphs the cumulative distribution of national income; the Gini coefficient calculates the area between it and the line of perfect equality."
+                },
+                {
+                    subject: "Indian Economy",
+                    question: "Which committee recommended the implementation of the Monetary Policy Committee (MPC) framework in the Reserve Bank of India?",
+                    options: [
+                        "Narasimham Committee",
+                        "Urjit Patel Committee",
+                        "Raghuram Rajan Committee",
+                        "Kelkar Committee"
+                    ],
+                    answer: 1,
+                    explanation: "The Urjit Patel Committee report (2014) recommended institutionalizing the 6-member MPC and adopting flexible inflation targeting (FIT)."
+                },
+                {
+                    subject: "Indian Economy",
+                    question: "What distinguishes Current Account Deficit (CAD) from Fiscal Deficit?",
+                    options: [
+                        "CAD reflects foreign trade & remittance deficit; Fiscal Deficit reflects government total borrowing needs",
+                        "CAD measures domestic inflation; Fiscal Deficit measures export growth",
+                        "Both represent identical quantities",
+                        "CAD is managed by SEBI; Fiscal Deficit is managed by LIC"
+                    ],
+                    answer: 0,
+                    explanation: "CAD occurs when a nation's total import of goods, services, and transfers exceeds its exports; Fiscal deficit is the excess of government expenditure over non-debt revenue."
+                },
+                {
+                    subject: "Indian Economy",
+                    question: "Which constitutional body recommends the sharing of net tax proceeds between the Union and the States under Article 280?",
+                    options: [
+                        "NITI Aayog",
+                        "Finance Commission of India",
+                        "GST Council",
+                        "Inter-State Council"
+                    ],
+                    answer: 1,
+                    explanation: "Article 280 mandates the constitution of a Finance Commission every 5 years to recommend horizontal and vertical tax devolution formulas."
+                }
+            ],
+            csat: [
+                {
+                    subject: "CSAT Math",
+                    question: "A can complete a project in 10 days and B can complete it in 15 days. Working together, in how many days will they finish the project?",
+                    options: [
+                        "5 Days",
+                        "6 Days",
+                        "7.5 Days",
+                        "8 Days"
+                    ],
+                    answer: 1,
+                    explanation: "Combined rate = 1/10 + 1/15 = 5/30 = 1/6. Hence, together they finish the project in 6 days."
+                },
+                {
+                    subject: "CSAT Math",
+                    question: "If the selling price of an article is doubled, the profit triples. What was the initial profit percentage?",
+                    options: [
+                        "50%",
+                        "66.66%",
+                        "100%",
+                        "120%"
+                    ],
+                    answer: 2,
+                    explanation: "Let CP = C, SP = S. Profit P = S - C. Given 3(S - C) = 2S - C => 3S - 3C = 2S - C => S = 2C. Initial profit % = (2C - C)/C × 100 = 100%."
+                },
+                {
+                    subject: "CSAT Math",
+                    question: "The average of 5 consecutive odd numbers is 27. What is the value of the largest of these numbers?",
+                    options: [
+                        "29",
+                        "31",
+                        "33",
+                        "35"
+                    ],
+                    answer: 1,
+                    explanation: "In an arithmetic progression with an odd number of terms, the middle term is the average: middle = 27. The numbers are 23, 25, 27, 29, 31. Largest = 31."
+                },
+                {
+                    subject: "CSAT Math",
+                    question: "At 3:30, what is the acute angle formed between the hour hand and the minute hand of an analog clock?",
+                    options: [
+                        "70°",
+                        "75°",
+                        "80°",
+                        "85°"
+                    ],
+                    answer: 1,
+                    explanation: "Angle = |30H - (11/2)M| = |30(3) - (11/2)(30)| = |90 - 165| = 75°."
+                },
+                {
+                    subject: "CSAT Math",
+                    question: "A sum of money doubles itself in 5 years at simple interest. In how many years will it become four times itself at the same rate?",
+                    options: [
+                        "10 Years",
+                        "12 Years",
+                        "15 Years",
+                        "20 Years"
+                    ],
+                    answer: 2,
+                    explanation: "Doubles => SI = P in 5 years. For becoming 4 times, SI = 3P. Time needed = 3 × 5 = 15 years."
+                }
+            ],
+            reasoning: [
+                {
+                    subject: "Logical Reasoning",
+                    question: "In a certain code language, if 'EARTH' is coded as 'FCUXM', how will 'MOON' be coded in that same pattern?",
+                    options: [
+                        "NRPQ",
+                        "NQSP",
+                        "NPRT",
+                        "NRPS"
+                    ],
+                    answer: 0,
+                    explanation: "E(+1)=F, A(+2)=C, R(+3)=U, T(+4)=X, H(+5)=M. For MOON: M(+1)=N, O(+2)=Q, O(+3)=R, N(+4)=R -> NRPQ."
+                },
+                {
+                    subject: "Logical Reasoning",
+                    question: "Look at this number series: 2, 6, 12, 20, 30, ?. What number comes next?",
+                    options: [
+                        "38",
+                        "40",
+                        "42",
+                        "44"
+                    ],
+                    answer: 2,
+                    explanation: "Pattern: 1×2=2, 2×3=6, 3×4=12, 4×5=20, 5×6=30, next is 6×7 = 42 (or +4, +6, +8, +10, +12)."
+                },
+                {
+                    subject: "Logical Reasoning",
+                    question: "A man walks 10 metres North, turns right and walks 5 metres, then turns right again and walks 10 metres. In which direction is he from his starting point?",
+                    options: [
+                        "North",
+                        "South",
+                        "East",
+                        "West"
+                    ],
+                    answer: 2,
+                    explanation: "He went 10m North, 5m East, and 10m South. The North and South displacements cancel out, leaving him 5m due East of the starting point."
+                },
+                {
+                    subject: "Logical Reasoning",
+                    question: "Which of the following does NOT belong to the group: Copper, Iron, Brass, Silver, Zinc?",
+                    options: [
+                        "Copper",
+                        "Brass",
+                        "Silver",
+                        "Zinc"
+                    ],
+                    answer: 1,
+                    explanation: "Brass is an alloy (mixture of Copper and Zinc), whereas Copper, Iron, Silver, and Zinc are pure metallic chemical elements."
+                },
+                {
+                    subject: "Logical Reasoning",
+                    question: "If 'A + B' means A is the brother of B, 'A - B' means A is the sister of B, and 'A * B' means A is the father of B, which of the following means P is the paternal uncle of S?",
+                    options: [
+                        "P + Q * S",
+                        "P * Q + S",
+                        "P - Q * S",
+                        "P + Q - S"
+                    ],
+                    answer: 0,
+                    explanation: "P + Q means P is brother of Q. Q * S means Q is father of S. Hence, P is father's brother (paternal uncle) of S."
+                }
+            ],
+            science: [
+                {
+                    subject: "General Science",
+                    question: "Which fuel and oxidizer combination is used in ISRO's indigenous Semi-Cryogenic rocket engine (SE-2000)?",
+                    options: [
+                        "Liquid Hydrogen & Liquid Oxygen",
+                        "Refined Kerosene (Isrosene) & Liquid Oxygen (LOX)",
+                        "Solid HTPB & Ammonium Perchlorate",
+                        "UDMH & Nitrogen Tetroxide"
+                    ],
+                    answer: 1,
+                    explanation: "Semi-cryogenic engines utilize aviation-grade highly refined kerosene (termed Isrosene in India) as fuel and liquid oxygen (-183°C) as oxidizer."
+                },
+                {
+                    subject: "General Science",
+                    question: "Which fat-soluble vitamin is physiologically indispensable for blood coagulation and synthesis of prothrombin?",
+                    options: [
+                        "Vitamin A",
+                        "Vitamin C",
+                        "Vitamin D",
+                        "Vitamin K"
+                    ],
+                    answer: 3,
+                    explanation: "Vitamin K (Phylloquinone) is essential for liver synthesis of prothrombin and factors VII, IX, and X needed for blood clotting."
+                },
+                {
+                    subject: "General Science",
+                    question: "Newton's First Law of Motion is also commonly known as the:",
+                    options: [
+                        "Law of Momentum",
+                        "Law of Inertia",
+                        "Law of Conservation of Energy",
+                        "Law of Action and Reaction"
+                    ],
+                    answer: 1,
+                    explanation: "Newton's first law states that an object remains at rest or in uniform motion unless acted upon by an external net force; this resistance is inertia."
+                },
+                {
+                    subject: "General Science",
+                    question: "What is the primary greenhouse gas contributing the largest natural percentage of Earth's greenhouse effect?",
+                    options: [
+                        "Carbon Dioxide (CO2)",
+                        "Water Vapour (H2O)",
+                        "Methane (CH4)",
+                        "Nitrous Oxide (N2O)"
+                    ],
+                    answer: 1,
+                    explanation: "Water vapour is the most potent and abundant greenhouse gas, accounting for 36% to 70% of the natural atmospheric greenhouse warming."
+                },
+                {
+                    subject: "General Science",
+                    question: "Which organelle in eukaryotic cells contains its own distinct circular DNA and 70S ribosomes, supporting the endosymbiotic theory?",
+                    options: [
+                        "Golgi Apparatus",
+                        "Mitochondria",
+                        "Endoplasmic Reticulum",
+                        "Lysosome"
+                    ],
+                    answer: 1,
+                    explanation: "Mitochondria (and chloroplasts in plants) have their own circular double-stranded DNA and 70S ribosomes, replicating independently through binary fission."
+                }
+            ],
+            current_affairs: [
+                {
+                    subject: "Current Affairs",
+                    question: "The Union Cabinet approved PM GatiShakti National Master Plan 2.0 with primary focus on:",
+                    options: [
+                        "Agricultural loan waivers",
+                        "Multi-modal logistics, digital freight connectivity & supply chain corridors",
+                        "Space tourism missions",
+                        "Secondary school education curriculum"
+                    ],
+                    answer: 1,
+                    explanation: "PM GatiShakti 2.0 integrates high-speed freight corridors, inland waterways, and digital cargo tracking hubs across 28 states for optimal logistics."
+                },
+                {
+                    subject: "Current Affairs",
+                    question: "With the recent notification of two new wetland reserves in Gujarat and Odisha, what is India's total tally of Ramsar Wetland Sites?",
+                    options: [
+                        "75 Sites",
+                        "80 Sites",
+                        "87 Sites",
+                        "92 Sites"
+                    ],
+                    answer: 2,
+                    explanation: "India added two international Ramsar wetland reserves, taking India's total designated Ramsar sites count to 87."
+                },
+                {
+                    subject: "Current Affairs",
+                    question: "What is the name of the 1,000 kg class Long-Range Glide Bomb successfully test-fired by DRDO from a Su-30MKI fighter jet?",
+                    options: [
+                        "Astra",
+                        "Gaurav",
+                        "Rudram",
+                        "Pralay"
+                    ],
+                    answer: 1,
+                    explanation: "DRDO completed developmental flight trials of 'Gaurav', an indigenous 1,000 kg class long-range winged glide bomb with satellite guidance."
+                },
+                {
+                    subject: "Current Affairs",
+                    question: "What is the current policy Repo Rate set by the Reserve Bank of India (RBI) Monetary Policy Committee under its neutral stance?",
+                    options: [
+                        "5.75%",
+                        "6.25%",
+                        "6.50%",
+                        "6.75%"
+                    ],
+                    answer: 2,
+                    explanation: "The RBI MPC held the benchmark policy repo rate steady at 6.50% while transitioning to a 'Neutral' monetary policy stance."
+                },
+                {
+                    subject: "Current Affairs",
+                    question: "At which ISRO facility was the hot-test of the Semi-Cryogenic Engine Pre-Burner for LVM3 successfully conducted?",
+                    options: [
+                        "SDSC Sriharikota",
+                        "VSSC Thiruvananthapuram",
+                        "IPRC Mahendragiri (Tamil Nadu)",
+                        "URSC Bengaluru"
+                    ],
+                    answer: 2,
+                    explanation: "The hot test was executed at the ISRO Propulsion Complex (IPRC) at Mahendragiri, Tamil Nadu."
+                }
+            ]
+        };
+
+        let currentQuizSubject = 'all';
+        let dailyQuizQuestions = quizQuestionBanks['all'];
+
+        function switchQuizSubject(subject) {
+            currentQuizSubject = subject;
+            document.querySelectorAll('.qsub-btn').forEach(btn => {
+                btn.classList.remove('bg-indigo-600', 'text-white');
+                btn.classList.add('bg-slate-900', 'text-slate-400');
+            });
+            const activeBtn = document.getElementById('qsub-' + subject);
+            if (activeBtn) {
+                activeBtn.classList.add('bg-indigo-600', 'text-white');
+                activeBtn.classList.remove('bg-slate-900', 'text-slate-400');
             }
-        ];
+            dailyQuizQuestions = quizQuestionBanks[subject] || quizQuestionBanks['all'];
+            initQuiz();
+        }
 
         let quizCurrentIndex = 0;
         let quizScore = 0;
@@ -2532,12 +3451,205 @@
             }
         }
 
+        // 11. EXAM COUNTDOWN TIMERS
+        function initExamCountdowns() {
+            const targets = [
+                { id: 'cd-upsc', date: new Date('2026-05-24T09:30:00') },
+                { id: 'cd-neet', date: new Date('2026-05-03T14:00:00') },
+                { id: 'cd-ssc', date: new Date('2026-09-12T09:00:00') },
+                { id: 'cd-rrb', date: new Date('2026-12-15T09:00:00') }
+            ];
+
+            function update() {
+                const now = new Date();
+                targets.forEach(t => {
+                    const diff = t.date - now;
+                    const el = document.getElementById(t.id);
+                    if (!el) return;
+                    if (diff <= 0) {
+                        el.innerText = "Exam Live!";
+                        return;
+                    }
+                    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                    el.innerText = `${days}d ${hours}h`;
+                });
+            }
+            update();
+            setInterval(update, 60000);
+        }
+
+        // 12. EXAM VACANCIES RADAR & SEARCH
+        let currentVacFilter = 'all';
+
+        function setVacFilter(cat) {
+            currentVacFilter = cat;
+            document.querySelectorAll('.vcat-btn').forEach(btn => {
+                btn.classList.remove('bg-indigo-600', 'text-white');
+                btn.classList.add('bg-slate-900', 'text-slate-400');
+            });
+            const activeBtn = document.getElementById('vcat-' + cat);
+            if (activeBtn) {
+                activeBtn.classList.add('bg-indigo-600', 'text-white');
+                activeBtn.classList.remove('bg-slate-900', 'text-slate-400');
+            }
+            filterVacancies();
+        }
+
+        function filterVacancies() {
+            const query = (document.getElementById('searchVacancyInput')?.value || '').toLowerCase().trim();
+            const cards = document.querySelectorAll('.vacancy-card');
+            let visibleCount = 0;
+
+            cards.forEach(card => {
+                const cat = (card.dataset.category || '').toLowerCase();
+                const text = (card.dataset.search || '').toLowerCase();
+
+                const matchesCat = (currentVacFilter === 'all') || (cat === currentVacFilter.toLowerCase());
+                const matchesQuery = !query || text.includes(query);
+
+                if (matchesCat && matchesQuery) {
+                    card.classList.remove('hidden');
+                    visibleCount++;
+                } else {
+                    card.classList.add('hidden');
+                }
+            });
+
+            const emptyState = document.getElementById('vacanciesEmptyState');
+            if (emptyState) {
+                if (visibleCount === 0) emptyState.classList.remove('hidden');
+                else emptyState.classList.add('hidden');
+            }
+        }
+
+        function togglePostVacancyModal() {
+            const modal = document.getElementById('modalAddVacancy');
+            if (modal) modal.classList.toggle('hidden');
+        }
+
+        async function submitNewVacancy() {
+            const title = document.getElementById('vformTitle')?.value.trim();
+            const org = document.getElementById('vformOrg')?.value.trim();
+            const category = document.getElementById('vformCategory')?.value || 'General';
+            const total_posts = document.getElementById('vformPosts')?.value.trim();
+            const eligibility = document.getElementById('vformEligibility')?.value.trim();
+            const age_limit = document.getElementById('vformAge')?.value.trim();
+            const last_date = document.getElementById('vformLastDate')?.value.trim();
+            const exam_date = document.getElementById('vformExamDate')?.value.trim();
+            const notif_link = document.getElementById('vformNotifLink')?.value.trim();
+            const apply_link = document.getElementById('vformApplyLink')?.value.trim();
+
+            if (!title || !org) {
+                alert("Please enter Exam Title and Organization.");
+                return;
+            }
+
+            const btn = document.getElementById('btnSubmitVacancy');
+            if (btn) { btn.disabled = true; btn.innerText = "Publishing..."; }
+
+            try {
+                const res = await fetch('/api/admin/vacancies/add', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Telegram-User-Id': String(currentUserId)
+                    },
+                    body: JSON.stringify({
+                        title, org, category, total_posts, eligibility, age_limit, last_date, exam_date, notif_link, apply_link
+                    })
+                });
+                const d = await res.json();
+                if (d.success) {
+                    alert("✅ Vacancy Alert published successfully!");
+                    togglePostVacancyModal();
+                    location.reload();
+                } else {
+                    alert(d.error || "Failed to publish vacancy.");
+                }
+            } catch (err) {
+                alert("Network error publishing vacancy.");
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerText = "Publish Alert"; }
+            }
+        }
+
+        async function deleteVacancy(vacId) {
+            if (!confirm("Are you sure you want to remove this vacancy alert?")) return;
+
+            try {
+                const res = await fetch('/api/admin/vacancies/delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Telegram-User-Id': String(currentUserId)
+                    },
+                    body: JSON.stringify({ id: vacId })
+                });
+                const d = await res.json();
+                if (d.success) {
+                    const card = document.querySelector(`.vacancy-card[data-id="${vacId}"]`);
+                    if (card) card.remove();
+                    filterVacancies();
+                } else {
+                    alert(d.error || "Failed to delete vacancy.");
+                }
+            } catch (err) {
+                alert("Network error.");
+            }
+        }
+
+        function shareVacancyTelegram(title, org, lastDate, applyLink) {
+            const botUser = '{{ bot_username }}' || 'H4R_Contact_bot';
+            const shareText = `📢 *2026 Govt Exam Vacancy Alert!*\n\n🎯 *${title}*\n🏛️ Commission: ${org}\n📅 Last Date to Apply: ${lastDate}\n\n👉 Apply via Portal: ${applyLink}\n✨ Track syllabus & batches on @${botUser}!`;
+            const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(applyLink)}&text=${encodeURIComponent(shareText)}`;
+            if (window.Telegram?.WebApp?.openTelegramLink) {
+                window.Telegram.WebApp.openTelegramLink(shareUrl);
+            } else {
+                window.open(shareUrl, '_blank');
+            }
+        }
+
+        // 13. CURRENT AFFAIRS DIGEST
+        function copyCurrentAffairsDigest() {
+            const items = document.querySelectorAll('.ca-item');
+            if (!items.length) return;
+
+            let digest = "📰 *Daily High-Yield Current Affairs Digest*\n━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+            items.forEach((item, idx) => {
+                const topic = item.querySelector('span.font-extrabold')?.innerText.trim() || '';
+                const date = item.querySelector('span.font-mono')?.innerText.trim() || '';
+                const title = item.querySelector('h4')?.innerText.trim() || '';
+                const snippet = item.querySelector('p')?.innerText.trim() || '';
+                digest += `${idx + 1}. [${topic} • ${date}]\n📌 *${title}*\n${snippet}\n\n`;
+            });
+            digest += "━━━━━━━━━━━━━━━━━━━━━━━━━\n✨ Master your exam with @{{ bot_username or 'H4R_Contact_bot' }}";
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(digest).then(() => {
+                    const btnText = document.getElementById('btnCopyCAText');
+                    if (btnText) {
+                        btnText.innerText = "✅ Copied Notes!";
+                        setTimeout(() => { btnText.innerText = "Copy Notes"; }, 2500);
+                    }
+                }).catch(() => { alert("Failed to copy notes."); });
+            }
+        }
+
         // Kickoff
         document.addEventListener('DOMContentLoaded', () => {
             initTelegramApp();
             setTimerDuration(25, 'Pomodoro');
             updateSoundButtonUI();
             initQuiz();
+            initExamCountdowns();
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const tabParam = urlParams.get('tab');
+            if (tabParam) {
+                if (typeof switchMainTab === 'function') switchMainTab(tabParam);
+                else if (typeof switchTab === 'function') switchTab(tabParam);
+            }
         });
     </script>
 </body>

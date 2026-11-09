@@ -122,6 +122,8 @@ async def student_store():
         categories=categories,
         leaderboard=leaderboard,
         study_leaderboard=_get_study_leaderboard(),
+        vacancies=DB.get("EXAM_VACANCIES", config.DEFAULT_VACANCIES),
+        current_affairs=DB.get("CURRENT_AFFAIRS", config.DEFAULT_CURRENT_AFFAIRS),
         bot_username=bot_username,
         bot_title="Educational Batch Store & Study Hub",
         owner_id=str(config.OWNER_ID),
@@ -482,6 +484,100 @@ async def api_study_tasks():
         DB.setdefault("USER_DATA", {}).setdefault(user_key, {})["study_tasks"] = tasks
         await save_data_async()
         return jsonify({"success": True})
+
+# --- EXAM VACANCIES & CURRENT AFFAIRS API ---
+@app.route('/api/vacancies', methods=['GET'])
+async def api_get_vacancies():
+    cat = (request.args.get("category") or "").strip().lower()
+    vacs = DB.get("EXAM_VACANCIES", config.DEFAULT_VACANCIES)
+    if cat and cat != "all":
+        vacs = [v for v in vacs if v.get("category", "").lower() == cat]
+    return jsonify({"success": True, "vacancies": vacs})
+
+@app.route('/api/admin/vacancies/add', methods=['POST'])
+async def api_admin_add_vacancy():
+    if not is_auth("admin"):
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+    data = await request.get_json() or {}
+    title = (data.get("title") or "").strip()
+    org = (data.get("org") or "").strip()
+    cat = (data.get("category") or "General").strip()
+    posts = (data.get("total_posts") or "").strip()
+    eligibility = (data.get("eligibility") or "").strip()
+    age_limit = (data.get("age_limit") or "").strip()
+    last_date = (data.get("last_date") or "").strip()
+    exam_date = (data.get("exam_date") or "").strip()
+    notif_link = (data.get("notif_link") or "").strip()
+    apply_link = (data.get("apply_link") or "").strip()
+
+    if not title or not org:
+        return jsonify({"success": False, "error": "Title and Organization are required"}), 400
+
+    new_vac = {
+        "id": f"vac_{int(time.time())}",
+        "title": title,
+        "org": org,
+        "category": cat,
+        "total_posts": posts or "Various Posts",
+        "eligibility": eligibility or "See official notification",
+        "age_limit": age_limit or "As per rules",
+        "last_date": last_date or "Check Notification",
+        "exam_date": exam_date or "Announced Soon",
+        "status": "active",
+        "notif_link": notif_link or "https://upsc.gov.in",
+        "apply_link": apply_link or "https://upsconline.nic.in"
+    }
+
+    DB.setdefault("EXAM_VACANCIES", []).insert(0, new_vac)
+    await save_data_async()
+    return jsonify({"success": True, "vacancy": new_vac})
+
+@app.route('/api/admin/vacancies/delete', methods=['POST'])
+async def api_admin_delete_vacancy():
+    if not is_auth("admin"):
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+    data = await request.get_json() or {}
+    vac_id = str(data.get("id") or "").strip()
+    if not vac_id:
+        return jsonify({"success": False, "error": "Missing vacancy ID"}), 400
+
+    vacs = DB.get("EXAM_VACANCIES", [])
+    DB["EXAM_VACANCIES"] = [v for v in vacs if str(v.get("id")) != vac_id]
+    await save_data_async()
+    return jsonify({"success": True, "message": "Vacancy removed"})
+
+@app.route('/api/current-affairs', methods=['GET'])
+async def api_get_current_affairs():
+    items = DB.get("CURRENT_AFFAIRS", config.DEFAULT_CURRENT_AFFAIRS)
+    return jsonify({"success": True, "items": items})
+
+@app.route('/api/admin/current-affairs/add', methods=['POST'])
+async def api_admin_add_current_affairs():
+    if not is_auth("admin"):
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+    data = await request.get_json() or {}
+    title = (data.get("title") or "").strip()
+    topic = (data.get("topic") or "National").strip()
+    snippet = (data.get("snippet") or "").strip()
+    date_str = (data.get("date") or time.strftime("%d %b %Y")).strip()
+
+    if not title or not snippet:
+        return jsonify({"success": False, "error": "Title and Snippet are required"}), 400
+
+    new_ca = {
+        "id": f"ca_{int(time.time())}",
+        "date": date_str,
+        "topic": topic,
+        "title": title,
+        "snippet": snippet
+    }
+
+    DB.setdefault("CURRENT_AFFAIRS", []).insert(0, new_ca)
+    await save_data_async()
+    return jsonify({"success": True, "item": new_ca})
 
 # --- PUBLIC CLIENT API ---
 @app.route('/api/redeem', methods=['POST'])
