@@ -41,6 +41,17 @@ from pyrogram.types import (
     WebAppInfo,
 )
 
+from bot_api_bridge import (
+    send_ephemeral_reply,
+    send_html_widget,
+    edit_widget_data,
+    get_topic_deeplink,
+    build_demands_console_card,
+    build_giveaway_claim_card,
+    build_interactive_broadcast_card,
+    to_pyrogram_markup,
+)
+
 logger = logging.getLogger(__name__)
 
 # Custom Animated / Premium Emojis from @istevedogs Emoji Icons Pack
@@ -1288,17 +1299,26 @@ async def cmd_genvoucher(client: Client, message: Message):
         "created_at": time.time()
     }
     await save_data_async()
-    copy_btn = make_copy_button(f"📋 Copy Code: {code}", code)
-    kb = InlineKeyboardMarkup([[copy_btn]])
-    await message.reply_text(
-        f"✅ **Promo Voucher Created!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🎟️ **Code:** `{code}`\n"
-        f"💰 **Reward:** `{pts} Coins`\n"
-        f"👥 **Total Uses:** `{max_uses}`\n\n"
-        f"Yeh code users ke sath share karein!",
-        reply_markup=kb,
-        parse_mode=ParseMode.MARKDOWN
-    )
+
+    card = build_giveaway_claim_card(code, pts, max_uses, 0)
+    pyro_kb = to_pyrogram_markup(card["reply_markup"])
+    copy_btn = make_copy_button(f"📋 Copy: {code}", code)
+    pyro_kb.inline_keyboard.append([
+        copy_btn,
+        InlineKeyboardButton("📢 Broadcast Giveaway", callback_data=f"bc_giveaway_{code}")
+    ])
+
+    try:
+        widget_res = await send_html_widget(
+            message.chat.id,
+            card["text"],
+            caption=f"🎁 <b>GIVEAWAY VOUCHER ACTIVE:</b> <code>{code}</code>",
+            reply_markup=card["reply_markup"]
+        )
+        if not widget_res:
+            await message.reply_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
+    except Exception:
+        await message.reply_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
 
 def build_batch_requests_msg(page: int = 0):
     reqs = DB.get("BATCH_REQUESTS", {})
@@ -1395,8 +1415,33 @@ async def cmd_batchrequests(client: Client, message: Message):
     if not is_admin_msg(message):
         return
     try:
-        msg = build_batch_requests_msg(page=0)
-        await rp.send(client, message.chat.id, msg)
+        reqs = DB.get("BATCH_REQUESTS", {})
+        statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
+        if not reqs:
+            return await message.reply_text("📭 Abhi tak koi batch requests nahi aayi hain.")
+
+        def _sort_key(item):
+            bname, uids = item
+            status = statuses.get(bname, "pending")
+            status_rank = 0 if status != "done" else 1
+            return (status_rank, -len(uids), bname.lower())
+
+        sorted_items = sorted(reqs.items(), key=_sort_key)
+        card = build_demands_console_card(sorted_items, page=0)
+        pyro_kb = to_pyrogram_markup(card["reply_markup"])
+
+        try:
+            widget_res = await send_html_widget(
+                message.chat.id,
+                card["text"],
+                caption="📋 <b>BATCH DEMANDS & TASK CONSOLE</b>",
+                reply_markup=card["reply_markup"]
+            )
+            if not widget_res:
+                await message.reply_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
+        except Exception:
+            msg = build_batch_requests_msg(page=0)
+            await rp.send(client, message.chat.id, msg)
     except Exception as e:
         logger.error(f"cmd_batchrequests error: {e}")
         reqs = DB.get("BATCH_REQUESTS", {})
@@ -1527,17 +1572,26 @@ async def cmd_genvoucher_from_wizard(client: Client, message: Message):
         "created_at": time.time()
     }
     await save_data_async()
-    copy_btn = make_copy_button(f"📋 Copy Code: {code}", code)
-    kb = InlineKeyboardMarkup([[copy_btn]])
-    await message.reply_text(
-        f"✅ **Promo Voucher Created!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🎟️ **Code:** `{code}`\n"
-        f"💰 **Reward:** `{pts} Coins`\n"
-        f"👥 **Total Uses:** `{max_uses}`\n\n"
-        f"Yeh code users ke sath share karein!",
-        reply_markup=kb,
-        parse_mode=ParseMode.MARKDOWN
-    )
+
+    card = build_giveaway_claim_card(code, pts, max_uses, 0)
+    pyro_kb = to_pyrogram_markup(card["reply_markup"])
+    copy_btn = make_copy_button(f"📋 Copy: {code}", code)
+    pyro_kb.inline_keyboard.append([
+        copy_btn,
+        InlineKeyboardButton("📢 Broadcast Giveaway", callback_data=f"bc_giveaway_{code}")
+    ])
+
+    try:
+        widget_res = await send_html_widget(
+            message.chat.id,
+            card["text"],
+            caption=f"🎁 <b>GIVEAWAY VOUCHER ACTIVE:</b> <code>{code}</code>",
+            reply_markup=card["reply_markup"]
+        )
+        if not widget_res:
+            await message.reply_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
+    except Exception:
+        await message.reply_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
 
 async def cmd_find_user(client: Client, message: Message):
     if not is_admin_msg(message):
@@ -1592,7 +1646,7 @@ async def cmd_user_lookup(client: Client, message: Message):
     topic_id = DB.get("USER_TOPICS", {}).get(target) or DB.get("USER_TOPICS", {}).get(str(target))
     if topic_id and SUPPORT_GROUP_ID:
         group_id_str = str(SUPPORT_GROUP_ID).replace("-100", "")
-        topic_link = f"https://t.me/c/{group_id_str}/{topic_id}"
+        topic_link = f"https://t.me/c/{group_id_str}/{topic_id} | Bot Deep-Link: {get_topic_deeplink(topic_id)}"
     else:
         topic_link = "_No support topic yet._"
 
@@ -3979,26 +4033,59 @@ async def general_callback(client: Client, q: CallbackQuery):
             await q.edit_message_text(info_text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
 
         # =====================================================================
-        # 📋 BATCH REQUESTS DEMANDS & CHECKLIST TRACKER
+        # 📋 BATCH REQUESTS DEMANDS & CHECKLIST TRACKER (Bot API 10.4 Console)
         # =====================================================================
         elif data in ["view_batch_requests", "act_requestbatches", "requestbatches"]:
             if not is_admin(uid):
-                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
-            await q.answer()
-            msg = build_batch_requests_msg(page=0)
-            await rp.edit(client, q.message.chat.id, q.message.id, msg)
+                return await send_ephemeral_reply(q.id, "❌ Sirf admins ke liye.", chat_id=q.message.chat.id)
+            reqs = DB.get("BATCH_REQUESTS", {})
+            statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
+            if not reqs:
+                await send_ephemeral_reply(q.id, "📭 Abhi tak koi batch requests nahi aayi hain.", chat_id=q.message.chat.id)
+                msg = build_batch_requests_msg(page=0)
+                return await rp.edit(client, q.message.chat.id, q.message.id, msg)
+
+            def _sort_key(item):
+                bname, uids = item
+                status = statuses.get(bname, "pending")
+                status_rank = 0 if status != "done" else 1
+                return (status_rank, -len(uids), bname.lower())
+
+            sorted_items = sorted(reqs.items(), key=_sort_key)
+            card = build_demands_console_card(sorted_items, page=0)
+            pyro_kb = to_pyrogram_markup(card["reply_markup"])
+            try:
+                await q.edit_message_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
+            except Exception:
+                msg = build_batch_requests_msg(page=0)
+                await rp.edit(client, q.message.chat.id, q.message.id, msg)
 
         elif data.startswith("breq_p_"):
             if not is_admin(uid):
-                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
+                return await send_ephemeral_reply(q.id, "❌ Sirf admins ke liye.", chat_id=q.message.chat.id)
             page = int(data.split("_")[2])
-            await q.answer()
-            msg = build_batch_requests_msg(page=page)
-            await rp.edit(client, q.message.chat.id, q.message.id, msg)
+            reqs = DB.get("BATCH_REQUESTS", {})
+            statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
 
-        elif data.startswith("breq_t_"):
+            def _sort_key(item):
+                bname, uids = item
+                status = statuses.get(bname, "pending")
+                status_rank = 0 if status != "done" else 1
+                return (status_rank, -len(uids), bname.lower())
+
+            sorted_items = sorted(reqs.items(), key=_sort_key)
+            card = build_demands_console_card(sorted_items, page=page)
+            pyro_kb = to_pyrogram_markup(card["reply_markup"])
+            try:
+                await q.edit_message_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
+            except Exception:
+                msg = build_batch_requests_msg(page=page)
+                await rp.edit(client, q.message.chat.id, q.message.id, msg)
+
+        elif data.startswith("breq_w_"):
+            # 👥 View which students requested this specific batch (Ephemeral)
             if not is_admin(uid):
-                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
+                return await send_ephemeral_reply(q.id, "❌ Sirf admins ke liye.", chat_id=q.message.chat.id)
             parts = data.split("_")
             item_global_idx = int(parts[2])
             page = int(parts[3])
@@ -4014,7 +4101,41 @@ async def general_callback(client: Client, q: CallbackQuery):
 
             sorted_items = sorted(reqs.items(), key=_sort_key)
             if item_global_idx < 0 or item_global_idx >= len(sorted_items):
-                return await q.answer("❌ Invalid batch index.", show_alert=True)
+                return await send_ephemeral_reply(q.id, "❌ Invalid batch index.", chat_id=q.message.chat.id)
+
+            bname, uids = sorted_items[item_global_idx]
+            student_lines = []
+            for s_idx, target_uid in enumerate(uids[:20], 1):
+                u_info = DB.get("USER_DATA", {}).get(target_uid) or DB.get("USER_DATA", {}).get(str(target_uid), {})
+                uname = u_info.get("name") or f"User {target_uid}"
+                handle = f"(@{u_info.get('username')})" if u_info.get("username") else ""
+                student_lines.append(f"{s_idx}. {uname} {handle} <code>[{target_uid}]</code>")
+
+            st_summary = f"👥 <b>STUDENTS DEMANDING BATCH:</b>\n📦 <b>{bname}</b>\nTotal Waiting: <b>{len(uids)} Students</b>\n\n" + "\n".join(student_lines)
+            if len(uids) > 20:
+                st_summary += f"\n<i>...and {len(uids) - 20} more students</i>"
+
+            await send_ephemeral_reply(q.id, st_summary, chat_id=q.message.chat.id)
+
+        elif data.startswith("breq_t_"):
+            if not is_admin(uid):
+                return await send_ephemeral_reply(q.id, "❌ Sirf admins ke liye.", chat_id=q.message.chat.id)
+            parts = data.split("_")
+            item_global_idx = int(parts[2])
+            page = int(parts[3])
+
+            reqs = DB.get("BATCH_REQUESTS", {})
+            statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
+
+            def _sort_key(item):
+                bname, uids = item
+                status = statuses.get(bname, "pending")
+                status_rank = 0 if status != "done" else 1
+                return (status_rank, -len(uids), bname.lower())
+
+            sorted_items = sorted(reqs.items(), key=_sort_key)
+            if item_global_idx < 0 or item_global_idx >= len(sorted_items):
+                return await send_ephemeral_reply(q.id, "❌ Invalid batch index.", chat_id=q.message.chat.id)
 
             bname, uids = sorted_items[item_global_idx]
             current_status = statuses.get(bname, "pending")
@@ -4023,7 +4144,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                 # Toggle back to pending
                 statuses[bname] = "pending"
                 await save_data_async()
-                await q.answer(f"Marked '{bname}' as Pending (☐)")
+                await send_ephemeral_reply(q.id, f"Marked '{bname}' as Pending (☐)", chat_id=q.message.chat.id)
             else:
                 # Mark done & notify requesting users
                 statuses[bname] = "done"
@@ -4050,11 +4171,17 @@ async def general_callback(client: Client, q: CallbackQuery):
                     except Exception as err:
                         logger.warning(f"Could not notify user {target_uid}: {err}")
 
-                alert_txt = f"✅ '{bname}' marked as Uploaded (☑)!\n👥 {notified_count} user(s) notified."
-                await q.answer(alert_txt, show_alert=True)
+                alert_txt = f"✅ '{bname}' marked as Uploaded (☑)!\n👥 {notified_count} user(s) notified instantly."
+                await send_ephemeral_reply(q.id, alert_txt, chat_id=q.message.chat.id)
 
-            msg = build_batch_requests_msg(page=page)
-            await rp.edit(client, q.message.chat.id, q.message.id, msg)
+            sorted_items = sorted(reqs.items(), key=_sort_key)
+            card = build_demands_console_card(sorted_items, page=page)
+            pyro_kb = to_pyrogram_markup(card["reply_markup"])
+            try:
+                await q.edit_message_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
+            except Exception:
+                msg = build_batch_requests_msg(page=page)
+                await rp.edit(client, q.message.chat.id, q.message.id, msg)
 
         elif data == "act_adminlist":
             await q.answer("Fetching Admin List...")
@@ -4217,7 +4344,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                     break
 
             kb = [
-                [InlineKeyboardButton("🎁 Refer & Earn", callback_data="menu_refer")],
+                [InlineKeyboardButton("🎁 Refer & Earn", callback_data="menu_refer"), InlineKeyboardButton("🎟️ Giveaways Ticker", callback_data="view_giveaways_ticker")],
                 [InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]
             ]
 
@@ -4230,6 +4357,23 @@ async def general_callback(client: Client, q: CallbackQuery):
                 "✨ *Top referrers ko automatic VIP tier aur free batches ka access milta hai!*"
             )
             await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+
+        elif data == "view_giveaways_ticker":
+            vouchers = DB.get("VOUCHERS", {})
+            if not vouchers:
+                return await send_ephemeral_reply(q.id, "📭 Abhi koi active giveaway nahi hai. Jaldi hi naye giveaway aayenge!", chat_id=q.message.chat.id)
+
+            active_v_lines = []
+            for code, v_data in list(vouchers.items())[-8:]:
+                max_u = v_data.get("max_uses", 1)
+                used_c = len(v_data.get("used_by", []))
+                rem = max(0, max_u - used_c)
+                pts = v_data.get("points", 0)
+                status_icon = "🔥" if rem > 0 else "❌"
+                active_v_lines.append(f"{status_icon} <code>{code}</code>: <b>+{pts} Coins</b> ({rem}/{max_u} slots left)")
+
+            summary = "🎁 <b>LIVE GIVEAWAYS & PROMO TICKER</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━\n" + "\n".join(active_v_lines) + "\n\n<i>Promo codes claim karne ke liye 'Redeem Code' use karein!</i>"
+            await send_ephemeral_reply(q.id, summary, chat_id=q.message.chat.id)
 
         # =====================================================================
         # 🙋 REQUEST A BATCH
@@ -4268,6 +4412,101 @@ async def general_callback(client: Client, q: CallbackQuery):
             await q.answer("Cancelled")
             USER_FLOW_STATE.pop(uid, None)
             await show_user_menu_cb(client, q)
+
+        # =====================================================================
+        # 🎁 1-CLICK GIVEAWAY CLAIMS & TICKER (Bot API 10.4)
+        # =====================================================================
+        elif data.startswith("claim_voucher_"):
+            code = data.replace("claim_voucher_", "").strip().upper()
+            vouchers = DB.get("VOUCHERS", {})
+            if code not in vouchers:
+                return await send_ephemeral_reply(q.id, "❌ Yeh voucher expire ho chuka hai ya exist nahi karta.", chat_id=q.message.chat.id)
+
+            v_data = vouchers[code]
+            used_by = v_data.setdefault("used_by", [])
+            max_uses = v_data.get("max_uses", 1)
+            pts = v_data.get("points", 0)
+
+            if uid in used_by or str(uid) in used_by:
+                return await send_ephemeral_reply(q.id, f"⚠️ Aapne voucher '{code}' pehle hi claim kar liya hai!", chat_id=q.message.chat.id)
+
+            if len(used_by) >= max_uses:
+                return await send_ephemeral_reply(q.id, f"⌛ Giveaway is full! All {max_uses} slots are already claimed.", chat_id=q.message.chat.id)
+
+            used_by.append(uid)
+            user_key = uid if uid in DB["USER_DATA"] else str(uid)
+            user_info = DB["USER_DATA"].setdefault(user_key, {})
+            user_info["referral_count"] = round(user_info.get("referral_count", 0) + pts, 2)
+            await save_data_async()
+
+            await send_ephemeral_reply(q.id, f"🎉 Mubarak ho! +{pts} Coins successfully aapke wallet me add ho gaye! 💎", chat_id=q.message.chat.id)
+
+            # Live update card counter
+            try:
+                card = build_giveaway_claim_card(code, pts, max_uses, len(used_by))
+                pyro_kb = to_pyrogram_markup(card["reply_markup"])
+                await q.edit_message_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
+            except Exception as e:
+                logger.debug(f"Live update card error: {e}")
+
+        elif data.startswith("claimers_voucher_"):
+            code = data.replace("claimers_voucher_", "").strip().upper()
+            vouchers = DB.get("VOUCHERS", {})
+            if code not in vouchers:
+                return await send_ephemeral_reply(q.id, "❌ Voucher nahi mila.", chat_id=q.message.chat.id)
+            v_data = vouchers[code]
+            used_by = v_data.get("used_by", [])
+            max_uses = v_data.get("max_uses", 1)
+            pts = v_data.get("points", 0)
+
+            if not used_by:
+                return await send_ephemeral_reply(q.id, f"🎟️ <b>VOUCHER:</b> <code>{code}</code>\nAbhi tak kisi ne claim nahi kiya hai! (0/{max_uses} slots claimed)", chat_id=q.message.chat.id)
+
+            claimer_lines = []
+            for idx, c_uid in enumerate(used_by[:15], 1):
+                u_info = DB.get("USER_DATA", {}).get(c_uid) or DB.get("USER_DATA", {}).get(str(c_uid), {})
+                uname = u_info.get("name") or f"User {c_uid}"
+                claimer_lines.append(f"{idx}. {uname} (+{pts} Coins)")
+
+            summary = f"👥 <b>GIVEAWAY CLAIMERS LIST ({code})</b>\nClaimed: <b>{len(used_by)}/{max_uses}</b>\n\n" + "\n".join(claimer_lines)
+            if len(used_by) > 15:
+                summary += f"\n<i>...and {len(used_by) - 15} more students</i>"
+            await send_ephemeral_reply(q.id, summary, chat_id=q.message.chat.id)
+
+        elif data.startswith("copy_voucher_"):
+            code = data.replace("copy_voucher_", "").strip().upper()
+            await send_ephemeral_reply(q.id, f"🎟️ <b>Voucher Code:</b> <code>{code}</code>\nTap the code above to copy it!", chat_id=q.message.chat.id)
+
+        elif data.startswith("bc_giveaway_"):
+            if not is_admin(uid):
+                return await send_ephemeral_reply(q.id, "❌ Sirf admins ke liye.", chat_id=q.message.chat.id)
+            code = data.replace("bc_giveaway_", "").strip().upper()
+            vouchers = DB.get("VOUCHERS", {})
+            if code not in vouchers:
+                return await send_ephemeral_reply(q.id, "❌ Voucher nahi mila.", chat_id=q.message.chat.id)
+            v_data = vouchers[code]
+            pts = v_data.get("points", 0)
+            max_uses = v_data.get("max_uses", 1)
+            used_count = len(v_data.get("used_by", []))
+
+            await send_ephemeral_reply(q.id, f"🚀 Broadcasting Giveaway '{code}' to all active users...", chat_id=q.message.chat.id)
+            
+            card = build_giveaway_claim_card(code, pts, max_uses, used_count)
+            pyro_kb = to_pyrogram_markup(card["reply_markup"])
+
+            targets = list(DB.get("USER_DATA", {}).keys())
+            sent_count = 0
+            for t_uid in targets:
+                try:
+                    await client.send_message(int(t_uid), card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
+                    sent_count += 1
+                    await asyncio.sleep(0.04)
+                except FloodWait as fw:
+                    await asyncio.sleep(fw.value + 1)
+                except Exception:
+                    pass
+
+            await send_ephemeral_reply(q.id, f"✅ Giveaway '{code}' successfully broadcasted to {sent_count} users! 🎉", chat_id=q.message.chat.id)
 
         # =====================================================================
         # 🔗 SHARE SPECIFIC BATCH & DEEP-LINK REDIRECT LOGIC
