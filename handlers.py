@@ -1371,18 +1371,37 @@ def build_batch_requests_msg(page: int = 0):
     for idx, (bname, uids) in enumerate(page_items, start=start_idx + 1):
         st = statuses.get(bname, "pending")
         is_done = (st == "done")
-        badge = ce("CHECK", "✅") if is_done else ce("ALERT", "❗️")
-        status_tag = rp.marked(" [☑ Uploaded] ") if is_done else rp.italic(" [☐ Pending] ")
+        badge = ce("CHECK", "✅") if is_done else ce("ALERT", "🔴")
+        status_tag = rp.marked(" [☑ Live] ") if is_done else rp.italic(" [☐ Pending] ")
+
+        names = []
+        user_db = DB.get("USER_DATA", {})
+        for u in uids[:2]:
+            u_info = user_db.get(u) or user_db.get(str(u), {})
+            nm = u_info.get("name")
+            un = u_info.get("username")
+            if nm and un:
+                names.append(f"{nm} (@{un})")
+            elif nm:
+                names.append(nm)
+            elif un:
+                names.append(f"@{un}")
+            else:
+                names.append(f"ID {u}")
+        user_str = ", ".join(names) or f"{len(uids)} Students"
+        if len(uids) > 2:
+            user_str += f" (+{len(uids) - 2} more)"
+
         body_elements.append(
             rp.para(
                 badge, " ", rp.bold(f"{idx}. {bname}"), "\n",
-                "   ↳ ", rp.bold(f"👥 {len(uids)} Users"), " — ", status_tag
+                "   ↳ ", rp.bold(f"👥 Demand ({len(uids)}): "), user_str, " — ", status_tag
             )
         )
 
     body_elements.append(rp.divider())
     body_elements.append(
-        rp.italic("💡 Niche buttons se checkbox toggle karein. Uploaded tick karte hi users ko auto-notification bhej di jayegi!")
+        rp.italic("💡 Niche button se 1-click me batch Live karein. Students ko auto-notification chali jayegi!")
     )
 
     btn_rows = []
@@ -1391,8 +1410,9 @@ def build_batch_requests_msg(page: int = 0):
         st = statuses.get(bname, "pending")
         is_done = (st == "done")
         check_icon = "☑" if is_done else "☐"
-        short_name = (bname[:18] + "..") if len(bname) > 20 else bname
-        label = f"{check_icon} {short_name} ({'Done' if is_done else 'Upload'})"
+        icon_txt = "Live:" if is_done else "Upload:"
+        short_name = (bname[:26] + "..") if len(bname) > 28 else bname
+        label = f"{item_global_idx + 1}. {check_icon} {icon_txt} {short_name} ({len(uids)})"
         style = rp.Style.SUCCESS if is_done else rp.Style.DEFAULT
         btn_rows.append(rp.buttons(rp.btn(label, f"breq_t_{item_global_idx}_{page}", style=style)))
 
@@ -1406,7 +1426,8 @@ def build_batch_requests_msg(page: int = 0):
     btn_rows.append(rp.buttons(*nav_buttons))
     btn_rows.append(rp.buttons(
         rp.btn("🔄 Refresh", f"breq_p_{page}", style=rp.Style.DEFAULT),
-        rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DANGER)
+        rp.btn("🗑️ Delete Mode", f"breq_delm_{page}", style=rp.Style.DANGER),
+        rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DEFAULT)
     ))
 
     return rp.message(*body_elements, *btn_rows)
@@ -4182,6 +4203,101 @@ async def general_callback(client: Client, q: CallbackQuery):
             except Exception:
                 msg = build_batch_requests_msg(page=page)
                 await rp.edit(client, q.message.chat.id, q.message.id, msg)
+
+        elif data.startswith("breq_delm_"):
+            if not is_admin(uid):
+                return await send_ephemeral_reply(q.id, "❌ Sirf admins ke liye.", chat_id=q.message.chat.id)
+            page = int(data.split("_")[2])
+            reqs = DB.get("BATCH_REQUESTS", {})
+            statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
+
+            def _sort_key(item):
+                bname, uids = item
+                status = statuses.get(bname, "pending")
+                status_rank = 0 if status != "done" else 1
+                return (status_rank, -len(uids), bname.lower())
+
+            sorted_items = sorted(reqs.items(), key=_sort_key)
+            card = build_demands_console_card(sorted_items, page=page, mode="delete")
+            pyro_kb = to_pyrogram_markup(card["reply_markup"])
+            try:
+                await q.edit_message_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
+            except Exception:
+                await q.answer()
+
+        elif data.startswith("breq_del_"):
+            if not is_admin(uid):
+                return await send_ephemeral_reply(q.id, "❌ Sirf admins ke liye.", chat_id=q.message.chat.id)
+            parts = data.split("_")
+            item_global_idx = int(parts[2])
+            page = int(parts[3])
+
+            reqs = DB.get("BATCH_REQUESTS", {})
+            statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
+
+            def _sort_key(item):
+                bname, uids = item
+                status = statuses.get(bname, "pending")
+                status_rank = 0 if status != "done" else 1
+                return (status_rank, -len(uids), bname.lower())
+
+            sorted_items = sorted(reqs.items(), key=_sort_key)
+            if item_global_idx < 0 or item_global_idx >= len(sorted_items):
+                return await send_ephemeral_reply(q.id, "❌ Invalid batch index.", chat_id=q.message.chat.id)
+
+            bname, _ = sorted_items[item_global_idx]
+            if bname in reqs:
+                del reqs[bname]
+            if bname in statuses:
+                del statuses[bname]
+            await save_data_async()
+
+            await send_ephemeral_reply(q.id, f"🗑️ Request '{bname}' delete kar di gayi!", chat_id=q.message.chat.id)
+
+            sorted_items = sorted(reqs.items(), key=_sort_key)
+            total_pages = max(1, (len(sorted_items) + 4) // 5)
+            if page >= total_pages:
+                page = max(0, total_pages - 1)
+
+            card = build_demands_console_card(sorted_items, page=page, mode="delete")
+            pyro_kb = to_pyrogram_markup(card["reply_markup"])
+            try:
+                await q.edit_message_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
+            except Exception:
+                await q.answer()
+
+        elif data == "breq_clean_done":
+            if not is_admin(uid):
+                return await send_ephemeral_reply(q.id, "❌ Sirf admins ke liye.", chat_id=q.message.chat.id)
+
+            reqs = DB.get("BATCH_REQUESTS", {})
+            statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
+
+            done_keys = [k for k, v in statuses.items() if v == "done"]
+            cleaned_count = 0
+            for k in done_keys:
+                if k in reqs:
+                    del reqs[k]
+                    cleaned_count += 1
+                if k in statuses:
+                    del statuses[k]
+
+            await save_data_async()
+            await send_ephemeral_reply(q.id, f"🧹 {cleaned_count} uploaded batch requests clean kar diye gaye!", chat_id=q.message.chat.id)
+
+            def _sort_key(item):
+                bname, uids = item
+                status = statuses.get(bname, "pending")
+                status_rank = 0 if status != "done" else 1
+                return (status_rank, -len(uids), bname.lower())
+
+            sorted_items = sorted(reqs.items(), key=_sort_key)
+            card = build_demands_console_card(sorted_items, page=0, mode="normal")
+            pyro_kb = to_pyrogram_markup(card["reply_markup"])
+            try:
+                await q.edit_message_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
+            except Exception:
+                await q.answer()
 
         elif data == "act_adminlist":
             await q.answer("Fetching Admin List...")

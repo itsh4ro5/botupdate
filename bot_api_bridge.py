@@ -187,27 +187,95 @@ def get_topic_deeplink(thread_id: int, bot_username: Optional[str] = None) -> st
 # 4. PRE-ENGINEERED ULTRA-ATTRACTIVE WIDGET TEMPLATES
 # =============================================================================
 
-def build_demands_console_card(sorted_items: List[tuple], page: int = 0, per_page: int = 5) -> Dict[str, Any]:
+def build_demands_console_card(sorted_items: List[tuple], page: int = 0, per_page: int = 5, mode: str = "normal") -> Dict[str, Any]:
     """
-    Builds the interactive Batch Demands Console widget card for the Owner/Admin.
-    Enables 1-click mark live & notify directly from chat!
+    Builds the clean, professional Batch Demands Console card.
+    Supports:
+    - mode="normal": Full-width 1-tap Live/Upload toggles with student names shown directly in text.
+    - mode="delete": 1-tap delete mode to purge bogus requests or clean completed batches.
     """
     total = len(sorted_items)
-    statuses = config.DB.get("BATCH_REQUEST_STATUS", {})
+    statuses = getattr(config, "DB", {}).get("BATCH_REQUEST_STATUS", {})
     completed = sum(1 for b, _ in sorted_items if statuses.get(b) == "done")
     pending = total - completed
-    pct = int((completed / total) * 100) if total > 0 else 0
 
     total_pages = max(1, (total + per_page - 1) // per_page)
     page = max(0, min(page, total_pages - 1))
     start_idx = page * per_page
     page_items = sorted_items[start_idx:start_idx + per_page]
 
-    # HTML Card Body
+    # Format Student names helper
+    def _format_requesters(uids: list) -> str:
+        names = []
+        user_db = getattr(config, "DB", {}).get("USER_DATA", {})
+        for u in uids[:2]:
+            u_info = user_db.get(u) or user_db.get(str(u), {})
+            nm = u_info.get("name")
+            un = u_info.get("username")
+            if nm and un:
+                names.append(f"{nm} (@{un})")
+            elif nm:
+                names.append(nm)
+            elif un:
+                names.append(f"@{un}")
+            else:
+                names.append(f"ID {u}")
+        if len(uids) > 2:
+            return f"{', '.join(names)} (+{len(uids) - 2} more)"
+        return ", ".join(names) or f"{len(uids)} Students"
+
+    if mode == "delete":
+        html_lines = [
+            "<b>🗑️ <u>MANAGE & DELETE BATCH REQUESTS</u></b>",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━",
+            f"📊 <b>Total:</b> <code>{total}</code> | ⏳ <b>Pending:</b> <code>{pending}</code> | ✅ <b>Live:</b> <code>{completed}</code>",
+            f"📄 <b>Page:</b> <code>{page + 1}/{total_pages}</code> <i>(Delete Mode)</i>",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━"
+        ]
+        for idx, (bname, uids) in enumerate(page_items, start=start_idx + 1):
+            st = statuses.get(bname, "pending")
+            status_text = "✅ Live" if st == "done" else "⏳ Pending"
+            req_str = _format_requesters(uids)
+            html_lines.append(f"<b>{idx}. {bname}</b>\n   ↳ 👥 <b>{len(uids)} Users:</b> {req_str} ({status_text})")
+
+        html_lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━")
+        html_lines.append("<i>⚠️ Niche kisi bhi button par tap karke us request ko permanent delete karein:</i>")
+
+        kb_rows = []
+        for sub_idx, (bname, uids) in enumerate(page_items):
+            item_idx = start_idx + sub_idx
+            short_bname = (bname[:26] + "..") if len(bname) > 28 else bname
+            btn_text = f"🗑️ Delete {start_idx + sub_idx + 1}: {short_bname}"
+            kb_rows.append([{"text": btn_text, "callback_data": f"breq_del_{item_idx}_{page}"}])
+
+        nav_row = []
+        if page > 0:
+            nav_row.append({"text": "◀ Prev", "callback_data": f"breq_delm_{page - 1}"})
+        nav_row.append({"text": f"📄 {page + 1}/{total_pages}", "callback_data": f"breq_delm_{page}"})
+        if page < total_pages - 1:
+            nav_row.append({"text": "Next ▶", "callback_data": f"breq_delm_{page + 1}"})
+        if nav_row:
+            kb_rows.append(nav_row)
+
+        if completed > 0:
+            kb_rows.append([{"text": f"🧹 Clean All {completed} Uploaded Batches", "callback_data": "breq_clean_done"}])
+
+        kb_rows.append([
+            {"text": "🔙 Exit Delete Mode", "callback_data": f"breq_p_{page}"},
+            {"text": "🏠 Main Terminal", "callback_data": "dash_home"}
+        ])
+
+        return {
+            "text": "\n".join(html_lines),
+            "reply_markup": {"inline_keyboard": kb_rows}
+        }
+
+    # NORMAL MODE: Ultra-Clean, Full-Width Buttons, Zero Clutter!
     html_lines = [
-        "<b>📋 <u>LIVE BATCH DEMANDS & TASK CONSOLE</u></b>",
-        f"<b>Progress:</b> <code>[{'█' * (pct // 10)}{'░' * (10 - (pct // 10))}] {completed}/{total} ({pct}%)</code>",
-        f"<b>📦 Total:</b> <code>{total}</code> | <b>⏳ Pending:</b> <code>{pending}</code> | <b>✅ Live:</b> <code>{completed}</code>",
+        "<b>📋 <u>STUDENT BATCH DEMANDS & CHECKLIST</u></b>",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━",
+        f"📊 <b>Total:</b> <code>{total}</code> | ⏳ <b>Pending:</b> <code>{pending}</code> | ✅ <b>Live:</b> <code>{completed}</code>",
+        f"📄 <b>Page:</b> <code>{page + 1}/{total_pages}</code> <i>(Sorted by Highest Demand)</i>",
         "━━━━━━━━━━━━━━━━━━━━━━━━━"
     ]
 
@@ -215,25 +283,23 @@ def build_demands_console_card(sorted_items: List[tuple], page: int = 0, per_pag
         st = statuses.get(bname, "pending")
         is_done = (st == "done")
         badge = "🟢" if is_done else "🔴"
-        status_text = "<b>[☑ UPLOADED & LIVE]</b>" if is_done else "<i>[☐ PENDING APPROVAL]</i>"
-        html_lines.append(f"{badge} <b>{idx}. {bname}</b>\n   ↳ 👥 <b>{len(uids)} Students Waiting</b> — {status_text}")
+        status_text = "<b>[☑ LIVE & NOTIFIED]</b>" if is_done else "<i>[☐ PENDING UPLOAD]</i>"
+        req_str = _format_requesters(uids)
+        html_lines.append(f"{badge} <b>{idx}. {bname}</b>\n   ↳ 👥 <b>Demand ({len(uids)}):</b> {req_str} — {status_text}")
 
     html_lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━")
-    html_lines.append("<i>💡 Niche buttons se 1-click me batch Live karein. Students ko instant notification chali jayegi!</i>")
+    html_lines.append("<i>💡 Button dabate hi batch Uploaded mark hoga aur students ko auto-notify chala jayega!</i>")
 
-    # Interactive Keyboard Rows
+    # Clean 1-button-per-row layout (Full Width readable text!)
     kb_rows = []
     for sub_idx, (bname, uids) in enumerate(page_items):
         item_idx = start_idx + sub_idx
         st = statuses.get(bname, "pending")
         is_done = (st == "done")
-        icon = "✅ Live" if is_done else "⚡ Mark Live & Notify"
-        short_bname = (bname[:16] + "..") if len(bname) > 18 else bname
-        btn_text = f"{icon}: {short_bname}"
-        kb_rows.append([
-            {"text": btn_text, "callback_data": f"breq_t_{item_idx}_{page}"},
-            {"text": f"👥 Users ({len(uids)})", "callback_data": f"breq_w_{item_idx}_{page}"}
-        ])
+        icon = "☑ Live:" if is_done else "☐ Upload:"
+        short_bname = (bname[:26] + "..") if len(bname) > 28 else bname
+        btn_text = f"{start_idx + sub_idx + 1}. {icon} {short_bname} ({len(uids)})"
+        kb_rows.append([{"text": btn_text, "callback_data": f"breq_t_{item_idx}_{page}"}])
 
     # Nav Row
     nav_row = []
@@ -245,9 +311,11 @@ def build_demands_console_card(sorted_items: List[tuple], page: int = 0, per_pag
     if nav_row:
         kb_rows.append(nav_row)
 
+    # Actions Row
     kb_rows.append([
-        {"text": "🔄 Refresh Console", "callback_data": f"breq_p_{page}"},
-        {"text": "🔙 Back to Terminal", "callback_data": "dash_home"}
+        {"text": "🔄 Refresh", "callback_data": f"breq_p_{page}"},
+        {"text": "🗑️ Delete / Clean", "callback_data": f"breq_delm_{page}"},
+        {"text": "🔙 Terminal", "callback_data": "dash_home"}
     ])
 
     return {
