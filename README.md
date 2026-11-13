@@ -9,18 +9,19 @@ pinned: false
 
 <div align="center">
 
-# ⚡ Advanced Telegram Bot & Community Ecosystem Manager
+# ⚡ H4R Telegram Bot & Student Education Ecosystem
 
-[![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![Framework](https://img.shields.io/badge/Engine-Kurigram%20%7C%20Pyrogram-red?style=for-the-badge&logo=telegram&logoColor=white)](https://github.com/Telegram-Kurigram/Kurigram)
-[![UI Library](https://img.shields.io/badge/UI-Richpyro%20(Bot%20API%2010.1%2B)-teal?style=for-the-badge)](https://github.com/devgaganin/richpyro)
-[![Database](https://img.shields.io/badge/Database-JSON%20%2B%20MongoDB-green?style=for-the-badge&logo=mongodb&logoColor=white)](https://mongodb.com)
-[![Web Server](https://img.shields.io/badge/Server-Flask%20KeepAlive-black?style=for-the-badge&logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
+[![Python Version](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-blue?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![Telegram Bot API](https://img.shields.io/badge/Telegram%20Bot%20API-10.4%20(Latest)-0088cc?style=for-the-badge&logo=telegram&logoColor=white)](https://core.telegram.org/bots/api)
+[![Engine](https://img.shields.io/badge/Engine-Kurigram%20%7C%20Pyrogram%20Layer%20229-red?style=for-the-badge&logo=telegram&logoColor=white)](https://github.com/Telegram-Kurigram/Kurigram)
+[![Web Server](https://img.shields.io/badge/Web%20Server-Quart%20ASGI%20%2B%20Hypercorn-black?style=for-the-badge&logo=fastapi&logoColor=white)](https://pgjones.gitlab.io/quart/)
+[![Database](https://img.shields.io/badge/Database-MongoDB%20Atlas%20%2B%20Atomic%20JSON-green?style=for-the-badge&logo=mongodb&logoColor=white)](https://mongodb.com)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
+[![Hugging Face](https://img.shields.io/badge/Deployment-Hugging%20Face%20Spaces-FFD21E?style=for-the-badge&logo=huggingface&logoColor=black)](https://huggingface.co/spaces)
 
-**An enterprise-grade, state-of-the-art Telegram bot architecture engineered for managing massive educational & premium communities, multi-tier paid/free batch ecosystems, automated link provisioning, userbot content automation, and forum-based customer support.**
+**An enterprise-grade, state-of-the-art Telegram Bot & Student Community Ecosystem. Engineered with a Telegram Bot API 10.4 Hybrid Bridge, Telegram WebApp (TWA) Student Portal, Multi-Tier Batch Provisioning with 1-Time Expiring Links, 2-Way Forum Support Ticket Sync, Userbot Batch Recovery Suite, and Exam Preparation Radar.**
 
-[Features](#-feature-highlights) • [Architecture](#-architecture-overview) • [Installation](#-quick-start--installation) • [Deployment](#-deployment-options) • [Commands Manual](#-commands--manual) • [Configuration](#-environment-variables)
+[🌟 Features](#-feature-highlights) • [🏛️ Architecture](#-system-architecture) • [📱 WebApp Portal](#-student-webapp-portal) • [🚀 Quick Start](#-quick-start--installation) • [☁️ Deployment](#-deployment-options) • [📖 Commands](#-commands--manual) • [🔌 REST APIs](#-rest-api-endpoints) • [⚙️ Configuration](#-environment-variables)
 
 ---
 
@@ -29,121 +30,185 @@ pinned: false
 ## 🌟 Feature Highlights
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        TELEGRAM BOT ECOSYSTEM                          │
-├──────────────────┬──────────────────┬──────────────────┬───────────────┤
-│ 🔐 Smart Access  │ 💎 Economy Engine│ 🤖 Userbot Tools │ 🎫 2-Way Sync │
-│ • 1-Time Invites │ • Referral System│ • SuperForwarder │ • Forum Topics│
-│ • 3h Auto-Demo   │ • Coins & Wallet │ • Caption Editor │ • Reactions   │
-│ • Free/Paid/Spec │ • Promo Vouchers │ • Anti-Leech     │ • Deletions   │
-└──────────────────┴──────────────────┴──────────────────┴───────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                                H4R BOT & WEB ECOSYSTEM                                 │
+├─────────────────────┬─────────────────────┬─────────────────────┬──────────────────────┤
+│ 🚀 Bot API 10.4     │ 📱 Student WebApp   │ 🔐 Batch Manager    │ 🤖 Userbot & Recovery│
+│ • In-Chat Widgets   │ • Exam Vacancy Radar│ • 1-Time Auto-Links │ • /restorebatches    │
+│ • Ephemeral Replies │ • 2026 Countdown    │ • 3-Hour Auto-Demo  │ • Super Forwarder    │
+│ • Topic Deep-Links  │ • Mock Test Arena   │ • Demand Checklist  │ • Caption Editor     │
+│ • Giveaway Ticker   │ • Study Tasks & Stre│ • Delete/Clean Mode │ • Anti-Leech Guard   │
+└─────────────────────┴─────────────────────┴─────────────────────┴──────────────────────┘
 ```
 
-### 1. 🔐 Multi-Tier Batch & Access Management
+### 1. 🚀 Telegram Bot API 10.4 Hybrid Bridge (`bot_api_bridge.py`)
+Powered by a persistent, pooled HTTP/2 asynchronous client (`httpx.AsyncClient`) that runs side-by-side with Pyrogram/Kurigram MTProto:
+* **In-Chat HTML Widgets (`sendWidget`, `editMessageWidgetData`):** Sends interactive mini-apps and rich HTML widget cards directly into private chats with built-in `protected_content` (anti-piracy forward prevention).
+* **Ephemeral Messages:** Dispatches instant auto-vanishing notifications and answers linked directly to `callback_query_id` using `ephemeral_message_parameters`, preventing chat spam.
+* **Topic Deep-Linking:** Automatically generates standard universal forum thread links (`https://t.me/<bot_username>/<thread_id>`).
+* **Live Giveaway Claims Ticker:** Interactive giveaway cards featuring visual animated slot progress bars (`[██████░░░░] 60%`), real-time claimed slots counters, and live claimer modal views.
+* **Redesigned Batch Demands Console:**
+  * Clean 1-button-per-row full-width layout displaying up to 30 characters without text truncation.
+  * Student requester names and `@usernames` rendered directly in the message body.
+  * **Dedicated 1-Tap Delete & Cleanup Mode (`🗑️ Delete / Clean`):** Admins can delete spam/bogus requests individually or clean all uploaded batches with a single click.
+
+---
+
+### 2. 📱 Modern Student WebApp & Study Companion (`/webapp`, `/app`, `/store`)
+A mobile-optimized, glassmorphism single-page application built on top of the Telegram WebApp SDK (`Telegram.WebApp`):
+* **Student Telemetry & Access Hub:** Displays verified Telegram user profile, coin balance, invite counts, and instant 1-tap batch study portals.
+* **🎯 Exam Vacancy Radar:** Real-time tracking of active national exams (UPSC CSE, SSC CGL/CHSL, RRB JE/NTPC, SBI/IBPS, NEET UG, NDA/CDS, CTET) with vacancies, eligibility, last dates, and direct official apply links.
+* **⏳ 2026 Competitive Exam Countdown Clocks:** Live countdown timers (Days : Hours : Mins : Secs) to target exam dates.
+* **📰 Daily Current Affairs Digest:** Curated high-yield current affairs snippets across National Governance, Science & Tech, Defence, and Economy.
+* **📝 Multi-Subject Mock Test Arena:**
+  * High-yield mock tests with real-time exam countdown timer.
+  * TCS-style marking scheme (+2.0 positive mark, -0.50 negative marking penalty).
+  * Instant score breakdown, accuracy percentage, and detailed answer explanations.
+* **✅ Interactive Study Tasks Checklist:** Daily, One-time, and Custom Date study goals with local persistence and completion streaks.
+* **⏱️ Pomodoro Study Timer & Streaks:** Tracks active study minutes and completed sessions with gamified daily study streak rewards.
+* **🏆 Study Leaderboard:** Real-time rankings showcasing top learners by study minutes, sessions, and streaks.
+* **🛍️ Recommended Prep Resources:** Handpicked topper-recommended books and mock test discount links.
+* **🛡️ Role-Based Maintenance Mode:**
+  * Full lockdown screen for regular students displaying a high-tech animated "Under Maintenance" portal with support contact.
+  * Automatic bypass for Owner, Admins, and Whitelisted Testers (managed via Telegram Chat IDs).
+
+---
+
+### 3. 🔐 Multi-Tier Batch Provisioning & Access Lifecycle
 * **Three Dedicated Batch Tiers:**
-  * 🆓 **Free Batches:** Generates unique, 1-time expiring join links (1-minute auto-expiry) to prevent link leakages and unauthorized sharing. Supports universal 1-coin unlock after 3 batches.
-  * 💵 **Paid Batches:** Features pricing tags, screenshot payment submission, and an approval workflow (Permanent or Timed Demo) with automatic user notifications.
-  * ✨ **Special Batches:** Gated batches unlocked exclusively using coins earned through the Referral Program.
-* **Automated Demo Lifecycle:**
-  * 3-hour automated trial timer.
-  * Auto-kick cron scheduler removes users from demo channels once trial concludes.
-  * Admins can extend demo time or generate instant demo invite links on demand.
+  * 🆓 **Free Batches:** Generates unique, 1-time expiring join links (60-second validity) to prevent link forwarding and unauthorized leaks. Includes universal 1-coin unlock after 3 batches.
+  * 💵 **Paid Batches:** Features dynamic price tags, QR screenshot payment proof uploads, and an approval center (Permanent or Timed Demo) with automatic user notifications.
+  * ✨ **Special Batches:** Unlocked exclusively through study coins earned via the Referral Program.
+* **Automated 3-Hour Demo Lifecycle:**
+  * Background cron scheduler tracks demo expiry times.
+  * Automatically removes users from batch channels when their trial concludes and logs audit records to the log channel.
+  * Admins can extend demo duration or grant permanent access anytime.
 * **Batch Update Channel Auto-Posting:**
-  * Automatically inspects target batch channel profile picture (DP).
-  * Generates high-conversion announcement cards with **Richpyro Primary (`ButtonStyle.PRIMARY`)** and **Success (`ButtonStyle.SUCCESS`)** styled buttons.
-  * Auto-notifies all users who submitted requests for that specific batch once it goes live!
+  * Automatically downloads and caches the target batch channel's profile avatar.
+  * Publishes high-conversion announcement cards with **Richpyro Primary** and **Success** styled action buttons.
+  * Automatically notifies all users who demanded that batch the moment it goes live!
 
 ---
 
-### 2. 💎 Referral & Coins Economy Engine
-* **Automated Referral Tracking:** Unique invite links (`https://t.me/bot?start=ref_<uid>`) with 1-tap copy buttons and deep links for Telegram & WhatsApp.
-* **Anti-Fraud Security:** Prevents self-referrals and duplicate credits.
-* **Promo Voucher System:** Create time/usage-limited gift vouchers (`/genvoucher <CODE> <COINS> <USES>`) redeemable by users in the menu.
-* **Global Leaderboard:** Live top-10 referral rankings with real-time coin balance tracking.
-* **Bonus Claims:** Monthly bonus coin distribution for active community members.
+### 4. 🎫 Topic-Based 2-Way Forum Support Ticket Dispatcher
+* **Bidirectional Sync:** Seamlessly converts user direct messages into isolated Telegram Forum Topics inside a private Staff Supergroup.
+* **Reaction Sync:** Staff reactions inside a topic sync directly to the student's DM and vice-versa.
+* **Deletion Sync:** Deleting a staff response in the support topic purges the corresponding message from the student's DM in real time.
+* **Rich Media Handling:** Supports voice notes, PDFs, code files, screenshots, and video messages.
 
 ---
 
-### 3. 📋 Batch Demands & Admin Checklist System
-* **User Demand Registration:** Users can request new study materials or courses directly from the interface.
-* **Custom Acknowledgement Note:** Admins can set dynamic notes (`/setrequestnote`) displayed upon demand submission.
-* **Visual Progress Tracker:** Admin terminal displays interactive checklist bars (e.g. `[████░░░░] 50%`) with pending vs uploaded tallies.
-* **1-Tap Upload Notification:** When an admin marks a requested batch as uploaded (`☑`), the bot automatically blasts private DM notifications to all users who demanded that batch.
+### 5. 🤖 Userbot Content Automation Suite & Disaster Recovery
+* **📦 Userbot Batch Restorer (`/restorebatches` / `restore_batches.py`):**
+  * Restores missing batches from JSON/MongoDB backups.
+  * Userbot joins private channels, adds the bot, promotes it to full administrator, extracts invite links, and restores original categories.
+  * **100% Non-Destructive:** Preserves all active batches and existing database settings.
+* **⚡ Super Forwarder:** Bulk-forwards media, lectures, and files between restricted channels with flood-wait protection.
+* **✏️ Advanced Caption Editor:** Scans channel message IDs (`min_id` to `max_id`) and applies regex/prefix/suffix modifications without re-uploading media.
+* **🛡️ Anti-Leech Cleaner:** Automatically scans batch channels and removes members who leave the mandatory force-sub channel.
 
 ---
 
-### 4. 🎫 Topic-Based Forum Support Ticket System
-* **2-Way Forum Integration:** Forwards user direct messages into individual Telegram Forum Topics inside a private Staff Supergroup.
-* **Live Reaction Sync:** Admin emoji reactions in the forum topic sync to the user's DM and vice-versa.
-* **Live Deletion Sync:** When staff delete messages in the support topic, corresponding messages in the user's DM are purged in real time.
-* **Full Media Support:** Handles voice notes, documents, screenshots, and videos seamlessly.
-
----
-
-### 5. 🤖 Built-In Userbot Automation Suite
-* **Super Forwarder (All-in-One):** Bulk-forwards media, files, and lectures between private/restricted channels with rate-limiting protection.
-* **Advanced Caption Changer:** Scans channel message ranges (`min_id` to `max_id`) and applies regex/prefix/suffix edits without losing media files.
-* **Anti-Leech Member Cleaner:** Scans channels and automatically purges members who left the mandatory channel or failed verification.
-* **Session Login:** Interactive String Session management directly from the terminal.
-
----
-
-### 6. 🎛️ Terminal Dashboard & Control Panels
-* **Owner Terminal (`/owner`):**
-  * **Security & Access Control:** Global Lockdown, Free Batch Lock, Paid Batch Lock, Maintenance Mode toggles.
-  * **Database Operations:** Real-time JSON database export, MongoDB cloud synchronizer, user account reset, user lookup.
-  * **Staff Management:** Promote/demote admins on the fly.
-* **Admin Terminal (`/admin`):**
-  * Interactive Batch Creation Wizard (Category, Access Level, Pricing, Channel ID).
+### 6. 🎛️ Dual Control Terminals (In-Bot + Web Portal)
+* **👑 Owner Terminal (`/owner` and `/owner` web):**
+  * Toggle Maintenance Mode, Global Lockdown, Free Batch Lock, and Paid Batch Lock.
+  * Whitelist or remove WebApp Testers by Telegram Chat ID.
+  * Download instant database JSON backups and trigger MongoDB Atlas cloud synchronization.
+  * Broadcast engine with optional pinning and auto-delete timers.
+* **🛡️ Admin Terminal (`/admin` and `/admin` web):**
+  * Interactive Batch Addition Wizard (Category, Access Level, Price, Channel ID).
   * Member Approvals Center (Demo & Permanent approvals).
-  * Broadcast Engine with persistent pins and auto-deleting channel updates.
+  * Vacancy & Current Affairs Manager.
+  * User lookup and coins gifting.
 
 ---
 
-## 🏗️ Architecture Overview
+## 🏛️ System Architecture
 
 ```mermaid
-graph TD
-    User([Telegram User]) <-->|Commands & Callbacks| Kurigram[Kurigram Engine]
-    Kurigram <-->|UI Components| Richpyro[Richpyro Bot API 10.1+]
-    Kurigram <-->|Forward / Sync| Forum[Support Forum Topics]
-    Kurigram <-->|Auto Post| UpdateCh[Batch Update Channel]
-    Kurigram <-->|Auto Sync| DB[(Local bot_data.json)]
-    DB -.->|Optional Cloud Backup| Mongo[(MongoDB Cloud)]
-    Kurigram <-->|Session Worker| Userbot[Pyrogram Userbot]
-    Userbot -->|Bulk Operations| Channels[Managed Batches]
-    Flask[Flask Keep-Alive Web Server] -.->|Port 7860/8080| CloudPlatform[Koyeb / Render / HuggingFace]
+flowchart TD
+    subgraph Clients["Clients & Interfaces"]
+        TelegramUser["👤 Telegram Student"]
+        TWA["📱 Telegram WebApp (SPA)"]
+        StaffUser["🛡️ Staff & Admins"]
+    end
+
+    subgraph CoreEngine["Bot Core Engine (Python 3.12)"]
+        MTProto["⚡ Kurigram / Pyrogram Layer 229\n(MIN_CHANNEL_ID Patched)"]
+        Bridge["🚀 Bot API 10.4 Bridge\n(HTTP/2 AsyncClient)"]
+        QuartApp["🌐 Quart ASGI Web Server\n(Port 7860 / Hypercorn)"]
+    end
+
+    subgraph UserbotSuite["Userbot Automation Suite"]
+        PyroUserbot["🤖 Pyrogram Userbot Client"]
+        Restorer["📦 Batch Restorer Engine\n(/restorebatches)"]
+    end
+
+    subgraph StorageLayer["Data & Persistence Layer"]
+        MemoryDB["🧠 In-Memory Matrix DB"]
+        JSONDisk["💾 bot_data.json (Atomic Sync)"]
+        MongoAtlas["☁️ MongoDB Atlas (tlsCAFile Certifi)"]
+    end
+
+    subgraph TelegramCloud["Telegram Cloud Ecosystem"]
+        BatchChannels["📚 Batch Channels (Private)"]
+        ForumSupport["🎫 Staff Supergroup (Topics)"]
+        UpdateChannel["📢 Batch Update Channel"]
+    end
+
+    TelegramUser <-->|DMs, Commands, Callbacks| MTProto
+    TWA <-->|REST API + InitData Auth| QuartApp
+    StaffUser <-->|Forum Topics & Terminals| MTProto
+
+    MTProto <--> Bridge
+    Bridge -->|Widgets & Ephemeral| TelegramUser
+    MTProto <--> QuartApp
+    QuartApp <--> MemoryDB
+
+    MemoryDB <--> JSONDisk
+    MemoryDB <--> MongoAtlas
+
+    MTProto <--> ForumSupport
+    MTProto -->|1-Time Invites & Autokick| BatchChannels
+    MTProto -->|Announcement Cards| UpdateChannel
+
+    PyroUserbot <--> Restorer
+    Restorer --> BatchChannels
 ```
 
 ---
 
 ## ⚙️ Environment Variables
 
-Create a `.env` file in the root directory or configure them in your cloud provider's dashboard:
+Configure these variables in your `.env` file or cloud dashboard:
 
-| Variable | Description | Required | Example |
-|---|---|:---:|---|
-| `TELEGRAM_BOT_TOKEN` | Bot API token obtained from [@BotFather](https://t.me/BotFather) | **Yes** | `7845123456:AAFd...` |
-| `OWNER_ID` | Numeric Telegram user ID of the Bot Owner | **Yes** | `123456789` |
-| `MANDATORY_CHANNEL_ID` | Telegram Channel ID for mandatory force-subscription | **Yes** | `-1001234567890` |
-| `MANDATORY_CHANNEL_LINK` | Invite URL for the mandatory channel | **Yes** | `https://t.me/MyChannel` |
-| `SUPPORT_GROUP_ID` | Supergroup ID with **Topics (Forums)** enabled | **Yes** | `-1009876543210` |
-| `BATCH_UPDATE_CHANNEL_ID` | Channel ID where new batch posts are announced | No | `-1004304703943` |
-| `BATCH_UPDATE_CHANNEL_LINK`| Public/Private link to your Batch Update Channel | No | `https://t.me/c/4304703943` |
-| `LOG_CHANNEL_ID` | Channel ID for audit logs, demo expiries, and alerts | No | `-1005555555555` |
-| `CONTACT_ADMIN_LINK` | Direct contact username or URL for manual inquiries | No | `https://t.me/YourUsername` |
-| `MONGO_URL` | MongoDB connection URI for persistent cloud database sync | No | `mongodb+srv://...` |
-| `DATA_FILE` | Path to JSON database file | No | `bot_data.json` |
-| `PORT` | Web server port for keep-alive checks | No | `7860` |
+| Variable | Required | Default | Description |
+|---|:---:|:---:|---|
+| `TELEGRAM_BOT_TOKEN` | **Yes** | — | Bot token obtained from [@BotFather](https://t.me/BotFather) |
+| `OWNER_ID` | **Yes** | `0` | Numeric Telegram User ID of the primary owner |
+| `API_ID` | Conditional | `0` | Telegram API ID from [my.telegram.org](https://my.telegram.org) (for Userbot/Restorer) |
+| `API_HASH` | Conditional | `""` | Telegram API Hash from [my.telegram.org](https://my.telegram.org) |
+| `MANDATORY_CHANNEL_ID` | **Yes** | `0` | Force-sub channel ID (e.g. `-1001234567890`) |
+| `MANDATORY_CHANNEL_LINK` | **Yes** | `""` | Invite link for the mandatory channel |
+| `SUPPORT_GROUP_ID` | **Yes** | `0` | Supergroup ID with **Topics (Forums)** enabled |
+| `BATCH_UPDATE_CHANNEL_ID` | No | `-1004304703943` | Channel ID for live batch announcements |
+| `BATCH_UPDATE_CHANNEL_LINK`| No | `""` | Link to the Batch Update Channel |
+| `LOG_CHANNEL_ID` | No | `0` | Channel ID for audit trails, demo expiries, and alerts |
+| `MONGO_URL` | No | `None` | MongoDB Atlas URI for persistent cloud database sync |
+| `DATA_FILE` | No | `bot_data.json` | Path to the local JSON database file |
+| `PORT` | No | `7860` | Web server port (Default: `7860` for Hugging Face) |
+| `WEB_APP_URL` | No | Auto | Public URL of the WebApp (e.g. `https://itsh4r01-user-manager.hf.space`) |
+| `WEB_PASSWORD` | No | `OWNER_ID` | Password to access `/owner` and `/admin` web dashboards |
+| `SESSION_STRING` | No | `""` | Pyrogram String Session for Userbot features |
 
 > [!IMPORTANT]
-> Channel IDs must be numeric and typically begin with `-100` (e.g., `-1001234567890`).
+> Channel and Group IDs must be integers starting with `-100` (e.g., `-1001928374650`).
 
 ---
 
 ## 🚀 Quick Start & Installation
 
-### Option 1: Local Setup
+### Option 1: Native Python Setup
 
 1. **Clone the repository:**
    ```bash
@@ -151,24 +216,30 @@ Create a `.env` file in the root directory or configure them in your cloud provi
    cd botupdate
    ```
 
-2. **Create a virtual environment & install dependencies:**
+2. **Set up a virtual environment:**
    ```bash
    python -m venv venv
-   # Linux/macOS:
-   source venv/bin/activate
-   # Windows:
-   venv\Scripts\activate
 
+   # Linux / macOS:
+   source venv/bin/activate
+
+   # Windows PowerShell:
+   venv\Scripts\Activate.ps1
+   ```
+
+3. **Install dependencies:**
+   ```bash
+   pip install --upgrade pip
    pip install -r requirements.txt
    ```
 
-3. **Configure Environment:**
-   Create a `.env` file or export your variables:
+4. **Configure environment:**
    ```bash
-   cp .env.example .env # edit with your values
+   cp .env.example .env
+   # Edit .env with your credentials
    ```
 
-4. **Run the Bot:**
+5. **Start the engine:**
    ```bash
    python bot.py
    ```
@@ -178,17 +249,17 @@ Create a `.env` file in the root directory or configure them in your cloud provi
 ### Option 2: Docker Container
 
 ```bash
-# Build Docker image
-docker build -t telegram-batch-bot .
+# Build the Docker image
+docker build -t h4r-telegram-bot .
 
-# Run container with environment file
+# Run the container
 docker run -d \
-  --name batch-bot \
-  --restart unless-stopped \
-  -v $(pwd)/data:/app/data \
-  --env-file .env \
+  --name h4r-bot \
+  --restart always \
   -p 7860:7860 \
-  telegram-batch-bot
+  --env-file .env \
+  -v $(pwd)/data:/app/data \
+  h4r-telegram-bot
 ```
 
 ---
@@ -196,25 +267,58 @@ docker run -d \
 ## ☁️ Deployment Options
 
 <details>
-<summary><b>Deploying to Render / Koyeb</b></summary>
+<summary><b>1. Deploying to Hugging Face Spaces (Recommended)</b></summary>
 
-1. Fork or push this repository to GitHub.
-2. In **Render** / **Koyeb**, create a new **Web Service**.
-3. Choose **Docker** environment (or Python 3.10+ runtime).
-4. Build Command: `pip install -r requirements.txt` (if using native Python).
-5. Start Command: `python bot.py`
-6. Add all required environment variables under the **Environment** tab.
-7. *(Optional)* Add a Persistent Disk mounted at `/data` and set `DATA_FILE=/data/bot_data.json` to prevent data loss on restarts.
+This repository includes native Hugging Face Spaces Docker headers.
+1. Create a new Space on [Hugging Face](https://huggingface.co/new-space).
+2. Choose **Docker** as the Space SDK (Blank template).
+3. Connect your GitHub repository or push directly to the HF Space git remote.
+4. Go to **Settings > Variables and secrets** in your Space:
+   * Add `TELEGRAM_BOT_TOKEN`, `OWNER_ID`, `MANDATORY_CHANNEL_ID`, `MANDATORY_CHANNEL_LINK`, `SUPPORT_GROUP_ID`, `MONGO_URL`, etc.
+5. The container boots automatically and opens the health endpoint on port `7860`.
 </details>
 
 <details>
-<summary><b>Deploying to Hugging Face Spaces</b></summary>
+<summary><b>2. Deploying to Render / Koyeb / Railway</b></summary>
 
-This repository includes Hugging Face Docker configuration headers.
-1. Create a new Space with the **Docker** SDK.
-2. Push this repo to your Space repository.
-3. Add your Bot Token and Owner ID in **Settings > Variables and secrets**.
-4. The bot will automatically boot and expose its health endpoint on port `7860`.
+1. Connect your GitHub repository to **Render** or **Koyeb**.
+2. Create a new **Web Service**.
+3. Set the Environment to **Docker** (or Python 3.10+).
+4. If using native Python:
+   * Build Command: `pip install -r requirements.txt`
+   * Start Command: `python bot.py`
+5. Supply all environment variables under the **Environment** tab.
+6. *(Recommended)* Add a persistent disk mounted at `/app/data` and set `DATA_FILE=/app/data/bot_data.json`.
+</details>
+
+<details>
+<summary><b>3. Deploying to Ubuntu VPS with Systemd</b></summary>
+
+Create a systemd service file `/etc/systemd/system/h4rbot.service`:
+```ini
+[Unit]
+Description=H4R Telegram Bot & Web Ecosystem
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/botupdate
+ExecStart=/root/botupdate/venv/bin/python bot.py
+Restart=always
+RestartSec=5
+EnvironmentFile=/root/botupdate/.env
+
+[Install]
+WantedBy=multi-user.target
+```
+Enable and start the service:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable h4rbot
+sudo systemctl start h4rbot
+sudo systemctl status h4rbot
+```
 </details>
 
 ---
@@ -224,58 +328,82 @@ This repository includes Hugging Face Docker configuration headers.
 ### 👑 Owner Terminal Commands
 | Command | Arguments | Description |
 |---|---|---|
-| `/owner` | None | Open the master interactive control terminal |
-| `/addadmin` | `<user_id>` | Promote a user to Admin dynamically |
-| `/removeadmin` | `<user_id>` | Demote an Admin back to standard user |
-| `/backup` | None | Instant export & download of JSON database |
-| `/sync` | None | Force immediate cloud sync with MongoDB |
-| `/allusers` | None | Generate complete registered users CSV/dump |
-| `/genvoucher` | `<CODE> <COINS> <USES>` | Mint custom promo coin vouchers |
-| `/vouchers` | None | View all active and claimed vouchers |
-| `/setprice` | `<batch_id> <price>` | Update pricing tag for a paid course |
-| `/setwelcome` | `<batch_id> <text>` | Set custom welcome DM for batch joiners |
-| `/setrequestnote` | `<text>` | Update batch demand acknowledgement note |
-| `/settestbot` | `<link>` | Set practice test bot link |
-| `/ban` / `/unban` | `<user_id>` | Globally blacklist or whitelist a user |
-| `/resetuser` | `<user_id>` | Reset a user's join history and demo logs |
+| `/owner` | None | Opens the interactive Master Terminal with toggles & system stats |
+| `/addadmin` | `<user_id>` | Dynamically promotes a user to Admin |
+| `/removeadmin` | `<user_id>` | Demotes an Admin to standard user |
+| `/backup` | None | Instant export & document download of `bot_data.json` |
+| `/sync` | None | Forces immediate synchronization with MongoDB Atlas |
+| `/restorebatches` | None (reply to file) | Launches Userbot automated batch recovery from backup JSON |
+| `/allusers` | None | Generates a complete registered user dump/CSV |
+| `/genvoucher` | `<CODE> <COINS> <USES>` | Mints custom study coin gift vouchers |
+| `/vouchers` | None | Displays active, depleted, and claimed promo vouchers |
+| `/setprice` | `<batch_id> <price>` | Sets or updates pricing for paid batches |
+| `/setwelcome` | `<batch_id> <text>` | Configures custom welcome DM for batch joiners |
+| `/setrequestnote` | `<text>` | Sets dynamic acknowledgement note for batch demands |
+| `/settestbot` | `<link>` | Sets practice test bot link |
+| `/ban` / `/unban` | `<user_id>` | Blacklists or whitelists a user from the bot |
+| `/resetuser` | `<user_id>` | Clears a user's join history and trial demo records |
 
 ---
 
 ### 🛡️ Admin Commands
 | Command | Arguments | Description |
 |---|---|---|
-| `/admin` | None | Open Admin dashboard & approvals center |
-| `/addbatch` | None | Launch interactive Batch Addition Wizard |
-| `/batchrequests` | None | Open Batch Demands Checklist & Progress Tracker |
-| `/batchstats` | `<batch_id>` | View member count and engagement stats |
-| `/check` | `<user_id>` | Check a user's force-sub & access status |
-| `/link` | `<user_id>` | Link a support topic manually to a user ID |
-| `/cancel` | None | Abort any active input state or wizard |
+| `/admin` | None | Opens Admin Dashboard & Approvals Center |
+| `/addbatch` | None | Launches the interactive step-by-step Batch Creation Wizard |
+| `/batchrequests` | None | Opens redesigned Batch Demands Console with 1-tap delete mode |
+| `/batchstats` | `<batch_id>` | Displays member counts and active user statistics |
+| `/check` | `<user_id>` | Inspects user force-subscription and batch access rights |
+| `/link` | `<user_id>` | Manually binds a support topic to a specific Telegram user ID |
+| `/cancel` | None | Cancels any ongoing state wizard or input session |
 
 ---
 
-### 👤 User Commands
+### 👤 Student / User Commands
 | Command | Description |
 |---|---|
-| `/start` | Open personalized user dashboard and batch catalog |
-| `/batch` | View joined batches and access direct study portals |
-| `/id` | Check your Telegram User ID & current chat details |
+| `/start` | Opens personalized student dashboard, batch catalog, and WebApp launcher |
+| `/batch` | Displays all enrolled batches and direct study channels |
+| `/id` | Displays your Telegram User ID, chat ID, and topic info |
+
+---
+
+## 🔌 REST API Endpoints
+
+The built-in Quart ASGI web server exposes high-performance REST APIs:
+
+| Endpoint | Method | Authentication | Description |
+|---|:---:|:---:|---|
+| `/health` | `GET` | Public | Service health status, user counts, and batch totals |
+| `/webapp` or `/app` | `GET` | Public / Role Check | Main Student WebApp Portal (supports maintenance mode) |
+| `/api/twa/session` | `POST` | `Telegram.WebApp.initData` | Validates WebApp session and returns student telemetry |
+| `/api/vacancies` | `GET` | Public | Returns active competitive exam radar listings |
+| `/api/current-affairs` | `GET` | Public | Returns daily high-yield exam current affairs |
+| `/api/study/complete-session` | `POST` | TWA Session | Logs completed Pomodoro study minutes |
+| `/api/study/complete-quiz` | `POST` | TWA Session | Records mock test quiz results and accuracy |
+| `/api/study/claim-streak` | `POST` | TWA Session | Claims daily study streak reward coins |
+| `/api/study/tasks` | `GET` / `POST`| TWA Session | Retrieves or saves personal study tasks |
+| `/api/request-batch` | `POST` | TWA Session | Submits student batch demand requests |
+| `/api/redeem` | `POST` | TWA Session | Redeems promo coin vouchers |
+| `/api/owner/testers/add` | `POST` | Admin Session | Whitelists tester Chat ID for maintenance bypass |
+| `/api/owner/testers/delete`| `POST` | Admin Session | Removes whitelisted tester |
+| `/api/owner/backup/download`| `GET` | Owner Session | Downloads encrypted/raw database backup |
 
 ---
 
 ## 🔒 Bot Permissions Checklist
 
-Ensure the bot has the following administrator permissions:
+Ensure the bot is granted these permissions across the ecosystem:
 
-| Context | Required Permissions | Purpose |
+| Channel / Group | Required Permissions | Purpose |
 |---|---|---|
-| **Mandatory Channel** | `Invite Users via Link` | Verify membership & check anti-leech status |
-| **All Batch Channels** | `Invite Users`, `Manage Voice Chats / Messages`, `Ban Users` | Generate 1-time links & auto-kick expired demos |
-| **Support Supergroup** | `Manage Topics`, `Delete Messages`, `Pin Messages` | Create user ticket topics & bidirectional sync |
-| **Batch Update Channel** | `Post Messages`, `Edit Messages` | Publish rich announcement cards with styled buttons |
+| **Mandatory Channel** | `Invite Users via Link` | Verifies force-sub membership and anti-leech status |
+| **All Batch Channels** | `Invite Users`, `Manage Messages`, `Ban Users` | Generates 1-time expiring links & auto-kicks expired trials |
+| **Support Supergroup** | `Manage Topics`, `Delete Messages`, `Pin Messages` | Creates student forum topics and mirrors reactions/deletions |
+| **Batch Update Channel** | `Post Messages`, `Edit Messages` | Publishes rich announcement cards with primary/success buttons |
 
 ---
 
 ## 📄 License & Credits
 
-Distributed under the MIT License. Built and maintained with passion by **[IT'S H4R](https://github.com/itsh4ro5)**.
+Distributed under the **MIT License**. Engineered and maintained with passion by **[IT'S H4R](https://github.com/itsh4ro5)**.
