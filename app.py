@@ -3,6 +3,7 @@ import json
 import asyncio
 import logging
 import time
+from datetime import datetime
 from quart import Quart, jsonify, request, session, redirect, url_for, render_template, send_file
 import config
 from config import DB, save_data_async, save_data_sync
@@ -850,4 +851,214 @@ async def api_owner_testers_delete():
         testers.remove(tester_id)
         await save_data_async()
     return jsonify({"success": True, "message": f"Tester {tester_id} removed", "testers": testers})
+
+# =============================================================================
+# WEBHOOK ENGINE: Telegram Bot API & External Webhook Ingestion
+# =============================================================================
+
+@app.route('/webhook', methods=['GET', 'POST'])
+@app.route('/api/webhook', methods=['GET', 'POST'])
+async def general_webhook():
+    """
+    Universal Webhook Endpoint:
+    GET: Health & status check of webhook pipeline
+    POST: Ingestion point for Telegram Bot API or external webhook events
+    """
+    if request.method == 'GET':
+        return jsonify({
+            "status": "online",
+            "webhook_ready": True,
+            "engine": "Quart Hypercorn Async Webhook",
+            "endpoints": [
+                "/webhook/telegram",
+                "/webhook/payment",
+                "/webhook/events"
+            ],
+            "timestamp": int(time.time())
+        }), 200
+
+    try:
+        data = await request.get_json() or {}
+    except Exception:
+        data = {}
+
+    if "update_id" in data:
+        return await handle_telegram_webhook_payload(data)
+
+    logger.info(f"Received generic webhook event: {list(data.keys())}")
+    return jsonify({"ok": True, "received": True}), 200
+
+
+@app.route('/webhook/telegram', methods=['POST'])
+async def telegram_webhook():
+    """
+    Telegram Bot API Official Webhook Handler:
+    Handles updates pushed by Telegram if setWebhook is configured.
+    Supports secret token verification via X-Telegram-Bot-Api-Secret-Token header.
+    """
+    secret_header = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+    expected_secret = os.environ.get("WEBHOOK_SECRET") or getattr(config, "WEBHOOK_SECRET", None)
+    if expected_secret and secret_header != expected_secret:
+        logger.warning("Unauthorized webhook access attempt (invalid secret token)!")
+        return jsonify({"error": "Unauthorized"}), 403
+
+    try:
+        update = await request.get_json()
+    except Exception as e:
+        logger.error(f"Malformed JSON in telegram webhook: {e}")
+        return jsonify({"error": "Bad JSON"}), 400
+
+    if not update:
+        return jsonify({"ok": True}), 200
+
+    return await handle_telegram_webhook_payload(update)
+
+
+async def handle_telegram_webhook_payload(update: dict):
+    """
+    Dispatches Telegram updates received over HTTP webhook:
+    Processes messages, callback queries, and inline queries.
+    """
+    update_id = update.get("update_id")
+    logger.debug(f"Processing Webhook Update #{update_id}")
+
+    msg = update.get("message")
+    cb = update.get("callback_query")
+    
+    if msg:
+        chat_id = msg.get("chat", {}).get("id")
+        text = msg.get("text", "")
+        sender_id = msg.get("from", {}).get("id")
+        logger.info(f"Webhook Message from {sender_id} in {chat_id}: {text[:30]}")
+
+    elif cb:
+        cb_id = cb.get("id")
+        cb_data = cb.get("data")
+        sender_id = cb.get("from", {}).get("id")
+        logger.info(f"Webhook CallbackQuery {cb_id} from {sender_id}: {cb_data}")
+
+    return jsonify({"ok": True, "update_id": update_id}), 200
+
+
+@app.route('/webhook/payment', methods=['POST'])
+async def payment_webhook():
+    """
+    Instant Payment & Coins Credit Webhook:
+    Accepts automated payment notifications from gateways (Razorpay, Cashfree, UPI, Crypto).
+    Credits user study coins and dispatches instant Telegram DM notification.
+    """
+    secret = request.headers.get("X-Payment-Secret") or request.args.get("secret")
+    expected_secret = os.environ.get("PAYMENT_WEBHOOK_SECRET", "kamal_pay_secret_2026")
+    if secret and secret != expected_secret:
+        return jsonify({"error": "Invalid signature or secret"}), 403
+
+    try:
+        payload = await request.get_json() or {}
+    except Exception:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    user_id = payload.get("user_id") or payload.get("telegram_id")
+    coins = payload.get("coins") or payload.get("amount_coins")
+    order_id = payload.get("order_id", f"PAY_{int(time.time())}")
+
+    if not user_id or not coins:
+        return jsonify({"error": "Missing user_id or coins in payload"}), 400
+
+    try:
+        user_id = int(user_id)
+        coins = round(float(coins), 2)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid user_id or coins format"}), 400
+
+    # Credit coins in database
+    user_key = str(user_id)
+    if user_key not in DB["USER_DATA"]:
+        DB["USER_DATA"][user_key] = {
+            "name": payload.get("name", f"Student {user_id}"),
+            "referral_count": 0,
+            "total_invited": 0,
+            "joined_date": datetime.now().strftime("%Y-%m-%d"),
+            "tier": "Regular"
+        }
+    
+    DB["USER_DATA"][user_key]["referral_count"] = round(
+        DB["USER_DATA"][user_key].get("referral_count", 0) + coins, 2
+    )
+    new_balance = DB["USER_DATA"][user_key]["referral_count"]
+
+    # Log payment history in DB
+    history = DB.setdefault("PAYMENT_HISTORY", [])
+    history.append({
+        "order_id": order_id,
+        "user_id": user_id,
+        "coins": coins,
+        "new_balance": new_balance,
+        "timestamp": int(time.time()),
+        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    })
+
+    # Save to disk / DB asynchronously
+    await save_data_async()
+
+    # Notify student via Telegram Bot if bot_app is active
+    bot_app = getattr(config, "bot_app", None)
+    if bot_app:
+        try:
+            success_msg = (
+                f"🎉 **PAYMENT SUCCESSFUL!**\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🆔 **Order ID:** `{order_id}`\n"
+                f"💎 **Coins Added:** `+{coins} Study Coins`\n"
+                f"💰 **Total Balance:** `{new_balance} Coins`\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"⚡ *Ab aap kisi bhi Special Batch ko unlock kar sakte hain!*"
+            )
+            asyncio.create_task(bot_app.send_message(user_id, success_msg))
+        except Exception as e:
+            logger.warning(f"Could not send Telegram notification for payment: {e}")
+
+    return jsonify({
+        "ok": True,
+        "order_id": order_id,
+        "user_id": user_id,
+        "credited_coins": coins,
+        "new_balance": new_balance
+    }), 200
+
+
+@app.route('/webhook/set', methods=['GET', 'POST'])
+async def set_telegram_webhook():
+    """
+    Admin Route: Configures Telegram Bot API setWebhook or deleteWebhook.
+    Requires Admin Login session or master token.
+    """
+    if not is_auth("admin"):
+        token_arg = request.args.get("token")
+        if token_arg != getattr(config, "WEB_PASSWORD", None):
+            return jsonify({"error": "Admin authentication required"}), 403
+
+    bot_token = getattr(config, "TELEGRAM_BOT_TOKEN", "") or os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    if not bot_token:
+        return jsonify({"error": "TELEGRAM_BOT_TOKEN not configured"}), 500
+
+    action = request.args.get("action", "info")
+    webhook_url = request.args.get("url", "").strip()
+
+    import httpx
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        if action == "set":
+            if not webhook_url:
+                return jsonify({"error": "url parameter is required"}), 400
+            resp = await client.post(
+                f"https://api.telegram.org/bot{bot_token}/setWebhook",
+                json={"url": webhook_url, "drop_pending_updates": False}
+            )
+            return jsonify(resp.json()), resp.status_code
+        elif action == "delete":
+            resp = await client.post(f"https://api.telegram.org/bot{bot_token}/deleteWebhook")
+            return jsonify(resp.json()), resp.status_code
+        else:
+            resp = await client.get(f"https://api.telegram.org/bot{bot_token}/getWebhookInfo")
+            return jsonify(resp.json()), resp.status_code
+
 

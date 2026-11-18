@@ -388,3 +388,217 @@ def build_interactive_broadcast_card(title: str, text: str, tag: str = "⚡ ANNO
         {"text": "📢 Official Channel", "url": getattr(config, "BATCH_UPDATE_CHANNEL_LINK", "https://t.me/H4R_Contact_bot")}
     ])
     return {"text": html, "reply_markup": {"inline_keyboard": kb_rows}}
+
+# =============================================================================
+# 5. ADVANCED BOT API 10.4 LIVE IN-CHAT WIDGETS
+# =============================================================================
+
+def build_student_wallet_widget(user_id: int, user_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Bot API 10.4 Live In-Chat Student Wallet Widget:
+    Displays dynamic student coins, referral status, streak, tier, and live action buttons.
+    """
+    if user_info is None:
+        user_db = getattr(config, "DB", {}).get("USER_DATA", {})
+        user_info = user_db.get(str(user_id)) or user_db.get(int(user_id), {})
+
+    coins = round(float(user_info.get("referral_count", 0)), 2)
+    invites = int(user_info.get("total_invited", 0))
+    tier = str(user_info.get("tier", "Regular")).upper()
+    streak = int(user_info.get("streak", 0))
+    name = user_info.get("name") or f"Student {user_id}"
+
+    # Tier Progress towards VIP (25 invites)
+    vip_target = 25
+    vip_pct = min(100, int((invites / vip_target) * 100))
+    vip_pbar = '█' * (vip_pct // 10) + '░' * (10 - (vip_pct // 10))
+
+    html = (
+        "<b>💳 <u>LIVE STUDENT WALLET & PASS</u></b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 <b>Student:</b> <code>{name}</code> (<code>{user_id}</code>)\n"
+        f"💎 <b>Coin Balance:</b> <code>{coins} Study Coins</code>\n"
+        f"🔥 <b>Daily Streak:</b> <code>{streak} Days Active</code>\n"
+        f"👥 <b>Total Invited:</b> <code>{invites} Friends</code>\n"
+        f"👑 <b>Status:</b> <b>{tier} MEMBER</b>\n"
+        f"📊 <b>VIP Progress:</b> <code>[{vip_pbar}] {invites}/{vip_target} ({vip_pct}%)</code>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "<i>⚡ Coins se aap koi bhi Special/Premium Course Batch unlock kar sakte hain!</i>"
+    )
+
+    kb = {
+        "inline_keyboard": [
+            [
+                {"text": "🔥 Claim Daily Streak (+1 Coin)", "callback_data": "wallet_claim_streak"},
+                {"text": "🎟️ Redeem Code", "callback_data": "claim_voucher_prompt"}
+            ],
+            [
+                {"text": "👥 Invite Friends & Earn", "callback_data": "u_ref_card"},
+                {"text": "📚 Browse Batches", "callback_data": "all_batches_0"}
+            ],
+            [
+                {"text": "🔄 Live Refresh", "callback_data": f"wallet_refresh_{user_id}"},
+                {"text": "🏠 Main Menu", "callback_data": "u_main"}
+            ]
+        ]
+    }
+    return {
+        "text": html,
+        "reply_markup": kb,
+        "chat_data": json.dumps({"user_id": user_id, "coins": coins, "streak": streak}),
+        "protect_content": True
+    }
+
+def build_batch_details_widget(channel_id: int, user_id: int, user_has_access: bool = False) -> Dict[str, Any]:
+    """
+    Bot API 10.4 Live Batch Inspector Widget:
+    Shows live course status, pricing/coins, active enrollments, and instant unlock flow.
+    """
+    cid_str = str(channel_id)
+    db = getattr(config, "DB", {})
+    name = (
+        db.get("FREE_CHANNELS", {}).get(cid_str)
+        or db.get("PAID_CHANNELS", {}).get(cid_str)
+        or db.get("SPECIAL_CHANNELS", {}).get(cid_str)
+        or db.get("ALL_CHATS", {}).get(cid_str)
+        or f"Batch {channel_id}"
+    )
+    category = db.get("BATCH_CATEGORIES", {}).get(cid_str, "Educational Batches")
+    
+    # Determine batch type & requirements
+    if cid_str in db.get("FREE_CHANNELS", {}):
+        batch_type = "FREE"
+        price_tag = "FREE (Open to all)"
+        coins_req = 0
+    elif cid_str in db.get("SPECIAL_CHANNELS", {}):
+        coins_req = db.get("BATCH_COINS", {}).get(cid_str, 1)
+        batch_type = "SPECIAL"
+        price_tag = f"{coins_req} Study Coins"
+    else:
+        batch_type = "PREMIUM"
+        price_tag = db.get("BATCH_PRICES", {}).get(cid_str, "Contact Support")
+        coins_req = 0
+
+    enrolled_count = len(db.get("PAID_USERS", {}).get(cid_str, []))
+    status_badge = "🟢 <b>ACCESS GRANTED (ENROLLED)</b>" if user_has_access else "🔒 <b>ACCESS LOCKED</b>"
+
+    html = (
+        f"<b>📚 <u>COURSE & BATCH INSPECTOR</u></b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📖 <b>Batch:</b> <b>{name}</b>\n"
+        f"📂 <b>Category:</b> <code>{category}</code>\n"
+        f"🏷️ <b>Type:</b> <code>{batch_type}</code>\n"
+        f"💰 <b>Requirement:</b> <code>{price_tag}</code>\n"
+        f"👥 <b>Active Students:</b> <code>{enrolled_count}+ Enrolled</code>\n"
+        f"🛡️ <b>Access Status:</b> {status_badge}\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "<i>⚡ Protected Link: Safe, 1-Time, and Anti-Forwarding enabled!</i>"
+    )
+
+    kb_rows = []
+    if user_has_access:
+        kb_rows.append([{"text": "🚀 Open / Enter Batch Now", "callback_data": f"gen_link_{channel_id}"}])
+    else:
+        if batch_type == "FREE":
+            kb_rows.append([{"text": "✨ Generate Free Joining Link", "callback_data": f"gen_link_{channel_id}"}])
+        elif batch_type == "SPECIAL":
+            kb_rows.append([{"text": f"💎 Unlock with {coins_req} Coins", "callback_data": f"unlock_special_{channel_id}"}])
+        else:
+            kb_rows.append([
+                {"text": "💳 Purchase Access / Pay", "callback_data": f"pay_batch_{channel_id}"},
+                {"text": "🎁 Request Free Demo", "callback_data": f"req_demo_{channel_id}"}
+            ])
+
+    kb_rows.append([
+        {"text": "🔄 Refresh Status", "callback_data": f"batch_inspect_{channel_id}"},
+        {"text": "📚 Back to Batches", "callback_data": "all_batches_0"}
+    ])
+    kb_rows.append([{"text": "🏠 Main Menu", "callback_data": "u_main"}])
+
+    return {
+        "text": html,
+        "reply_markup": {"inline_keyboard": kb_rows},
+        "chat_data": json.dumps({"cid": channel_id, "type": batch_type, "has_access": user_has_access}),
+        "protect_content": True
+    }
+
+def build_leaderboard_widget(user_id: int, page: int = 0) -> Dict[str, Any]:
+    """
+    Bot API 10.4 Live Dynamic Leaderboard Widget:
+    Displays top students, user rank, live medals, and pagination.
+    """
+    user_db = getattr(config, "DB", {}).get("USER_DATA", {})
+    ranked = []
+    for uid, udata in user_db.items():
+        inv = int(udata.get("total_invited", 0))
+        coins = round(float(udata.get("referral_count", 0)), 1)
+        if inv > 0 or coins > 0:
+            ranked.append({
+                "id": str(uid),
+                "name": udata.get("name") or f"Student {uid}",
+                "invites": inv,
+                "coins": coins
+            })
+
+    ranked.sort(key=lambda x: (x["invites"], x["coins"]), reverse=True)
+    total_ranked = len(ranked)
+
+    my_rank = "N/A"
+    my_invites = 0
+    my_coins = 0.0
+    for idx, r in enumerate(ranked, start=1):
+        if r["id"] == str(user_id):
+            my_rank = f"#{idx}"
+            my_invites = r["invites"]
+            my_coins = r["coins"]
+            break
+
+    per_page = 5
+    total_pages = max(1, (total_ranked + per_page - 1) // per_page)
+    page = max(0, min(page, total_pages - 1))
+    items = ranked[page * per_page : (page + 1) * per_page]
+
+    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+
+    html_lines = [
+        "<b>🏆 <u>LIVE HALL OF FAME & LEADERBOARD</u></b>",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━",
+        f"📊 <b>Total Competitors:</b> <code>{total_ranked} Students</code>",
+        f"👤 <b>Your Rank:</b> <code>{my_rank}</code> (<code>{my_invites}</code> Invites | <code>{my_coins}</code> Coins)",
+        f"📄 <b>Page:</b> <code>{page + 1}/{total_pages}</code>",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━"
+    ]
+
+    for idx, item in enumerate(items, start=page * per_page + 1):
+        badge = medals.get(idx, f"<b>#{idx}</b>")
+        html_lines.append(f"{badge} <b>{item['name']}</b>\n   ↳ 👥 <code>{item['invites']}</code> Invites • 💎 <code>{item['coins']}</code> Coins")
+
+    if not items:
+        html_lines.append("<i>Abhi koi ranking record nahi hai. Dosto ko invite karke #1 banein!</i>")
+
+    html_lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━")
+    html_lines.append("<i>💡 Har dost ko invite karne par Coins milte hain jisse batch unlock hota hai!</i>")
+
+    kb_rows = []
+    nav_row = []
+    if page > 0:
+        nav_row.append({"text": "◀ Prev", "callback_data": f"lb_page_{page - 1}"})
+    nav_row.append({"text": f"📄 {page + 1}/{total_pages}", "callback_data": f"lb_page_{page}"})
+    if page < total_pages - 1:
+        nav_row.append({"text": "Next ▶", "callback_data": f"lb_page_{page + 1}"})
+    if nav_row:
+        kb_rows.append(nav_row)
+
+    kb_rows.append([
+        {"text": "👥 Invite & Climb Rank", "callback_data": "u_ref_card"},
+        {"text": "🔄 Live Refresh", "callback_data": f"lb_page_{page}"}
+    ])
+    kb_rows.append([{"text": "🏠 Main Menu", "callback_data": "u_main"}])
+
+    return {
+        "text": "\n".join(html_lines),
+        "reply_markup": {"inline_keyboard": kb_rows},
+        "chat_data": json.dumps({"page": page, "my_rank": my_rank}),
+        "protect_content": True
+    }
+
