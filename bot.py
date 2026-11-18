@@ -348,10 +348,21 @@ async def _run_pyrogram_engine():
 
     @app.on_message(filters.command(list(all_commands.keys())))
     async def _on_all_cmds(client: Client, message: Message):
+        # Support Group topics me commands direct topic handler me execute honge
+        if message.chat and str(message.chat.id) == str(getattr(config, "SUPPORT_GROUP_ID", 0)):
+            return await H.main_message_handler(client, message)
+
         if not message.command: return
         cmd_name = message.command[0].lower()
         if cmd_name in all_commands:
             await all_commands[cmd_name](client, message)
+
+    @app.on_message(filters.command(["info", "file", "txt", "status", "userinfo"]))
+    async def _on_topic_profile_cmds(client: Client, message: Message):
+        if message.chat and str(message.chat.id) == str(getattr(config, "SUPPORT_GROUP_ID", 0)):
+            return await H.main_message_handler(client, message)
+        # In private chat, /info shows student myinfo
+        await H.cmd_myinfo(client, message)
 
     # =====================================================================
     # 2. CALLBACK QUERY HANDLER (Buttons)
@@ -448,10 +459,12 @@ async def _run_pyrogram_engine():
     # 5. REGULAR MESSAGES & SUPPORT TICKETS (🔥 YAHAN SOLVE HUA AAPKA BUG 🔥)
     # Ye handler normal text/photo/video ko Support Group me forward karega
     # =====================================================================
-    @app.on_message(filters.all & ~filters.command(list(all_commands.keys()) + ["start", "ping", "id"]))
+    @app.on_message(filters.all & ~filters.command(list(all_commands.keys()) + ["start", "ping", "id", "info", "file", "txt", "status", "userinfo"]))
     async def _on_regular_msg(client: Client, message: Message):
-        if message.text and message.text.startswith("/"): return
-        if message.caption and message.caption.startswith("/"): return
+        is_support = bool(message.chat and str(message.chat.id) == str(getattr(config, "SUPPORT_GROUP_ID", 0)))
+        if not is_support:
+            if message.text and message.text.startswith("/"): return
+            if message.caption and message.caption.startswith("/"): return
         await H.main_message_handler(client, message)
 
     # --- STARTING THE MTPROTO CONNECTION ---

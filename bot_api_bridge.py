@@ -347,7 +347,7 @@ def build_giveaway_claim_card(code: str, points: float, max_uses: int, used_coun
             [{"text": btn_text, "callback_data": f"claim_voucher_{code}"}],
             [
                 {"text": f"👥 View Claimers ({used_count})", "callback_data": f"claimers_voucher_{code}"},
-                {"text": "📚 Open Batches", "url": f"https://t.me/{bot_user}/app"}
+                {"text": "📚 Open Batches", "callback_data": "all_batches_0"}
             ]
         ]
     }
@@ -384,7 +384,7 @@ def build_interactive_broadcast_card(title: str, text: str, tag: str = "⚡ ANNO
     if cta_text and cta_url:
         kb_rows.append([{"text": cta_text, "url": cta_url}])
     kb_rows.append([
-        {"text": "🏠 Study Dashboard", "url": "https://t.me/" + getattr(config, "BOT_USERNAME", "H4R_Contact_bot").lstrip("@") + "/app"},
+        {"text": "🏠 Main Menu", "callback_data": "u_main"},
         {"text": "📢 Official Channel", "url": getattr(config, "BATCH_UPDATE_CHANNEL_LINK", "https://t.me/H4R_Contact_bot")}
     ])
     return {"text": html, "reply_markup": {"inline_keyboard": kb_rows}}

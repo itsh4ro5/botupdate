@@ -240,16 +240,8 @@ async def set_role_based_commands(user_id: int, client: Client):
                 user_cmds, scope=BotCommandScopeChat(chat_id=user_id)
             )
         try:
-            web_url = getattr(config, "WEB_APP_URL", "")
-            if web_url and web_url.startswith("https://"):
-                from pyrogram.types import MenuButtonWebApp, WebAppInfo
-                await client.set_chat_menu_button(
-                    chat_id=user_id,
-                    menu_button=MenuButtonWebApp(text="🚀 Open App", web_app=WebAppInfo(url=f"{web_url}?uid={user_id}"))
-                )
-            else:
-                from pyrogram.types import MenuButtonCommands
-                await client.set_chat_menu_button(chat_id=user_id, menu_button=MenuButtonCommands())
+            from pyrogram.types import MenuButtonCommands
+            await client.set_chat_menu_button(chat_id=user_id, menu_button=MenuButtonCommands())
         except Exception:
             pass
     except Exception:
@@ -1057,30 +1049,29 @@ async def cmd_start(client: Client, message: Message):
     await start(client, message)
 
 async def cmd_webapp(client: Client, message: Message):
-    url = getattr(config, "WEB_APP_URL", "") or "https://itsh4r01-user-manager.hf.space"
     uid = message.from_user.id if message.from_user else message.chat.id
+    if not is_admin(uid):
+        return await message.reply_text("🔒 **Study Portal abhi private maintenance me hai.**", parse_mode=ParseMode.MARKDOWN)
+
+    url = getattr(config, "WEB_APP_URL", "") or "https://itsh4r01-user-manager.hf.space"
     direct_app_url = f"{url}?uid={uid}"
     
     kb = [
-        [InlineKeyboardButton("🚀 Launch Mini App (TWA)", web_app=WebAppInfo(url=direct_app_url))],
+        [InlineKeyboardButton("🚀 Launch Staff Mini App (TWA)", web_app=WebAppInfo(url=direct_app_url))],
         [InlineKeyboardButton("🌐 Open in Web Browser", url=direct_app_url)]
     ]
-    role_text = "👑 **Owner Console**" if str(uid) == str(config.OWNER_ID) else ("⚡ **Admin Desk**" if is_admin(uid) else "🎓 **Student Study Hub**")
+    role_text = "👑 **Owner Console**" if str(uid) == str(config.OWNER_ID) else "⚡ **Admin Desk**"
     await message.reply_text(
-        f"📱 **Telegram Mini App & Study Companion**\n"
+        f"📱 **Staff Control Portal**\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"Detected Role: {role_text}\n\n"
-        f"✨ **Smart Features Inside Mini App:**\n"
-        f"• 👑 **Owner**: Real-time Kill Switches, Telemetry & Broadcasts\n"
-        f"• ⚡ **Admin**: Demands Kanban, Batch Catalog & Coin Gifting\n"
-        f"• 🎓 **Student**: Complete Courses Store, Pomodoro Study Timer, Revision Checklist & Formula Deck!\n\n"
-        f"👇 *Click below to open the Mini App seamlessly inside Telegram:*",
+        f"👇 *Staff portal open karne ke liye niche tap karein:*",
         reply_markup=InlineKeyboardMarkup(kb),
         parse_mode=ParseMode.MARKDOWN
     )
 
 async def cmd_study(client: Client, message: Message):
-    await cmd_webapp(client, message)
+    await message.reply_text("📚 Apne batches dekhne ke liye `/batch` use karein ya `/start` dabayein.", parse_mode=ParseMode.MARKDOWN)
 
 async def cmd_vacancies(client: Client, message: Message):
     url = getattr(config, "WEB_APP_URL", "") or "https://itsh4r01-user-manager.hf.space"
@@ -5727,7 +5718,8 @@ def build_home_menu(user_key, user):
                 rp.bold("• "), "🎁 ", rp.bold("Monthly Bonus"), " — ", rp.italic("Har mahine VIP bonus rewards\n\n"),
                 rp.bold("• "), "🚀 ", rp.bold("Refer & Earn"), " — ", rp.italic("Friends ko invite karein aur free coins earn karein\n\n"),
                 rp.bold("• "), "🎟️ ", rp.bold("Redeem Voucher"), " — ", rp.italic("Promo codes se free coins activate karein\n\n"),
-                rp.bold("• "), "🙋 ", rp.bold("Request Batch"), " — ", rp.italic("Naye batch ki demand direct submit karein")
+                rp.bold("• "), "🙋 ", rp.bold("Request Batch"), " — ", rp.italic("Naye batch ki demand direct submit karein\n\n"),
+                rp.bold("• "), "ℹ️ ", rp.bold("My Profile"), " — ", rp.italic("Aapka account, balance aur join history")
             ]),
             rp.buttons(
                 rp.btn("👑 My Batches", "my_batches_0", style=rp.Style.SUCCESS),
@@ -5750,16 +5742,8 @@ def build_home_menu(user_key, user):
                 rp.btn("🤖 Test Bot", "test_bot", style=rp.Style.DEFAULT)
             ),
             rp.buttons(
-                rp.btn("📢 Govt Vacancies & Alerts", "menu_vacancies", style=rp.Style.SUCCESS),
-                rp.btn("🧠 Exam Practice Quizzes", "menu_quizzes", style=rp.Style.DEFAULT)
-            ),
-            rp.buttons(
                 rp.btn("ℹ️ My Profile", "my_info", style=rp.Style.DEFAULT),
                 rp.url_btn("📢 Updates", BATCH_UPDATE_CHANNEL_LINK, style=rp.Style.LINK)
-            ),
-            rp.buttons(
-                rp.url_btn("📱 WebApp & Study Hub", getattr(config, "WEB_APP_URL", "https://itsh4r01-user-manager.hf.space"), style=rp.Style.SUCCESS),
-                rp.url_btn("🎥 Video Tutorial", VIDEO_TUTORIAL_LINK, style=rp.Style.LINK)
             )
         )
     else:
@@ -5778,8 +5762,6 @@ def build_home_menu(user_key, user):
                 rp.bold("• "), "🎟️ ", rp.bold("Redeem Voucher"), " — ", rp.italic("Promo codes se free coins activate karein\n\n"),
                 rp.bold("• "), "🙋 ", rp.bold("Request Batch"), " — ", rp.italic("Apne manpasand batch ki request dalein\n\n"),
                 rp.bold("• "), "🤖 ", rp.bold("Test Bot"), " — ", rp.italic("Practice test series solve karein\n\n"),
-                rp.bold("• "), "📢 ", rp.bold("Govt Vacancies"), " — ", rp.italic("UPSC, SSC, Railways recruitment radar\n\n"),
-                rp.bold("• "), "🧠 ", rp.bold("Practice Quizzes"), " — ", rp.italic("Daily topic MCQs & earn study coins\n\n"),
                 rp.bold("• "), "ℹ️ ", rp.bold("Profile"), " — ", rp.italic("Wallet balance, streak & account details")
             ]),
             rp.buttons(
@@ -5799,16 +5781,8 @@ def build_home_menu(user_key, user):
                 rp.btn("🤖 Test Bot", "test_bot", style=rp.Style.DEFAULT)
             ),
             rp.buttons(
-                rp.btn("📢 Govt Vacancies & Alerts", "menu_vacancies", style=rp.Style.SUCCESS),
-                rp.btn("🧠 Exam Practice Quizzes", "menu_quizzes", style=rp.Style.DEFAULT)
-            ),
-            rp.buttons(
                 rp.btn("ℹ️ My Profile", "my_info", style=rp.Style.DEFAULT),
                 rp.url_btn("📢 Updates", BATCH_UPDATE_CHANNEL_LINK, style=rp.Style.LINK)
-            ),
-            rp.buttons(
-                rp.url_btn("📱 WebApp & Study Hub", getattr(config, "WEB_APP_URL", "https://itsh4r01-user-manager.hf.space"), style=rp.Style.SUCCESS),
-                rp.url_btn("🎥 Video Tutorial", VIDEO_TUTORIAL_LINK, style=rp.Style.LINK)
             )
         )
 
@@ -6722,11 +6696,36 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
                 mapped_chat_id, _ = MESSAGE_MAP[reply_key]
                 target_uid = int(mapped_chat_id)
 
+        # Fallback 1: Check command arguments (e.g. /info 123456789 or /file 123456789)
+        raw_cmd_text = (message.text or message.caption or "").strip()
+        cmd_parts = raw_cmd_text.split()
+        if not target_uid and len(cmd_parts) > 1 and cmd_parts[1].isdigit():
+            target_uid = int(cmd_parts[1])
+
+        # Fallback 2: Check reply_to_message for user ID patterns (tg://user?id= or 🆔)
+        if not target_uid and message.reply_to_message:
+            rep_text = message.reply_to_message.text or message.reply_to_message.caption or ""
+            id_match = re.search(r"tg://user\?id=(\d+)", rep_text)
+            if not id_match:
+                id_match = re.search(r"🆔\s*`?(\d+)`?", rep_text)
+            if not id_match:
+                id_match = re.search(r"User ID[:\s]+`?(\d+)`?", rep_text, re.IGNORECASE)
+            if id_match:
+                target_uid = int(id_match.group(1))
+
+        # Fallback 3: If message is a slash command in topic but target_uid couldn't be resolved:
+        if raw_cmd_text.startswith(("/", "!", ".")) and not target_uid:
+            await message.reply_text(
+                "⚠️ **Student ID auto-detect nahi ho payi.**\n"
+                "Kripya ID ke sath command dein: `/info <user_id>` ya `/file <user_id>`",
+                parse_mode=ParseMode.MARKDOWN
+            )
+            return
+
         if not target_uid:
             return
 
         # --- ADMIN TOPIC COMMAND INTERCEPTOR ---
-        raw_cmd_text = (message.text or message.caption or "").strip()
         if raw_cmd_text.startswith(("/", "!", ".")):
             # Commands in this topic should NEVER be forwarded to the student!
             cmd_parts = raw_cmd_text.split()

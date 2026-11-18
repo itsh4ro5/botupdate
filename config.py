@@ -658,7 +658,7 @@ DB = {
     "LINK_MAP": {}, "CUSTOM_WELCOMES": {}, "NEW_USERS_ALLOWED": True, 
     "FREE_LOCKED": False, "PAID_LOCKED": False, "TEST_BOT_LOCKED": False, 
     "SCHEDULED_DELETES": [], "TEST_BOT_LINK": "", "BATCH_CATEGORIES": {},
-    "CATEGORIES": DEFAULT_CATEGORIES.copy(), "MAINTENANCE_MODE": True,
+    "CATEGORIES": DEFAULT_CATEGORIES.copy(), "MAINTENANCE_MODE": False,
     "TESTER_IDS": [],
     "BATCH_COINS": {}, "BATCH_REQUESTS": {}, "BATCH_REQUEST_STATUS": {}, "VOUCHERS": {},
     "BATCH_PRICES": {},
@@ -761,9 +761,6 @@ def load_data():
                     val = _get_val(loaded, k)
                     if val is not None: DB[k] = val
                 
-                # Active Maintenance Lock (Only Owner/Admin/Tester bypass)
-                DB["MAINTENANCE_MODE"] = True
-                
                 for k in ["CUSTOM_WELCOMES", "FREE_CHANNELS", "PAID_CHANNELS", "SPECIAL_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
                     val = _get_val(loaded, k)
                     if val is not None: 
@@ -805,8 +802,6 @@ def load_data():
             for k in keys_to_load:
                 val = _get_val(loaded, k)
                 if val is not None: DB[k] = val
-            
-            DB["MAINTENANCE_MODE"] = True
             
             for k in ["CUSTOM_WELCOMES", "FREE_CHANNELS", "PAID_CHANNELS", "SPECIAL_CHANNELS", "ALL_CHATS", "USER_TOPICS", "USER_DATA", "PENDING_REQUESTS"]:
                 val = _get_val(loaded, k)
