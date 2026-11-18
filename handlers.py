@@ -4012,6 +4012,61 @@ async def general_callback(client: Client, q: CallbackQuery):
                 f"🎁 User `{target}` ko kitne Coins gift karne hain? (Number bhejein, e.g. `5`)",
                 parse_mode=ParseMode.MARKDOWN,
             )
+
+        elif data.startswith("t_user_txt_"):
+            if not is_admin(uid):
+                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
+            target = int(data.replace("t_user_txt_", ""))
+            await q.answer("📄 Generating full details .txt file...", show_alert=False)
+            try:
+                from config import generate_user_txt_file
+                f = await generate_user_txt_file(client, target)
+                topic_id = getattr(q.message, "message_thread_id", None) or getattr(q.message, "reply_to_top_message_id", None)
+                user_key = target if target in DB.get("USER_DATA", {}) else str(target)
+                u_name = DB.get("USER_DATA", {}).get(user_key, {}).get("name") or f"Student {target}"
+                safe_name = str(u_name).replace("[", "").replace("]", "")
+                await client.send_document(
+                    chat_id=q.message.chat.id,
+                    document=f,
+                    caption=f"📄 **FULL AUDIT FILE FOR STUDENT:** [{safe_name}](tg://user?id={target}) (`{target}`)",
+                    message_thread_id=topic_id,
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            except Exception as err:
+                await q.message.reply_text(f"❌ Error generating audit file: `{err}`")
+
+        elif data.startswith("t_block_"):
+            if not is_admin(uid):
+                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
+            target = int(data.replace("t_block_", ""))
+            if target not in DB.get("BLOCKED_USERS", []):
+                DB.setdefault("BLOCKED_USERS", []).append(target)
+                await save_data_async()
+            await q.answer(f"🚫 User {target} blocked!", show_alert=True)
+            try:
+                from config import build_user_topic_info
+                summary_text, kb, _ = await build_user_topic_info(client, target)
+                await q.edit_message_text(summary_text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+            except Exception:
+                pass
+
+        elif data.startswith("t_unblock_"):
+            if not is_admin(uid):
+                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
+            target = int(data.replace("t_unblock_", ""))
+            blocked = DB.get("BLOCKED_USERS", [])
+            if target in blocked:
+                blocked.remove(target)
+            if str(target) in blocked:
+                blocked.remove(str(target))
+            await save_data_async()
+            await q.answer(f"🟢 User {target} unblocked!", show_alert=True)
+            try:
+                from config import build_user_topic_info
+                summary_text, kb, _ = await build_user_topic_info(client, target)
+                await q.edit_message_text(summary_text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+            except Exception:
+                pass
         elif data == "dash_stats":
             await q.answer("Generating Stats...")
             await cmd_stats(client, q.message)
@@ -6669,6 +6724,112 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
 
         if not target_uid:
             return
+
+        # --- ADMIN TOPIC COMMAND INTERCEPTOR ---
+        raw_cmd_text = (message.text or message.caption or "").strip()
+        if raw_cmd_text.startswith(("/", "!", ".")):
+            # Commands in this topic should NEVER be forwarded to the student!
+            cmd_parts = raw_cmd_text.split()
+            cmd_name = cmd_parts[0].lstrip("/!.").lower()
+
+            if cmd_name in ["info", "user", "userinfo", "status", "details", "check", "profile"]:
+                loading_msg = await message.reply_text("🔍 _Fetching student profile & batch membership..._", parse_mode=ParseMode.MARKDOWN)
+                try:
+                    from config import build_user_topic_info
+                    summary_text, kb, _ = await build_user_topic_info(client, target_uid)
+                    await loading_msg.edit_text(summary_text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+                except Exception as err:
+                    await loading_msg.edit_text(f"❌ Error fetching student details: `{err}`")
+                return
+
+            elif cmd_name in ["txt", "file", "dump", "fulldetails", "fullinfo", "download"]:
+                loading_msg = await message.reply_text("📄 _Generating complete student audit file (.txt)..._", parse_mode=ParseMode.MARKDOWN)
+                try:
+                    from config import generate_user_txt_file
+                    f = await generate_user_txt_file(client, target_uid)
+                    await loading_msg.delete()
+                    user_key = target_uid if target_uid in DB.get("USER_DATA", {}) else str(target_uid)
+                    u_name = DB.get("USER_DATA", {}).get(user_key, {}).get("name") or f"Student {target_uid}"
+                    safe_u_name = str(u_name).replace("[", "").replace("]", "")
+                    await client.send_document(
+                        chat_id=int(SUPPORT_GROUP_ID),
+                        document=f,
+                        caption=f"📄 **FULL AUDIT FILE FOR STUDENT:** [{safe_u_name}](tg://user?id={target_uid}) (`{target_uid}`)",
+                        message_thread_id=topic_id,
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+                except Exception as err:
+                    await loading_msg.edit_text(f"❌ Error generating audit file: `{err}`")
+                return
+
+            elif cmd_name in ["giftcoin", "addcoins", "coins", "givecoins"]:
+                if len(cmd_parts) < 2 or not cmd_parts[1].isdigit():
+                    return await message.reply_text(
+                        "⚠️ **Usage:** `/giftcoin <amount>` (e.g. `/giftcoin 5`)",
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+                amount = int(cmd_parts[1])
+                user_key = target_uid if target_uid in DB.get("USER_DATA", {}) else str(target_uid)
+                if user_key not in DB.get("USER_DATA", {}):
+                    DB.setdefault("USER_DATA", {})[user_key] = {"name": f"User {target_uid}", "referral_count": 0}
+                DB["USER_DATA"][user_key]["referral_count"] = DB["USER_DATA"][user_key].get("referral_count", 0) + amount
+                await save_data_async()
+                new_bal = DB["USER_DATA"][user_key]["referral_count"]
+                
+                try:
+                    await client.send_message(
+                        target_uid,
+                        f"🎉 **Great News!** Admin ne aapko **+{amount} Study Coins** gift kiye hain! 💎\n"
+                        f"Aapka naya coin balance: `{new_bal} Coins`"
+                    )
+                except Exception:
+                    pass
+
+                await message.reply_text(
+                    f"✅ **Success!** Successfully gifted **+{amount} Coins** to student `{target_uid}`.\n"
+                    f"💎 New Balance: `{new_bal} Coins`",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                return
+
+            elif cmd_name in ["ban", "block"]:
+                if target_uid not in DB.get("BLOCKED_USERS", []):
+                    DB.setdefault("BLOCKED_USERS", []).append(target_uid)
+                    await save_data_async()
+                await message.reply_text(
+                    f"🚫 **Student Blocked!** User `{target_uid}` has been banned from the bot.",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                return
+
+            elif cmd_name in ["unban", "unblock"]:
+                blocked = DB.get("BLOCKED_USERS", [])
+                if target_uid in blocked:
+                    blocked.remove(target_uid)
+                if str(target_uid) in blocked:
+                    blocked.remove(str(target_uid))
+                await save_data_async()
+                await message.reply_text(
+                    f"🟢 **Student Unblocked!** User `{target_uid}` has been unbanned.",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                return
+
+            else:
+                user_key = target_uid if target_uid in DB.get("USER_DATA", {}) else str(target_uid)
+                u_name = DB.get("USER_DATA", {}).get(user_key, {}).get("name") or f"Student {target_uid}"
+                safe_u_name = str(u_name).replace("[", "").replace("]", "")
+                await message.reply_text(
+                    f"🛠️ **TOPIC COMMANDS FOR [{safe_u_name}](tg://user?id={target_uid}) (`{target_uid}`):**\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"• `/info` or `/status` - View student profile snapshot (coins, referrals, batches)\n"
+                    f"• `/file` or `/txt` - Download complete student audit report (.txt)\n"
+                    f"• `/giftcoin <amount>` - Gift study coins directly to this student\n"
+                    f"• `/ban` / `/unban` - Block or unblock student\n\n"
+                    f"_(Note: Commands in this topic are kept private and never forwarded to the student.)_",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                return
 
         reply_id = None
         if message.reply_to_message:

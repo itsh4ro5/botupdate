@@ -7,6 +7,7 @@ except ImportError:
 
 from pyrogram.enums import ChatMemberStatus, ParseMode
 from pyrogram.errors import RPCError, PeerIdInvalid, ChannelInvalid, ChannelPrivate
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # --- LOGGING SETUP ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -1115,6 +1116,258 @@ async def refresh_peer_cache(client, chat_id):
         logger.error(f"  Native peer refresh failed for {chat_id}: {e}")
         return False
 
+async def build_user_topic_info(client, target_uid):
+    """
+    Returns (summary_text, reply_markup, joined_batches_list) for a student inside a support topic.
+    Performs fast parallel membership checking with caching.
+    """
+    target_uid = int(target_uid)
+    user_key = target_uid if target_uid in DB.get("USER_DATA", {}) else (str(target_uid) if str(target_uid) in DB.get("USER_DATA", {}) else None)
+    u_data = DB.get("USER_DATA", {}).get(user_key, {}) if user_key else {}
+
+    tg_user = None
+    try:
+        tg_user = await client.get_users(target_uid)
+    except Exception:
+        pass
+
+    raw_name = (tg_user.first_name if tg_user and tg_user.first_name else None) or u_data.get("name") or f"Student {target_uid}"
+    safe_name = raw_name.replace("[", "").replace("]", "").replace("*", "").replace("_", "")
+    username = (tg_user.username if tg_user and tg_user.username else None) or u_data.get("username")
+    uname_str = f"@{username}" if username else "`None`"
+
+    coins = u_data.get("referral_count", 0)
+    total_invited = u_data.get("total_invited", 0)
+    tier = "👑 VIP Student" if u_data.get("tier") == "vip" else "Normal Student"
+    is_blocked = target_uid in DB.get("BLOCKED_USERS", []) or str(target_uid) in DB.get("BLOCKED_USERS", [])
+
+    referrer_id = u_data.get("referred_by") or u_data.get("pending_referral")
+    referrer_str = "`Direct / None`"
+    if referrer_id:
+        try:
+            r_user = await client.get_users(int(referrer_id))
+            r_name = (r_user.first_name or f"User {referrer_id}").replace("[", "").replace("]", "")
+            referrer_str = f"[{r_name}](tg://user?id={referrer_id}) (`{referrer_id}`)"
+        except Exception:
+            referrer_str = f"`{referrer_id}`"
+
+    # Parallel membership check across all batches
+    all_target_cids = {}
+    for cid, cname in DB.get("ALL_CHATS", {}).items():
+        all_target_cids[str(cid)] = cname
+    for cid, cname in DB.get("FREE_CHANNELS", {}).items():
+        all_target_cids[str(cid)] = cname
+    for cid, cname in DB.get("PAID_CHANNELS", {}).items():
+        all_target_cids[str(cid)] = cname
+    for cid, cname in DB.get("SPECIAL_CHANNELS", {}).items():
+        all_target_cids[str(cid)] = cname
+
+    sem = asyncio.Semaphore(10)
+    async def _chk(cid_str, cname):
+        async with sem:
+            try:
+                is_mem = await get_membership_cached(client, int(cid_str), target_uid)
+                if is_mem:
+                    b_type = "Free"
+                    if cid_str in DB.get("PAID_CHANNELS", {}):
+                        b_type = "Paid"
+                    elif cid_str in DB.get("SPECIAL_CHANNELS", {}):
+                        b_type = "Special"
+                    return (cid_str, cname, b_type)
+            except Exception:
+                pass
+            return None
+
+    chk_res = await asyncio.gather(*[_chk(c_id, c_name) for c_id, c_name in all_target_cids.items()], return_exceptions=True)
+    joined_batches = [r for r in chk_res if isinstance(r, tuple) and r is not None]
+
+    if joined_batches:
+        b_lines = []
+        for cid_str, bname, btype in joined_batches[:6]:
+            clean_bname = str(bname).replace("[", "").replace("]", "").replace("*", "")
+            b_lines.append(f"• ⚡ **[{btype}]** {clean_bname}")
+        if len(joined_batches) > 6:
+            b_lines.append(f"• _...and {len(joined_batches) - 6} more batches_")
+        batches_summary = "\n".join(b_lines)
+    else:
+        batches_summary = "_Student abhi kisi bhi batch me join nahi hai._"
+
+    status_tag = "🔴 **BLOCKED**" if is_blocked else "🟢 **Active Student**"
+
+    msg_text = (
+        f"👤 **<u>STUDENT PROFILE & SUPPORT SNAPSHOT</u>**\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 **Name:** [{safe_name}](tg://user?id={target_uid})\n"
+        f"🆔 **User ID:** `{target_uid}`\n"
+        f"📛 **Username:** {uname_str}\n"
+        f"💎 **Study Coins:** `{coins} Coins`\n"
+        f"👥 **Total Referrals:** `{total_invited} Students`\n"
+        f"🔗 **Referred By:** {referrer_str}\n"
+        f"🏷️ **Account Tier:** `{tier}`\n"
+        f"🛡️ **Status:** {status_tag}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📚 **JOINED BATCHES ({len(joined_batches)}):**\n"
+        f"{batches_summary}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"💡 _Niche button se full data (.txt) download ya coins gift karein:_"
+    )
+
+    block_btn_text = "🟢 Unblock Student" if is_blocked else "🚫 Block Student"
+    block_cb = f"t_unblock_{target_uid}" if is_blocked else f"t_block_{target_uid}"
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📄 Download Full Details (.txt)", callback_data=f"t_user_txt_{target_uid}")],
+        [
+            InlineKeyboardButton("🎁 Gift Coins", callback_data=f"giftcoin_direct_{target_uid}"),
+            InlineKeyboardButton(block_btn_text, callback_data=block_cb)
+        ]
+    ])
+
+    return msg_text, kb, joined_batches
+
+
+async def generate_user_txt_file(client, target_uid):
+    """
+    Generates a comprehensive .txt audit file in memory (io.BytesIO) for target_uid.
+    """
+    import io
+    from datetime import datetime
+    target_uid = int(target_uid)
+    user_key = target_uid if target_uid in DB.get("USER_DATA", {}) else (str(target_uid) if str(target_uid) in DB.get("USER_DATA", {}) else None)
+    u_data = DB.get("USER_DATA", {}).get(user_key, {}) if user_key else {}
+
+    tg_user = None
+    try:
+        tg_user = await client.get_users(target_uid)
+    except Exception:
+        pass
+
+    name = (tg_user.first_name if tg_user and tg_user.first_name else None) or u_data.get("name") or f"Student {target_uid}"
+    username = (tg_user.username if tg_user and tg_user.username else None) or u_data.get("username")
+    uname_str = f"@{username}" if username else "None"
+
+    coins = u_data.get("referral_count", 0)
+    total_invited = u_data.get("total_invited", 0)
+    tier = "VIP Student" if u_data.get("tier") == "vip" else "Normal Student"
+    is_blocked = target_uid in DB.get("BLOCKED_USERS", []) or str(target_uid) in DB.get("BLOCKED_USERS", [])
+    tnc = "Accepted" if u_data.get("tnc_accepted") else "Not Accepted"
+
+    referrer_id = u_data.get("referred_by") or u_data.get("pending_referral")
+    referrer_str = "Direct / None"
+    if referrer_id:
+        try:
+            r_user = await client.get_users(int(referrer_id))
+            referrer_str = f"{r_user.first_name or 'User'} (ID: {referrer_id})"
+        except Exception:
+            referrer_str = f"User ID: {referrer_id}"
+
+    all_target_cids = {}
+    for cid, cname in DB.get("ALL_CHATS", {}).items():
+        all_target_cids[str(cid)] = cname
+    for cid, cname in DB.get("FREE_CHANNELS", {}).items():
+        all_target_cids[str(cid)] = cname
+    for cid, cname in DB.get("PAID_CHANNELS", {}).items():
+        all_target_cids[str(cid)] = cname
+    for cid, cname in DB.get("SPECIAL_CHANNELS", {}).items():
+        all_target_cids[str(cid)] = cname
+
+    sem = asyncio.Semaphore(10)
+    async def _chk(cid_str, cname):
+        async with sem:
+            try:
+                is_mem = await get_membership_cached(client, int(cid_str), target_uid)
+                b_type = "FREE"
+                if cid_str in DB.get("PAID_CHANNELS", {}):
+                    b_type = "PAID"
+                elif cid_str in DB.get("SPECIAL_CHANNELS", {}):
+                    b_type = "SPECIAL"
+                return (cid_str, cname, b_type, is_mem)
+            except Exception:
+                return (cid_str, cname, "OTHER", False)
+
+    chk_res = await asyncio.gather(*[_chk(c_id, c_name) for c_id, c_name in all_target_cids.items()], return_exceptions=True)
+
+    joined_lines = []
+    not_joined_lines = []
+    for r in chk_res:
+        if isinstance(r, tuple):
+            cid_str, cname, btype, is_mem = r
+            line = f"  [{'JOINED' if is_mem else 'NOT JOINED'}] [{btype}] {cname} (ID: {cid_str})"
+            if is_mem:
+                joined_lines.append(line)
+            else:
+                not_joined_lines.append(line)
+
+    channels_txt = "JOINED BATCHES:\n" + ("\n".join(joined_lines) if joined_lines else "  None\n")
+    channels_txt += "\nAVAILABLE UNJOINED BATCHES:\n" + ("\n".join(not_joined_lines) if not_joined_lines else "  None\n")
+
+    demo_lines = []
+    active_demos = u_data.get("demos", {})
+    if active_demos:
+        for bid, exp_ts in active_demos.items():
+            dt_str = datetime.fromtimestamp(exp_ts).strftime("%Y-%m-%d %H:%M:%S") if isinstance(exp_ts, (int, float)) else str(exp_ts)
+            demo_lines.append(f"  Active Trial for Batch {bid} -> Expiry: {dt_str}")
+    demo_hist = u_data.get("demo_history", [])
+    if demo_hist:
+        for h in demo_hist:
+            demo_lines.append(f"  Log: {h}")
+    demo_txt = "\n".join(demo_lines) if demo_lines else "  No demo history found."
+
+    study_mins = u_data.get("study_minutes", 0)
+    sessions = u_data.get("study_sessions_completed", 0)
+    streak = u_data.get("streak", 0)
+    quiz_attempts = u_data.get("completed_quizzes", [])
+
+    report_lines = [
+        "================================================================================",
+        "                    STUDENT AUDIT REPORT & FULL DATA DUMP",
+        "================================================================================",
+        f"Generated At          : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"Telegram User ID      : {target_uid}",
+        f"Student Full Name     : {name}",
+        f"Telegram Username     : {uname_str}",
+        f"Mention Direct Link   : tg://user?id={target_uid}",
+        f"Account Status        : {'BLOCKED / BANNED' if is_blocked else 'Active Student'}",
+        f"Account Tier          : {tier}",
+        f"Terms & Conditions    : {tnc}",
+        "",
+        "--------------------------------------------------------------------------------",
+        "1. REFERRAL & STUDY COINS TELEMETRY",
+        "--------------------------------------------------------------------------------",
+        f"Current Coins Balance : {coins} Coins",
+        f"Total Students Invited: {total_invited} Users",
+        f"Invited By / Referrer : {referrer_str}",
+        f"Welcome Bonus Claimed : {'Yes' if u_data.get('welcome_bonus_claimed') else 'No'}",
+        "",
+        "--------------------------------------------------------------------------------",
+        "2. BATCH MEMBERSHIP AUDIT (TOTAL JOINED: " + str(len(joined_lines)) + ")",
+        "--------------------------------------------------------------------------------",
+        channels_txt,
+        "",
+        "--------------------------------------------------------------------------------",
+        "3. TRIAL & DEMO ACCESS HISTORY",
+        "--------------------------------------------------------------------------------",
+        demo_txt,
+        "",
+        "--------------------------------------------------------------------------------",
+        "4. WEBAPP STUDY COMPANION & QUIZ ANALYTICS",
+        "--------------------------------------------------------------------------------",
+        f"Total Study Minutes   : {study_mins} Minutes",
+        f"Study Sessions Done   : {sessions} Sessions",
+        f"Daily Study Streak    : {streak} Days",
+        f"Quiz Attempts Recorded: {len(quiz_attempts)} Quizzes",
+        "",
+        "================================================================================",
+        "                    END OF REPORT - H4R BOT ECOSYSTEM",
+        "================================================================================"
+    ]
+
+    report_content = "\n".join(report_lines)
+    buf = io.BytesIO(report_content.encode("utf-8"))
+    buf.name = f"student_{target_uid}_full_audit.txt"
+    buf.seek(0)
+    return buf
+
+
 async def get_or_create_topic(user, client, is_retry=False):
     if not SUPPORT_GROUP_ID:
         return None
@@ -1155,51 +1408,32 @@ async def get_or_create_topic(user, client, is_retry=False):
         DB.setdefault("USER_TOPICS", {})[user.id] = topic_id
         await save_data_async()
         
-        # --- NEW TICKET PINNED MESSAGE ---
+        # --- NEW TICKET PINNED MESSAGE (RICHEST FIRST MESSAGE & PINNED) ---
         try:
-            user_key = str(user.id) if str(user.id) in DB["USER_DATA"] else (user.id if user.id in DB["USER_DATA"] else str(user.id))
-            user_data = DB.get("USER_DATA", {}).get(user_key, {})
-            referrer_id = user_data.get("referred_by") or user_data.get("pending_referral")
-            
-            referrer_text = ""
-            if referrer_id:
-                try:
-                    referrer_user = await client.get_users(int(referrer_id))
-                    ref_name = referrer_user.first_name or "Referrer"
-                    referrer_text = f"\n🔗 **Referrer:** [{ref_name}](tg://user?id={referrer_id})"
-                except:
-                    referrer_text = f"\n🔗 **Referrer:** `{referrer_id}`"
-
-            pin_text = f"🚨 **NEW USER TICKET**\n👤 [{user.first_name or 'User'}](tg://user?id={user.id})\n🆔 `{user.id}`{referrer_text}"
+            summary_text, kb, _ = await build_user_topic_info(client, user.id)
+            pin_text = f"🚨 **NEW USER TICKET CREATED**\n" + summary_text
             
             sent_msg = await client.send_message(
                 chat_id=int(SUPPORT_GROUP_ID),
                 text=pin_text,
-                message_thread_id=topic_id
+                reply_markup=kb,
+                message_thread_id=topic_id,
+                parse_mode=ParseMode.MARKDOWN
             )
-            await sent_msg.pin()
+            try:
+                await client.pin_chat_message(
+                    chat_id=int(SUPPORT_GROUP_ID),
+                    message_id=sent_msg.id,
+                    disable_notification=True
+                )
+            except Exception as pin_err:
+                try:
+                    await sent_msg.pin(disable_notification=True)
+                except Exception as pin_err2:
+                    logger.warning(f"Could not pin ticket message: {pin_err2}")
         except Exception as e:
-            logger.error(f"Failed to pin ticket message: {e}")
+            logger.error(f"Failed to send and pin ticket header: {e}")
             
-        group_id_str = str(SUPPORT_GROUP_ID).replace("-100", "")
-        # Name ko clickable link banaya (tg://user format use karke)
-        safe_name = user.first_name or "User"
-        
-        text = (
-            f"🚨 **NEW USER TICKET**\n"
-            f"👤 [{safe_name}](tg://user?id={user.id})\n"
-            f"🆔 `{user.id}`\n"
-        )
-                
-        try:
-            await client.send_message(
-                int(SUPPORT_GROUP_ID), text, message_thread_id=topic_id, parse_mode=ParseMode.MARKDOWN
-            )
-        except TypeError:
-            await client.send_message(
-                int(SUPPORT_GROUP_ID), text, reply_to_message_id=topic_id, parse_mode=ParseMode.MARKDOWN
-            )
-                    
         return topic_id
             
     except (PeerIdInvalid, ChannelInvalid, ChannelPrivate) as e:
