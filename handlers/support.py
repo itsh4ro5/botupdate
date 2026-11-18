@@ -243,6 +243,147 @@ async def handle_user_flow_messages(client: Client, message: Message) -> bool:
         )
         return True
 
+    elif state == "wait_search_breq":
+        USER_FLOW_STATE.pop(uid, None)
+        query = text.lower().strip()
+        reqs = DB.get("BATCH_REQUESTS", {})
+        statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
+        matches = []
+        user_db = DB.get("USER_DATA", {})
+        for bname, uids in reqs.items():
+            if query in bname.lower():
+                matches.append((bname, uids))
+            elif query in [str(u) for u in uids]:
+                matches.append((bname, uids))
+            else:
+                for u in uids:
+                    u_info = user_db.get(u) or user_db.get(str(u), {})
+                    if query in (u_info.get("name") or "").lower() or query in (u_info.get("username") or "").lower():
+                        matches.append((bname, uids))
+                        break
+
+        if not matches:
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔍 Search Again", callback_data="breq_search_prompt")],
+                [InlineKeyboardButton("🔙 Back to Requests", callback_data="breq_p_0_pending")]
+            ])
+            await message.reply_text(f"❌ '{text}' ke liye koi matching batch request nahi mili.", reply_markup=kb)
+            return True
+
+        card = build_demands_console_card(matches, page=0, tab="all")
+        pyro_kb = to_pyrogram_markup(card["reply_markup"])
+        await message.reply_text(f"🔍 <b>Search Results for:</b> <code>{text}</code> (<b>{len(matches)}</b> found)\n\n" + card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
+        return True
+
+    elif state.startswith("wait_breq_link:"):
+        parts = state.split(":", 3)
+        bname = parts[1]
+        page = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
+        tab = parts[3] if len(parts) > 3 else "pending"
+        USER_FLOW_STATE.pop(uid, None)
+
+        all_chats = DB.get("ALL_CHATS", {})
+        matched_cid = None
+        clean_text = text.strip()
+        for cid, cname in all_chats.items():
+            if clean_text == str(cid) or clean_text.lower() in str(cname).lower():
+                matched_cid = cid
+                break
+
+        if not matched_cid and clean_text.startswith("-100"):
+            try:
+                matched_cid = int(clean_text)
+            except ValueError:
+                pass
+
+        if not matched_cid:
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Request", callback_data=f"breq_p_{page}_{tab}")]])
+            await message.reply_text(
+                f"❌ '{text}' namak koi valid batch channel nahi mila.\n"
+                f"Kripya sahi Channel ID (jaise -100...) ya exact Channel Name bhejein.",
+                reply_markup=kb
+            )
+            return True
+
+        channel_name = all_chats.get(matched_cid) or all_chats.get(str(matched_cid)) or f"Channel {matched_cid}"
+        DB.setdefault("BATCH_REQUEST_STATUS", {})[bname] = "done"
+        DB.setdefault("BATCH_REQUEST_LINKS", {})[bname] = matched_cid
+        await save_data_async()
+
+        uids = DB.get("BATCH_REQUESTS", {}).get(bname, [])
+        notified = 0
+        for target_uid in uids:
+            try:
+                notify_kb = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🚀 Open & Join Batch", callback_data=f"gen_link_{matched_cid}")],
+                    [InlineKeyboardButton("📚 Browse All Batches", callback_data="all_batches_0")],
+                    [InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]
+                ])
+                await client.send_message(
+                    int(target_uid),
+                    f"🎉 **Great News! Aapka Requested Batch Bot Me Add Ho Chuka Hai!**\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"📦 **Requested Batch:** `{bname}`\n"
+                    f"📁 **Live Batch Channel:** `{channel_name}`\n\n"
+                    f"Admin ne is batch ko live upload kar diya hai. Niche button dabakar instant batch me join karein!\n\n"
+                    f"Happy Learning! 🚀",
+                    reply_markup=notify_kb,
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                notified += 1
+            except Exception as e:
+                logger.warning(f"Failed to notify requester {target_uid}: {e}")
+
+        back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Requests", callback_data=f"breq_p_{page}_{tab}")]])
+        await message.reply_text(
+            f"✅ **Batch Successfully Linked & Fulfilled!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📦 **Request:** `{bname}`\n"
+            f"📁 **Linked Channel:** `{channel_name}` (`{matched_cid}`)\n"
+            f"👥 **Students Notified:** `{notified}/{len(uids)} Students`\n\n"
+            f"Status has been marked as **Live (☑)**.",
+            reply_markup=back_kb,
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return True
+
+    elif state.startswith("wait_breq_broadcast:"):
+        parts = state.split(":", 3)
+        bname = parts[1]
+        page = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
+        tab = parts[3] if len(parts) > 3 else "pending"
+        USER_FLOW_STATE.pop(uid, None)
+
+        uids = DB.get("BATCH_REQUESTS", {}).get(bname, [])
+        sent = 0
+        for target_uid in uids:
+            try:
+                kb = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📚 All Batches", callback_data="all_batches_0")],
+                    [InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]
+                ])
+                await client.send_message(
+                    int(target_uid),
+                    f"📢 **ADMIN UPDATE ON YOUR REQUESTED BATCH**\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"📦 **Batch:** `{bname}`\n\n"
+                    f"{text}\n\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"*(Aapne is batch ki demand submit ki thi isliye yeh update bheja gaya)*",
+                    reply_markup=kb,
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                sent += 1
+            except Exception as err:
+                logger.warning(f"Could not send broadcast to requester {target_uid}: {err}")
+
+        back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Request", callback_data=f"breq_p_{page}_{tab}")]])
+        await message.reply_text(
+            f"✅ **Broadcast Sent!**\n\nDelivered update to `{sent}/{len(uids)}` waiting students for `{bname}`.",
+            reply_markup=back_kb,
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return True
+
     return False
 
 

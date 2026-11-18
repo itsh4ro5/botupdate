@@ -48,6 +48,7 @@ from bot_api_bridge import (
     edit_widget_data,
     get_topic_deeplink,
     build_demands_console_card,
+    build_batch_request_detail_card,
     build_giveaway_claim_card,
     build_interactive_broadcast_card,
     build_student_wallet_widget,
@@ -476,21 +477,9 @@ async def cmd_batchrequests(client: Client, message: Message):
             return (status_rank, -len(uids), bname.lower())
 
         sorted_items = sorted(reqs.items(), key=_sort_key)
-        card = build_demands_console_card(sorted_items, page=0)
+        card = build_demands_console_card(sorted_items, page=0, tab="pending")
         pyro_kb = to_pyrogram_markup(card["reply_markup"])
-
-        try:
-            widget_res = await send_html_widget(
-                message.chat.id,
-                card["text"],
-                caption="📋 <b>BATCH DEMANDS & TASK CONSOLE</b>",
-                reply_markup=card["reply_markup"]
-            )
-            if not widget_res:
-                await message.reply_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
-        except Exception:
-            msg = build_batch_requests_msg(page=0)
-            await rp.send(client, message.chat.id, msg)
+        await message.reply_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.error(f"cmd_batchrequests error: {e}")
         reqs = DB.get("BATCH_REQUESTS", {})

@@ -48,6 +48,7 @@ from bot_api_bridge import (
     edit_widget_data,
     get_topic_deeplink,
     build_demands_console_card,
+    build_batch_request_detail_card,
     build_giveaway_claim_card,
     build_interactive_broadcast_card,
     build_student_wallet_widget,

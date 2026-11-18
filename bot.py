@@ -101,10 +101,15 @@ async def _patched_send(client, chat_id, text=None, parse_mode=None, reply_marku
                 if r_btns:
                     rp_rows.append(rp.buttons(*r_btns))
             
-            parser = Markdown(client)
-            res = await parser.parse(str(text or ""))
-            rich_texts = _entities_to_rich(res['message'], res['entities'])
-            msg = rp.message(rp.para(*rich_texts), *rp_rows)
+            is_html = (parse_mode in [ParseMode.HTML, "html", "HTML"]) or any(t in str(text or "") for t in ["<b>", "<i>", "<code>", "<u>", "<pre>", "<a ", "</a>", "</span>"])
+            try:
+                content_block = rp.html_message(str(text or "")) if is_html else rp.markdown_message(str(text or ""))
+                msg = rp.message(content_block, *rp_rows)
+            except Exception:
+                parser = Markdown(client)
+                res = await parser.parse(str(text or ""))
+                rich_texts = _entities_to_rich(res['message'], res['entities'])
+                msg = rp.message(rp.para(*rich_texts), *rp_rows)
             
             safe_kwargs = {k:v for k,v in kwargs.items() if k in ['disable_notification', 'protect_content', 'message_thread_id']}
             if 'reply_parameters' in kwargs and kwargs['reply_parameters']:
@@ -160,10 +165,15 @@ async def _patched_edit(client, chat_id, message_id, text=None, parse_mode=None,
                 if r_btns:
                     rp_rows.append(rp.buttons(*r_btns))
             
-            parser = Markdown(client)
-            res = await parser.parse(str(text or ""))
-            rich_texts = _entities_to_rich(res['message'], res['entities'])
-            msg = rp.message(rp.para(*rich_texts), *rp_rows)
+            is_html = (parse_mode in [ParseMode.HTML, "html", "HTML"]) or any(t in str(text or "") for t in ["<b>", "<i>", "<code>", "<u>", "<pre>", "<a ", "</a>", "</span>"])
+            try:
+                content_block = rp.html_message(str(text or "")) if is_html else rp.markdown_message(str(text or ""))
+                msg = rp.message(content_block, *rp_rows)
+            except Exception:
+                parser = Markdown(client)
+                res = await parser.parse(str(text or ""))
+                rich_texts = _entities_to_rich(res['message'], res['entities'])
+                msg = rp.message(rp.para(*rich_texts), *rp_rows)
             
             return await rp.edit(client, chat_id, message_id, msg)
         except Exception as e:

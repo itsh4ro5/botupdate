@@ -204,17 +204,7 @@ async def cmd_genvoucher(client: Client, message: Message):
         InlineKeyboardButton("📢 Broadcast Giveaway", callback_data=f"bc_giveaway_{code}")
     ])
 
-    try:
-        widget_res = await send_html_widget(
-            message.chat.id,
-            card["text"],
-            caption=f"🎁 <b>GIVEAWAY VOUCHER ACTIVE:</b> <code>{code}</code>",
-            reply_markup=card["reply_markup"]
-        )
-        if not widget_res:
-            await message.reply_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
-    except Exception:
-        await message.reply_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
+    await message.reply_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
 
 
 async def cmd_list_vouchers(client: Client, message: Message):
@@ -264,17 +254,7 @@ async def cmd_genvoucher_from_wizard(client: Client, message: Message):
         InlineKeyboardButton("📢 Broadcast Giveaway", callback_data=f"bc_giveaway_{code}")
     ])
 
-    try:
-        widget_res = await send_html_widget(
-            message.chat.id,
-            card["text"],
-            caption=f"🎁 <b>GIVEAWAY VOUCHER ACTIVE:</b> <code>{code}</code>",
-            reply_markup=card["reply_markup"]
-        )
-        if not widget_res:
-            await message.reply_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
-    except Exception:
-        await message.reply_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
+    await message.reply_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
 
 
 async def cmd_myinfo(client: Client, message: Message):

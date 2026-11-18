@@ -137,9 +137,10 @@ async def send_html_widget(
         logger.debug(f"sendWidget HTTP exception: {e}, applying fallback")
 
     # Fallback: Send ultra-attractive Rich Card HTML message with identical interactive buttons
+    full_text = f"{caption}\n\n{widget_html}" if (caption and caption != widget_html) else widget_html
     fallback_payload: Dict[str, Any] = {
         "chat_id": chat_id,
-        "text": caption or widget_html,
+        "text": full_text,
         "parse_mode": "HTML",
         "disable_web_page_preview": True
     }
@@ -187,22 +188,37 @@ def get_topic_deeplink(thread_id: int, bot_username: Optional[str] = None) -> st
 # 4. PRE-ENGINEERED ULTRA-ATTRACTIVE WIDGET TEMPLATES
 # =============================================================================
 
-def build_demands_console_card(sorted_items: List[tuple], page: int = 0, per_page: int = 5, mode: str = "normal") -> Dict[str, Any]:
+def build_demands_console_card(sorted_items: Optional[List[tuple]] = None, page: int = 0, per_page: int = 5, mode: str = "normal", tab: str = "pending") -> Dict[str, Any]:
     """
-    Builds the clean, professional Batch Demands Console card.
+    Builds the clean, professional Batch Demands Console card with interactive filter tabs.
     Supports:
-    - mode="normal": Full-width 1-tap Live/Upload toggles with student names shown directly in text.
-    - mode="delete": 1-tap delete mode to purge bogus requests or clean completed batches.
+    - tab="pending": Displays only active demands waiting for upload.
+    - tab="done": Displays fulfilled/live batches.
+    - tab="all": Displays full demands registry.
+    - mode="delete": 1-tap delete mode to purge bogus requests.
     """
-    total = len(sorted_items)
+    if sorted_items is None:
+        reqs = getattr(config, "DB", {}).get("BATCH_REQUESTS", {})
+        sorted_items = sorted(reqs.items(), key=lambda x: len(x[1]) if isinstance(x[1], list) else 0, reverse=True)
     statuses = getattr(config, "DB", {}).get("BATCH_REQUEST_STATUS", {})
-    completed = sum(1 for b, _ in sorted_items if statuses.get(b) == "done")
-    pending = total - completed
+    
+    # Filter based on tab:
+    if tab == "pending":
+        filtered_items = [item for item in sorted_items if statuses.get(item[0], "pending") != "done"]
+    elif tab == "done":
+        filtered_items = [item for item in sorted_items if statuses.get(item[0], "pending") == "done"]
+    else:
+        filtered_items = sorted_items
 
+    total_all = len(sorted_items)
+    total_completed = sum(1 for b, _ in sorted_items if statuses.get(b) == "done")
+    total_pending = total_all - total_completed
+    
+    total = len(filtered_items)
     total_pages = max(1, (total + per_page - 1) // per_page)
     page = max(0, min(page, total_pages - 1))
     start_idx = page * per_page
-    page_items = sorted_items[start_idx:start_idx + per_page]
+    page_items = filtered_items[start_idx:start_idx + per_page]
 
     # Format Student names helper
     def _format_requesters(uids: list) -> str:
@@ -228,7 +244,7 @@ def build_demands_console_card(sorted_items: List[tuple], page: int = 0, per_pag
         html_lines = [
             "<b>🗑️ <u>MANAGE & DELETE BATCH REQUESTS</u></b>",
             "━━━━━━━━━━━━━━━━━━━━━━━━━",
-            f"📊 <b>Total:</b> <code>{total}</code> | ⏳ <b>Pending:</b> <code>{pending}</code> | ✅ <b>Live:</b> <code>{completed}</code>",
+            f"📊 <b>Total:</b> <code>{total_all}</code> | ⏳ <b>Pending:</b> <code>{total_pending}</code> | ✅ <b>Live:</b> <code>{total_completed}</code>",
             f"📄 <b>Page:</b> <code>{page + 1}/{total_pages}</code> <i>(Delete Mode)</i>",
             "━━━━━━━━━━━━━━━━━━━━━━━━━"
         ]
@@ -246,22 +262,22 @@ def build_demands_console_card(sorted_items: List[tuple], page: int = 0, per_pag
             item_idx = start_idx + sub_idx
             short_bname = (bname[:26] + "..") if len(bname) > 28 else bname
             btn_text = f"🗑️ Delete {start_idx + sub_idx + 1}: {short_bname}"
-            kb_rows.append([{"text": btn_text, "callback_data": f"breq_del_{item_idx}_{page}"}])
+            kb_rows.append([{"text": btn_text, "callback_data": f"breq_del_{item_idx}_{page}_{tab}"}])
 
         nav_row = []
         if page > 0:
-            nav_row.append({"text": "◀ Prev", "callback_data": f"breq_delm_{page - 1}"})
-        nav_row.append({"text": f"📄 {page + 1}/{total_pages}", "callback_data": f"breq_delm_{page}"})
+            nav_row.append({"text": "◀ Prev", "callback_data": f"breq_delm_{page - 1}_{tab}"})
+        nav_row.append({"text": f"📄 {page + 1}/{total_pages}", "callback_data": f"breq_delm_{page}_{tab}"})
         if page < total_pages - 1:
-            nav_row.append({"text": "Next ▶", "callback_data": f"breq_delm_{page + 1}"})
+            nav_row.append({"text": "Next ▶", "callback_data": f"breq_delm_{page + 1}_{tab}"})
         if nav_row:
             kb_rows.append(nav_row)
 
-        if completed > 0:
-            kb_rows.append([{"text": f"🧹 Clean All {completed} Uploaded Batches", "callback_data": "breq_clean_done"}])
+        if total_completed > 0:
+            kb_rows.append([{"text": f"🧹 Clean All {total_completed} Uploaded Batches", "callback_data": "breq_clean_done"}])
 
         kb_rows.append([
-            {"text": "🔙 Exit Delete Mode", "callback_data": f"breq_p_{page}"},
+            {"text": "🔙 Exit Delete Mode", "callback_data": f"breq_p_{page}_{tab}"},
             {"text": "🏠 Main Terminal", "callback_data": "dash_home"}
         ])
 
@@ -270,52 +286,135 @@ def build_demands_console_card(sorted_items: List[tuple], page: int = 0, per_pag
             "reply_markup": {"inline_keyboard": kb_rows}
         }
 
-    # NORMAL MODE: Ultra-Clean, Full-Width Buttons, Zero Clutter!
+    # NORMAL MODE: Filter Tabs + Full Batch Display + Dedicated 1-Tap Management
     html_lines = [
-        "<b>📋 <u>STUDENT BATCH DEMANDS & CHECKLIST</u></b>",
+        "<b>📋 <u>STUDENT BATCH DEMANDS CONSOLE</u></b>",
         "━━━━━━━━━━━━━━━━━━━━━━━━━",
-        f"📊 <b>Total:</b> <code>{total}</code> | ⏳ <b>Pending:</b> <code>{pending}</code> | ✅ <b>Live:</b> <code>{completed}</code>",
-        f"📄 <b>Page:</b> <code>{page + 1}/{total_pages}</code> <i>(Sorted by Highest Demand)</i>",
+        f"📊 <b>Total:</b> <code>{total_all}</code> | ⏳ <b>Pending:</b> <code>{total_pending}</code> | ✅ <b>Live:</b> <code>{total_completed}</code>",
+        f"📄 <b>Page:</b> <code>{page + 1}/{total_pages}</code> <i>(Active Tab: {tab.upper()})</i>",
         "━━━━━━━━━━━━━━━━━━━━━━━━━"
     ]
 
-    for idx, (bname, uids) in enumerate(page_items, start=start_idx + 1):
-        st = statuses.get(bname, "pending")
-        is_done = (st == "done")
-        badge = "🟢" if is_done else "🔴"
-        status_text = "<b>[☑ LIVE & NOTIFIED]</b>" if is_done else "<i>[☐ PENDING UPLOAD]</i>"
-        req_str = _format_requesters(uids)
-        html_lines.append(f"{badge} <b>{idx}. {bname}</b>\n   ↳ 👥 <b>Demand ({len(uids)}):</b> {req_str} — {status_text}")
+    if not page_items:
+        html_lines.append(f"<i>Is tab ({tab.upper()}) me koi batch requests nahi hain.</i>")
+    else:
+        for idx, (bname, uids) in enumerate(page_items, start=start_idx + 1):
+            st = statuses.get(bname, "pending")
+            is_done = (st == "done")
+            badge = "🟢 [LIVE]" if is_done else "🔴 [PENDING]"
+            req_str = _format_requesters(uids)
+            html_lines.append(f"<b>{idx}.</b> <b>{bname}</b>\n   ↳ {badge} • 👥 <b>Demand ({len(uids)}):</b> {req_str}")
 
     html_lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━")
-    html_lines.append("<i>💡 Button dabate hi batch Uploaded mark hoga aur students ko auto-notify chala jayega!</i>")
+    html_lines.append("<i>💡 Batch ka full name, students list aur actions ke liye niche button dabayein:</i>")
 
-    # Clean 1-button-per-row layout (Full Width readable text!)
     kb_rows = []
+    # 1. Filter Tabs Row
+    tab_p = f"🔘 ⏳ Pending ({total_pending})" if tab == "pending" else f"⏳ Pending ({total_pending})"
+    tab_d = f"🔘 ✅ Live ({total_completed})" if tab == "done" else f"✅ Live ({total_completed})"
+    tab_a = f"🔘 📋 All ({total_all})" if tab == "all" else f"📋 All ({total_all})"
+
+    kb_rows.append([
+        {"text": tab_p, "callback_data": f"breq_tab_pending_0"},
+        {"text": tab_d, "callback_data": f"breq_tab_done_0"},
+        {"text": tab_a, "callback_data": f"breq_tab_all_0"}
+    ])
+
+    # 2. Per-Item Manage Button (1 per batch on current page)
     for sub_idx, (bname, uids) in enumerate(page_items):
         item_idx = start_idx + sub_idx
         st = statuses.get(bname, "pending")
         is_done = (st == "done")
-        icon = "☑ Live:" if is_done else "☐ Upload:"
-        short_bname = (bname[:26] + "..") if len(bname) > 28 else bname
+        icon = "☑ Live:" if is_done else "⚙️ Manage:"
+        short_bname = (bname[:24] + "..") if len(bname) > 26 else bname
         btn_text = f"{start_idx + sub_idx + 1}. {icon} {short_bname} ({len(uids)})"
-        kb_rows.append([{"text": btn_text, "callback_data": f"breq_t_{item_idx}_{page}"}])
+        kb_rows.append([{"text": btn_text, "callback_data": f"breq_view_{item_idx}_{page}_{tab}"}])
 
-    # Nav Row
+    # 3. Navigation Row
     nav_row = []
     if page > 0:
-        nav_row.append({"text": "◀ Prev", "callback_data": f"breq_p_{page - 1}"})
-    nav_row.append({"text": f"📄 {page + 1}/{total_pages}", "callback_data": f"breq_p_{page}"})
+        nav_row.append({"text": "◀ Prev", "callback_data": f"breq_p_{page - 1}_{tab}"})
+    nav_row.append({"text": f"📄 {page + 1}/{total_pages}", "callback_data": f"breq_p_{page}_{tab}"})
     if page < total_pages - 1:
-        nav_row.append({"text": "Next ▶", "callback_data": f"breq_p_{page + 1}"})
+        nav_row.append({"text": "Next ▶", "callback_data": f"breq_p_{page + 1}_{tab}"})
     if nav_row:
         kb_rows.append(nav_row)
 
-    # Actions Row
+    # 4. Action Row 1
     kb_rows.append([
-        {"text": "🔄 Refresh", "callback_data": f"breq_p_{page}"},
-        {"text": "🗑️ Delete / Clean", "callback_data": f"breq_delm_{page}"},
+        {"text": "🔍 Search Request", "callback_data": "breq_search_prompt"},
+        {"text": "🗑️ Delete / Clean", "callback_data": f"breq_delm_{page}_{tab}"}
+    ])
+    # 5. Action Row 2
+    kb_rows.append([
+        {"text": "🔄 Refresh", "callback_data": f"breq_p_{page}_{tab}"},
         {"text": "🔙 Terminal", "callback_data": "dash_home"}
+    ])
+
+    return {
+        "text": "\n".join(html_lines),
+        "reply_markup": {"inline_keyboard": kb_rows}
+    }
+
+def build_batch_request_detail_card(bname: str, page: int = 0, tab: str = "pending") -> Dict[str, Any]:
+    """
+    Builds a high-precision, dedicated Batch Demand Inspector Card:
+    Displays full un-truncated batch name, complete student requesters list, and 1-tap actions.
+    """
+    reqs = getattr(config, "DB", {}).get("BATCH_REQUESTS", {})
+    statuses = getattr(config, "DB", {}).get("BATCH_REQUEST_STATUS", {})
+    uids = reqs.get(bname, [])
+    st = statuses.get(bname, "pending")
+    is_done = (st == "done")
+    status_str = "🟢 <b>LIVE & NOTIFIED (☑)</b>" if is_done else "⏳ <b>PENDING UPLOAD (☐)</b>"
+
+    user_db = getattr(config, "DB", {}).get("USER_DATA", {})
+    student_lines = []
+    for idx, u in enumerate(uids[:20], start=1):
+        u_info = user_db.get(u) or user_db.get(str(u), {})
+        nm = u_info.get("name") or f"Student {u}"
+        un = f"(@{u_info.get('username')})" if u_info.get("username") else ""
+        student_lines.append(f"<b>{idx}.</b> {nm} {un} — <code>{u}</code>")
+
+    html_lines = [
+        "<b>📦 <u>BATCH DEMAND DETAILS & CONTROL</u></b>",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━",
+        f"🏷️ <b>Batch Name:</b>\n<code>{bname}</code>\n",
+        f"📊 <b>Status:</b> {status_str}",
+        f"👥 <b>Total Demands:</b> <code>{len(uids)} Students Waiting</code>",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "<b>👥 Requesting Students:</b>"
+    ]
+    if student_lines:
+        html_lines.extend(student_lines)
+        if len(uids) > 20:
+            html_lines.append(f"<i>...and {len(uids) - 20} more students</i>")
+    else:
+        html_lines.append("<i>Is request ke liye koi user records nahi hain.</i>")
+
+    html_lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━")
+    html_lines.append("<i>💡 Niche diye gaye actions me se chunein:</i>")
+
+    import urllib.parse
+    bname_encoded = urllib.parse.quote(bname)
+
+    kb_rows = []
+    # 1. Toggle Live / Pending
+    if is_done:
+        kb_rows.append([{"text": "⏳ Revert to Pending (☐)", "callback_data": f"breq_det_toggle_{bname_encoded}_{page}_{tab}"}])
+    else:
+        kb_rows.append([{"text": f"✅ Mark Live & Notify ({len(uids)} Students)", "callback_data": f"breq_det_toggle_{bname_encoded}_{page}_{tab}"}])
+
+    # 2. Link with existing channel & Broadcast
+    kb_rows.append([
+        {"text": "🔗 Fulfill with Bot Channel Link", "callback_data": f"breq_det_link_{bname_encoded}_{page}_{tab}"},
+        {"text": "📢 Message Requesters", "callback_data": f"breq_det_msg_{bname_encoded}_{page}_{tab}"}
+    ])
+
+    # 3. Delete & Back
+    kb_rows.append([
+        {"text": "🗑️ Delete This Request", "callback_data": f"breq_det_del_{bname_encoded}_{page}_{tab}"},
+        {"text": "🔙 Back to Requests List", "callback_data": f"breq_p_{page}_{tab}"}
     ])
 
     return {
@@ -355,7 +454,7 @@ def build_giveaway_claim_card(code: str, points: float, max_uses: int, used_coun
 
 def to_pyrogram_markup(markup_dict: Optional[Dict[str, Any]]):
     """Converts standard Bot API inline_keyboard dict into Pyrogram InlineKeyboardMarkup."""
-    from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
     if not markup_dict or "inline_keyboard" not in markup_dict:
         return InlineKeyboardMarkup([])
     rows = []
@@ -364,6 +463,8 @@ def to_pyrogram_markup(markup_dict: Optional[Dict[str, Any]]):
         for b in r:
             if "url" in b:
                 row_btns.append(InlineKeyboardButton(b["text"], url=b["url"]))
+            elif "web_app" in b:
+                row_btns.append(InlineKeyboardButton(b["text"], web_app=WebAppInfo(url=b["web_app"].get("url"))))
             else:
                 row_btns.append(InlineKeyboardButton(b["text"], callback_data=b.get("callback_data", "noop")))
         rows.append(row_btns)
@@ -500,12 +601,12 @@ def build_batch_details_widget(channel_id: int, user_id: int, user_has_access: b
         kb_rows.append([{"text": "🚀 Open / Enter Batch Now", "callback_data": f"gen_link_{channel_id}"}])
     else:
         if batch_type == "FREE":
-            kb_rows.append([{"text": "✨ Generate Free Joining Link", "callback_data": f"gen_link_{channel_id}"}])
+            kb_rows.append([{"text": "✨ Generate Free Joining Link", "callback_data": f"get_f_{channel_id}"}])
         elif batch_type == "SPECIAL":
-            kb_rows.append([{"text": f"💎 Unlock with {coins_req} Coins", "callback_data": f"unlock_special_{channel_id}"}])
+            kb_rows.append([{"text": f"💎 Unlock with {coins_req} Coins", "callback_data": f"unlock_s_{channel_id}"}])
         else:
             kb_rows.append([
-                {"text": "💳 Purchase Access / Pay", "callback_data": f"pay_batch_{channel_id}"},
+                {"text": "💳 Purchase Access / Pay", "callback_data": f"req_access_{channel_id}"},
                 {"text": "🎁 Request Free Demo", "callback_data": f"req_demo_{channel_id}"}
             ])
 

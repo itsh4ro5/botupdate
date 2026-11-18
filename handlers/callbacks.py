@@ -19,6 +19,7 @@ from pyrogram.errors import (
     ChatAdminRequired,
     FloodWait,
     InputUserDeactivated,
+    MessageNotModified,
     PeerIdInvalid,
     RPCError,
     SessionPasswordNeeded,
@@ -48,6 +49,7 @@ from bot_api_bridge import (
     edit_widget_data,
     get_topic_deeplink,
     build_demands_console_card,
+    build_batch_request_detail_card,
     build_giveaway_claim_card,
     build_interactive_broadcast_card,
     build_student_wallet_widget,
@@ -366,10 +368,16 @@ async def general_callback(client: Client, q: CallbackQuery):
                 msg = build_batch_requests_msg(page=0)
                 await rp.edit(client, q.message.chat.id, q.message.id, msg)
 
-        elif data.startswith("breq_p_"):
+        # =====================================================================
+        # 📋 BATCH REQUESTS ADVANCED MANAGEMENT SUITE (TABS, DETAIL, ACTIONS)
+        # =====================================================================
+        elif data.startswith("breq_tab_"):
             if not is_admin(uid):
-                return await send_ephemeral_reply(q.id, "❌ Sirf admins ke liye.", chat_id=q.message.chat.id)
-            page = int(data.split("_")[2])
+                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
+            parts = data.split("_")
+            new_tab = parts[2]
+            new_page = int(parts[3]) if len(parts) > 3 else 0
+
             reqs = DB.get("BATCH_REQUESTS", {})
             statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
 
@@ -380,21 +388,20 @@ async def general_callback(client: Client, q: CallbackQuery):
                 return (status_rank, -len(uids), bname.lower())
 
             sorted_items = sorted(reqs.items(), key=_sort_key)
-            card = build_demands_console_card(sorted_items, page=page)
+            card = build_demands_console_card(sorted_items, page=new_page, tab=new_tab)
             pyro_kb = to_pyrogram_markup(card["reply_markup"])
+            await q.answer()
             try:
                 await q.edit_message_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
             except Exception:
-                msg = build_batch_requests_msg(page=page)
-                await rp.edit(client, q.message.chat.id, q.message.id, msg)
+                pass
 
-        elif data.startswith("breq_w_"):
-            # 👥 View which students requested this specific batch (Ephemeral)
+        elif data.startswith("breq_p_"):
             if not is_admin(uid):
-                return await send_ephemeral_reply(q.id, "❌ Sirf admins ke liye.", chat_id=q.message.chat.id)
+                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
             parts = data.split("_")
-            item_global_idx = int(parts[2])
-            page = int(parts[3])
+            page = int(parts[2])
+            tab = parts[3] if len(parts) > 3 else "pending"
 
             reqs = DB.get("BATCH_REQUESTS", {})
             statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
@@ -406,29 +413,22 @@ async def general_callback(client: Client, q: CallbackQuery):
                 return (status_rank, -len(uids), bname.lower())
 
             sorted_items = sorted(reqs.items(), key=_sort_key)
-            if item_global_idx < 0 or item_global_idx >= len(sorted_items):
-                return await send_ephemeral_reply(q.id, "❌ Invalid batch index.", chat_id=q.message.chat.id)
+            card = build_demands_console_card(sorted_items, page=page, tab=tab)
+            pyro_kb = to_pyrogram_markup(card["reply_markup"])
+            await q.answer()
+            try:
+                await q.edit_message_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
+            except Exception:
+                pass
 
-            bname, uids = sorted_items[item_global_idx]
-            student_lines = []
-            for s_idx, target_uid in enumerate(uids[:20], 1):
-                u_info = DB.get("USER_DATA", {}).get(target_uid) or DB.get("USER_DATA", {}).get(str(target_uid), {})
-                uname = u_info.get("name") or f"User {target_uid}"
-                handle = f"(@{u_info.get('username')})" if u_info.get("username") else ""
-                student_lines.append(f"{s_idx}. {uname} {handle} <code>[{target_uid}]</code>")
-
-            st_summary = f"👥 <b>STUDENTS DEMANDING BATCH:</b>\n📦 <b>{bname}</b>\nTotal Waiting: <b>{len(uids)} Students</b>\n\n" + "\n".join(student_lines)
-            if len(uids) > 20:
-                st_summary += f"\n<i>...and {len(uids) - 20} more students</i>"
-
-            await send_ephemeral_reply(q.id, st_summary, chat_id=q.message.chat.id)
-
-        elif data.startswith("breq_t_"):
+        elif data.startswith("breq_view_"):
+            # Drill-down: View dedicated batch request details & actions
             if not is_admin(uid):
-                return await send_ephemeral_reply(q.id, "❌ Sirf admins ke liye.", chat_id=q.message.chat.id)
+                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
             parts = data.split("_")
             item_global_idx = int(parts[2])
             page = int(parts[3])
+            tab = parts[4] if len(parts) > 4 else "pending"
 
             reqs = DB.get("BATCH_REQUESTS", {})
             statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
@@ -440,22 +440,48 @@ async def general_callback(client: Client, q: CallbackQuery):
                 return (status_rank, -len(uids), bname.lower())
 
             sorted_items = sorted(reqs.items(), key=_sort_key)
-            if item_global_idx < 0 or item_global_idx >= len(sorted_items):
-                return await send_ephemeral_reply(q.id, "❌ Invalid batch index.", chat_id=q.message.chat.id)
+            if tab == "pending":
+                filtered = [it for it in sorted_items if statuses.get(it[0], "pending") != "done"]
+            elif tab == "done":
+                filtered = [it for it in sorted_items if statuses.get(it[0], "pending") == "done"]
+            else:
+                filtered = sorted_items
 
-            bname, uids = sorted_items[item_global_idx]
+            if item_global_idx < 0 or item_global_idx >= len(filtered):
+                return await q.answer("❌ Invalid request index.", show_alert=True)
+
+            bname, _ = filtered[item_global_idx]
+            card = build_batch_request_detail_card(bname, page=page, tab=tab)
+            pyro_kb = to_pyrogram_markup(card["reply_markup"])
+            await q.answer()
+            try:
+                await q.edit_message_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
+            except Exception:
+                pass
+
+        elif data.startswith("breq_det_toggle_"):
+            if not is_admin(uid):
+                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
+            parts = data.split("_")
+            bname_enc = parts[3]
+            page = int(parts[4])
+            tab = parts[5] if len(parts) > 5 else "pending"
+            bname = urllib.parse.unquote(bname_enc)
+
+            reqs = DB.get("BATCH_REQUESTS", {})
+            statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
+            uids = reqs.get(bname, [])
+
             current_status = statuses.get(bname, "pending")
-
             if current_status == "done":
-                # Toggle back to pending
                 statuses[bname] = "pending"
                 await save_data_async()
-                await send_ephemeral_reply(q.id, f"Marked '{bname}' as Pending (☐)", chat_id=q.message.chat.id)
+                await q.answer(f"⏳ Marked '{bname[:30]}' as Pending (☐)")
             else:
-                # Mark done & notify requesting users
                 statuses[bname] = "done"
                 await save_data_async()
 
+                # Notify students
                 notified_count = 0
                 for target_uid in uids:
                     try:
@@ -468,7 +494,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                             f"🎉 **Great News! Aapka Requested Batch Live Ho Chuka Hai!**\n"
                             f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                             f"📦 **Batch Name:** `{bname}`\n\n"
-                            f"Aapne is batch ke liye demand request submit ki thi. Admin ne ise bot me successfully upload kar diya hai!\n\n"
+                            f"Aapne is batch ke liye demand request submit ki thi. Admin ne ise bot me successfully live kar diya hai!\n\n"
                             f"Abhi access karke apni preparation continue karein! 🚀",
                             reply_markup=notify_kb,
                             parse_mode=ParseMode.MARKDOWN
@@ -477,83 +503,175 @@ async def general_callback(client: Client, q: CallbackQuery):
                     except Exception as err:
                         logger.warning(f"Could not notify user {target_uid}: {err}")
 
-                alert_txt = f"✅ '{bname}' marked as Uploaded (☑)!\n👥 {notified_count} user(s) notified instantly."
-                await send_ephemeral_reply(q.id, alert_txt, chat_id=q.message.chat.id)
+                await q.answer(f"✅ Live marked & {notified_count} student(s) notified!", show_alert=True)
 
-            sorted_items = sorted(reqs.items(), key=_sort_key)
-            card = build_demands_console_card(sorted_items, page=page)
+            card = build_batch_request_detail_card(bname, page=page, tab=tab)
             pyro_kb = to_pyrogram_markup(card["reply_markup"])
             try:
                 await q.edit_message_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
             except Exception:
-                msg = build_batch_requests_msg(page=page)
-                await rp.edit(client, q.message.chat.id, q.message.id, msg)
+                pass
 
-        elif data.startswith("breq_delm_"):
+        elif data.startswith("breq_det_del_"):
             if not is_admin(uid):
-                return await send_ephemeral_reply(q.id, "❌ Sirf admins ke liye.", chat_id=q.message.chat.id)
-            page = int(data.split("_")[2])
-            reqs = DB.get("BATCH_REQUESTS", {})
-            statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
-
-            def _sort_key(item):
-                bname, uids = item
-                status = statuses.get(bname, "pending")
-                status_rank = 0 if status != "done" else 1
-                return (status_rank, -len(uids), bname.lower())
-
-            sorted_items = sorted(reqs.items(), key=_sort_key)
-            card = build_demands_console_card(sorted_items, page=page, mode="delete")
-            pyro_kb = to_pyrogram_markup(card["reply_markup"])
-            try:
-                await q.edit_message_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
-            except Exception:
-                await q.answer()
-
-        elif data.startswith("breq_del_"):
-            if not is_admin(uid):
-                return await send_ephemeral_reply(q.id, "❌ Sirf admins ke liye.", chat_id=q.message.chat.id)
+                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
             parts = data.split("_")
-            item_global_idx = int(parts[2])
-            page = int(parts[3])
+            bname_enc = parts[3]
+            page = int(parts[4])
+            tab = parts[5] if len(parts) > 5 else "pending"
+            bname = urllib.parse.unquote(bname_enc)
 
             reqs = DB.get("BATCH_REQUESTS", {})
             statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
-
-            def _sort_key(item):
-                bname, uids = item
-                status = statuses.get(bname, "pending")
-                status_rank = 0 if status != "done" else 1
-                return (status_rank, -len(uids), bname.lower())
-
-            sorted_items = sorted(reqs.items(), key=_sort_key)
-            if item_global_idx < 0 or item_global_idx >= len(sorted_items):
-                return await send_ephemeral_reply(q.id, "❌ Invalid batch index.", chat_id=q.message.chat.id)
-
-            bname, _ = sorted_items[item_global_idx]
             if bname in reqs:
                 del reqs[bname]
             if bname in statuses:
                 del statuses[bname]
             await save_data_async()
 
-            await send_ephemeral_reply(q.id, f"🗑️ Request '{bname}' delete kar di gayi!", chat_id=q.message.chat.id)
+            await q.answer(f"🗑️ Request '{bname[:30]}' deleted!", show_alert=True)
+
+            def _sort_key(item):
+                bn, u = item
+                status = statuses.get(bn, "pending")
+                status_rank = 0 if status != "done" else 1
+                return (status_rank, -len(u), bn.lower())
 
             sorted_items = sorted(reqs.items(), key=_sort_key)
-            total_pages = max(1, (len(sorted_items) + 4) // 5)
-            if page >= total_pages:
-                page = max(0, total_pages - 1)
-
-            card = build_demands_console_card(sorted_items, page=page, mode="delete")
+            card = build_demands_console_card(sorted_items, page=page, tab=tab)
             pyro_kb = to_pyrogram_markup(card["reply_markup"])
             try:
                 await q.edit_message_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
             except Exception:
-                await q.answer()
+                pass
+
+        elif data.startswith("breq_det_link_"):
+            if not is_admin(uid):
+                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
+            parts = data.split("_")
+            bname_enc = parts[3]
+            page = parts[4]
+            tab = parts[5] if len(parts) > 5 else "pending"
+            bname = urllib.parse.unquote(bname_enc)
+
+            USER_FLOW_STATE[uid] = f"wait_breq_link:{bname}:{page}:{tab}"
+            await q.answer()
+            cancel_kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data=f"breq_p_{page}_{tab}")]])
+            await q.message.reply_text(
+                f"🔗 **LINK BATCH TO CHANNEL**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📦 **Request:** `{bname}`\n\n"
+                f"Kripya bot ke us **Channel ka Numeric ID** bhejein (jaise `-100...`) ya Exact Channel Name jisme yeh batch upload hai.\n\n"
+                f"Jaise hi aap ID bhejenge, students ko direct batch join button ke saath notification chala jayega!",
+                reply_markup=cancel_kb,
+                parse_mode=ParseMode.MARKDOWN
+            )
+
+        elif data.startswith("breq_det_msg_"):
+            if not is_admin(uid):
+                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
+            parts = data.split("_")
+            bname_enc = parts[3]
+            page = parts[4]
+            tab = parts[5] if len(parts) > 5 else "pending"
+            bname = urllib.parse.unquote(bname_enc)
+
+            uids = DB.get("BATCH_REQUESTS", {}).get(bname, [])
+            USER_FLOW_STATE[uid] = f"wait_breq_broadcast:{bname}:{page}:{tab}"
+            await q.answer()
+            cancel_kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data=f"breq_p_{page}_{tab}")]])
+            await q.message.reply_text(
+                f"📢 **BROADCAST TO REQUESTERS**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📦 **Batch:** `{bname}`\n"
+                f"👥 **Recipients:** `{len(uids)} Students`\n\n"
+                f"Kripya apna text/update message bhejein jo aap in sabhi students ko bhejna chahte hain.\n"
+                f"*(Cancel karne ke liye /cancel likhein)*",
+                reply_markup=cancel_kb,
+                parse_mode=ParseMode.MARKDOWN
+            )
+
+        elif data == "breq_search_prompt":
+            if not is_admin(uid):
+                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
+            USER_FLOW_STATE[uid] = "wait_search_breq"
+            await q.answer()
+            cancel_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Requests", callback_data="breq_p_0_pending")]])
+            await q.message.reply_text(
+                "🔍 **SEARCH BATCH DEMANDS**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Kripya koi bhi **Keyword** (e.g. `ALP`, `Science`, `GATE`, `Drishti`) ya **Student ID** type karke bhejein:\n\n"
+                "*(Cancel karne ke liye /cancel likhein)*",
+                reply_markup=cancel_kb,
+                parse_mode=ParseMode.MARKDOWN
+            )
+
+        elif data.startswith("breq_delm_"):
+            if not is_admin(uid):
+                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
+            parts = data.split("_")
+            page = int(parts[2])
+            tab = parts[3] if len(parts) > 3 else "pending"
+            reqs = DB.get("BATCH_REQUESTS", {})
+            statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
+
+            def _sort_key(item):
+                bname, uids = item
+                status = statuses.get(bname, "pending")
+                status_rank = 0 if status != "done" else 1
+                return (status_rank, -len(uids), bname.lower())
+
+            sorted_items = sorted(reqs.items(), key=_sort_key)
+            card = build_demands_console_card(sorted_items, page=page, mode="delete", tab=tab)
+            pyro_kb = to_pyrogram_markup(card["reply_markup"])
+            await q.answer()
+            try:
+                await q.edit_message_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
+            except Exception:
+                pass
+
+        elif data.startswith("breq_del_"):
+            if not is_admin(uid):
+                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
+            parts = data.split("_")
+            item_global_idx = int(parts[2])
+            page = int(parts[3])
+            tab = parts[4] if len(parts) > 4 else "pending"
+
+            reqs = DB.get("BATCH_REQUESTS", {})
+            statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
+
+            def _sort_key(item):
+                bname, uids = item
+                status = statuses.get(bname, "pending")
+                status_rank = 0 if status != "done" else 1
+                return (status_rank, -len(uids), bname.lower())
+
+            sorted_items = sorted(reqs.items(), key=_sort_key)
+            if tab == "pending":
+                filtered = [it for it in sorted_items if statuses.get(it[0], "pending") != "done"]
+            elif tab == "done":
+                filtered = [it for it in sorted_items if statuses.get(it[0], "pending") == "done"]
+            else:
+                filtered = sorted_items
+
+            if item_global_idx >= 0 and item_global_idx < len(filtered):
+                bname, _ = filtered[item_global_idx]
+                if bname in reqs:
+                    del reqs[bname]
+                if bname in statuses:
+                    del statuses[bname]
+                await save_data_async()
+                await q.answer(f"🗑️ Deleted: {bname[:25]}", show_alert=True)
+
+            sorted_items = sorted(reqs.items(), key=_sort_key)
+            card = build_demands_console_card(sorted_items, page=page, mode="delete", tab=tab)
+            pyro_kb = to_pyrogram_markup(card["reply_markup"])
+            try:
+                await q.edit_message_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
+            except Exception:
+                pass
 
         elif data == "breq_clean_done":
             if not is_admin(uid):
-                return await send_ephemeral_reply(q.id, "❌ Sirf admins ke liye.", chat_id=q.message.chat.id)
+                return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
 
             reqs = DB.get("BATCH_REQUESTS", {})
             statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
@@ -568,7 +686,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                     del statuses[k]
 
             await save_data_async()
-            await send_ephemeral_reply(q.id, f"🧹 {cleaned_count} uploaded batch requests clean kar diye gaye!", chat_id=q.message.chat.id)
+            await q.answer(f"🧹 {cleaned_count} uploaded batch requests clean kar diye gaye!", show_alert=True)
 
             def _sort_key(item):
                 bname, uids = item
@@ -577,12 +695,12 @@ async def general_callback(client: Client, q: CallbackQuery):
                 return (status_rank, -len(uids), bname.lower())
 
             sorted_items = sorted(reqs.items(), key=_sort_key)
-            card = build_demands_console_card(sorted_items, page=0, mode="normal")
+            card = build_demands_console_card(sorted_items, page=0, mode="normal", tab="pending")
             pyro_kb = to_pyrogram_markup(card["reply_markup"])
             try:
                 await q.edit_message_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
             except Exception:
-                await q.answer()
+                pass
 
         elif data == "act_adminlist":
             await q.answer("Fetching Admin List...")
@@ -657,10 +775,9 @@ async def general_callback(client: Client, q: CallbackQuery):
             await show_user_menu_cb(client, q)
 
         # =====================================================================
-        # 🎁 DAILY STREAK CLAIM SYSTEM
+        # 🎁 DAILY STREAK CLAIM SYSTEM (In-Chat Live Streak & Wallet)
         # =====================================================================
-        elif data == "claim_daily_streak":
-            await q.answer()
+        elif data in ("claim_daily_streak", "wallet_claim_streak"):
             user_key = uid if uid in DB["USER_DATA"] else str(uid)
             user_info = DB["USER_DATA"].setdefault(user_key, {})
             now_dt = datetime.now()
@@ -671,6 +788,7 @@ async def general_callback(client: Client, q: CallbackQuery):
             if last_claim == today_str:
                 return await q.answer("⏳ Aapne aaj ka streak reward pehle hi claim kar liya hai! Agla reward kal milega.", show_alert=True)
 
+            await q.answer("🎉 Badhai ho! Daily Streak Claimed!", show_alert=False)
             streak = user_info.get("streak", 0)
             if last_claim == yesterday_str:
                 streak = (streak % 7) + 1
@@ -697,7 +815,7 @@ async def general_callback(client: Client, q: CallbackQuery):
 
             bar_display = " | ".join(streak_boxes)
             kb = [
-                [InlineKeyboardButton("🏆 View Leaderboard", callback_data="show_leaderboard")],
+                [InlineKeyboardButton("💳 View Student Wallet", callback_data="my_info"), InlineKeyboardButton("🏆 View Leaderboard", callback_data="show_leaderboard")],
                 [InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]
             ]
 
@@ -715,52 +833,34 @@ async def general_callback(client: Client, q: CallbackQuery):
             await q.edit_message_text(msg_text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
 
         # =====================================================================
-        # 🏆 LIVE REFERRAL LEADERBOARD
+        # 🏆 LIVE REFERRAL LEADERBOARD & PAGINATION
         # =====================================================================
         elif data == "show_leaderboard":
             await q.answer()
             widget = build_leaderboard_widget(uid, page=0)
             pm = to_pyrogram_markup(widget.get("reply_markup"))
-            return await q.edit_message_text(widget["text"], reply_markup=pm, parse_mode=ParseMode.HTML)
-            user_key = uid if uid in DB["USER_DATA"] else str(uid)
-            ranked = []
-            for u_k, u_d in DB.get("USER_DATA", {}).items():
-                inv = u_d.get("total_invited", 0)
-                if inv > 0:
-                    ranked.append((u_k, inv, u_d.get("name") or "Telegram User"))
-            ranked.sort(key=lambda x: x[1], reverse=True)
+            try:
+                await q.edit_message_text(widget["text"], reply_markup=pm, parse_mode=ParseMode.HTML)
+            except MessageNotModified:
+                pass
+            return
 
-            medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
-            lines = []
-            top_10 = ranked[:10]
-            for idx, (rk, count, uname) in enumerate(top_10):
-                medal = medals[idx] if idx < len(medals) else f"`#{idx+1}`"
-                crown = " 👑" if idx == 0 else ""
-                lines.append(f"{medal} **{uname}** — `{count}` Invites{crown}")
-
-            if not lines:
-                lines.append("📭 Abhi tak kisi ne refer nahi kiya hai. Pehle banen!")
-
-            user_rank_txt = "🎯 Your Rank: `Not Ranked (0 Invites)`"
-            for idx, (rk, count, _) in enumerate(ranked):
-                if str(rk) == str(user_key):
-                    user_rank_txt = f"🎯 Your Rank: `#{idx + 1}` (`{count}` Invites)"
-                    break
-
-            kb = [
-                [InlineKeyboardButton("🎁 Refer & Earn", callback_data="menu_refer"), InlineKeyboardButton("🎟️ Giveaways Ticker", callback_data="view_giveaways_ticker")],
-                [InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]
-            ]
-
-            txt = (
-                "🏆 **TOP 10 REFERRAL CHAMPIONS** 🏆\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                + "\n".join(lines)
-                + "\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                + f"{user_rank_txt}\n\n"
-                "✨ *Top referrers ko automatic VIP tier aur free batches ka access milta hai!*"
-            )
-            await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        elif data.startswith("lb_page_"):
+            try:
+                page_idx = int(data.split("_")[2])
+            except Exception:
+                page_idx = 0
+            widget = build_leaderboard_widget(uid, page=page_idx)
+            pm = to_pyrogram_markup(widget.get("reply_markup"))
+            try:
+                await q.edit_message_text(widget["text"], reply_markup=pm, parse_mode=ParseMode.HTML)
+                await q.answer()
+            except MessageNotModified:
+                await q.answer("✅ Updated to current live rankings!", show_alert=False)
+            except Exception as e:
+                logger.error(f"Error updating leaderboard: {e}")
+                await q.answer()
+            return
 
         elif data == "view_giveaways_ticker":
             vouchers = DB.get("VOUCHERS", {})
@@ -975,52 +1075,82 @@ async def general_callback(client: Client, q: CallbackQuery):
             except Exception:
                 await client.send_message(uid, f"🎯 **Share Link Ready!**\n\n🔗 `{batch_link}`", reply_markup=kb)
 
-        # --- MY INFO VIEW ---
+        # --- MY INFO / LIVE STUDENT WALLET VIEW ---
         elif data == "my_info":
             await q.answer()
             user_key = uid if uid in DB["USER_DATA"] else str(uid)
             u_data = DB["USER_DATA"].get(user_key, {})
             widget = build_student_wallet_widget(uid, u_data)
             pm = to_pyrogram_markup(widget.get("reply_markup"))
-            return await q.edit_message_text(widget["text"], reply_markup=pm, parse_mode=ParseMode.HTML)
+            try:
+                await q.edit_message_text(widget["text"], reply_markup=pm, parse_mode=ParseMode.HTML)
+            except MessageNotModified:
+                pass
+            return
+
+        elif data.startswith("wallet_refresh_"):
             user_key = uid if uid in DB["USER_DATA"] else str(uid)
             u_data = DB["USER_DATA"].get(user_key, {})
-            refer_points = u_data.get("referral_count", 0)
-            total_invited = u_data.get("total_invited", 0)
-            streak = u_data.get("streak", 0)
-            is_vip = u_data.get("tier") == "vip"
+            widget = build_student_wallet_widget(uid, u_data)
+            pm = to_pyrogram_markup(widget.get("reply_markup"))
+            try:
+                await q.edit_message_text(widget["text"], reply_markup=pm, parse_mode=ParseMode.HTML)
+                await q.answer("🔄 Live Wallet Refreshed!", show_alert=False)
+            except MessageNotModified:
+                await q.answer("✅ Wallet is already up-to-date!", show_alert=False)
+            except Exception as e:
+                logger.error(f"Error refreshing wallet: {e}")
+                await q.answer()
+            return
 
-            progress_bar = render_progress_bar(total_invited, 25, length=10)
+        # --- LIVE BATCH INSPECTOR WIDGET ---
+        elif data.startswith("batch_inspect_"):
+            try:
+                cid = int(data.split("_")[2])
+            except Exception:
+                return await q.answer("❌ Invalid batch ID.", show_alert=True)
+            cid_str = str(cid)
+            has_access = (
+                cid_str in DB.get("FREE_CHANNELS", {})
+                or cid in DB.get("FREE_CHANNELS", {})
+                or str(uid) in [str(x) for x in DB.get("PAID_USERS", {}).get(cid_str, [])]
+                or int(uid) in DB.get("ADMINS", [])
+            )
+            widget = build_batch_details_widget(cid, uid, user_has_access=has_access)
+            pm = to_pyrogram_markup(widget.get("reply_markup"))
+            try:
+                await q.edit_message_text(widget["text"], reply_markup=pm, parse_mode=ParseMode.HTML)
+                await q.answer()
+            except MessageNotModified:
+                await q.answer("✅ Batch details up-to-date!", show_alert=False)
+            except Exception as e:
+                logger.error(f"Error inspecting batch: {e}")
+                await q.answer()
+            return
 
-            if is_vip:
-                txt = (
-                    "👑 **[Elite Referrer Profile]** 👑\n"
-                    "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"🆔 **User ID:** `{uid}`\n"
-                    f"🏷️ **Status:** `👑 VIP Referrer` 🌟\n"
-                    f"🔥 **Daily Streak:** `{streak} Days`\n"
-                    f"👥 **Total Refers:** `{total_invited}`\n"
-                    f"💰 **Wallet Balance:** `{refer_points}` Coins\n\n"
-                    "💎 *Enjoy zero cooldowns, exclusive VIP materials, and priority access.*"
-                )
-            else:
-                txt = (
-                    f"👤 **USER PROFILE & STATS**\n"
-                    f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"🆔 **User ID:** `{uid}`\n"
-                    f"🔥 **Daily Streak:** `{streak} Days`\n"
-                    f"👥 **Total Refers:** `{total_invited}`\n"
-                    f"🎁 **Available Coins:** `{refer_points}`\n\n"
-                    f"🎯 **VIP Tier Goal:** `{total_invited}/25`\n"
-                    f"`[{progress_bar}]`\n\n"
-                    f"💡 *Coins ka use karke aap koi bhi Special Batch ya Free Batch unlock kar sakte hain.*"
-                )
-            kb = [
-                [InlineKeyboardButton("🔥 Claim Daily Streak", callback_data="claim_daily_streak")],
-                [InlineKeyboardButton("🏆 Top Leaderboard", callback_data="show_leaderboard")],
-                [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="u_main")]
-            ]
-            await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
+        # --- DEMO REQUEST FOR PAID BATCH ---
+        elif data.startswith("req_demo_"):
+            try:
+                cid = int(data.split("_")[2])
+            except Exception:
+                cid = data.split("_")[2]
+            bname = DB.get("ALL_CHATS", {}).get(cid) or DB.get("PAID_CHANNELS", {}).get(cid) or f"Batch {cid}"
+            await q.answer("🎁 Demo Request Sent to Support Team!", show_alert=True)
+            topic_id = await get_or_create_topic(q.from_user, client)
+            if topic_id:
+                try:
+                    await client.send_message(
+                        SUPPORT_GROUP_ID,
+                        f"🎁 <b>DEMO / PREVIEW REQUEST</b>\n"
+                        f"👤 Student: <code>{q.from_user.id}</code> (@{q.from_user.username or 'NoUser'})\n"
+                        f"📦 Batch: <b>{bname}</b> (<code>{cid}</code>)\n"
+                        f"<i>Student requested demo/sample lectures for this batch.</i>",
+                        reply_to_message_id=topic_id,
+                        parse_mode=ParseMode.HTML
+                    )
+                except Exception as e:
+                    logger.error(f"Error sending demo request to topic: {e}")
+            return
 
         # --- HOME MENU: REFER & EARN LAYOUT ---
         elif data == "menu_refer":
@@ -1575,7 +1705,7 @@ async def general_callback(client: Client, q: CallbackQuery):
             except Exception:
                 pass
 
-        elif data.startswith("get_f_"):
+        elif data.startswith("get_f_") or data.startswith("gen_link_"):
             cid = int(data.split("_")[2])
             user_key = uid if uid in DB["USER_DATA"] else str(uid)
             user_rec = DB["USER_DATA"].setdefault(user_key, {})
