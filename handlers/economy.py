@@ -219,7 +219,13 @@ async def cmd_list_vouchers(client: Client, message: Message):
         max_u = data.get("max_uses", 1)
         pts = data.get("points", 0)
         txt += f"• `{code}`: `{pts} Coins` | `{used}/{max_u} Used`\n"
-    await message.reply_text(txt, parse_mode=ParseMode.MARKDOWN)
+    if len(txt) > 3500:
+        f = io.BytesIO(txt.encode("utf-8"))
+        f.name = "active_vouchers.txt"
+        f.seek(0)
+        await message.reply_document(document=f, caption="🎟️ Active Vouchers List (File)")
+    else:
+        await message.reply_text(txt, parse_mode=ParseMode.MARKDOWN)
 
 
 async def cmd_genvoucher_from_wizard(client: Client, message: Message):

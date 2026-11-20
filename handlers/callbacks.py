@@ -451,7 +451,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                 return await q.answer("❌ Invalid request index.", show_alert=True)
 
             bname, _ = filtered[item_global_idx]
-            card = build_batch_request_detail_card(bname, page=page, tab=tab)
+            card = build_batch_request_detail_card(bname, item_idx=item_global_idx, page=page, tab=tab)
             pyro_kb = to_pyrogram_markup(card["reply_markup"])
             await q.answer()
             try:
@@ -463,15 +463,38 @@ async def general_callback(client: Client, q: CallbackQuery):
             if not is_admin(uid):
                 return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
             parts = data.split("_")
-            bname_enc = parts[3]
+            idx_or_enc = parts[3]
             page = int(parts[4])
             tab = parts[5] if len(parts) > 5 else "pending"
-            bname = urllib.parse.unquote(bname_enc)
 
             reqs = DB.get("BATCH_REQUESTS", {})
             statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
-            uids = reqs.get(bname, [])
 
+            def _sort_key(item):
+                bn, u = item
+                status = statuses.get(bn, "pending")
+                status_rank = 0 if status != "done" else 1
+                return (status_rank, -len(u), bn.lower())
+
+            sorted_items = sorted(reqs.items(), key=_sort_key)
+            if tab == "pending":
+                filtered = [it for it in sorted_items if statuses.get(it[0], "pending") != "done"]
+            elif tab == "done":
+                filtered = [it for it in sorted_items if statuses.get(it[0], "pending") == "done"]
+            else:
+                filtered = sorted_items
+
+            if idx_or_enc.isdigit():
+                item_idx = int(idx_or_enc)
+                if 0 <= item_idx < len(filtered):
+                    bname = filtered[item_idx][0]
+                else:
+                    return await q.answer("❌ Request list updated. Kripya refresh karein.", show_alert=True)
+            else:
+                bname = urllib.parse.unquote(idx_or_enc)
+                item_idx = 0
+
+            uids = reqs.get(bname, [])
             current_status = statuses.get(bname, "pending")
             if current_status == "done":
                 statuses[bname] = "pending"
@@ -505,7 +528,7 @@ async def general_callback(client: Client, q: CallbackQuery):
 
                 await q.answer(f"✅ Live marked & {notified_count} student(s) notified!", show_alert=True)
 
-            card = build_batch_request_detail_card(bname, page=page, tab=tab)
+            card = build_batch_request_detail_card(bname, item_idx=item_idx, page=page, tab=tab)
             pyro_kb = to_pyrogram_markup(card["reply_markup"])
             try:
                 await q.edit_message_text(card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
@@ -516,13 +539,37 @@ async def general_callback(client: Client, q: CallbackQuery):
             if not is_admin(uid):
                 return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
             parts = data.split("_")
-            bname_enc = parts[3]
+            idx_or_enc = parts[3]
             page = int(parts[4])
             tab = parts[5] if len(parts) > 5 else "pending"
-            bname = urllib.parse.unquote(bname_enc)
 
             reqs = DB.get("BATCH_REQUESTS", {})
             statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
+
+            def _sort_key(item):
+                bn, u = item
+                status = statuses.get(bn, "pending")
+                status_rank = 0 if status != "done" else 1
+                return (status_rank, -len(u), bn.lower())
+
+            sorted_items = sorted(reqs.items(), key=_sort_key)
+            if tab == "pending":
+                filtered = [it for it in sorted_items if statuses.get(it[0], "pending") != "done"]
+            elif tab == "done":
+                filtered = [it for it in sorted_items if statuses.get(it[0], "pending") == "done"]
+            else:
+                filtered = sorted_items
+
+            if idx_or_enc.isdigit():
+                item_idx = int(idx_or_enc)
+                if 0 <= item_idx < len(filtered):
+                    bname = filtered[item_idx][0]
+                else:
+                    return await q.answer("❌ Request list updated. Kripya refresh karein.", show_alert=True)
+            else:
+                bname = urllib.parse.unquote(idx_or_enc)
+                item_idx = 0
+
             if bname in reqs:
                 del reqs[bname]
             if bname in statuses:
@@ -530,12 +577,6 @@ async def general_callback(client: Client, q: CallbackQuery):
             await save_data_async()
 
             await q.answer(f"🗑️ Request '{bname[:30]}' deleted!", show_alert=True)
-
-            def _sort_key(item):
-                bn, u = item
-                status = statuses.get(bn, "pending")
-                status_rank = 0 if status != "done" else 1
-                return (status_rank, -len(u), bn.lower())
 
             sorted_items = sorted(reqs.items(), key=_sort_key)
             card = build_demands_console_card(sorted_items, page=page, tab=tab)
@@ -549,12 +590,37 @@ async def general_callback(client: Client, q: CallbackQuery):
             if not is_admin(uid):
                 return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
             parts = data.split("_")
-            bname_enc = parts[3]
-            page = parts[4]
+            idx_or_enc = parts[3]
+            page = int(parts[4]) if len(parts) > 4 and parts[4].isdigit() else 0
             tab = parts[5] if len(parts) > 5 else "pending"
-            bname = urllib.parse.unquote(bname_enc)
 
-            USER_FLOW_STATE[uid] = f"wait_breq_link:{bname}:{page}:{tab}"
+            reqs = DB.get("BATCH_REQUESTS", {})
+            statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
+
+            def _sort_key(item):
+                bn, u = item
+                status = statuses.get(bn, "pending")
+                status_rank = 0 if status != "done" else 1
+                return (status_rank, -len(u), bn.lower())
+
+            sorted_items = sorted(reqs.items(), key=_sort_key)
+            if tab == "pending":
+                filtered = [it for it in sorted_items if statuses.get(it[0], "pending") != "done"]
+            elif tab == "done":
+                filtered = [it for it in sorted_items if statuses.get(it[0], "pending") == "done"]
+            else:
+                filtered = sorted_items
+
+            if idx_or_enc.isdigit():
+                item_idx = int(idx_or_enc)
+                if 0 <= item_idx < len(filtered):
+                    bname = filtered[item_idx][0]
+                else:
+                    return await q.answer("❌ Request list updated. Kripya refresh karein.", show_alert=True)
+            else:
+                bname = urllib.parse.unquote(idx_or_enc)
+
+            USER_FLOW_STATE[uid] = {"action": "wait_breq_link", "bname": bname, "page": page, "tab": tab}
             await q.answer()
             cancel_kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data=f"breq_p_{page}_{tab}")]])
             await q.message.reply_text(
@@ -570,13 +636,38 @@ async def general_callback(client: Client, q: CallbackQuery):
             if not is_admin(uid):
                 return await q.answer("❌ Sirf admins ke liye.", show_alert=True)
             parts = data.split("_")
-            bname_enc = parts[3]
-            page = parts[4]
+            idx_or_enc = parts[3]
+            page = int(parts[4]) if len(parts) > 4 and parts[4].isdigit() else 0
             tab = parts[5] if len(parts) > 5 else "pending"
-            bname = urllib.parse.unquote(bname_enc)
+
+            reqs = DB.get("BATCH_REQUESTS", {})
+            statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
+
+            def _sort_key(item):
+                bn, u = item
+                status = statuses.get(bn, "pending")
+                status_rank = 0 if status != "done" else 1
+                return (status_rank, -len(u), bn.lower())
+
+            sorted_items = sorted(reqs.items(), key=_sort_key)
+            if tab == "pending":
+                filtered = [it for it in sorted_items if statuses.get(it[0], "pending") != "done"]
+            elif tab == "done":
+                filtered = [it for it in sorted_items if statuses.get(it[0], "pending") == "done"]
+            else:
+                filtered = sorted_items
+
+            if idx_or_enc.isdigit():
+                item_idx = int(idx_or_enc)
+                if 0 <= item_idx < len(filtered):
+                    bname = filtered[item_idx][0]
+                else:
+                    return await q.answer("❌ Request list updated. Kripya refresh karein.", show_alert=True)
+            else:
+                bname = urllib.parse.unquote(idx_or_enc)
 
             uids = DB.get("BATCH_REQUESTS", {}).get(bname, [])
-            USER_FLOW_STATE[uid] = f"wait_breq_broadcast:{bname}:{page}:{tab}"
+            USER_FLOW_STATE[uid] = {"action": "wait_breq_broadcast", "bname": bname, "page": page, "tab": tab}
             await q.answer()
             cancel_kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data=f"breq_p_{page}_{tab}")]])
             await q.message.reply_text(

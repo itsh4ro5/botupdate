@@ -356,10 +356,11 @@ def build_demands_console_card(sorted_items: Optional[List[tuple]] = None, page:
         "reply_markup": {"inline_keyboard": kb_rows}
     }
 
-def build_batch_request_detail_card(bname: str, page: int = 0, tab: str = "pending") -> Dict[str, Any]:
+def build_batch_request_detail_card(bname: str, item_idx: int = 0, page: int = 0, tab: str = "pending") -> Dict[str, Any]:
     """
     Builds a high-precision, dedicated Batch Demand Inspector Card:
     Displays full un-truncated batch name, complete student requesters list, and 1-tap actions.
+    Uses item_idx in callback_data to strictly respect Telegram's 64-byte callback size limit.
     """
     reqs = getattr(config, "DB", {}).get("BATCH_REQUESTS", {})
     statuses = getattr(config, "DB", {}).get("BATCH_REQUEST_STATUS", {})
@@ -395,25 +396,22 @@ def build_batch_request_detail_card(bname: str, page: int = 0, tab: str = "pendi
     html_lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━")
     html_lines.append("<i>💡 Niche diye gaye actions me se chunein:</i>")
 
-    import urllib.parse
-    bname_encoded = urllib.parse.quote(bname)
-
     kb_rows = []
     # 1. Toggle Live / Pending
     if is_done:
-        kb_rows.append([{"text": "⏳ Revert to Pending (☐)", "callback_data": f"breq_det_toggle_{bname_encoded}_{page}_{tab}"}])
+        kb_rows.append([{"text": "⏳ Revert to Pending (☐)", "callback_data": f"breq_det_toggle_{item_idx}_{page}_{tab}"}])
     else:
-        kb_rows.append([{"text": f"✅ Mark Live & Notify ({len(uids)} Students)", "callback_data": f"breq_det_toggle_{bname_encoded}_{page}_{tab}"}])
+        kb_rows.append([{"text": f"✅ Mark Live & Notify ({len(uids)} Students)", "callback_data": f"breq_det_toggle_{item_idx}_{page}_{tab}"}])
 
     # 2. Link with existing channel & Broadcast
     kb_rows.append([
-        {"text": "🔗 Fulfill with Bot Channel Link", "callback_data": f"breq_det_link_{bname_encoded}_{page}_{tab}"},
-        {"text": "📢 Message Requesters", "callback_data": f"breq_det_msg_{bname_encoded}_{page}_{tab}"}
+        {"text": "🔗 Fulfill with Bot Channel Link", "callback_data": f"breq_det_link_{item_idx}_{page}_{tab}"},
+        {"text": "📢 Message Requesters", "callback_data": f"breq_det_msg_{item_idx}_{page}_{tab}"}
     ])
 
     # 3. Delete & Back
     kb_rows.append([
-        {"text": "🗑️ Delete This Request", "callback_data": f"breq_det_del_{bname_encoded}_{page}_{tab}"},
+        {"text": "🗑️ Delete This Request", "callback_data": f"breq_det_del_{item_idx}_{page}_{tab}"},
         {"text": "🔙 Back to Requests List", "callback_data": f"breq_p_{page}_{tab}"}
     ])
 

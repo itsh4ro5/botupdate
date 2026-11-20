@@ -275,11 +275,19 @@ async def handle_user_flow_messages(client: Client, message: Message) -> bool:
         await message.reply_text(f"🔍 <b>Search Results for:</b> <code>{text}</code> (<b>{len(matches)}</b> found)\n\n" + card["text"], reply_markup=pyro_kb, parse_mode=ParseMode.HTML)
         return True
 
-    elif state.startswith("wait_breq_link:"):
-        parts = state.split(":", 3)
-        bname = parts[1]
-        page = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
-        tab = parts[3] if len(parts) > 3 else "pending"
+    is_link_state = (isinstance(state, dict) and state.get("action") == "wait_breq_link") or (isinstance(state, str) and state.startswith("wait_breq_link:"))
+    is_bc_state = (isinstance(state, dict) and state.get("action") == "wait_breq_broadcast") or (isinstance(state, str) and state.startswith("wait_breq_broadcast:"))
+
+    if is_link_state:
+        if isinstance(state, dict):
+            bname = state.get("bname", "")
+            page = state.get("page", 0)
+            tab = state.get("tab", "pending")
+        else:
+            parts = state.split(":", 3)
+            bname = parts[1]
+            page = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
+            tab = parts[3] if len(parts) > 3 else "pending"
         USER_FLOW_STATE.pop(uid, None)
 
         all_chats = DB.get("ALL_CHATS", {})
@@ -346,11 +354,16 @@ async def handle_user_flow_messages(client: Client, message: Message) -> bool:
         )
         return True
 
-    elif state.startswith("wait_breq_broadcast:"):
-        parts = state.split(":", 3)
-        bname = parts[1]
-        page = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
-        tab = parts[3] if len(parts) > 3 else "pending"
+    elif is_bc_state:
+        if isinstance(state, dict):
+            bname = state.get("bname", "")
+            page = state.get("page", 0)
+            tab = state.get("tab", "pending")
+        else:
+            parts = state.split(":", 3)
+            bname = parts[1]
+            page = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
+            tab = parts[3] if len(parts) > 3 else "pending"
         USER_FLOW_STATE.pop(uid, None)
 
         uids = DB.get("BATCH_REQUESTS", {}).get(bname, [])
@@ -513,6 +526,7 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
         # Fallback 1: Check command arguments (e.g. /info 123456789 or /file 123456789)
         raw_cmd_text = (message.text or message.caption or "").strip()
         cmd_parts = raw_cmd_text.split()
+        cmd_name = cmd_parts[0].lstrip("/!.").lower() if cmd_parts else ""
         if not target_uid and len(cmd_parts) > 1 and cmd_parts[1].isdigit():
             target_uid = int(cmd_parts[1])
 
@@ -529,12 +543,37 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
 
         # Fallback 3: If message is a slash command in topic but target_uid couldn't be resolved:
         if raw_cmd_text.startswith(("/", "!", ".")) and not target_uid:
-            await message.reply_text(
-                "⚠️ **Student ID auto-detect nahi ho payi.**\n"
-                "Kripya ID ke sath command dein: `/info <user_id>` ya `/file <user_id>`",
-                parse_mode=ParseMode.MARKDOWN
-            )
-            return
+            if cmd_name in ["demo"]:
+                from .batches import cmd_approve_demo
+                return await cmd_approve_demo(client, message)
+            elif cmd_name in ["per", "perm"]:
+                from .batches import cmd_approve_perm
+                return await cmd_approve_perm(client, message)
+            elif cmd_name in ["extend"]:
+                from .batches import cmd_extend_demo
+                return await cmd_extend_demo(client, message)
+            elif cmd_name in ["gendemo"]:
+                from .batches import cmd_gendemo
+                return await cmd_gendemo(client, message)
+            elif cmd_name in ["batchrequests", "requestbatches"]:
+                from .batches import cmd_batchrequests
+                return await cmd_batchrequests(client, message)
+            elif cmd_name in ["vouchers"]:
+                from .economy import cmd_list_vouchers
+                return await cmd_list_vouchers(client, message)
+            elif cmd_name in ["genvoucher"]:
+                from .economy import cmd_genvoucher
+                return await cmd_genvoucher(client, message)
+            elif cmd_name in ["help", "start"]:
+                from .menus import cmd_start
+                return await cmd_start(client, message)
+            else:
+                await message.reply_text(
+                    "⚠️ **Student ID auto-detect nahi ho payi.**\n"
+                    "Kripya ID ke sath command dein: `/info <user_id>` ya `/file <user_id>`",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                return
 
         if not target_uid:
             return

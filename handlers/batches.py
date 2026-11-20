@@ -809,7 +809,7 @@ def resolve_link_and_batch(message: Message, args: list):
 
     # 6. If target_uid is known but batch_id is not:
     if target_uid and not batch_id:
-        for map_link, map_data in DB.get("LINK_MAP", {}).items():
+        for map_link, map_data in reversed(list(DB.get("LINK_MAP", {}).items())):
             if isinstance(map_data, dict) and str(map_data.get("u")) == str(target_uid):
                 batch_id = map_data.get("b")
                 if not link: link = map_link

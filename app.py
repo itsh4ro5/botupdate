@@ -98,7 +98,7 @@ async def student_store():
         "pending_demands": pending_demands
     }
 
-    maintenance_mode = DB.get("MAINTENANCE_MODE", True)
+    maintenance_mode = DB.get("MAINTENANCE_MODE", False)
     settings = {
         "NEW_USERS_ALLOWED": DB.get("NEW_USERS_ALLOWED", True),
         "FREE_LOCKED": DB.get("FREE_LOCKED", False),
@@ -327,7 +327,7 @@ async def api_twa_session():
         "success": True,
         "role": role,
         "user_id": uid_str,
-        "maintenance_mode": DB.get("MAINTENANCE_MODE", True),
+        "maintenance_mode": DB.get("MAINTENANCE_MODE", False),
         "is_tester": role in ["owner", "admin", "tester"],
         "user": user_summary
     }
