@@ -653,16 +653,61 @@ async def cmd_extend_demo(client: Client, message: Message):
     if not is_admin_msg(message):
         return
     args = get_args(message)
-    if len(args) < 3:
-        return await message.reply_text("Usage: /extend <user_id> <batch_id> <hours>\nExample: `/extend 12345678 -10012345678 24`", parse_mode=ParseMode.MARKDOWN)
-    try:
-        uid, bid, hours = int(args[0]), str(args[1]), float(args[2])
-    except ValueError:
-        return await message.reply_text("❌ Error: Numbers invalid hain. Example: `/extend 12345678 -10012345678 24`", parse_mode=ParseMode.MARKDOWN)
+    uid = None
+    bid = None
+    hours = None
+
+    # Check topic resolution if in SUPPORT_GROUP_ID
+    if message.chat and str(message.chat.id) == str(getattr(config, "SUPPORT_GROUP_ID", 0)):
+        topic_id = getattr(message, "message_thread_id", None) or getattr(message, "reply_to_top_message_id", None)
+        if not topic_id and message.reply_to_message:
+            topic_id = getattr(message.reply_to_message, "message_thread_id", None) or message.reply_to_message.id
+        if topic_id:
+            for u, t in DB.get("USER_TOPICS", {}).items():
+                if str(t) == str(topic_id):
+                    uid = int(u)
+                    break
+
+    if len(args) == 1:
+        try:
+            hours = float(args[0].lower().replace("h", ""))
+        except ValueError:
+            pass
+        if uid:
+            user_key = uid if uid in DB["USER_DATA"] else (str(uid) if str(uid) in DB["USER_DATA"] else None)
+            demos = DB.get("USER_DATA", {}).get(user_key, {}).get("demos", {}) if user_key else {}
+            if demos:
+                bid = list(demos.keys())[-1]
+    elif len(args) == 2:
+        try:
+            if str(args[0]).startswith("-100"):
+                bid = str(args[0])
+                hours = float(args[1].lower().replace("h", ""))
+            elif uid:
+                bid = str(args[0])
+                hours = float(args[1].lower().replace("h", ""))
+            else:
+                uid = int(args[0])
+                hours = float(args[1].lower().replace("h", ""))
+                user_key = uid if uid in DB["USER_DATA"] else (str(uid) if str(uid) in DB["USER_DATA"] else None)
+                demos = DB.get("USER_DATA", {}).get(user_key, {}).get("demos", {}) if user_key else {}
+                if demos:
+                    bid = list(demos.keys())[-1]
+        except ValueError:
+            pass
+    elif len(args) >= 3:
+        try:
+            uid, bid, hours = int(args[0]), str(args[1]), float(args[2].lower().replace("h", ""))
+        except ValueError:
+            pass
+
+    if not uid or not bid or hours is None:
+        return await message.reply_text("Usage: `/extend [hours]` (topic ke andar) ya `/extend <user_id> <batch_id> <hours>`", parse_mode=ParseMode.MARKDOWN)
+
     user_key = uid if uid in DB["USER_DATA"] else (str(uid) if str(uid) in DB["USER_DATA"] else None)
-    if user_key and bid in DB["USER_DATA"].get(user_key, {}).get("demos", {}):
-        d = DB["USER_DATA"][user_key]["demos"][bid]
-        DB["USER_DATA"][user_key]["demos"][bid] = {
+    if user_key and str(bid) in DB["USER_DATA"].get(user_key, {}).get("demos", {}):
+        d = DB["USER_DATA"][user_key]["demos"][str(bid)]
+        DB["USER_DATA"][user_key]["demos"][str(bid)] = {
             "expiry": max(
                 (d["expiry"] if isinstance(d, dict) else float(d)), time.time()
             )
@@ -675,70 +720,166 @@ async def cmd_extend_demo(client: Client, message: Message):
         await message.reply_text(f"⚠️ User `{uid}` ka batch `{bid}` me koi active demo nahi mila.", parse_mode=ParseMode.MARKDOWN)
 
 
-async def cmd_approve_demo(client: Client, message: Message):
-    if not is_admin_msg(message):
-        return
-    args = get_args(message)
+def resolve_link_and_batch(message: Message, args: list):
+    """
+    Intelligently extracts link, target_uid, and batch_id from:
+    1. Command text & arguments
+    2. Replied message (text & caption)
+    3. LINK_MAP (exact + invite hash match)
+    4. Support Forum Topic ID -> Student mapping
+    5. Active user requests in PENDING_REQUESTS
+    6. Active user demos in USER_DATA
+    """
     link = None
-    hours = 3.0
-    if message.reply_to_message:
-        replied = message.reply_to_message
-        msg_text = replied.text or replied.caption or ""
-        m = re.search(r"(https?://t\.me/(?:\+|joinchat/)[a-zA-Z0-9_\-]+)", msg_text)
-        if m:
-            link = m.group(1)
-        if args:
-            for arg in args:
-                if "h" in arg.lower():
-                    try:
-                        hours = float(arg.lower().replace("h", ""))
-                    except Exception:
-                        pass
-                elif arg.replace(".", "", 1).isdigit():
-                    try:
-                        hours = float(arg)
-                    except Exception:
-                        pass
-
-    if not link and args:
-        for arg in args:
-            if "t.me" in arg:
-                link = arg.strip()
-            elif "h" in arg.lower():
-                try:
-                    hours = float(arg.lower().replace("h", ""))
-                except Exception:
-                    pass
-            elif arg.replace(".", "", 1).isdigit():
-                try:
-                    hours = float(arg)
-                except Exception:
-                    pass
-
     target_uid = None
     batch_id = None
+    hours = None
 
+    full_texts = []
+    if getattr(message, "text", None): full_texts.append(message.text)
+    if getattr(message, "caption", None): full_texts.append(message.caption)
+    if getattr(message, "reply_to_message", None):
+        if getattr(message.reply_to_message, "text", None): full_texts.append(message.reply_to_message.text)
+        if getattr(message.reply_to_message, "caption", None): full_texts.append(message.reply_to_message.caption)
+
+    # 1. Look for invite links in full_texts and args
+    for txt in full_texts:
+        m = re.search(r"(https?://t\.me/(?:\+|joinchat/)[a-zA-Z0-9_\-]+)", txt)
+        if m:
+            link = m.group(1).strip().rstrip(".,;!/")
+            break
+
+    if not link:
+        for arg in args:
+            if "t.me" in arg or arg.startswith("+"):
+                m = re.search(r"(https?://t\.me/(?:\+|joinchat/)[a-zA-Z0-9_\-]+)", arg)
+                if m:
+                    link = m.group(1).strip().rstrip(".,;!/")
+                    break
+                else:
+                    link = arg.strip().rstrip(".,;!/")
+                    break
+
+    # 2. Extract hours if present in args
+    for arg in args:
+        a_clean = arg.lower().replace("h", "").strip()
+        if a_clean.replace(".", "", 1).isdigit():
+            val = float(a_clean)
+            if 0 < val <= 720:
+                hours = val
+                break
+
+    # 3. Resolve from LINK_MAP using link
     if link:
         ld = DB.get("LINK_MAP", {}).get(link)
+        if not ld:
+            clean_link = link.strip().rstrip("/")
+            link_hash = clean_link.split("/")[-1].lstrip("+")
+            for map_link, map_data in DB.get("LINK_MAP", {}).items():
+                if map_link.strip().rstrip("/") == clean_link:
+                    ld = map_data
+                    link = map_link
+                    break
+                map_hash = map_link.strip().rstrip("/").split("/")[-1].lstrip("+")
+                if link_hash and (link_hash == map_hash or link_hash in map_link or map_hash in clean_link):
+                    ld = map_data
+                    link = map_link
+                    break
         if ld:
             target_uid = ld.get("u") if isinstance(ld, dict) else None
             batch_id = ld.get("b") if isinstance(ld, dict) else ld
 
-    # Also support /demo <user_id> <batch_id> [hours]
+    # 4. Resolve target_uid from Support Forum Topic
+    if not target_uid and message.chat and str(message.chat.id) == str(getattr(config, "SUPPORT_GROUP_ID", 0)):
+        topic_id = getattr(message, "message_thread_id", None) or getattr(message, "reply_to_top_message_id", None)
+        if not topic_id and message.reply_to_message:
+            topic_id = getattr(message.reply_to_message, "message_thread_id", None) or message.reply_to_message.id
+        if topic_id:
+            for u, t in DB.get("USER_TOPICS", {}).items():
+                if str(t) == str(topic_id):
+                    target_uid = int(u)
+                    break
+
+    # 5. Fallback user_id from replied message
+    if not target_uid and message.reply_to_message:
+        rep_txt = message.reply_to_message.text or message.reply_to_message.caption or ""
+        m_u = re.search(r"tg://user\?id=(\d+)", rep_txt) or re.search(r"🆔\s*`?(\d+)`?", rep_txt) or re.search(r"User ID[:\s]+`?(\d+)`?", rep_txt, re.IGNORECASE)
+        if m_u:
+            target_uid = int(m_u.group(1))
+
+    # 6. If target_uid is known but batch_id is not:
+    if target_uid and not batch_id:
+        for map_link, map_data in DB.get("LINK_MAP", {}).items():
+            if isinstance(map_data, dict) and str(map_data.get("u")) == str(target_uid):
+                batch_id = map_data.get("b")
+                if not link: link = map_link
+                break
+
+    if target_uid and not batch_id:
+        p_batches = DB.get("PENDING_REQUESTS", {}).get(str(target_uid), {}).get("active_batches", {})
+        if p_batches:
+            batch_id = int(list(p_batches.keys())[-1])
+
+    if target_uid and not batch_id:
+        u_demos = DB.get("USER_DATA", {}).get(str(target_uid), {}).get("demos", {})
+        if u_demos:
+            batch_id = int(list(u_demos.keys())[-1])
+
+    if not batch_id:
+        for arg in args:
+            if str(arg) in DB.get("ALL_CHATS", {}) or str(arg).startswith("-100"):
+                try:
+                    batch_id = int(arg)
+                    break
+                except ValueError:
+                    pass
+
+    if not batch_id and message.reply_to_message:
+        rep_txt = message.reply_to_message.text or message.reply_to_message.caption or ""
+        m_bid = re.search(r"\(?(-100\d+)\)?", rep_txt)
+        if m_bid:
+            try:
+                batch_id = int(m_bid.group(1))
+            except ValueError:
+                pass
+        if not batch_id:
+            for cid, cname in DB.get("ALL_CHATS", {}).items():
+                if cname and str(cname).lower() in rep_txt.lower():
+                    batch_id = int(cid)
+                    break
+
+    # 7. Check positional args: /demo <user_id> <batch_id> or /per <user_id> <batch_id>
     if (not target_uid or not batch_id) and len(args) >= 2:
         try:
-            target_uid = int(args[0])
-            batch_id = int(args[1])
-            if len(args) >= 3:
-                try:
-                    hours = float(args[2].lower().replace("h", ""))
-                except Exception:
-                    pass
+            a0, a1 = int(args[0]), int(args[1])
+            if str(a0).startswith("-100"):
+                batch_id, target_uid = a0, a1
+            elif str(a1).startswith("-100"):
+                target_uid, batch_id = a0, a1
+            else:
+                target_uid, batch_id = a0, a1
         except ValueError:
             pass
 
+    return link, target_uid, batch_id, hours
+
+
+async def cmd_approve_demo(client: Client, message: Message):
+    if not is_admin_msg(message):
+        return
+    args = get_args(message)
+    link, target_uid, batch_id, parsed_hours = resolve_link_and_batch(message, args)
+    hours = parsed_hours if parsed_hours is not None else 3.0
+
     if not target_uid or not batch_id:
-        return await message.reply_text("❌ Error: Valid Link ya `<user_id> <batch_id>` nahi mila.")
+        return await message.reply_text(
+            "❌ **Error: Request link ya Batch ID nahi mila.**\n\n"
+            "💡 **Usage:**\n"
+            "• `/demo <link> [hours]` (e.g. `/demo https://t.me/+xyz 6h`)\n"
+            "• Ya topic ke request message par reply karke: `/demo`\n"
+            "• Ya direct: `/demo <batch_id> [hours]` ya `/demo <user_id> <batch_id> [hours]`",
+            parse_mode=ParseMode.MARKDOWN
+        )
 
     batch_id = int(batch_id)
     target_uid = int(target_uid)
@@ -756,7 +897,6 @@ async def cmd_approve_demo(client: Client, message: Message):
         except Exception:
             pass
 
-        # Generate a guaranteed direct invite link
         direct_link = None
         try:
             l_obj = await client.create_chat_invite_link(
@@ -779,7 +919,12 @@ async def cmd_approve_demo(client: Client, message: Message):
         }
         clear_active_request(target_uid, batch_id)
         if link:
-            DB.get("LINK_MAP", {}).pop(link, None)
+            DB.setdefault("LINK_MAP", {})[link] = {
+                "u": target_uid,
+                "b": batch_id,
+                "demo": True,
+                "ts": time.time()
+            }
         await save_data_async()
 
         bname = DB.get("ALL_CHATS", {}).get(batch_id, f"Batch {batch_id}")
@@ -806,9 +951,10 @@ async def cmd_approve_demo(client: Client, message: Message):
             f"👤 <b>User:</b> <code>{target_uid}</code>\n"
             f"📦 <b>Batch:</b> <b>{bname}</b> (<code>{batch_id}</code>)\n"
             f"⏳ <b>Duration:</b> <code>{hours} Hours</code>\n"
-            f"⚡ <b>Join Request:</b> {'Approved (Auto-Joined)' if approved_via_req else 'Link Sent to User'}\n"
+            f"⚡ <b>Join Request:</b> {'Approved (Auto-Joined)' if approved_via_req else 'Direct Link Generated'}\n"
             f"🔗 <b>Direct Link:</b> {direct_link or 'N/A'}\n\n"
-            f"✨ User ko message aur direct Join Button deliver kar diya gaya hai!"
+            f"✨ User ko message aur direct Join Button deliver kar diya gaya hai!\n"
+            f"🔄 <i>To make it permanent later, reply with:</i> <code>/per {link or ''}</code>"
         )
         await message.reply_text(admin_resp, parse_mode=ParseMode.HTML)
     except Exception as e:
@@ -818,45 +964,23 @@ async def cmd_approve_demo(client: Client, message: Message):
 async def cmd_approve_perm(client: Client, message: Message):
     if not is_admin_msg(message):
         return
-    link = None
     args = get_args(message)
-    if message.reply_to_message:
-        replied = message.reply_to_message
-        msg_text = replied.text or replied.caption or ""
-        m = re.search(r"(https?://t\.me/(?:\+|joinchat/)[a-zA-Z0-9_\-]+)", msg_text)
-        if m:
-            link = m.group(1)
-
-    if not link and args:
-        for arg in args:
-            if "t.me" in arg:
-                link = arg.strip()
-
-    target_uid = None
-    batch_id = None
-
-    if link:
-        ld = DB.get("LINK_MAP", {}).get(link)
-        if ld:
-            target_uid = ld.get("u") if isinstance(ld, dict) else None
-            batch_id = ld.get("b") if isinstance(ld, dict) else ld
-
-    # Also support direct /per <user_id> <batch_id>
-    if (not target_uid or not batch_id) and len(args) >= 2:
-        try:
-            target_uid = int(args[0])
-            batch_id = int(args[1])
-        except ValueError:
-            pass
+    link, target_uid, batch_id, _ = resolve_link_and_batch(message, args)
 
     if not target_uid or not batch_id:
-        return await message.reply_text("❌ Error: Link nahi mila ya database me registered nahi hai.\nUsage: `/per <link>` ya `/per <user_id> <batch_id>`", parse_mode=ParseMode.MARKDOWN)
+        return await message.reply_text(
+            "❌ **Error: Request link ya Batch ID nahi mila.**\n\n"
+            "💡 **Usage:**\n"
+            "• `/per <link>` ya `/perm <link>`\n"
+            "• Ya topic ke request message par reply karke: `/per`\n"
+            "• Ya direct: `/per <batch_id>` ya `/per <user_id> <batch_id>`",
+            parse_mode=ParseMode.MARKDOWN
+        )
 
     batch_id = int(batch_id)
     target_uid = int(target_uid)
 
     try:
-        # 1. Try to approve pending join request if present
         approved_via_join_request = False
         try:
             await client.approve_chat_join_request(batch_id, target_uid)
@@ -864,13 +988,11 @@ async def cmd_approve_perm(client: Client, message: Message):
         except Exception as e_req:
             logger.info(f"approve_chat_join_request notice: {e_req}")
 
-        # 2. Try direct add if possible
         try:
             await client.add_chat_members(batch_id, target_uid)
         except Exception:
             pass
 
-        # 3. Always create a guaranteed direct 1-use invite link for the user
         direct_join_link = None
         try:
             l_obj = await client.create_chat_invite_link(
@@ -885,7 +1007,6 @@ async def cmd_approve_perm(client: Client, message: Message):
 
         invalidate_membership_cache(target_uid, batch_id)
 
-        # 4. Save to Database: grant lifetime access
         target_key = str(target_uid) if str(target_uid) in DB.get("USER_DATA", {}) else target_uid
         u_info = DB.setdefault("USER_DATA", {}).setdefault(target_key, {})
         u_info.setdefault("unlocked_batches", [])
@@ -896,8 +1017,9 @@ async def cmd_approve_perm(client: Client, message: Message):
             u_info["permanent_batches"].append(batch_id)
 
         # Remove demo timer if any
-        if "demos" in u_info and str(batch_id) in u_info["demos"]:
-            del u_info["demos"][str(batch_id)]
+        if "demos" in u_info:
+            u_info["demos"].pop(str(batch_id), None)
+            u_info["demos"].pop(int(batch_id), None)
 
         clear_active_request(target_uid, batch_id)
         if link:
@@ -906,7 +1028,6 @@ async def cmd_approve_perm(client: Client, message: Message):
 
         bname = DB.get("ALL_CHATS", {}).get(batch_id, f"Batch {batch_id}")
 
-        # 5. Notify the user with Direct Join Button!
         kb = []
         if direct_join_link:
             kb.append([InlineKeyboardButton("🚀 Join Batch Now", url=direct_join_link)])
@@ -924,13 +1045,13 @@ async def cmd_approve_perm(client: Client, message: Message):
         except Exception as e_user:
             logger.error(f"User perm notification failed: {e_user}")
 
-        # 6. Notify admin
         admin_resp = (
             f"✅ <b>APPROVED (PERMANENT)</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"👤 <b>User:</b> <code>{target_uid}</code>\n"
             f"📦 <b>Batch:</b> <b>{bname}</b> (<code>{batch_id}</code>)\n"
-            f"⚡ <b>Join Request:</b> {'Approved (Auto-Joined)' if approved_via_join_request else 'Link Sent to User'}\n"
+            f"🏷️ <b>Access:</b> <code>Lifetime Permanent</code>\n"
+            f"⚡ <b>Join Request:</b> {'Approved (Auto-Joined)' if approved_via_join_request else 'Direct Link Generated'}\n"
             f"🔗 <b>Direct Link:</b> {direct_join_link or 'N/A'}\n\n"
             f"✨ User ko confirmation message aur direct Join Button deliver kar diya gaya hai!"
         )

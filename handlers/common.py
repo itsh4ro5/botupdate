@@ -199,10 +199,14 @@ def clear_active_request(uid, cid):
 
 
 def get_args(message: Message):
-    if message.command and len(message.command) > 1:
+    if getattr(message, "command", None) and len(message.command) > 1:
         return message.command[1:]
-    elif message.text and not message.text.startswith('/'):
-        return message.text.split(" ")
+    txt = (getattr(message, "text", None) or getattr(message, "caption", None) or "").strip()
+    if txt:
+        parts = txt.split()
+        if txt.startswith(("/", "!", ".")):
+            return parts[1:]
+        return parts
     return []
 
 

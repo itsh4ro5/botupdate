@@ -605,6 +605,26 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
                 )
                 return
 
+            elif cmd_name in ["demo"]:
+                from .batches import cmd_approve_demo
+                return await cmd_approve_demo(client, message)
+
+            elif cmd_name in ["per", "perm"]:
+                from .batches import cmd_approve_perm
+                return await cmd_approve_perm(client, message)
+
+            elif cmd_name in ["extend"]:
+                from .batches import cmd_extend_demo
+                return await cmd_extend_demo(client, message)
+
+            elif cmd_name in ["gendemo"]:
+                from .batches import cmd_gendemo
+                return await cmd_gendemo(client, message)
+
+            elif cmd_name in ["kick"]:
+                from .admin import cmd_kick_user
+                return await cmd_kick_user(client, message)
+
             elif cmd_name in ["ban", "block"]:
                 if target_uid not in DB.get("BLOCKED_USERS", []):
                     DB.setdefault("BLOCKED_USERS", []).append(target_uid)
@@ -629,12 +649,20 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
                 return
 
             else:
+                import handlers as H
+                cmd_func = getattr(H, f"cmd_{cmd_name}", None)
+                if cmd_func and callable(cmd_func):
+                    return await cmd_func(client, message)
+
                 user_key = target_uid if target_uid in DB.get("USER_DATA", {}) else str(target_uid)
                 u_name = DB.get("USER_DATA", {}).get(user_key, {}).get("name") or f"Student {target_uid}"
                 safe_u_name = str(u_name).replace("[", "").replace("]", "")
                 await message.reply_text(
                     f"🛠️ **TOPIC COMMANDS FOR [{safe_u_name}](tg://user?id={target_uid}) (`{target_uid}`):**\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"• `/demo <link> [hours]` - Grant temporary demo access (default: 3h)\n"
+                    f"• `/per <link>` or `/perm` - Grant permanent lifetime batch access\n"
+                    f"• `/extend [hours]` - Extend current active demo\n"
                     f"• `/info` or `/status` - View student profile snapshot (coins, referrals, batches)\n"
                     f"• `/file` or `/txt` - Download complete student audit report (.txt)\n"
                     f"• `/giftcoin <amount>` - Gift study coins directly to this student\n"

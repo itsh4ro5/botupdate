@@ -707,6 +707,7 @@ async def wizard_message(client: Client, message: Message):
                 "find": cmd_find_user,
                 "resetuser": cmd_reset_user,
                 "demo": cmd_approve_demo,
+                "per": cmd_approve_perm,
                 "perm": cmd_approve_perm,
                 "extend": cmd_extend_demo,
                 "gendemo": cmd_gendemo,
