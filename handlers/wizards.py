@@ -362,6 +362,8 @@ async def wizard_message(client: Client, message: Message):
                 for t_cid in list(DB.get("ALL_CHATS", {}).keys()):
                     if t_cid != cid:
                         try:
+                            t_topic_id = DB.get("ANNOUNCEMENT_TOPICS", {}).get(str(t_cid))
+                            kwargs = {"message_thread_id": int(t_topic_id)} if t_topic_id else {}
                             sent_msg = await client.send_message(
                                 int(t_cid),
                                 f"🎉 <b>NEW FREE BATCH ADDED!</b>\n\n"
@@ -370,6 +372,7 @@ async def wizard_message(client: Client, message: Message):
                                 f"👉 <i>Click below to get direct access via our Bot:</i>",
                                 reply_markup=broadcast_kb,
                                 parse_mode=ParseMode.HTML,
+                                **kwargs
                             )
                             DB.setdefault("SCHEDULED_DELETES", []).append({
                                 "c": int(t_cid),
@@ -410,6 +413,8 @@ async def wizard_message(client: Client, message: Message):
             for t_cid in list(DB.get("ALL_CHATS", {}).keys()):
                 if t_cid != cid:
                     try:
+                        t_topic_id = DB.get("ANNOUNCEMENT_TOPICS", {}).get(str(t_cid))
+                        kwargs = {"message_thread_id": int(t_topic_id)} if t_topic_id else {}
                         sent_msg = await client.send_message(
                             int(t_cid),
                             f"💎 <b>NEW PAID BATCH ADDED!</b>\n\n"
@@ -419,6 +424,7 @@ async def wizard_message(client: Client, message: Message):
                             f"👉 <i>Click below to get direct access via our Bot:</i>",
                             reply_markup=broadcast_kb,
                             parse_mode=ParseMode.HTML,
+                            **kwargs
                         )
                         DB.setdefault("SCHEDULED_DELETES", []).append({
                             "c": int(t_cid),
@@ -463,6 +469,8 @@ async def wizard_message(client: Client, message: Message):
             for t_cid in list(DB.get("ALL_CHATS", {}).keys()):
                 if t_cid != cid:
                     try:
+                        t_topic_id = DB.get("ANNOUNCEMENT_TOPICS", {}).get(str(t_cid))
+                        kwargs = {"message_thread_id": int(t_topic_id)} if t_topic_id else {}
                         sent_msg = await client.send_message(
                             int(t_cid),
                             f"✨ <b>NEW SPECIAL BATCH ADDED!</b>\n\n"
@@ -472,6 +480,7 @@ async def wizard_message(client: Client, message: Message):
                             f"👉 <i>Click below to get direct access via our Bot:</i>",
                             reply_markup=broadcast_kb,
                             parse_mode=ParseMode.HTML,
+                            **kwargs
                         )
                         DB.setdefault("SCHEDULED_DELETES", []).append({
                             "c": int(t_cid),

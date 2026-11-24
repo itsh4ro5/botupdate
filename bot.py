@@ -398,6 +398,8 @@ async def _run_pyrogram_engine():
         "vacancies": H.cmd_vacancies, "jobs": H.cmd_vacancies, "alerts": H.cmd_vacancies,
         "quiz": H.cmd_quiz, "quizzes": H.cmd_quiz,
         "currentaffairs": H.cmd_currentaffairs, "news": H.cmd_currentaffairs,
+        "setupannouncements": H.cmd_setup_announcements, "syncannouncements": H.cmd_setup_announcements,
+        "grouptopics": H.cmd_setup_announcements, "announcementstopics": H.cmd_setup_announcements,
     }
 
     @app.on_message(filters.command(list(all_commands.keys())))

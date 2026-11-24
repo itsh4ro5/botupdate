@@ -80,7 +80,7 @@ async def general_callback(client: Client, q: CallbackQuery):
     try:
         if data.startswith("wiz_") or data.startswith("wcat_"):
             return await wizard_callback(client, q)
-        if data.startswith("bc_"):
+        if data.startswith("bc_") or data.startswith("post_ttl_"):
             return await broadcast_callback(client, q)
         if data == "role_selector":
             if not is_admin(uid):
