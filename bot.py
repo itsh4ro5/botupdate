@@ -400,10 +400,14 @@ async def _run_pyrogram_engine():
         "currentaffairs": H.cmd_currentaffairs, "news": H.cmd_currentaffairs,
         "setupannouncements": H.cmd_setup_announcements, "syncannouncements": H.cmd_setup_announcements,
         "grouptopics": H.cmd_setup_announcements, "announcementstopics": H.cmd_setup_announcements,
+        "addgroup": H.cmd_add_group, "addsupergroup": H.cmd_add_group, "trackgroup": H.cmd_add_group,
+        "delgroup": H.cmd_del_group, "delsupergroup": H.cmd_del_group, "groups": H.cmd_del_group, "supergroups": H.cmd_del_group,
     }
 
     @app.on_message(filters.command(list(all_commands.keys())))
     async def _on_all_cmds(client: Client, message: Message):
+        if message.chat and message.chat.type in [ChatType.SUPERGROUP, ChatType.GROUP]:
+            config.DB.setdefault("SUPERGROUPS", {})[str(message.chat.id)] = message.chat.title or str(message.chat.id)
         # Support Group topics me commands direct topic handler me execute honge
         if message.chat and str(message.chat.id) == str(getattr(config, "SUPPORT_GROUP_ID", 0)):
             return await H.main_message_handler(client, message)
@@ -446,6 +450,8 @@ async def _run_pyrogram_engine():
         group=-100,
     )
     async def _on_service_msg(client: Client, message: Message):
+        if message.chat and message.chat.type in [ChatType.SUPERGROUP, ChatType.GROUP]:
+            config.DB.setdefault("SUPERGROUPS", {})[str(message.chat.id)] = message.chat.title or str(message.chat.id)
         is_service = False
 
         # 1. Explicit join/leave/title-change filters (covers "joined",
@@ -517,6 +523,8 @@ async def _run_pyrogram_engine():
     # =====================================================================
     @app.on_message(filters.all & ~filters.command(list(all_commands.keys()) + ["start", "ping", "id", "info", "file", "txt", "status", "userinfo"]))
     async def _on_regular_msg(client: Client, message: Message):
+        if message.chat and message.chat.type in [ChatType.SUPERGROUP, ChatType.GROUP]:
+            config.DB.setdefault("SUPERGROUPS", {})[str(message.chat.id)] = message.chat.title or str(message.chat.id)
         is_support = bool(message.chat and str(message.chat.id) == str(getattr(config, "SUPPORT_GROUP_ID", 0)))
         if not is_support:
             if message.text and message.text.startswith("/"): return

@@ -731,6 +731,10 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
 async def on_chat_member_update(client: Client, update: ChatMemberUpdated):
     logger.debug(f"Raw member-update event: chat {update.chat.id}")
 
+    # Auto-capture any group or supergroup where bot or user is updated
+    if update.chat and update.chat.type in [ChatType.SUPERGROUP, ChatType.GROUP]:
+        DB.setdefault("SUPERGROUPS", {})[str(update.chat.id)] = update.chat.title or str(update.chat.id)
+
     if not update.new_chat_member:
         return
         
@@ -759,6 +763,8 @@ async def on_chat_member_update(client: Client, update: ChatMemberUpdated):
 
 async def track_chats(client: Client, update: ChatMemberUpdated):
     chat = update.chat
+    if chat and chat.type in [ChatType.SUPERGROUP, ChatType.GROUP]:
+        DB.setdefault("SUPERGROUPS", {})[str(chat.id)] = chat.title or str(chat.id)
     if not update.new_chat_member:
         return
     status = update.new_chat_member.status
