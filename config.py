@@ -1437,6 +1437,65 @@ async def generate_user_txt_file(client, target_uid):
     return buf
 
 
+async def safe_create_forum_topic(client, chat_id: int, title: str):
+    """
+    Universally creates a forum topic across all Pyrogram versions and Kurigram forks.
+    Tries positional (chat_id, title), name= (Kurigram), title= (stock Pyrogram), and raw MTProto fallback.
+    """
+    chat_id = int(chat_id)
+
+    # 1. Try positional call (works across both Pyrogram & Kurigram without keyword name clash)
+    if hasattr(client, "create_forum_topic"):
+        try:
+            topic = await client.create_forum_topic(chat_id, title)
+            topic_id = getattr(topic, "id", None) or getattr(topic, "message_thread_id", None)
+            if topic_id:
+                return int(topic_id)
+        except TypeError:
+            pass
+        except Exception as e:
+            logger.warning(f"create_forum_topic positional failed for {chat_id}: {e}")
+
+    # 2. Try with name= keyword (Kurigram specific)
+    if hasattr(client, "create_forum_topic"):
+        try:
+            topic = await client.create_forum_topic(chat_id=chat_id, name=title)
+            topic_id = getattr(topic, "id", None) or getattr(topic, "message_thread_id", None)
+            if topic_id:
+                return int(topic_id)
+        except TypeError:
+            pass
+        except Exception as e:
+            logger.warning(f"create_forum_topic name= failed for {chat_id}: {e}")
+
+    # 3. Try with title= keyword (stock Pyrogram)
+    if hasattr(client, "create_forum_topic"):
+        try:
+            topic = await client.create_forum_topic(chat_id=chat_id, title=title)
+            topic_id = getattr(topic, "id", None) or getattr(topic, "message_thread_id", None)
+            if topic_id:
+                return int(topic_id)
+        except TypeError:
+            pass
+        except Exception as e:
+            logger.warning(f"create_forum_topic title= failed for {chat_id}: {e}")
+
+    # 4. Raw MTProto fallback (Channels.CreateForumTopic)
+    try:
+        from pyrogram.raw.functions.channels import CreateForumTopic
+        peer = await client.resolve_peer(chat_id)
+        r = await client.invoke(
+            CreateForumTopic(channel=peer, title=title, random_id=client.rnd_id())
+        )
+        for update in r.updates:
+            if hasattr(update, "message") and hasattr(update.message, "id"):
+                return int(update.message.id)
+    except Exception as raw_e:
+        logger.error(f"Raw MTProto CreateForumTopic failed for {chat_id}: {raw_e}")
+
+    return None
+
+
 async def get_or_create_topic(user, client, is_retry=False):
     if not SUPPORT_GROUP_ID:
         return None
@@ -1455,21 +1514,7 @@ async def get_or_create_topic(user, client, is_retry=False):
     
     try:
         title = f"{(user.first_name or 'User')[:20]} ({user.id})"
-        topic_id = None
-                
-        try:
-            topic = await client.create_forum_topic(chat_id=int(SUPPORT_GROUP_ID), title=title)
-            topic_id = getattr(topic, "id", None) or getattr(topic, "message_thread_id", None)
-        except AttributeError:
-            from pyrogram.raw.functions.channels import CreateForumTopic
-            peer = await client.resolve_peer(int(SUPPORT_GROUP_ID))
-            r = await client.invoke(
-                CreateForumTopic(channel=peer, title=title, random_id=client.rnd_id())
-            )
-            for update in r.updates:
-                if hasattr(update, "message") and hasattr(update.message, "id"):
-                    topic_id = update.message.id
-                    break
+        topic_id = await safe_create_forum_topic(client, int(SUPPORT_GROUP_ID), title)
                             
         if not topic_id:
             raise Exception("Topic ID could not be resolved from Telegram's response.")

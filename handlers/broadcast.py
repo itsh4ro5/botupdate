@@ -809,21 +809,7 @@ async def cmd_setup_announcements(client: Client, message: Message):
 
         if is_forum and can_manage_topics:
             if not topic_id:
-                try:
-                    topic = await client.create_forum_topic(chat_id=cid, title="📢 Announcements")
-                    topic_id = getattr(topic, "id", None) or getattr(topic, "message_thread_id", None)
-                except AttributeError:
-                    from pyrogram.raw.functions.channels import CreateForumTopic
-                    peer = await client.resolve_peer(cid)
-                    r = await client.invoke(
-                        CreateForumTopic(channel=peer, title="📢 Announcements", random_id=client.rnd_id())
-                    )
-                    for update in r.updates:
-                        if hasattr(update, "message") and hasattr(update.message, "id"):
-                            topic_id = update.message.id
-                            break
-                except Exception as e:
-                    logger.error(f"Error creating topic in supergroup {cid}: {e}")
+                topic_id = await safe_create_forum_topic(client, cid, "📢 Announcements")
 
                 if topic_id:
                     DB.setdefault("ANNOUNCEMENT_TOPICS", {})[str(cid)] = int(topic_id)

@@ -524,15 +524,11 @@ async def run_super_forwarder(bot_client: Client, message: Message, source_str: 
                     topic_key = raw_topic_name.lower() 
                     
                     if topic_key not in created_topics:
-                        try:
-                            new_topic = await bot_client.create_forum_topic(chat_id=dest_id, title=raw_topic_name)
-                            created_topics[topic_key] = new_topic.id
-                        except Exception:
-                            try:
-                                new_topic = await userbot.create_forum_topic(chat_id=dest_id, title=raw_topic_name)
-                                created_topics[topic_key] = new_topic.id
-                            except Exception:
-                                pass
+                        new_topic_id = await safe_create_forum_topic(bot_client, dest_id, raw_topic_name)
+                        if not new_topic_id:
+                            new_topic_id = await safe_create_forum_topic(userbot, dest_id, raw_topic_name)
+                        if new_topic_id:
+                            created_topics[topic_key] = new_topic_id
                     topic_id = created_topics.get(topic_key)
                 
             try:
