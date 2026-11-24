@@ -31,6 +31,78 @@ try:
 except Exception as _patch_err:
     logger.warning(f"  Could not patch pyrogram ID bounds: {_patch_err}")
 
+# =====================================================================
+# PYROGRAM DC (DATA CENTER) ROUTER PATCH: Configurable DC (Default: DC5 Singapore)
+# =====================================================================
+def _patch_pyrogram_dc(default_dc: int = 5):
+    try:
+        from pyrogram import Client
+        from pyrogram.session.internals.data_center import DataCenter
+        from pyrogram.session.auth import Auth
+
+        if hasattr(Client, "_dc_router_patched"):
+            return
+        Client._dc_router_patched = True
+
+        async def custom_load_session(self):
+            await self.storage.open()
+
+            session_empty = any(
+                [
+                    await self.storage.test_mode() is None,
+                    await self.storage.auth_key() is None,
+                    await self.storage.user_id() is None,
+                    await self.storage.is_bot() is None,
+                ]
+            )
+
+            if session_empty:
+                if not self.api_id or not self.api_hash:
+                    raise AttributeError(
+                        "The API key is required for new authorizations. "
+                        "More info: https://docs.pyrogram.org/start/auth"
+                    )
+
+                dc_to_use = getattr(self, "_target_dc_id", None) or default_dc or 5
+                await self.storage.api_id(self.api_id)
+                await self.storage.dc_id(dc_to_use)
+
+                if self.test_mode:
+                    addr = DataCenter.TEST.get(dc_to_use, "149.154.167.40")
+                    await self.storage.server_address(addr)
+                    await self.storage.port(80)
+                else:
+                    addr = DataCenter.PROD.get(dc_to_use, "91.108.56.130")
+                    await self.storage.server_address(addr)
+                    await self.storage.port(443)
+
+                await self.storage.date(0)
+                await self.storage.test_mode(self.test_mode)
+
+                auth_obj = Auth(
+                    self,
+                    await self.storage.dc_id(),
+                    await self.storage.server_address(),
+                    await self.storage.port(),
+                    await self.storage.test_mode(),
+                )
+                auth_key = await auth_obj.create()
+                await self.storage.auth_key(auth_key)
+                await self.storage.user_id(None)
+                await self.storage.is_bot(None)
+            else:
+                if not await self.storage.api_id():
+                    if self.api_id:
+                        await self.storage.api_id(self.api_id)
+
+        Client.load_session = custom_load_session
+        logger.info(f"  Patched Pyrogram DC router to target DC{default_dc} by default.")
+    except Exception as dc_patch_err:
+        logger.warning(f"  Could not patch Pyrogram DC router: {dc_patch_err}")
+
+TELEGRAM_DC_ID = _safe_int("TELEGRAM_DC_ID", 5)
+_patch_pyrogram_dc(TELEGRAM_DC_ID)
+
 # --- CONFIGURATION & DEFAULTS ---
 DEFAULTS = {"TOKEN": "", "OWNER": 0, "SUPPORT": 0, "MAIN_CH": 0, "LOG_CH": 0, "UPDATE_CH": -1004304703943}
 

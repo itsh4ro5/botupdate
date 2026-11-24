@@ -525,14 +525,29 @@ async def _run_pyrogram_engine():
     # --- STARTING THE MTPROTO CONNECTION ---
     attempt = 1
     max_attempts = 10
+    initial_dc = getattr(config, "TELEGRAM_DC_ID", 5) or 5
+    dc_candidates = [initial_dc] + [dc for dc in [5, 4, 2, 1] if dc != initial_dc]
+
     while attempt <= max_attempts:
+        current_dc = dc_candidates[(attempt - 1) % len(dc_candidates)]
+        app._target_dc_id = current_dc
+
+        if attempt > 1:
+            try:
+                await app.storage.open()
+                await app.storage.auth_key(None)
+                await app.storage.dc_id(current_dc)
+                await app.storage.close()
+            except Exception:
+                pass
+
         try:
-            print(f"  BOT: Connecting via Pyrogram MTProto Sockets (Attempt {attempt}/{max_attempts})...", flush=True)
+            print(f"  BOT: Connecting via Pyrogram MTProto Sockets [DC{current_dc}] (Attempt {attempt}/{max_attempts})...", flush=True)
             await _start_with_floodwait_guard(app)
             me = await app.get_me()
             import config
             config.BOT_USERNAME = me.username # <--- ADD THIS LINE
-            print(f"  BOT LIVE! Authorized successfully as @{me.username} (ID: {me.id})!", flush=True)
+            print(f"  BOT LIVE! Authorized successfully on DC{current_dc} as @{me.username} (ID: {me.id})!", flush=True)
                          
             #   NATIVE MTPROTO PEER CACHE WARM-UP (no HTTP hacks)
             # NOTE: get_dialogs() is a USER-ACCOUNT-ONLY method   Telegram
