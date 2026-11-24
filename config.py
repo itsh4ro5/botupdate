@@ -31,6 +31,19 @@ try:
 except Exception as _patch_err:
     logger.warning(f"  Could not patch pyrogram ID bounds: {_patch_err}")
 
+# --- CONFIGURATION & DEFAULTS ---
+DEFAULTS = {"TOKEN": "", "OWNER": 0, "SUPPORT": 0, "MAIN_CH": 0, "LOG_CH": 0, "UPDATE_CH": -1004304703943}
+
+def _safe_int(env_name, default=0):
+    raw = os.environ.get(env_name, None)
+    if raw is None or str(raw).strip() == "":
+        return default
+    try:
+        return int(str(raw).strip())
+    except (ValueError, TypeError):
+        logger.warning(f"Env var {env_name}={repr(raw)} is not a valid integer. Using default {default}")
+        return default
+
 # =====================================================================
 # PYROGRAM DC (DATA CENTER) ROUTER PATCH: Configurable DC (Default: DC5 Singapore)
 # =====================================================================
@@ -102,19 +115,6 @@ def _patch_pyrogram_dc(default_dc: int = 5):
 
 TELEGRAM_DC_ID = _safe_int("TELEGRAM_DC_ID", 5)
 _patch_pyrogram_dc(TELEGRAM_DC_ID)
-
-# --- CONFIGURATION & DEFAULTS ---
-DEFAULTS = {"TOKEN": "", "OWNER": 0, "SUPPORT": 0, "MAIN_CH": 0, "LOG_CH": 0, "UPDATE_CH": -1004304703943}
-
-def _safe_int(env_name, default=0):
-    raw = os.environ.get(env_name, None)
-    if raw is None or str(raw).strip() == "":
-        return default
-    try:
-        return int(str(raw).strip())
-    except (ValueError, TypeError):
-        logger.warning(f"Env var {env_name}={repr(raw)} is not a valid integer. Using default {default}")
-        return default
 
 API_ID = _safe_int("API_ID", 0)
 API_HASH = (os.environ.get("API_HASH", "") or "").strip().strip("'\"")
