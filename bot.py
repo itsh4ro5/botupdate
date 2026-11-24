@@ -7,7 +7,7 @@ from pyrogram import StopPropagation
 
 # --- START BUTTON COLOR PATCH ---
 import pyrogram.types
-from pyrogram.enums import ButtonStyle
+from pyrogram.enums import ButtonStyle, ChatType, ChatMemberStatus, ParseMode
 import richpyro as rp
 from pyrogram.parser.markdown import Markdown
 from pyrogram.raw.types import (
