@@ -502,15 +502,37 @@ def _check_admin_privilege(member, perm_name: str) -> bool:
     return bool(getattr(member, perm_name, False))
 
 
+async def _is_sender_admin(client: Client, message: Message) -> bool:
+    """
+    Checks if message sender is a bot admin or group administrator.
+    Supports regular users, group admins, and anonymous admins (sender_chat).
+    """
+    if message.from_user:
+        uid = message.from_user.id
+        if is_admin(uid):
+            return True
+        if message.chat and message.chat.type in [ChatType.SUPERGROUP, ChatType.GROUP]:
+            try:
+                m = await client.get_chat_member(message.chat.id, uid)
+                if m.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
+                    return True
+            except Exception:
+                pass
+    elif message.sender_chat:
+        if message.chat and message.sender_chat.id == message.chat.id:
+            return True
+        if is_admin(message.sender_chat.id):
+            return True
+    return False
+
+
 async def cmd_add_group(client: Client, message: Message):
     """
     Manually register supergroups into the bot database.
     Can be run inside a supergroup directly (/addgroup) or with IDs/usernames.
     """
-    if not message.from_user:
-        return
-    if not is_admin(message.from_user.id):
-        return await message.reply_text("❌ **Access Denied:** Only Admins can use this command.", parse_mode=ParseMode.MARKDOWN)
+    if not await _is_sender_admin(client, message):
+        return await message.reply_text("❌ **Access Denied:** Yeh command keval Group Admins ya Bot Admins ke liye hai.", parse_mode=ParseMode.MARKDOWN)
 
     args = message.command[1:] if message.command else []
     target = None
@@ -550,7 +572,7 @@ async def cmd_add_group(client: Client, message: Message):
         resp.append("\n👉 Ab `/setupannouncements` run karke Topics setup aur permissions audit check karein!")
     if errors:
         resp.append(f"\n⚠️ **Failed to Add:**\n" + "\n".join(errors))
-        resp.append("\n💡 *Tip: Ensure bot is added as Admin in the group so it can resolve the chat ID.*")
+        resp.append("\n💡 *Tip: Agar bot group me admin nahi hai to pehle use group me Admin banayein.*")
 
     await message.reply_text("\n".join(resp), parse_mode=ParseMode.MARKDOWN)
 
@@ -559,9 +581,7 @@ async def cmd_del_group(client: Client, message: Message):
     """
     Remove a supergroup from the tracking database, or list currently tracked groups.
     """
-    if not message.from_user:
-        return
-    if not is_admin(message.from_user.id):
+    if not await _is_sender_admin(client, message):
         return await message.reply_text("❌ **Access Denied.**", parse_mode=ParseMode.MARKDOWN)
 
     args = message.command[1:] if message.command else []
@@ -594,11 +614,8 @@ async def cmd_setup_announcements(client: Client, message: Message):
     in all forum supergroups, identifies missing permissions, and generates a
     downloadable .txt report for manual permission approval.
     """
-    if not message.from_user:
-        return
-    uid = message.from_user.id
-    if not is_admin(uid):
-        return await message.reply_text("❌ **Access Denied:** Yeh command keval Bot Admins/Owner ke liye hai.", parse_mode=ParseMode.MARKDOWN)
+    if not await _is_sender_admin(client, message):
+        return await message.reply_text("❌ **Access Denied:** Yeh command keval Group Admins ya Bot Admins ke liye hai.", parse_mode=ParseMode.MARKDOWN)
 
     status_msg = await message.reply_text(
         "🔍 **Supergroups & Channels Audit Starting...**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -608,6 +625,12 @@ async def cmd_setup_announcements(client: Client, message: Message):
         parse_mode=ParseMode.MARKDOWN
     )
 
+    async def _safe_edit(text):
+        try:
+            await status_msg.edit_text(text, parse_mode=ParseMode.MARKDOWN)
+        except Exception:
+            pass
+
     try:
         me = await client.get_me()
         bot_id = me.id
@@ -616,39 +639,40 @@ async def cmd_setup_announcements(client: Client, message: Message):
         bot_id = 0
         bot_username = "Bot"
 
-    # Step 1: Userbot Dialog Scan (Automatically discover ALL groups and channels user is in)
+    # Step 1: Userbot Dialog Scan (with strict 5-second timeout so it never hangs)
     session_string = DB.get("USERBOT_SESSION") or os.environ.get("SESSION_STRING")
     ub_discovered_groups = {}
     ub_discovered_channels = {}
 
     if session_string and getattr(config, "API_ID", 0) and getattr(config, "API_HASH", ""):
         try:
-            await status_msg.edit_text(
+            await _safe_edit(
                 "🔍 **Scanning Telegram Dialogs via Userbot...**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                "⏳ Userbot session se aapke account ke saare Supergroups aur Channels auto-discover ho rahe hain...",
-                parse_mode=ParseMode.MARKDOWN
+                "⏳ Userbot session se aapke account ke saare Supergroups aur Channels auto-discover ho rahe hain..."
             )
-            userbot = Client(
-                "setup_userbot_scanner",
-                api_id=config.API_ID,
-                api_hash=config.API_HASH,
-                session_string=session_string,
-                in_memory=True
-            )
-            await userbot.start()
-            try:
-                async for dialog in userbot.get_dialogs():
-                    c = dialog.chat
-                    if c.type in [ChatType.SUPERGROUP, ChatType.GROUP]:
-                        ub_discovered_groups[c.id] = c.title or str(c.id)
-                        DB.setdefault("SUPERGROUPS", {})[str(c.id)] = c.title or str(c.id)
-                    elif c.type == ChatType.CHANNEL:
-                        ub_discovered_channels[c.id] = c.title or str(c.id)
-            finally:
+            async def _run_ub():
+                userbot = Client(
+                    "setup_userbot_scanner",
+                    api_id=config.API_ID,
+                    api_hash=config.API_HASH,
+                    session_string=session_string,
+                    in_memory=True
+                )
+                await userbot.start()
                 try:
-                    await userbot.stop()
-                except Exception:
-                    pass
+                    async for dialog in userbot.get_dialogs():
+                        c = dialog.chat
+                        if c.type in [ChatType.SUPERGROUP, ChatType.GROUP]:
+                            ub_discovered_groups[c.id] = c.title or str(c.id)
+                            DB.setdefault("SUPERGROUPS", {})[str(c.id)] = c.title or str(c.id)
+                        elif c.type == ChatType.CHANNEL:
+                            ub_discovered_channels[c.id] = c.title or str(c.id)
+                finally:
+                    try:
+                        await userbot.stop()
+                    except Exception:
+                        pass
+            await asyncio.wait_for(_run_ub(), timeout=5.0)
         except Exception as ub_e:
             logger.warning(f"Userbot dialog scan warning: {ub_e}")
 
@@ -714,12 +738,11 @@ async def cmd_setup_announcements(client: Client, message: Message):
             channels_to_scan[int(cid)] = name
 
     total_scanned_count = len(supergroups_to_scan) + len(channels_to_scan)
-    await status_msg.edit_text(
+    await _safe_edit(
         f"🔍 **Auditing Permissions & Setting Up Topics...**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"👥 Supergroups Found: `{len(supergroups_to_scan)}`\n"
         f"📢 Channels Found: `{len(channels_to_scan)}`\n"
-        f"⏳ Verifying bot permissions and creating topics...",
-        parse_mode=ParseMode.MARKDOWN
+        f"⏳ Verifying bot permissions and creating topics..."
     )
 
     supergroups_audit = []
@@ -1041,9 +1064,16 @@ async def cmd_setup_announcements(client: Client, message: Message):
             caption=summary_caption,
             parse_mode=ParseMode.MARKDOWN
         )
-        await status_msg.delete()
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
     except Exception as e:
-        await status_msg.edit_text(f"❌ Failed to send audit report document: {e}")
+        logger.error(f"Failed to send audit report document: {e}")
+        try:
+            await status_msg.edit_text(f"❌ Failed to send audit report document: `{e}`", parse_mode=ParseMode.MARKDOWN)
+        except Exception:
+            await message.reply_text(f"❌ Failed to send audit report document: `{e}`")
 
 
 

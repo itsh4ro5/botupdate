@@ -408,14 +408,25 @@ async def _run_pyrogram_engine():
     async def _on_all_cmds(client: Client, message: Message):
         if message.chat and message.chat.type in [ChatType.SUPERGROUP, ChatType.GROUP]:
             config.DB.setdefault("SUPERGROUPS", {})[str(message.chat.id)] = message.chat.title or str(message.chat.id)
-        # Support Group topics me commands direct topic handler me execute honge
-        if message.chat and str(message.chat.id) == str(getattr(config, "SUPPORT_GROUP_ID", 0)):
-            return await H.main_message_handler(client, message)
 
         if not message.command: return
         cmd_name = message.command[0].lower()
+
+        # In Support Group, ONLY student topic ticket commands (/demo, /per, etc.) route to main_message_handler
+        is_support = bool(message.chat and str(message.chat.id) == str(getattr(config, "SUPPORT_GROUP_ID", 0)))
+        if is_support and cmd_name in ["demo", "per", "perm"]:
+            return await H.main_message_handler(client, message)
+
         if cmd_name in all_commands:
-            await all_commands[cmd_name](client, message)
+            try:
+                await all_commands[cmd_name](client, message)
+            except Exception as e:
+                print(f"⚠️ Error executing command /{cmd_name}: {e}", flush=True)
+                traceback.print_exc()
+                try:
+                    await message.reply_text(f"⚠️ **Error executing `/{cmd_name}`:** `{e}`")
+                except Exception:
+                    pass
 
     @app.on_message(filters.command(["info", "file", "txt", "status", "userinfo"]))
     async def _on_topic_profile_cmds(client: Client, message: Message):
