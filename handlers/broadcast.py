@@ -559,8 +559,41 @@ async def cmd_add_group(client: Client, message: Message):
             tid = int(t) if str(t).lstrip('-').isdigit() else t
             chat = await client.get_chat(tid)
             DB.setdefault("SUPERGROUPS", {})[str(chat.id)] = chat.title or str(chat.id)
-            is_forum_str = "Forum Mode ON ✅" if getattr(chat, "is_forum", False) else "Forum Mode OFF ❌"
-            added.append(f"• **{chat.title}** (`{chat.id}`) — *{is_forum_str}*")
+            is_forum = getattr(chat, "is_forum", False)
+            forum_detail = "Forum Mode OFF ❌"
+            if is_forum:
+                topic_id = DB.get("ANNOUNCEMENT_TOPICS", {}).get(str(chat.id))
+                if not topic_id:
+                    from config import safe_create_forum_topic
+                    topic_id = await safe_create_forum_topic(client, chat.id, "📢 Announcements")
+                    if topic_id:
+                        DB.setdefault("ANNOUNCEMENT_TOPICS", {})[str(chat.id)] = int(topic_id)
+                        try:
+                            banner = await client.send_message(
+                                chat_id=chat.id,
+                                message_thread_id=int(topic_id),
+                                text=(
+                                    "📢 **Official Announcements Channel**\n"
+                                    "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                                    "👋 **Welcome to the Official Announcements topic!**\n\n"
+                                    "📌 Sabhi official batch updates, new releases, timetable alerts, "
+                                    "aur important notices isi topic me aayenge.\n\n"
+                                    "🔔 *Is topic ke notifications ON rakhein taaki koi important update miss na ho!*"
+                                ),
+                                parse_mode=ParseMode.MARKDOWN,
+                            )
+                            try:
+                                await client.pin_chat_message(chat_id=chat.id, message_id=banner.id)
+                            except Exception:
+                                pass
+                            forum_detail = "Forum ON ✅ (📢 Announcements Topic Created & Pinned)"
+                        except Exception:
+                            forum_detail = "Forum ON ✅ (Topic Created)"
+                    else:
+                        forum_detail = "Forum ON ⚠️ (Topic Create Permission Missing)"
+                else:
+                    forum_detail = "Forum ON ✅ (Topic Linked)"
+            added.append(f"• **{chat.title}** (`{chat.id}`) — *{forum_detail}*")
         except Exception as e:
             errors.append(f"• `{t}`: {e}")
 

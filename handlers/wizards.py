@@ -64,6 +64,70 @@ from .batches import *
 from .menus import *
 from .userbot import *
 
+async def _check_and_setup_supergroup_announcements(client: Client, cid: int, cname: str = "") -> tuple[bool, str]:
+    """
+    If cid is a Supergroup with forum topics enabled:
+    - Auto-registers in DB['SUPERGROUPS']
+    - Auto-creates '📢 Announcements' topic if not present
+    - Sends an official welcome announcement banner & pins it
+    - Saves the topic ID into DB['ANNOUNCEMENT_TOPICS']
+    Returns (success_bool, status_code).
+    """
+    try:
+        from config import safe_create_forum_topic
+        chat = await client.get_chat(cid)
+        if not cname:
+            cname = chat.title or f"Chat {cid}"
+
+        is_sg = chat.type in [ChatType.SUPERGROUP, ChatType.GROUP]
+        if not is_sg:
+            return False, "channel"
+
+        DB.setdefault("SUPERGROUPS", {})[str(cid)] = cname
+
+        if not getattr(chat, "is_forum", False):
+            await save_data_async()
+            return False, "not_forum"
+
+        existing_topic = DB.get("ANNOUNCEMENT_TOPICS", {}).get(str(cid))
+        if existing_topic:
+            return True, "already_exists"
+
+        topic_id = await safe_create_forum_topic(client, cid, "📢 Announcements")
+        if not topic_id:
+            logger.warning(f"Could not create forum topic in {cid}. Check bot admin permissions.")
+            return False, "permission_error"
+
+        DB.setdefault("ANNOUNCEMENT_TOPICS", {})[str(cid)] = int(topic_id)
+
+        try:
+            banner = await client.send_message(
+                chat_id=cid,
+                message_thread_id=int(topic_id),
+                text=(
+                    "📢 **Official Announcements Channel**\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    "👋 **Welcome to the Official Announcements topic!**\n\n"
+                    "📌 Sabhi official batch updates, new releases, timetable alerts, "
+                    "aur important notices isi topic me aayenge.\n\n"
+                    "🔔 *Is topic ke notifications ON rakhein taaki koi important update miss na ho!*"
+                ),
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            try:
+                await client.pin_chat_message(chat_id=cid, message_id=banner.id)
+            except Exception as pe:
+                logger.warning(f"Could not pin announcement banner in {cid}: {pe}")
+        except Exception as se:
+            logger.warning(f"Could not send announcement banner in {cid}: {se}")
+
+        await save_data_async()
+        return True, "created"
+    except Exception as e:
+        logger.warning(f"Error checking supergroup announcement topic for {cid}: {e}")
+        return False, str(e)
+
+
 async def wizard_callback(client: Client, q: CallbackQuery):
     uid = q.from_user.id
     if uid not in ADMIN_WIZARD:
@@ -210,13 +274,22 @@ async def wizard_callback(client: Client, q: CallbackQuery):
             )
             return
 
+        sg_success, sg_code = await _check_and_setup_supergroup_announcements(client, cid, cname)
+        sg_note = ""
+        if sg_code == "created":
+            sg_note = "\n📢 **Forum Supergroup:** `📢 Announcements` topic auto-created & pinned!"
+        elif sg_code == "already_exists":
+            sg_note = "\n📢 **Forum Supergroup:** `📢 Announcements` topic already linked."
+        elif sg_code == "permission_error":
+            sg_note = "\n⚠️ **Forum Supergroup:** Bot admin permission kam hai (Topic create nahi kar paya)."
+
         ADMIN_WIZARD.pop(uid, None)
         await q.edit_message_text(
             f"✅ **Batch Successfully Updated & Cleaned!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📦 **Name:** `{cname}`\n"
             f"🆔 **ID:** `{cid}`\n"
             f"🏷️ **Type:** `{target_type.upper()}`\n"
-            f"📂 **Category:** `{target_cat}`\n\n"
+            f"📂 **Category:** `{target_cat}`{sg_note}\n\n"
             f"✨ Purani duplicate entries safely remove kar di gayi hain!",
             parse_mode=ParseMode.MARKDOWN
         )
@@ -345,8 +418,17 @@ async def wizard_message(client: Client, message: Message):
                 )
                 return True
 
+            sg_success, sg_code = await _check_and_setup_supergroup_announcements(client, cid, cname)
+            sg_note = ""
+            if sg_code == "created":
+                sg_note = "\n📢 **Forum Supergroup:** `📢 Announcements` topic auto-created & pinned!"
+            elif sg_code == "already_exists":
+                sg_note = "\n📢 **Forum Supergroup:** `📢 Announcements` topic already linked."
+            elif sg_code == "permission_error":
+                sg_note = "\n⚠️ **Forum Supergroup:** Bot admin permission kam hai (Topic create nahi kar paya)."
+
             await message.reply_text(
-                f"✅ **Added!**\n📛 Name: {cname} ({cid})\n🏷️ Type: {state['type'].upper()}\n📂 Category: {state['category']}",
+                f"✅ **Added!**\n📛 Name: {cname} ({cid})\n🏷️ Type: {state['type'].upper()}\n📂 Category: {state['category']}{sg_note}",
                 parse_mode=ParseMode.MARKDOWN,
             )
             
@@ -400,8 +482,17 @@ async def wizard_message(client: Client, message: Message):
             DB.setdefault("BATCH_PRICES", {})[str(cid)] = price
             await save_data_async()
 
+            sg_success, sg_code = await _check_and_setup_supergroup_announcements(client, cid, cname)
+            sg_note = ""
+            if sg_code == "created":
+                sg_note = "\n📢 **Forum Supergroup:** `📢 Announcements` topic auto-created & pinned!"
+            elif sg_code == "already_exists":
+                sg_note = "\n📢 **Forum Supergroup:** `📢 Announcements` topic already linked."
+            elif sg_code == "permission_error":
+                sg_note = "\n⚠️ **Forum Supergroup:** Bot admin permission kam hai (Topic create nahi kar paya)."
+
             await message.reply_text(
-                f"✅ **Added!**\n📛 Name: {cname} ({cid})\n🏷️ Type: PAID\n📂 Category: {state['category']}\n💰 Price / Fee: **{price}**",
+                f"✅ **Added!**\n📛 Name: {cname} ({cid})\n🏷️ Type: PAID\n📂 Category: {state['category']}\n💰 Price / Fee: **{price}**{sg_note}",
                 parse_mode=ParseMode.MARKDOWN,
             )
 
@@ -456,8 +547,17 @@ async def wizard_message(client: Client, message: Message):
             DB.setdefault("BATCH_COINS", {})[str(cid)] = coin_cost
             await save_data_async()
 
+            sg_success, sg_code = await _check_and_setup_supergroup_announcements(client, cid, cname)
+            sg_note = ""
+            if sg_code == "created":
+                sg_note = "\n📢 **Forum Supergroup:** `📢 Announcements` topic auto-created & pinned!"
+            elif sg_code == "already_exists":
+                sg_note = "\n📢 **Forum Supergroup:** `📢 Announcements` topic already linked."
+            elif sg_code == "permission_error":
+                sg_note = "\n⚠️ **Forum Supergroup:** Bot admin permission kam hai (Topic create nahi kar paya)."
+
             await message.reply_text(
-                f"✅ **Added!**\n📛 Name: {cname} ({cid})\n🏷️ Type: SPECIAL\n📂 Category: {state['category']}\n💰 Unlock Cost: **{coin_cost} Coin{'s' if coin_cost != 1 else ''}**",
+                f"✅ **Added!**\n📛 Name: {cname} ({cid})\n🏷️ Type: SPECIAL\n📂 Category: {state['category']}\n💰 Unlock Cost: **{coin_cost} Coin{'s' if coin_cost != 1 else ''}**{sg_note}",
                 parse_mode=ParseMode.MARKDOWN,
             )
 
