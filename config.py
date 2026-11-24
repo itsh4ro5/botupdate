@@ -45,9 +45,9 @@ def _safe_int(env_name, default=0):
         return default
 
 API_ID = _safe_int("API_ID", 0)
-API_HASH = os.environ.get("API_HASH", "") or ""
-SESSION_STRING = os.environ.get("SESSION_STRING", "") or ""
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", DEFAULTS["TOKEN"]) or DEFAULTS["TOKEN"]
+API_HASH = (os.environ.get("API_HASH", "") or "").strip().strip("'\"")
+SESSION_STRING = (os.environ.get("SESSION_STRING", "") or "").strip().strip("'\"")
+TELEGRAM_BOT_TOKEN = (os.environ.get("TELEGRAM_BOT_TOKEN", DEFAULTS["TOKEN"]) or DEFAULTS["TOKEN"]).strip().strip("'\"")
 OWNER_ID = _safe_int("OWNER_ID", DEFAULTS["OWNER"])
 SUPPORT_GROUP_ID = _safe_int("SUPPORT_GROUP_ID", DEFAULTS["SUPPORT"])
 MANDATORY_CHANNEL_ID = _safe_int("MANDATORY_CHANNEL_ID", DEFAULTS["MAIN_CH"])

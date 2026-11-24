@@ -290,19 +290,63 @@ async def _run_pyrogram_engine():
                 continue
 
     API_ID = getattr(config, "API_ID", 0)
-    API_HASH = getattr(config, "API_HASH", "")
-    BOT_TOKEN = getattr(config, "TELEGRAM_BOT_TOKEN", "")
+    API_HASH = (getattr(config, "API_HASH", "") or "").strip().strip("'\"")
+    BOT_TOKEN = (getattr(config, "TELEGRAM_BOT_TOKEN", "") or "").strip().strip("'\"")
     OWNER_ID = getattr(config, "OWNER_ID", 0)
+
+    try:
+        API_ID = int(str(API_ID).strip().strip("'\""))
+    except Exception:
+        API_ID = 0
 
     if not BOT_TOKEN or not API_ID or not API_HASH:
         print("❌ TELEGRAM_BOT_TOKEN, API_ID ya API_HASH missing hai! HF Secrets check karein.", flush=True)
         return
+
+    # Clean up any stale session files on disk
+    for s_file in ["kamal_master_bot.session", "kamal_master_bot.session-journal"]:
+        if os.path.exists(s_file):
+            try:
+                os.remove(s_file)
+                print(f"🧹 Removed stale session file: {s_file}", flush=True)
+            except Exception:
+                pass
+
+    # Pre-flight Telegram Bot API verification
+    import httpx
+    print("🔍 Pre-flight check: Verifying TELEGRAM_BOT_TOKEN with Telegram HTTP API...", flush=True)
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as http_client:
+            res = await http_client.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getMe")
+            if res.status_code == 200 and res.json().get("ok"):
+                bot_meta = res.json().get("result", {})
+                b_name = bot_meta.get("username", "Unknown")
+                b_id = bot_meta.get("id", "Unknown")
+                print(f"✅ Bot Token verified successfully with Telegram! @{b_name} (ID: {b_id})", flush=True)
+            elif res.status_code in [401, 404]:
+                print(
+                    "\n" + "=" * 65 + "\n"
+                    "❌ FATAL ERROR: TELEGRAM_BOT_TOKEN IS INVALID OR REVOKED!\n"
+                    f"Telegram HTTP API response: {res.text}\n\n"
+                    "👉 KAISE SAHI KAREIN:\n"
+                    "1. Telegram par @BotFather ko message karein.\n"
+                    "2. /mybots command bhejein -> Apna bot select karein -> 'API Token' click karein.\n"
+                    "3. Agar token expire/revoke ho gaya hai, toh 'Revoke current token' karke naya token lein.\n"
+                    "4. Naya token copy karke Hugging Face Space Settings -> Variables and secrets -> TELEGRAM_BOT_TOKEN me paste karein.\n"
+                    "=" * 65 + "\n",
+                    flush=True
+                )
+            else:
+                print(f"⚠️ Telegram Bot API returned status {res.status_code}: {res.text}", flush=True)
+    except Exception as e_pre:
+        print(f"ℹ️ Pre-flight check notice: {e_pre}", flush=True)
 
     app = Client(
         "kamal_master_bot",
         api_id=int(API_ID),
         api_hash=str(API_HASH),
         bot_token=str(BOT_TOKEN),
+        in_memory=True,
         workers=50      
     )
     config.bot_app = app
@@ -480,9 +524,10 @@ async def _run_pyrogram_engine():
     # --- STARTING THE MTPROTO CONNECTION ---
     # --- STARTING THE MTPROTO CONNECTION ---
     attempt = 1
-    while attempt <= 5:
+    max_attempts = 10
+    while attempt <= max_attempts:
         try:
-            print(f"  BOT: Connecting via Pyrogram MTProto Sockets (Attempt {attempt}/5)...", flush=True)
+            print(f"  BOT: Connecting via Pyrogram MTProto Sockets (Attempt {attempt}/{max_attempts})...", flush=True)
             await _start_with_floodwait_guard(app)
             me = await app.get_me()
             import config
@@ -528,14 +573,28 @@ async def _run_pyrogram_engine():
             print(f"  FloodWait caught during startup sequence! Sleeping {wait_time}s...", flush=True)
             await asyncio.sleep(wait_time + 2)
             config.FLOOD_WAIT_UNTIL = 0
-            # Doesn't count against the 5-attempt budget   retry immediately.
+            # Doesn't count against the attempt budget   retry immediately.
             continue
         except Exception as e:
-            print(f"  Socket Connect Error: {type(e).__name__}: {e}", flush=True)
-            if attempt == 5:
-                print("  Could not connect to Telegram servers.", flush=True)
+            err_str = str(e)
+            print(f"  Socket Connect Error (Attempt {attempt}/{max_attempts}): {type(e).__name__}: {e}", flush=True)
+            if "RPC_CALL_FAIL" in err_str or "500" in err_str:
+                print("  💡 Telegram MTProto server returned 500 RPC_CALL_FAIL. Waiting for server recovery...", flush=True)
+            if attempt == max_attempts:
+                print(
+                    "\n" + "=" * 65 + "\n"
+                    "❌ FATAL: Could not connect to Telegram servers after 10 attempts.\n\n"
+                    "👉 REASON & FIX GUIDE:\n"
+                    "1. TELEGRAM_BOT_TOKEN: @BotFather par check karein ki token revoke toh nahi hua.\n"
+                    "2. API_ID & API_HASH: https://my.telegram.org par confirm karein ki API ID / Hash valid hain.\n"
+                    "3. SERVER OUTAGE: Agar Telegram DC2 par maintenance chal rahi hai, toh 5-10 minute wait karein.\n"
+                    "=" * 65 + "\n",
+                    flush=True
+                )
                 return
-            await asyncio.sleep(3)
+            sleep_time = min(attempt * 4, 30)
+            print(f"  Sleeping {sleep_time}s before attempt {attempt + 1}...", flush=True)
+            await asyncio.sleep(sleep_time)
             attempt += 1
 
     print("🟢 BOT: OPERATIONAL — MTProto Socket Listening...", flush=True)
