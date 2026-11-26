@@ -101,23 +101,45 @@ async def _check_and_setup_supergroup_announcements(client: Client, cid: int, cn
         DB.setdefault("ANNOUNCEMENT_TOPICS", {})[str(cid)] = int(topic_id)
 
         try:
-            banner = await client.send_message(
-                chat_id=cid,
-                message_thread_id=int(topic_id),
-                text=(
-                    "📢 **Official Announcements Channel**\n"
-                    "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                    "👋 **Welcome to the Official Announcements topic!**\n\n"
+            banner_rich = rp.message(
+                rp.heading("📢 Official Announcements Channel"),
+                rp.divider(),
+                rp.para("👋 ", rp.bold("Welcome to the Official Announcements topic!")),
+                rp.para(
                     "📌 Sabhi official batch updates, new releases, timetable alerts, "
-                    "aur important notices isi topic me aayenge.\n\n"
-                    "🔔 *Is topic ke notifications ON rakhein taaki koi important update miss na ho!*"
+                    "aur important notices isi topic me aayenge."
                 ),
-                parse_mode=ParseMode.MARKDOWN,
+                rp.divider(),
+                rp.para(rp.italic("🔔 Is topic ke notifications ON rakhein taaki koi important update miss na ho!"))
             )
+            banner = None
             try:
-                await client.pin_chat_message(chat_id=cid, message_id=banner.id)
-            except Exception as pe:
-                logger.warning(f"Could not pin announcement banner in {cid}: {pe}")
+                banner = await client.send_rich_message(
+                    chat_id=cid,
+                    rich_message=banner_rich,
+                    message_thread_id=int(topic_id)
+                )
+            except Exception:
+                pass
+            if not banner:
+                banner = await client.send_message(
+                    chat_id=cid,
+                    message_thread_id=int(topic_id),
+                    text=(
+                        "📢 **Official Announcements Channel**\n"
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                        "👋 **Welcome to the Official Announcements topic!**\n\n"
+                        "📌 Sabhi official batch updates, new releases, timetable alerts, "
+                        "aur important notices isi topic me aayenge.\n\n"
+                        "🔔 *Is topic ke notifications ON rakhein taaki koi important update miss na ho!*"
+                    ),
+                    parse_mode=ParseMode.MARKDOWN,
+                )
+            if banner:
+                try:
+                    await client.pin_chat_message(chat_id=cid, message_id=banner.id)
+                except Exception as pe:
+                    logger.warning(f"Could not pin announcement banner in {cid}: {pe}")
         except Exception as se:
             logger.warning(f"Could not send announcement banner in {cid}: {se}")
 
@@ -440,28 +462,28 @@ async def wizard_message(client: Client, message: Message):
                 await message.reply_text(
                     f"📡 Sending Auto-Broadcast for {state['type'].upper()} batch...", parse_mode=ParseMode.MARKDOWN
                 )
-                broadcast_kb = await get_batch_broadcast_kb(client, cid, cname)
+                rich_msg, caption, kb = await build_batch_announcement_rich_post(
+                    client, cid, cname, "free", state["category"]
+                )
                 for t_cid in list(DB.get("ALL_CHATS", {}).keys()):
                     if t_cid != cid:
                         try:
                             t_topic_id = DB.get("ANNOUNCEMENT_TOPICS", {}).get(str(t_cid))
-                            kwargs = {"message_thread_id": int(t_topic_id)} if t_topic_id else {}
-                            sent_msg = await client.send_message(
+                            sent_msg = await send_rich_batch_post(
+                                client,
                                 int(t_cid),
-                                f"🎉 <b>NEW FREE BATCH ADDED!</b>\n\n"
-                                f"🆓 <b>Name:</b> {cname}\n"
-                                f"📂 <b>Category:</b> {state['category']}\n\n"
-                                f"👉 <i>Click below to get direct access via our Bot:</i>",
-                                reply_markup=broadcast_kb,
-                                parse_mode=ParseMode.HTML,
-                                **kwargs
+                                rich_msg,
+                                caption,
+                                kb,
+                                message_thread_id=int(t_topic_id) if t_topic_id else None
                             )
-                            DB.setdefault("SCHEDULED_DELETES", []).append({
-                                "c": int(t_cid),
-                                "m": sent_msg.id,
-                                "t": time.time() + 10800,
-                            })
-                            b_count += 1
+                            if sent_msg:
+                                DB.setdefault("SCHEDULED_DELETES", []).append({
+                                    "c": int(t_cid),
+                                    "m": sent_msg.id,
+                                    "t": time.time() + 10800,
+                                })
+                                b_count += 1
                             await asyncio.sleep(0.05)
                         except FloodWait as e:
                             await asyncio.sleep(e.value + 1)
@@ -500,29 +522,28 @@ async def wizard_message(client: Client, message: Message):
 
             b_count = 0
             await message.reply_text("📡 Sending Auto-Broadcast for PAID batch...", parse_mode=ParseMode.MARKDOWN)
-            broadcast_kb = await get_batch_broadcast_kb(client, cid, cname)
+            rich_msg, caption, kb = await build_batch_announcement_rich_post(
+                client, cid, cname, "paid", state["category"], price=price
+            )
             for t_cid in list(DB.get("ALL_CHATS", {}).keys()):
                 if t_cid != cid:
                     try:
                         t_topic_id = DB.get("ANNOUNCEMENT_TOPICS", {}).get(str(t_cid))
-                        kwargs = {"message_thread_id": int(t_topic_id)} if t_topic_id else {}
-                        sent_msg = await client.send_message(
+                        sent_msg = await send_rich_batch_post(
+                            client,
                             int(t_cid),
-                            f"💎 <b>NEW PAID BATCH ADDED!</b>\n\n"
-                            f"📦 <b>Name:</b> {cname}\n"
-                            f"📂 <b>Category:</b> {state['category']}\n"
-                            f"💰 <b>Price / Fee:</b> {price}\n\n"
-                            f"👉 <i>Click below to get direct access via our Bot:</i>",
-                            reply_markup=broadcast_kb,
-                            parse_mode=ParseMode.HTML,
-                            **kwargs
+                            rich_msg,
+                            caption,
+                            kb,
+                            message_thread_id=int(t_topic_id) if t_topic_id else None
                         )
-                        DB.setdefault("SCHEDULED_DELETES", []).append({
-                            "c": int(t_cid),
-                            "m": sent_msg.id,
-                            "t": time.time() + 10800,
-                        })
-                        b_count += 1
+                        if sent_msg:
+                            DB.setdefault("SCHEDULED_DELETES", []).append({
+                                "c": int(t_cid),
+                                "m": sent_msg.id,
+                                "t": time.time() + 10800,
+                            })
+                            b_count += 1
                         await asyncio.sleep(0.05)
                     except FloodWait as e:
                         await asyncio.sleep(e.value + 1)
@@ -565,29 +586,28 @@ async def wizard_message(client: Client, message: Message):
 
             b_count = 0
             await message.reply_text("📡 Sending Auto-Broadcast for SPECIAL batch...", parse_mode=ParseMode.MARKDOWN)
-            broadcast_kb = await get_batch_broadcast_kb(client, cid, cname)
+            rich_msg, caption, kb = await build_batch_announcement_rich_post(
+                client, cid, cname, "special", state["category"], coin_cost=coin_cost
+            )
             for t_cid in list(DB.get("ALL_CHATS", {}).keys()):
                 if t_cid != cid:
                     try:
                         t_topic_id = DB.get("ANNOUNCEMENT_TOPICS", {}).get(str(t_cid))
-                        kwargs = {"message_thread_id": int(t_topic_id)} if t_topic_id else {}
-                        sent_msg = await client.send_message(
+                        sent_msg = await send_rich_batch_post(
+                            client,
                             int(t_cid),
-                            f"✨ <b>NEW SPECIAL BATCH ADDED!</b>\n\n"
-                            f"🌟 <b>Name:</b> {cname}\n"
-                            f"📂 <b>Category:</b> {state['category']}\n"
-                            f"💰 <b>Unlock Cost:</b> {coin_cost} Coin{'s' if coin_cost != 1 else ''}\n\n"
-                            f"👉 <i>Click below to get direct access via our Bot:</i>",
-                            reply_markup=broadcast_kb,
-                            parse_mode=ParseMode.HTML,
-                            **kwargs
+                            rich_msg,
+                            caption,
+                            kb,
+                            message_thread_id=int(t_topic_id) if t_topic_id else None
                         )
-                        DB.setdefault("SCHEDULED_DELETES", []).append({
-                            "c": int(t_cid),
-                            "m": sent_msg.id,
-                            "t": time.time() + 10800,
-                        })
-                        b_count += 1
+                        if sent_msg:
+                            DB.setdefault("SCHEDULED_DELETES", []).append({
+                                "c": int(t_cid),
+                                "m": sent_msg.id,
+                                "t": time.time() + 10800,
+                            })
+                            b_count += 1
                         await asyncio.sleep(0.05)
                     except FloodWait as e:
                         await asyncio.sleep(e.value + 1)

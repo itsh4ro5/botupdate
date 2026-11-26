@@ -102,11 +102,25 @@ async def get_batch_broadcast_kb(client: Client, cid: int, cname: str):
     ])
 
 
-async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: str, category: str, coin_cost: int = None, price: str = None):
+async def build_batch_announcement_rich_post(
+    client: Client,
+    cid: int,
+    cname: str,
+    b_type: str,
+    category: str,
+    coin_cost: int = None,
+    price: str = None,
+    photo_path: str = None
+):
+    """
+    Builds a full richpyro Rich Message post with branded headers, dividers,
+    and colorful rich buttons (Primary Blue for Get Access, Success Green for Share).
+    Returns (rich_msg, fallback_caption, fallback_reply_markup).
+    """
     import config
     import os
     import urllib.parse
-    update_channel = getattr(config, 'BATCH_UPDATE_CHANNEL_ID', 0) or config.DB.get('BATCH_UPDATE_CHANNEL_ID', 0) or -1004304703943
+    import richpyro as rp
 
     bot_username = getattr(config, 'BOT_USERNAME', None)
     if not bot_username:
@@ -119,28 +133,135 @@ async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: s
     share_text = f"🔥 Check out new batch: {cname} on our Bot!"
     share_url = f"https://t.me/share/url?url={urllib.parse.quote(deep_link)}&text={urllib.parse.quote(share_text)}"
 
-    kb = [
-        [InlineKeyboardButton("🚀 Get Access Here", url=deep_link, style=ButtonStyle.PRIMARY)],
-        [InlineKeyboardButton("📢 Share Batch", url=share_url, style=ButtonStyle.SUCCESS)],
-    ]
-
     type_badge = b_type.upper()
     paid_price = price or DB.get("BATCH_PRICES", {}).get(str(cid))
+    cost_text = ""
     if b_type.lower() == 'special' and coin_cost:
-        cost_line = f"\n💰 <b>Cost:</b> <code>{coin_cost} Coins</code>"
+        cost_text = f"{coin_cost} Coins"
     elif b_type.lower() == 'paid' and paid_price:
-        cost_line = f"\n💰 <b>Price:</b> <code>{paid_price}</code>"
-    else:
-        cost_line = ""
+        cost_text = str(paid_price)
 
+    # 1. Standard Fallback Keyboard
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🚀 Get Access Here", url=deep_link, style=ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton("📢 Share Batch", url=share_url, style=ButtonStyle.SUCCESS)],
+    ])
+
+    # 2. Standard Fallback HTML Caption
+    cost_line = f"\n💰 <b>Price / Cost:</b> <code>{cost_text}</code>" if cost_text else ""
     caption = (
-        "🎉 <b>NEW BATCH ADDED!</b>\n\n"
+        f"🎉 <b>NEW {type_badge} BATCH ADDED!</b>\n\n"
         f"📦 <b>Name:</b> <code>{cname}</code>\n"
         f"🏷️ <b>Type:</b> <code>{type_badge}</code>\n"
         f"📂 <b>Category:</b> <code>{category}</code>"
         f"{cost_line}\n\n"
-        "👉 <i>Click the button below to get direct access via our Bot!</i>"
+        "👉 <i>Click below to get direct access via our Bot:</i>"
     )
+
+    # 3. RichPyro Blocks Message
+    blocks = []
+    if photo_path and os.path.exists(photo_path):
+        try:
+            blocks.append(rp.photo_block(rp.photo_media(photo_path)))
+        except Exception:
+            pass
+
+    blocks.append(rp.heading(f"🎉 NEW {type_badge} BATCH ADDED!"))
+    blocks.append(rp.divider())
+    blocks.append(rp.para("📦 ", rp.bold("Batch Name: "), rp.code(cname)))
+    blocks.append(rp.para("🏷️ ", rp.bold("Access Tier: "), rp.bold(f"[{type_badge}]")))
+    blocks.append(rp.para("📂 ", rp.bold("Category: "), rp.italic(category)))
+
+    if b_type.lower() == 'special' and coin_cost:
+        blocks.append(rp.para("🪙 ", rp.bold("Unlock Cost: "), rp.code(f"{coin_cost} Coins")))
+    elif b_type.lower() == 'paid' and paid_price:
+        blocks.append(rp.para("💰 ", rp.bold("Enrollment Fee: "), rp.code(str(paid_price))))
+    elif b_type.lower() == 'free':
+        blocks.append(rp.para("🆓 ", rp.bold("Access: "), rp.bold("100% Free For Everyone")))
+
+    blocks.append(rp.divider())
+    blocks.append(rp.para(rp.italic("👉 Click below to get direct access via our Bot:")))
+    blocks.append(
+        rp.buttons(
+            rp.url_btn("🚀 Get Access Here", deep_link, style=rp.Style.PRIMARY),
+            rp.url_btn("📢 Share Batch", share_url, style=rp.Style.SUCCESS),
+        )
+    )
+
+    rich_msg = rp.message(*blocks)
+    return rich_msg, caption, kb
+
+
+async def send_rich_batch_post(
+    client: Client,
+    chat_id: int | str,
+    rich_msg,
+    caption: str,
+    reply_markup: InlineKeyboardMarkup,
+    photo_path: str = None,
+    message_thread_id: int = None
+):
+    """
+    Sends the announcement using richpyro Rich Message (with colorful buttons).
+    Falls back cleanly to photo or standard message if rich message is not supported.
+    """
+    cid = int(chat_id) if str(chat_id).lstrip("-").isdigit() else chat_id
+    kwargs = {}
+    if message_thread_id:
+        kwargs["message_thread_id"] = int(message_thread_id)
+
+    # 1. Try sending as native Rich Message (which renders richpyro styled buttons)
+    try:
+        sent = await client.send_rich_message(
+            cid,
+            rich_message=rich_msg,
+            **kwargs
+        )
+        if sent:
+            return sent
+    except Exception as e:
+        logger.debug(f"send_rich_message failed for {cid}, falling back: {e}")
+
+    # 2. Fallback: send_photo if photo exists
+    if photo_path and os.path.exists(photo_path):
+        try:
+            return await client.send_photo(
+                cid,
+                photo=photo_path,
+                caption=caption,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.HTML,
+                **kwargs
+            )
+        except Exception as pe:
+            logger.debug(f"send_photo fallback failed for {cid}: {pe}")
+
+    # 3. Fallback: standard send_message
+    return await client.send_message(
+        cid,
+        text=caption,
+        reply_markup=reply_markup,
+        parse_mode=ParseMode.HTML,
+        **kwargs
+    )
+
+
+async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: str, category: str, coin_cost: int = None, price: str = None):
+    import config
+    import os
+    import urllib.parse
+    import richpyro as rp
+    update_channel = getattr(config, 'BATCH_UPDATE_CHANNEL_ID', 0) or config.DB.get('BATCH_UPDATE_CHANNEL_ID', 0) or -1004304703943
+
+    bot_username = getattr(config, 'BOT_USERNAME', None)
+    if not bot_username:
+        try:
+            bot_username = (await client.get_me()).username
+        except Exception:
+            bot_username = "bot"
+
+    deep_link = f"https://t.me/{bot_username}?start=batch_{cid}"
+    type_badge = b_type.upper()
 
     photo_path = None
     try:
@@ -150,13 +271,14 @@ async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: s
     except Exception:
         pass
 
+    rich_msg, caption, kb = await build_batch_announcement_rich_post(
+        client, cid, cname, b_type, category, coin_cost=coin_cost, price=price, photo_path=photo_path
+    )
+
     # 1. Send to dedicated Update Channel (if configured)
     if update_channel:
         try:
-            if photo_path and os.path.exists(photo_path):
-                await client.send_photo(int(update_channel), photo=photo_path, caption=caption, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
-            else:
-                await client.send_message(int(update_channel), text=caption, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
+            await send_rich_batch_post(client, int(update_channel), rich_msg, caption, kb, photo_path=photo_path)
         except Exception as e:
             logger.error(f"Failed to send to batch update channel: {e}")
 
@@ -167,24 +289,9 @@ async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: s
             g_cid = int(g_cid_str)
             if g_cid == cid:
                 continue
-            sent_ann = None
-            if photo_path and os.path.exists(photo_path):
-                sent_ann = await client.send_photo(
-                    g_cid,
-                    photo=photo_path,
-                    caption=caption,
-                    reply_markup=InlineKeyboardMarkup(kb),
-                    parse_mode=ParseMode.HTML,
-                    message_thread_id=int(topic_id)
-                )
-            else:
-                sent_ann = await client.send_message(
-                    g_cid,
-                    text=caption,
-                    reply_markup=InlineKeyboardMarkup(kb),
-                    parse_mode=ParseMode.HTML,
-                    message_thread_id=int(topic_id)
-                )
+            sent_ann = await send_rich_batch_post(
+                client, g_cid, rich_msg, caption, kb, photo_path=photo_path, message_thread_id=int(topic_id)
+            )
             if sent_ann:
                 DB.setdefault("SCHEDULED_DELETES", []).append({
                     "c": g_cid,
@@ -212,17 +319,18 @@ async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: s
 
     for target_uid in matched_uids:
         try:
-            notify_kb = [[InlineKeyboardButton("🚀 Open Your Requested Batch", url=deep_link, style=ButtonStyle.PRIMARY)]]
-            await client.send_message(
-                target_uid,
-                f"🎉 **Great News! Aapka Requested Batch Live Ho Chuka Hai!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"📦 **Batch Name:** `{cname}`\n"
-                f"🏷️ **Type:** `{type_badge}`\n\n"
-                f"Aapne is batch ki demand ki thi. Ab yeh bot me successfully add ho gaya hai!\n"
-                f"Neeche button se direct join karein:",
-                reply_markup=InlineKeyboardMarkup(notify_kb),
-                parse_mode=ParseMode.MARKDOWN
+            notify_rich = rp.message(
+                rp.heading("🎉 Requested Batch Is Now Live!"),
+                rp.divider(),
+                rp.para("📦 ", rp.bold("Batch Name: "), rp.code(cname)),
+                rp.para("🏷️ ", rp.bold("Access Tier: "), rp.bold(f"[{type_badge}]")),
+                rp.divider(),
+                rp.para(rp.italic("👉 Aapne is batch ki demand submit ki thi. Ab yeh bot me uplabdh hai!")),
+                rp.buttons(
+                    rp.url_btn("🚀 Open Your Requested Batch", deep_link, style=rp.Style.PRIMARY)
+                )
             )
+            await rp.send(client, target_uid, notify_rich)
         except Exception:
             pass
 
@@ -569,23 +677,45 @@ async def cmd_add_group(client: Client, message: Message):
                     if topic_id:
                         DB.setdefault("ANNOUNCEMENT_TOPICS", {})[str(chat.id)] = int(topic_id)
                         try:
-                            banner = await client.send_message(
-                                chat_id=chat.id,
-                                message_thread_id=int(topic_id),
-                                text=(
-                                    "📢 **Official Announcements Channel**\n"
-                                    "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                                    "👋 **Welcome to the Official Announcements topic!**\n\n"
+                            banner_rich = rp.message(
+                                rp.heading("📢 Official Announcements Channel"),
+                                rp.divider(),
+                                rp.para("👋 ", rp.bold("Welcome to the Official Announcements topic!")),
+                                rp.para(
                                     "📌 Sabhi official batch updates, new releases, timetable alerts, "
-                                    "aur important notices isi topic me aayenge.\n\n"
-                                    "🔔 *Is topic ke notifications ON rakhein taaki koi important update miss na ho!*"
+                                    "aur important notices isi topic me aayenge."
                                 ),
-                                parse_mode=ParseMode.MARKDOWN,
+                                rp.divider(),
+                                rp.para(rp.italic("🔔 Is topic ke notifications ON rakhein taaki koi important update miss na ho!"))
                             )
+                            banner = None
                             try:
-                                await client.pin_chat_message(chat_id=chat.id, message_id=banner.id)
+                                banner = await client.send_rich_message(
+                                    chat.id,
+                                    rich_message=banner_rich,
+                                    message_thread_id=int(topic_id)
+                                )
                             except Exception:
                                 pass
+                            if not banner:
+                                banner = await client.send_message(
+                                    chat_id=chat.id,
+                                    message_thread_id=int(topic_id),
+                                    text=(
+                                        "📢 **Official Announcements Channel**\n"
+                                        "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                                        "👋 **Welcome to the Official Announcements topic!**\n\n"
+                                        "📌 Sabhi official batch updates, new releases, timetable alerts, "
+                                        "aur important notices isi topic me aayenge.\n\n"
+                                        "🔔 *Is topic ke notifications ON rakhein taaki koi important update miss na ho!*"
+                                    ),
+                                    parse_mode=ParseMode.MARKDOWN,
+                                )
+                            if banner:
+                                try:
+                                    await client.pin_chat_message(chat_id=chat.id, message_id=banner.id)
+                                except Exception:
+                                    pass
                             forum_detail = "Forum ON ✅ (📢 Announcements Topic Created & Pinned)"
                         except Exception:
                             forum_detail = "Forum ON ✅ (Topic Created)"

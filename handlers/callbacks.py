@@ -1859,8 +1859,8 @@ async def general_callback(client: Client, q: CallbackQuery):
                     await save_data_async()
 
                 kb = [
-                    [InlineKeyboardButton("🚀 Join Batch", url=l.invite_link)],
-                    [InlineKeyboardButton("🔗 Share Batch with Friends", callback_data=f"share_btn_{cid}")]
+                    [InlineKeyboardButton("🚀 Join Batch", url=l.invite_link, style=ButtonStyle.PRIMARY)],
+                    [InlineKeyboardButton("🔗 Share Batch with Friends", callback_data=f"share_btn_{cid}", style=ButtonStyle.SUCCESS)]
                 ]
                 sent_msg = await client.send_message(
                     uid,
