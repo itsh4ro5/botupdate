@@ -290,6 +290,10 @@ def build_home_menu(user_key, user):
                 rp.btn("🌟 All Batches", "all_batches_0", style=rp.Style.DEFAULT)
             ),
             rp.buttons(
+                rp.btn("🎁 Mega Giveaway", "menu_giveaway", style=rp.Style.SUCCESS),
+                rp.btn("🗳️ Batch Demands", "menu_batch_demands", style=rp.Style.PRIMARY)
+            ),
+            rp.buttons(
                 rp.btn("🔥 Daily Streak", "claim_daily_streak", style=rp.Style.SUCCESS),
                 rp.btn("🚀 Refer & Earn", "menu_refer", style=rp.Style.SUCCESS)
             ),
@@ -331,6 +335,10 @@ def build_home_menu(user_key, user):
             rp.buttons(
                 rp.btn("📚 My Batches", "my_batches_0", style=rp.Style.SUCCESS),
                 rp.btn("🌐 All Batches", "all_batches_0", style=rp.Style.DEFAULT)
+            ),
+            rp.buttons(
+                rp.btn("🎁 Mega Giveaway", "menu_giveaway", style=rp.Style.SUCCESS),
+                rp.btn("🗳️ Batch Demands", "menu_batch_demands", style=rp.Style.PRIMARY)
             ),
             rp.buttons(
                 rp.btn("🔥 Daily Streak", "claim_daily_streak", style=rp.Style.SUCCESS),
@@ -458,7 +466,8 @@ def build_database_panel_msg():
             rp.btn("📋 Request Batches", "view_batch_requests", style=rp.Style.SUCCESS)
         ),
         rp.buttons(
-            rp.btn("🗂️ Topic Arrangement", "start_topic_arranger", style=rp.Style.SUCCESS)
+            rp.btn("🗂️ Topic Arrangement", "start_topic_arranger", style=rp.Style.SUCCESS),
+            rp.btn("🎁 Manage Giveaway", "dash_giveaway", style=rp.Style.PRIMARY)
         ),
         rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DANGER))
     )
@@ -860,7 +869,23 @@ async def start(client: Client, message: Message):
             parts = param.split("_")
             if len(parts) >= 2 and parts[-1].isdigit():
                 referrer_id = int(parts[-1])
-                
+
+        # Case C: Giveaway Candidate Vote Link (vote_CANDIDATEID)
+        elif param.startswith("vote_"):
+            parts = param.split("_")
+            if len(parts) >= 2 and parts[1].isdigit():
+                cand_id = parts[1]
+                if str(cand_id) != str(user.id):
+                    referrer_id = int(cand_id)
+                    DB["USER_DATA"][user_key]["pending_vote"] = cand_id
+
+        # Case D: Batch Demand Campaign Vote Link (demand_INDEX)
+        elif param.startswith("demand_"):
+            parts = param.split("_")
+            if len(parts) >= 2 and parts[1].isdigit():
+                demand_idx = parts[1]
+                DB["USER_DATA"][user_key]["pending_demand"] = demand_idx
+
         # Save pending referral if it's a new user
         if is_new_user and referrer_id and str(referrer_id) != str(user.id):
             DB["USER_DATA"][user_key]["pending_referral"] = referrer_id
@@ -906,6 +931,20 @@ async def start(client: Client, message: Message):
                 referrer_id = DB["USER_DATA"][user_key].pop("pending_referral")
                 await save_data_async()
                 await process_successful_referral(client, user.id, referrer_id)
+
+            if "pending_vote" in DB["USER_DATA"][user_key]:
+                cand_id = DB["USER_DATA"][user_key].pop("pending_vote")
+                await save_data_async()
+                from .economy import cast_giveaway_vote
+                await cast_giveaway_vote(client, user, cand_id)
+
+            if "pending_demand" in DB["USER_DATA"][user_key]:
+                d_idx = DB["USER_DATA"][user_key].pop("pending_demand")
+                await save_data_async()
+                bname = DB.get("DEMAND_SLUGS", {}).get(str(d_idx))
+                if bname:
+                    from .batches import cast_batch_demand_vote
+                    await cast_batch_demand_vote(client, user.id, bname)
 
             msg = build_home_menu(user_key, user)
             await rp.edit(client, loading_msg.chat.id, loading_msg.id, msg)

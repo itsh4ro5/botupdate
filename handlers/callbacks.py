@@ -893,6 +893,20 @@ async def general_callback(client: Client, q: CallbackQuery):
                 await save_data_async()
                 await process_successful_referral(client, uid, referrer_id)
 
+            if "pending_vote" in DB["USER_DATA"][user_key]:
+                cand_id = DB["USER_DATA"][user_key].pop("pending_vote")
+                await save_data_async()
+                from .economy import cast_giveaway_vote
+                await cast_giveaway_vote(client, q.from_user, cand_id)
+
+            if "pending_demand" in DB["USER_DATA"][user_key]:
+                d_idx = DB["USER_DATA"][user_key].pop("pending_demand")
+                await save_data_async()
+                bname = DB.get("DEMAND_SLUGS", {}).get(str(d_idx))
+                if bname:
+                    from .batches import cast_batch_demand_vote
+                    await cast_batch_demand_vote(client, uid, bname)
+
             await show_user_menu_cb(client, q)
 
         elif data == "u_main":
@@ -1368,6 +1382,141 @@ async def general_callback(client: Client, q: CallbackQuery):
                 logger.error(f"Refer & Earn Error: {e}")
                 await q.answer("⚠️ Menu load hone me error aayi. Kripya wapas try karein.", show_alert=True)
 
+        # =====================================================================
+        # 🎁 GIVEAWAY & BATCH DEMANDS VIRAL SUITE CALLBACKS
+        # =====================================================================
+        elif data == "menu_giveaway":
+            await q.answer()
+            from .economy import build_giveaway_hub_msg
+            bot_info = getattr(client, "me", None)
+            bot_uname = bot_info.username if bot_info and bot_info.username else "H4R_Contact_bot"
+            msg = build_giveaway_hub_msg(uid, bot_uname)
+            await rp.edit(client, q.message.chat.id, q.message.id, msg)
+
+        elif data == "giveaway_enter_prompt":
+            await q.answer()
+            user_key = str(uid) if str(uid) in DB.get("USER_DATA", {}) else uid
+            user_coins = DB.get("USER_DATA", {}).get(user_key, {}).get("referral_count", 0)
+            req_coins = DB.get("GIVEAWAY_CONFIG", {}).get("required_coins", 3)
+            if user_coins < req_coins:
+                return await q.answer(f"❌ Kam se kam {req_coins} Coins chahiye! Pehle refer karein.", show_alert=True)
+            
+            USER_FLOW_STATE[uid] = "wait_giveaway_batch"
+            prompt_msg = rp.message(
+                rp.heading("🎟️ Giveaway Entry Registration"),
+                rp.divider(),
+                rp.para("👉 ", rp.bold("Aapko Giveaway jeetne par konsa Batch chahiye?")),
+                rp.expandable_quote([
+                    rp.bold("📌 Example:\n"),
+                    rp.code("SSC JE 2026 Foundation Batch C - Civil"), "\n\n",
+                    rp.italic("Apne manpasand batch ka naam likh kar chat me bhejein.\n3 Coins aapki entry fee ke roop me use honge aur aapka Candidate Profile create ho jayega!")
+                ]),
+                rp.divider(),
+                rp.buttons(rp.btn("❌ Cancel Entry", "menu_giveaway", style=rp.Style.DANGER))
+            )
+            await rp.edit(client, q.message.chat.id, q.message.id, prompt_msg)
+
+        elif data == "giveaway_leaderboard" or data.startswith("gw_lb_page_"):
+            await q.answer()
+            from .economy import build_giveaway_leaderboard_msg
+            page = 0
+            if data.startswith("gw_lb_page_"):
+                try:
+                    page = int(data.split("_")[-1])
+                except Exception:
+                    page = 0
+            msg = build_giveaway_leaderboard_msg(page=page, current_uid=uid)
+            await rp.edit(client, q.message.chat.id, q.message.id, msg)
+
+        elif data == "menu_batch_demands" or data.startswith("demands_page_"):
+            await q.answer()
+            from .batches import build_student_batch_demands_msg
+            page = 0
+            if data.startswith("demands_page_"):
+                try:
+                    page = int(data.split("_")[-1])
+                except Exception:
+                    page = 0
+            bot_info = getattr(client, "me", None)
+            bot_uname = bot_info.username if bot_info and bot_info.username else "H4R_Contact_bot"
+            msg = build_student_batch_demands_msg(uid, bot_uname, page=page)
+            await rp.edit(client, q.message.chat.id, q.message.id, msg)
+
+        elif data.startswith("votedmd_"):
+            d_idx = data.split("_")[1]
+            bname = DB.get("DEMAND_SLUGS", {}).get(str(d_idx))
+            if not bname:
+                return await q.answer("❌ Batch demand not found.", show_alert=True)
+            from .batches import cast_batch_demand_vote, build_student_batch_demands_msg
+            ok, text = await cast_batch_demand_vote(client, uid, bname)
+            await q.answer(text, show_alert=True)
+            bot_info = getattr(client, "me", None)
+            bot_uname = bot_info.username if bot_info and bot_info.username else "H4R_Contact_bot"
+            msg = build_student_batch_demands_msg(uid, bot_uname, page=0)
+            await rp.edit(client, q.message.chat.id, q.message.id, msg)
+
+        elif data == "dash_giveaway":
+            await q.answer()
+            if not is_admin(uid):
+                return await q.answer("❌ Sirf Admins ke liye.", show_alert=True)
+            from .economy import build_admin_giveaway_panel_msg
+            msg = build_admin_giveaway_panel_msg()
+            await rp.edit(client, q.message.chat.id, q.message.id, msg)
+
+        elif data == "gw_toggle_status":
+            await q.answer()
+            if not is_admin(uid):
+                return await q.answer("❌ Sirf Admins ke liye.", show_alert=True)
+            cfg = DB.setdefault("GIVEAWAY_CONFIG", {"active": True, "title": "🎉 Free Batch Mega Giveaway", "required_coins": 3})
+            cfg["active"] = not cfg.get("active", True)
+            await save_data_async()
+            await q.answer(f"✅ Giveaway is now {'ACTIVE' if cfg['active'] else 'PAUSED'}!", show_alert=True)
+            from .economy import build_admin_giveaway_panel_msg
+            msg = build_admin_giveaway_panel_msg()
+            await rp.edit(client, q.message.chat.id, q.message.id, msg)
+
+        elif data == "gw_declare_winner":
+            await q.answer()
+            if not is_admin(uid):
+                return await q.answer("❌ Sirf Admins ke liye.", show_alert=True)
+            participants = DB.get("GIVEAWAY_PARTICIPANTS", {})
+            if not participants:
+                return await q.answer("❌ Abhi tak koi contestants nahi hain!", show_alert=True)
+            sorted_p = sorted(participants.items(), key=lambda x: x[1].get("votes", 0), reverse=True)
+            winner_id, winner_data = sorted_p[0]
+            w_name = winner_data.get("name", "Student")
+            w_batch = winner_data.get("batch", "Target Batch")
+            w_votes = winner_data.get("votes", 0)
+
+            try:
+                await client.send_message(
+                    int(winner_id),
+                    f"🏆 **CONGRATULATIONS! YOU WON THE FREE BATCH GIVEAWAY!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"Aapne sabse zyada **{w_votes} Votes** jeetkar Free Batch Contest jeet liya hai! 🎉\n"
+                    f"🎯 **Your Batch:** `{w_batch}`\n\n"
+                    f"Admin aapke topic me free batch access turant approve kar rahe hain! 🚀",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            except Exception:
+                pass
+
+            await q.answer(f"👑 Winner Declared:\n{w_name} ({w_votes} Votes)\nBatch: {w_batch}", show_alert=True)
+            from .economy import build_admin_giveaway_panel_msg
+            msg = build_admin_giveaway_panel_msg()
+            await rp.edit(client, q.message.chat.id, q.message.id, msg)
+
+        elif data == "gw_reset_confirm":
+            await q.answer()
+            if not is_admin(uid):
+                return await q.answer("❌ Sirf Admins ke liye.", show_alert=True)
+            DB["GIVEAWAY_PARTICIPANTS"] = {}
+            DB["GIVEAWAY_VOTES"] = {}
+            await save_data_async()
+            await q.answer("🗑️ Giveaway contestants and votes reset successfully!", show_alert=True)
+            from .economy import build_admin_giveaway_panel_msg
+            msg = build_admin_giveaway_panel_msg()
+            await rp.edit(client, q.message.chat.id, q.message.id, msg)
+
         # --- HOME MENU: VACANCIES & RECRUITMENT RADAR ---
         elif data == "menu_vacancies":
             try:
@@ -1496,6 +1645,18 @@ async def general_callback(client: Client, q: CallbackQuery):
                         referrer_id = DB["USER_DATA"][user_key].pop("pending_referral")
                         await save_data_async()
                         await process_successful_referral(client, uid, referrer_id)
+                    if "pending_vote" in DB["USER_DATA"][user_key]:
+                        cand_id = DB["USER_DATA"][user_key].pop("pending_vote")
+                        await save_data_async()
+                        from .economy import cast_giveaway_vote
+                        await cast_giveaway_vote(client, q.from_user, cand_id)
+                    if "pending_demand" in DB["USER_DATA"][user_key]:
+                        d_idx = DB["USER_DATA"][user_key].pop("pending_demand")
+                        await save_data_async()
+                        bname = DB.get("DEMAND_SLUGS", {}).get(str(d_idx))
+                        if bname:
+                            from .batches import cast_batch_demand_vote
+                            await cast_batch_demand_vote(client, uid, bname)
                     await start_from_cb(client, q)
             else:
                 await q.answer(

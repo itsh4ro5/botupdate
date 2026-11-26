@@ -1368,3 +1368,155 @@ async def check_demos(client: Client):
         await save_data_async()
 
 
+# =====================================================================
+# 🗳️ STUDENT BATCH DEMANDS & VIRAL VOTING CAMPAIGN
+# =====================================================================
+
+def build_student_batch_demands_msg(user_id: int, bot_username: str = "H4R_Contact_bot", page: int = 0):
+    """
+    Builds the interactive student-facing Batch Demands & Voting Campaign message.
+    Students can vote on upcoming batches and share campaigns to rally votes.
+    """
+    reqs = DB.get("BATCH_REQUESTS", {})
+    statuses = DB.setdefault("BATCH_REQUEST_STATUS", {})
+    target_votes = DB.get("BATCH_DEMAND_TARGET", 30)
+
+    # Filter only pending / active requests
+    active_demands = [(bname, uids) for bname, uids in reqs.items() if statuses.get(bname) != "done"]
+    active_demands.sort(key=lambda x: len(x[1]), reverse=True)
+    total = len(active_demands)
+
+    if total == 0:
+        return rp.message(
+            rp.heading("🗳️ Batch Demands & Voting Campaign"),
+            rp.divider(),
+            rp.expandable_quote([
+                rp.bold("ℹ️ No Active Demands Right Now:\n\n"),
+                "Abhi koi pending batch demand list me nahi hai. Aap pehle student ban kar naye batch ki demand submit karein!\n",
+                f"Jaise hi kisi batch ko ", rp.bold(f"{target_votes} Votes"), " milenge, use sabse pehle channel me upload kiya jayega! 🚀"
+            ]),
+            rp.divider(),
+            rp.buttons(
+                rp.btn("➕ Request New Batch", "req_batch_btn", style=rp.Style.SUCCESS),
+                rp.btn("🏠 Main Menu", "u_main", style=rp.Style.DANGER)
+            )
+        )
+
+    # Store slug/index lookup for safe deep-linking
+    slugs_map = DB.setdefault("DEMAND_SLUGS", {})
+    for idx, (bname, _) in enumerate(active_demands, start=1):
+        slugs_map[str(idx)] = bname
+
+    PER_PAGE = 4
+    total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
+    page = max(0, min(page, total_pages - 1))
+    start_idx = page * PER_PAGE
+    end_idx = min(start_idx + PER_PAGE, total)
+    page_items = active_demands[start_idx:end_idx]
+
+    body_elements = [
+        rp.heading("🗳️ Batch Demands & Voting Campaign"),
+        rp.divider(),
+        rp.para(
+            "📢 ", rp.bold("Target: "), f"Har batch ko upload hone ke liye ", rp.bold(f"{target_votes} Votes"), " chahiye!\n",
+            rp.italic("Apne manpasand batch ko vote karein aur link apne college groups me share karke votes badhayein.")
+        ),
+        rp.marked(f" 📦 Active Demands: {total} | 🎯 Target: {target_votes} Votes | 📄 Page {page + 1}/{total_pages} "),
+        rp.divider(),
+    ]
+
+    action_buttons = []
+    for rel_idx, (bname, uids) in enumerate(page_items):
+        global_idx = start_idx + rel_idx + 1
+        voters_count = len(uids)
+        pct = min(100, int((voters_count / target_votes) * 100))
+        pbar = render_progress_bar(voters_count, target_votes, length=8)
+        has_voted = user_id in uids
+        voted_badge = "✅ Voted" if has_voted else "🗳️ Vote"
+        
+        deep_link = f"https://t.me/{bot_username}?start=demand_{global_idx}"
+        needed = max(0, target_votes - voters_count)
+        share_text = f"🔥 Bhaiyon, '{bname}' batch ke liye bas {needed} votes baaki hain! Is link pe click karke vote karo taaki jaldi upload ho: {deep_link}"
+        share_url = f"https://t.me/share/url?url={urllib.parse.quote(deep_link)}&text={urllib.parse.quote(share_text)}"
+
+        body_elements.append(
+            rp.para(
+                rp.bold(f"{global_idx}. {bname}\n"),
+                rp.code(f"[{pbar}] {voters_count}/{target_votes} Votes ({pct}%)"),
+                f" — ", rp.bold("Goal Reached! 🚀" if voters_count >= target_votes else f"{needed} more needed")
+            )
+        )
+
+        row = []
+        if not has_voted:
+            row.append(rp.btn(f"🗳️ Vote #{global_idx}", f"votedmd_{global_idx}", style=rp.Style.SUCCESS))
+        else:
+            row.append(rp.btn(f"✅ Voted ({voters_count})", f"votedmd_{global_idx}", style=rp.Style.PRIMARY))
+        
+        row.append(rp.url_btn(f"📤 Share #{global_idx}", share_url, style=rp.Style.LINK))
+        action_buttons.append(rp.buttons(*row))
+
+    nav_btns = []
+    if page > 0:
+        nav_btns.append(rp.btn("⬅️ Prev", f"demands_page_{page - 1}", style=rp.Style.DEFAULT))
+    if page < total_pages - 1:
+        nav_btns.append(rp.btn("Next ➡️", f"demands_page_{page + 1}", style=rp.Style.DEFAULT))
+
+    body_elements.append(rp.divider())
+    body_elements.extend(action_buttons)
+    if nav_btns:
+        body_elements.append(rp.buttons(*nav_btns))
+
+    body_elements.append(
+        rp.buttons(
+            rp.btn("➕ Request New Batch", "req_batch_btn", style=rp.Style.SUCCESS),
+            rp.btn("🏠 Main Menu", "u_main", style=rp.Style.DANGER)
+        )
+    )
+    return rp.message(*body_elements)
+
+
+async def cast_batch_demand_vote(client: Client, user_id: int, bname: str):
+    """Adds a vote for a batch demand and notifies admins if goal reached."""
+    reqs = DB.setdefault("BATCH_REQUESTS", {})
+    reqs.setdefault(bname, [])
+    
+    if user_id in reqs[bname]:
+        return False, f"⚠️ Aap pehle hi **{bname}** ke liye vote kar chuke hain!"
+    
+    reqs[bname].append(user_id)
+    await save_data_async()
+    
+    voters = len(reqs[bname])
+    target = DB.get("BATCH_DEMAND_TARGET", 30)
+    
+    # Target reached alert
+    if voters == target:
+        from config import SUPPORT_GROUP_ID
+        if SUPPORT_GROUP_ID:
+            try:
+                await client.send_message(
+                    chat_id=int(SUPPORT_GROUP_ID),
+                    text=f"🚨 <b>BATCH DEMAND GOAL REACHED!</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                         f"📦 Batch: <b>{bname}</b>\n"
+                         f"🎯 Target: <b>{voters}/{target} Votes Reached!</b>\n"
+                         f"Priority upload required!",
+                    parse_mode=ParseMode.HTML
+                )
+            except Exception:
+                pass
+
+    return True, f"✅ Aapka vote **{bname}** ke liye count ho gaya!\n📊 Total Votes: **{voters}/{target}**"
+
+
+async def cmd_demands(client: Client, message: Message):
+    """Command /demands handler"""
+    if not message.from_user:
+        return
+    bot_info = getattr(client, "me", None)
+    bot_uname = bot_info.username if bot_info and bot_info.username else "H4R_Contact_bot"
+    msg = build_student_batch_demands_msg(message.from_user.id, bot_uname, page=0)
+    await rp.send(client, message.chat.id, msg)
+
+
+

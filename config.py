@@ -734,6 +734,10 @@ DB = {
     "TESTER_IDS": [],
     "BATCH_COINS": {}, "BATCH_REQUESTS": {}, "BATCH_REQUEST_STATUS": {}, "VOUCHERS": {},
     "BATCH_PRICES": {},
+    "GIVEAWAY_CONFIG": {"active": True, "title": "🎉 Free Batch Mega Giveaway", "required_coins": 3, "target_winner_count": 1, "end_timestamp": 0},
+    "GIVEAWAY_PARTICIPANTS": {},
+    "GIVEAWAY_VOTES": {},
+    "BATCH_DEMAND_TARGET": 30,
     "BATCH_REQUEST_NOTE": "🙏 **Important Note from Admin:**\nMain abhi regular active nahi reh pata hu isliye batch upload/add hone me thoda waqt lag sakta hai. Aap bilkul chinta na karein aur thoda dhairya (patience) rakhein. Jaise hi yeh batch bot me add hoga, bot aapko direct notification bhej dega! Tab tak ke liye dhanyawad.",
     "USERBOT_SESSION": None, "USERBOT_PHONE": None,
     "VIP_MATERIALS_LINK": None, "VIP_STICKER_ID": None, "VIP_STICKER_TYPE": None,
@@ -811,6 +815,7 @@ def load_data():
         "BATCH_REQUESTS", "BATCH_REQUEST_STATUS", "VOUCHERS", "BATCH_PRICES", "BATCH_REQUEST_NOTE",
         "BATCH_UPDATE_CHANNEL_ID", "BATCH_UPDATE_CHANNEL_LINK", "EXAM_VACANCIES", "CURRENT_AFFAIRS",
         "TESTER_IDS", "MOCK_TESTS", "MOCK_TEST_RESULTS", "AD_CONFIG", "ANNOUNCEMENT_TOPICS", "SUPERGROUPS",
+        "GIVEAWAY_CONFIG", "GIVEAWAY_PARTICIPANTS", "GIVEAWAY_VOTES", "BATCH_DEMAND_TARGET",
     ]
     
     if MONGO_URL and mongo_collection is not None:
@@ -984,7 +989,11 @@ def save_data_sync():
             "CURRENT_AFFAIRS": DB.get("CURRENT_AFFAIRS", DEFAULT_CURRENT_AFFAIRS),
             "MOCK_TESTS": DB.get("MOCK_TESTS", DEFAULT_MOCK_TESTS),
             "MOCK_TEST_RESULTS": DB.get("MOCK_TEST_RESULTS", {}),
-            "AD_CONFIG": DB.get("AD_CONFIG", DEFAULT_AD_CONFIG)
+            "AD_CONFIG": DB.get("AD_CONFIG", DEFAULT_AD_CONFIG),
+            "GIVEAWAY_CONFIG": DB.get("GIVEAWAY_CONFIG", {"active": True, "title": "🎉 Free Batch Mega Giveaway", "required_coins": 3, "target_winner_count": 1, "end_timestamp": 0}),
+            "GIVEAWAY_PARTICIPANTS": {str(k): v for k, v in DB.get("GIVEAWAY_PARTICIPANTS", {}).items()},
+            "GIVEAWAY_VOTES": {str(k): str(v) for k, v in DB.get("GIVEAWAY_VOTES", {}).items()},
+            "BATCH_DEMAND_TARGET": DB.get("BATCH_DEMAND_TARGET", 30)
         }
         if MONGO_URL and mongo_collection is not None:
             try: 

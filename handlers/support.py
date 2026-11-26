@@ -213,6 +213,86 @@ async def handle_user_flow_messages(client: Client, message: Message) -> bool:
             )
             return True
 
+    elif state == "wait_giveaway_batch":
+        if not text:
+            await message.reply_text("⚠️ Kripya valid text message me batch ka naam bhejein.\n*(Agar cancel karna ho toh /cancel likhein)*")
+            return True
+        USER_FLOW_STATE.pop(uid, None)
+        user_key = str(uid) if str(uid) in DB.get("USER_DATA", {}) else uid
+        user_coins = DB.get("USER_DATA", {}).get(user_key, {}).get("referral_count", 0)
+        req_coins = DB.get("GIVEAWAY_CONFIG", {}).get("required_coins", 3)
+
+        if user_coins < req_coins:
+            kb = [
+                [InlineKeyboardButton("🚀 Refer Friends (+1 Coin)", callback_data="menu_refer")],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]
+            ]
+            await message.reply_text(
+                f"❌ **Coins Insufficient!**\n\n"
+                f"Giveaway me register karne ke liye kam se kam `{req_coins} Coins` chahiye.\n"
+                f"Aapke paas abhi sirf `{user_coins} Coins` hain.\n\n"
+                f"Dosto ko refer karke coins collect karein!",
+                reply_markup=InlineKeyboardMarkup(kb),
+                parse_mode=ParseMode.MARKDOWN
+            )
+            return True
+
+        # Deduct coins & register
+        DB["USER_DATA"][user_key]["referral_count"] -= req_coins
+        DB.setdefault("GIVEAWAY_PARTICIPANTS", {})[str(uid)] = {
+            "name": message.from_user.first_name or "Student",
+            "username": message.from_user.username or "",
+            "batch": text,
+            "votes": 0,
+            "voters": [],
+            "time": time.time()
+        }
+        await save_data_async()
+
+        bot_info = getattr(client, "me", None)
+        bot_uname = bot_info.username if bot_info and bot_info.username else "H4R_Contact_bot"
+        vote_link = f"https://t.me/{bot_uname}?start=vote_{uid}"
+        share_url = f"https://t.me/share/url?url={urllib.parse.quote(vote_link)}&text={urllib.parse.quote(f'🔥 Bhaiyon, mujhe Free Batch Giveaway me vote karein! Mera target batch: {text}. Ek vote se mera batch unlock hoga! 🗳️')}"
+
+        try:
+            reg_msg = rp.message(
+                rp.heading("🎉 Giveaway Registration Confirmed!"),
+                rp.divider(),
+                rp.marked(f" 🎯 Target Batch: {text} | 🎟️ Entry Paid: {req_coins} Coins "),
+                rp.divider(),
+                rp.expandable_quote([
+                    rp.bold("📢 Ab Aage Kya Karna Hai?\n\n"),
+                    "1. Aapka candidate profile successfully create ho gaya hai!\n",
+                    "2. Neeche diye gaye ", rp.bold("Share & Rally Votes"), " button se apna link WhatsApp & Telegram study groups me bhejein.\n",
+                    "3. Har user jo aapke link se aayega, aapko ", rp.bold("+1 Vote"), " dega!\n",
+                    "4. Sabse zyada votes wale student ko unka manpasand batch bilkul ", rp.bold("FREE"), " milega! 🏆"
+                ]),
+                rp.para("🔗 ", rp.bold("Your Personal Voting Link:\n"), rp.code(vote_link)),
+                rp.divider(),
+                rp.buttons(
+                    rp.url_btn("📤 Share & Rally Votes", share_url, style=rp.Style.LINK),
+                    rp.btn("🏆 Live Leaderboard", "giveaway_leaderboard", style=rp.Style.SUCCESS)
+                ),
+                rp.buttons(rp.btn("🏠 Main Menu", "u_main", style=rp.Style.DANGER))
+            )
+            await rp.send(client, message.chat.id, reg_msg)
+        except Exception:
+            kb = [
+                [InlineKeyboardButton("📤 Share & Rally Votes", url=share_url)],
+                [InlineKeyboardButton("🏆 Live Leaderboard", callback_data="giveaway_leaderboard")],
+                [InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")]
+            ]
+            await message.reply_text(
+                f"🎉 **Giveaway Registration Confirmed!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🎯 **Target Batch:** `{text}`\n"
+                f"🎟️ **Entry Fee Paid:** `{req_coins} Coins`\n\n"
+                f"🔗 **Your Voting Link:**\n`{vote_link}`\n\n"
+                f"Is link ko apne friends aur college groups me share karein!",
+                reply_markup=InlineKeyboardMarkup(kb),
+                parse_mode=ParseMode.MARKDOWN
+            )
+        return True
+
         v_data = vouchers[code]
         used_by = v_data.setdefault("used_by", [])
         if uid in used_by or str(uid) in used_by:

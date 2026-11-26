@@ -328,3 +328,309 @@ async def cmd_user_details(client: Client, message: Message):
     await message.reply_document(document=f, caption="  Deep Scan")
 
 
+# =====================================================================
+# 🎁 VIRAL FREE BATCH GIVEAWAY & VOTING ENGINE
+# =====================================================================
+
+def build_giveaway_hub_msg(user_id: int, bot_username: str = "H4R_Contact_bot"):
+    """
+    Builds the interactive Giveaway Hub message.
+    - If user entered: displays their target batch, votes count, rank, and shareable vote link.
+    - If user not entered: checks coins (3 coins required). If < 3, shows invite link to earn coins.
+      If >= 3, shows button to register candidate batch.
+    """
+    cfg = DB.get("GIVEAWAY_CONFIG", {"active": True, "title": "🎉 Free Batch Mega Giveaway", "required_coins": 3})
+    title = cfg.get("title", "🎉 Free Batch Mega Giveaway")
+    is_active = cfg.get("active", True)
+    req_coins = cfg.get("required_coins", 3)
+    
+    if not is_active:
+        return rp.message(
+            rp.heading("🎁 Mega Free Batch Giveaway"),
+            rp.divider(),
+            rp.expandable_quote([
+                rp.bold("⚠️ Giveaway Paused:\n\n"),
+                "Abhi koi active giveaway nahi chal raha hai.\n",
+                "Next mega giveaway jald hi announce hoga. Tab tak ke liye daily streak aur referral coins collect karte rahein! 🚀"
+            ]),
+            rp.divider(),
+            rp.buttons(
+                rp.btn("🏆 Previous Leaderboard", "giveaway_leaderboard", style=rp.Style.PRIMARY),
+                rp.btn("🏠 Main Menu", "u_main", style=rp.Style.DANGER)
+            )
+        )
+
+    user_key = str(user_id) if str(user_id) in DB.get("USER_DATA", {}) else user_id
+    user_coins = DB.get("USER_DATA", {}).get(user_key, {}).get("referral_count", 0)
+    participants = DB.get("GIVEAWAY_PARTICIPANTS", {})
+    entry = participants.get(str(user_id))
+
+    if entry:
+        target_batch = entry.get("batch", "Any Batch of Choice")
+        votes = entry.get("votes", 0)
+        
+        sorted_p = sorted(participants.items(), key=lambda x: x[1].get("votes", 0), reverse=True)
+        rank = 1
+        for idx, (p_id, p_data) in enumerate(sorted_p, start=1):
+            if str(p_id) == str(user_id):
+                rank = idx
+                break
+        
+        vote_link = f"https://t.me/{bot_username}?start=vote_{user_id}"
+        share_url = f"https://t.me/share/url?url={urllib.parse.quote(vote_link)}&text={urllib.parse.quote(f'🔥 Bhaiyon, mujhe Free Batch Giveaway me vote karein! Mera target batch: {target_batch}. Ek vote se mera batch unlock hoga! 🗳️')}"
+
+        return rp.message(
+            rp.heading(title),
+            rp.divider(),
+            rp.marked(f" 🎟️ Candidate Status: REGISTERED | 🏆 Current Rank: #{rank} "),
+            rp.table(
+                rows=[
+                    [rp.table_cell("Target Batch", is_header=True), rp.table_cell("Total Votes", is_header=True), rp.table_cell("Leaderboard Rank", is_header=True)],
+                    [rp.table_cell(f"🎯 {target_batch[:16]}"), rp.table_cell(f"🗳️ {votes} Votes"), rp.table_cell(f"🏅 #{rank}")]
+                ],
+                bordered=True, striped=True
+            ),
+            rp.divider(),
+            rp.expandable_quote([
+                rp.bold("📢 Apne Votes Badhayein (Viral Strategy):\n\n"),
+                "1. Neeche diye gaye ", rp.bold("Share & Rally Votes"), " button ko apne college WhatsApp & Telegram groups me bhejein.\n",
+                "2. Har student jo aapke link par click karke bot start karega, aapko ", rp.bold("+1 Vote"), " milega!\n",
+                "3. Contest end hone par sabse zyada votes wale candidate ko unka manpasand batch bilkul ", rp.bold("100% FREE"), " unlock ho jayega! 🎁"
+            ]),
+            rp.para("🔗 ", rp.bold("Your Personal Voting Link:\n"), rp.code(vote_link)),
+            rp.divider(),
+            rp.buttons(
+                rp.url_btn("📤 Share & Rally Votes", share_url, style=rp.Style.LINK),
+                rp.btn("🏆 Live Leaderboard", "giveaway_leaderboard", style=rp.Style.SUCCESS)
+            ),
+            rp.buttons(
+                rp.btn("🔄 Refresh Status", "menu_giveaway", style=rp.Style.PRIMARY),
+                rp.btn("🏠 Main Menu", "u_main", style=rp.Style.DANGER)
+            )
+        )
+    else:
+        vote_count_total = len(DB.get("GIVEAWAY_VOTES", {}))
+        contestant_count = len(participants)
+
+        if user_coins < req_coins:
+            needed = req_coins - user_coins
+            ref_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
+            share_ref = f"https://t.me/share/url?url={urllib.parse.quote(ref_link)}&text={urllib.parse.quote('Join H4R Contact Bot for Free SSC JE & Engineering Batches, Notes & Quizzes! 📚')}"
+            
+            return rp.message(
+                rp.heading(title),
+                rp.divider(),
+                rp.para(
+                    "🎁 ", rp.bold("Win ANY Course/Batch of your choice 100% FREE!\n"),
+                    "Jis student ke pass sabse zyada votes honge, usko unka manpasand batch giveaway me diya jayega."
+                ),
+                rp.marked(f" 👥 Total Contestants: {contestant_count} | 🗳️ Total Votes Cast: {vote_count_total} "),
+                rp.divider(),
+                rp.expandable_quote([
+                    rp.bold("🎟️ Entry Requirements:\n\n"),
+                    f"• Giveaway me participate karne ke liye ", rp.bold(f"{req_coins} Coins"), " ki zaroorat hai.\n",
+                    f"• Aapke wallet me abhi: ", rp.bold(f"{user_coins} Coins"), f" hain (Aur ", rp.bold(f"{needed} Coins"), " chahiye).\n\n",
+                    "💡 ", rp.bold("Coins Kaise Kamayein?\n"),
+                    "• Har 1 friend ko invite karne par ", rp.bold("+1 Coin"), " milta hai!\n",
+                    f"• Bas {needed} friends ko apna link share karein aur turant Giveaway me enter karein!"
+                ]),
+                rp.para("🔗 ", rp.bold("Your Referral Invite Link:\n"), rp.code(ref_link)),
+                rp.divider(),
+                rp.buttons(
+                    rp.url_btn("🚀 Invite Friends (+1 Coin)", share_ref, style=rp.Style.LINK),
+                    rp.btn("🏆 View Leaderboard", "giveaway_leaderboard", style=rp.Style.PRIMARY)
+                ),
+                rp.buttons(rp.btn("🏠 Main Menu", "u_main", style=rp.Style.DANGER))
+            )
+        else:
+            return rp.message(
+                rp.heading(title),
+                rp.divider(),
+                rp.marked(f" 💎 Your Balance: {user_coins} Coins | 🎟️ Entry Fee: {req_coins} Coins "),
+                rp.divider(),
+                rp.expandable_quote([
+                    rp.bold("🎉 You are Eligible to Participate!\n\n"),
+                    f"Aapke paas ", rp.bold(f"{user_coins} Coins"), f" hain! Aap ", rp.bold(f"{req_coins} Coins"), " use karke Giveaway Contest me register kar sakte hain.\n\n",
+                    "• Register karne ke baad aapko apna personal ", rp.bold("Voting Link"), " milega.\n",
+                    "• Friends aur groups se votes collect karein. Top candidate ko unka batch free milega!"
+                ]),
+                rp.divider(),
+                rp.buttons(
+                    rp.btn(f"🎟️ Enter Contest ({req_coins} Coins)", "giveaway_enter_prompt", style=rp.Style.SUCCESS),
+                    rp.btn("🏆 Live Leaderboard", "giveaway_leaderboard", style=rp.Style.PRIMARY)
+                ),
+                rp.buttons(rp.btn("🏠 Main Menu", "u_main", style=rp.Style.DANGER))
+            )
+
+
+def build_giveaway_leaderboard_msg(page: int = 0, current_uid: int = None):
+    """
+    Builds the real-time Giveaway Hall of Fame & Leaderboard.
+    """
+    participants = DB.get("GIVEAWAY_PARTICIPANTS", {})
+    sorted_p = sorted(participants.items(), key=lambda x: x[1].get("votes", 0), reverse=True)
+    total = len(sorted_p)
+
+    if total == 0:
+        return rp.message(
+            rp.heading("🏆 Giveaway Leaderboard"),
+            rp.divider(),
+            rp.expandable_quote([
+                rp.bold("ℹ️ No Contestants Yet:\n\n"),
+                "Abhi tak kisi candidate ne register nahi kiya hai. Pehle register karein aur top rank payein! 🚀"
+            ]),
+            rp.divider(),
+            rp.buttons(
+                rp.btn("🎁 Enter Giveaway", "menu_giveaway", style=rp.Style.SUCCESS),
+                rp.btn("🏠 Main Menu", "u_main", style=rp.Style.DANGER)
+            )
+        )
+
+    PER_PAGE = 8
+    total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
+    page = max(0, min(page, total_pages - 1))
+    start_idx = page * PER_PAGE
+    end_idx = min(start_idx + PER_PAGE, total)
+    page_items = sorted_p[start_idx:end_idx]
+
+    medals = ["🥇", "🥈", "🥉"]
+    body_lines = [
+        rp.heading("🏆 Giveaway Live Leaderboard"),
+        rp.divider(),
+        rp.marked(f" 👥 Total Contestants: {total} | 📄 Page: {page + 1}/{total_pages} "),
+        rp.divider(),
+    ]
+
+    for rank, (cand_id, cand_data) in enumerate(page_items, start=start_idx + 1):
+        badge = medals[rank - 1] if rank <= 3 else f"#{rank}"
+        cname = cand_data.get("name", "Student")
+        cbatch = cand_data.get("batch", "Any Batch")[:20]
+        votes = cand_data.get("votes", 0)
+        is_me = current_uid and str(cand_id) == str(current_uid)
+        me_mark = " (You) 📍" if is_me else ""
+        
+        body_lines.append(
+            rp.para(f"{badge} ", rp.bold(f"{cname}{me_mark}"), f" — ", rp.code(f"{votes} Votes"), f"\n   🎯 ", rp.italic(cbatch))
+        )
+
+    if current_uid and str(current_uid) in participants:
+        user_rank = 1
+        for idx, (p_id, _) in enumerate(sorted_p, start=1):
+            if str(p_id) == str(current_uid):
+                user_rank = idx
+                break
+        my_votes = participants[str(current_uid)].get("votes", 0)
+        body_lines.append(rp.divider())
+        body_lines.append(
+            rp.para("📍 ", rp.bold(f"Your Standing: Rank #{user_rank}"), f" ({my_votes} Votes)")
+        )
+
+    nav_btns = []
+    if page > 0:
+        nav_btns.append(rp.btn("⬅️ Prev", f"gw_lb_page_{page - 1}", style=rp.Style.DEFAULT))
+    if page < total_pages - 1:
+        nav_btns.append(rp.btn("Next ➡️", f"gw_lb_page_{page + 1}", style=rp.Style.DEFAULT))
+
+    body_lines.append(rp.divider())
+    if nav_btns:
+        body_lines.append(rp.buttons(*nav_btns))
+    
+    body_lines.append(
+        rp.buttons(
+            rp.btn("🎁 My Giveaway Status", "menu_giveaway", style=rp.Style.SUCCESS),
+            rp.btn("🏠 Main Menu", "u_main", style=rp.Style.DANGER)
+        )
+    )
+    return rp.message(*body_lines)
+
+
+async def cast_giveaway_vote(client: Client, voter_user, candidate_id: str):
+    """
+    Casts a vote for a candidate in the active giveaway.
+    - Prevents voting for self.
+    - Prevents duplicate voting by the same voter.
+    - Updates candidate vote count and voter list.
+    - Notifies the candidate in DM or support group topic.
+    """
+    participants = DB.get("GIVEAWAY_PARTICIPANTS", {})
+    if str(candidate_id) not in participants:
+        return False, "Candidate is not registered in the active giveaway."
+
+    if str(voter_user.id) == str(candidate_id):
+        return False, "❌ Aap khud ke liye vote nahi kar sakte!"
+
+    votes_map = DB.setdefault("GIVEAWAY_VOTES", {})
+    if str(voter_user.id) in votes_map:
+        prev_cand = participants.get(votes_map[str(voter_user.id)], {}).get("name", "another student")
+        return False, f"⚠️ Aap pehle hi candidate **{prev_cand}** ko vote kar chuke hain!\n*(Har student sirf 1 vote de sakta hai)*"
+
+    votes_map[str(voter_user.id)] = str(candidate_id)
+    participants[str(candidate_id)]["votes"] = participants[str(candidate_id)].get("votes", 0) + 1
+    participants[str(candidate_id)].setdefault("voters", []).append(voter_user.id)
+    await save_data_async()
+
+    cand_name = participants[str(candidate_id)].get("name", "Candidate")
+    cand_batch = participants[str(candidate_id)].get("batch", "Target Batch")
+    cand_total = participants[str(candidate_id)]["votes"]
+
+    try:
+        await client.send_message(
+            int(candidate_id),
+            f"🎉 **NEW VOTE RECEIVED!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 **{voter_user.first_name}** ne abhi aapke liye vote kiya hai!\n"
+            f"🏆 Total Votes: `{cand_total}`\n"
+            f"🎯 Target Batch: `{cand_batch}`\n\n"
+            f"Keep sharing your link to maintain top rank! 🚀",
+            parse_mode=ParseMode.MARKDOWN
+        )
+    except Exception:
+        pass
+
+    return True, f"✅ Aapka vote **{cand_name}** ({cand_batch}) ke liye count ho gaya!\n🏆 Current Votes: **{cand_total}**"
+
+
+def build_admin_giveaway_panel_msg():
+    """Builds Admin Giveaway Control panel."""
+    cfg = DB.get("GIVEAWAY_CONFIG", {"active": True, "title": "🎉 Free Batch Mega Giveaway", "required_coins": 3})
+    participants = DB.get("GIVEAWAY_PARTICIPANTS", {})
+    votes = DB.get("GIVEAWAY_VOTES", {})
+    is_active = cfg.get("active", True)
+    
+    sorted_p = sorted(participants.items(), key=lambda x: x[1].get("votes", 0), reverse=True)
+    top_cand = sorted_p[0][1] if sorted_p else None
+
+    return rp.message(
+        rp.heading("🎁 Admin Giveaway Console"),
+        rp.divider(),
+        rp.marked(f" ⚙️ Status: {'🟢 ACTIVE' if is_active else '🔴 PAUSED'} | 🎟️ Req Coins: {cfg.get('required_coins', 3)} "),
+        rp.table(
+            rows=[
+                [rp.table_cell("Total Contestants", is_header=True), rp.table_cell("Total Votes Cast", is_header=True), rp.table_cell("Current Leader", is_header=True)],
+                [rp.table_cell(f"👥 {len(participants)}"), rp.table_cell(f"🗳️ {len(votes)}"), rp.table_cell(f"👑 {top_cand.get('name', 'None')[:14] if top_cand else 'None'} ({top_cand.get('votes', 0) if top_cand else 0})")]
+            ],
+            bordered=True, striped=True
+        ),
+        rp.divider(),
+        rp.buttons(
+            rp.btn("⏸️ Pause/Resume" if is_active else "▶️ Resume Giveaway", "gw_toggle_status", style=rp.Style.WARNING),
+            rp.btn("👑 Declare Winner", "gw_declare_winner", style=rp.Style.SUCCESS)
+        ),
+        rp.buttons(
+            rp.btn("🏆 View Full Leaderboard", "giveaway_leaderboard", style=rp.Style.PRIMARY),
+            rp.btn("🗑️ Reset Contest", "gw_reset_confirm", style=rp.Style.DANGER)
+        ),
+        rp.buttons(rp.btn("🔙 Back to Database Panel", "dash_db", style=rp.Style.DANGER))
+    )
+
+
+async def cmd_giveaway(client: Client, message: Message):
+    """Command /giveaway handler"""
+    if not message.from_user:
+        return
+    bot_info = getattr(client, "me", None)
+    bot_uname = bot_info.username if bot_info and bot_info.username else "H4R_Contact_bot"
+    msg = build_giveaway_hub_msg(message.from_user.id, bot_uname)
+    await rp.send(client, message.chat.id, msg)
+
+
+
