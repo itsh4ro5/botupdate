@@ -283,14 +283,29 @@ async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: s
             logger.error(f"Failed to send to batch update channel: {e}")
 
     # 2. Send to all Supergroups' Announcements Topics (with 3-day auto-delete TTL)
-    announcement_topics = DB.get("ANNOUNCEMENT_TOPICS", {})
-    for g_cid_str, topic_id in list(announcement_topics.items()):
+    candidate_sgs = set()
+    for s_id in DB.get("SUPERGROUPS", {}).keys():
+        try: candidate_sgs.add(int(s_id))
+        except Exception: pass
+    for a_id in DB.get("ANNOUNCEMENT_TOPICS", {}).keys():
+        try: candidate_sgs.add(int(a_id))
+        except Exception: pass
+
+    from .wizards import _check_and_setup_supergroup_announcements
+
+    for g_cid in candidate_sgs:
         try:
-            g_cid = int(g_cid_str)
             if g_cid == cid:
                 continue
+            topic_id = DB.get("ANNOUNCEMENT_TOPICS", {}).get(str(g_cid))
+            if not topic_id:
+                # Auto setup topic on the fly if not created yet
+                await _check_and_setup_supergroup_announcements(client, g_cid)
+                topic_id = DB.get("ANNOUNCEMENT_TOPICS", {}).get(str(g_cid))
+
             sent_ann = await send_rich_batch_post(
-                client, g_cid, rich_msg, caption, kb, photo_path=photo_path, message_thread_id=int(topic_id)
+                client, g_cid, rich_msg, caption, kb, photo_path=photo_path,
+                message_thread_id=int(topic_id) if topic_id else None
             )
             if sent_ann:
                 DB.setdefault("SCHEDULED_DELETES", []).append({
@@ -300,7 +315,7 @@ async def send_batch_update_post(client: Client, cid: int, cname: str, b_type: s
                 })
             await asyncio.sleep(0.05)
         except Exception as e:
-            logger.error(f"Failed to send announcement to group {g_cid_str} topic {topic_id}: {e}")
+            logger.error(f"Failed to send announcement to group {g_cid}: {e}")
 
     if photo_path and os.path.exists(photo_path):
         try:
@@ -839,66 +854,57 @@ async def cmd_setup_announcements(client: Client, message: Message):
         except Exception as ub_e:
             logger.warning(f"Userbot dialog scan warning: {ub_e}")
 
-    # Step 2: Collect all candidate Supergroups
-    supergroups_to_scan = {}
-    
-    # Ingest from DB SUPERGROUPS
+    # Step 2: Collect all candidate chats (Supergroups and Channels)
+    all_candidate_chats = {}
     for gid, name in DB.get("SUPERGROUPS", {}).items():
-        try:
-            supergroups_to_scan[int(gid)] = name
-        except Exception:
-            pass
-
-    # Ingest from Userbot discovered groups
-    for gid, name in ub_discovered_groups.items():
-        supergroups_to_scan[int(gid)] = name
-
-    # Ingest from ANNOUNCEMENT_TOPICS
+        try: all_candidate_chats[int(gid)] = name
+        except Exception: pass
     for gid in DB.get("ANNOUNCEMENT_TOPICS", {}).keys():
-        try:
-            supergroups_to_scan[int(gid)] = supergroups_to_scan.get(int(gid), f"Group {gid}")
-        except Exception:
-            pass
-
-    # Ingest from SUPPORT_GROUP_ID
+        try: all_candidate_chats[int(gid)] = all_candidate_chats.get(int(gid), f"Group {gid}")
+        except Exception: pass
+    for col in ["FREE_CHANNELS", "PAID_CHANNELS", "SPECIAL_CHANNELS", "ALL_CHATS"]:
+        for cid, name in DB.get(col, {}).items():
+            try: all_candidate_chats[int(cid)] = name
+            except Exception: pass
+    for gid, name in ub_discovered_groups.items():
+        all_candidate_chats[int(gid)] = name
+    for cid, name in ub_discovered_channels.items():
+        all_candidate_chats[int(cid)] = name
     supp_id = getattr(config, "SUPPORT_GROUP_ID", 0)
     if supp_id:
-        try:
-            supergroups_to_scan[int(supp_id)] = supergroups_to_scan.get(int(supp_id), "Support Group")
-        except Exception:
-            pass
-
-    # Ingest if command was called inside a supergroup
-    if message.chat and message.chat.type in [ChatType.SUPERGROUP, ChatType.GROUP]:
-        supergroups_to_scan[message.chat.id] = message.chat.title or str(message.chat.id)
-        DB.setdefault("SUPERGROUPS", {})[str(message.chat.id)] = message.chat.title or str(message.chat.id)
-
-    # Ingest any arguments passed (e.g. /setupannouncements -100123456789 -100987654321 @group)
+        try: all_candidate_chats[int(supp_id)] = all_candidate_chats.get(int(supp_id), "Support Group")
+        except Exception: pass
+    if message.chat:
+        all_candidate_chats[message.chat.id] = message.chat.title or str(message.chat.id)
     cmd_args = message.command[1:] if message.command else []
     for arg in cmd_args:
         try:
             tid = int(arg) if str(arg).lstrip('-').isdigit() else arg
-            arg_chat = await client.get_chat(tid)
-            if arg_chat.type in [ChatType.SUPERGROUP, ChatType.GROUP]:
-                supergroups_to_scan[arg_chat.id] = arg_chat.title or str(arg_chat.id)
-                DB.setdefault("SUPERGROUPS", {})[str(arg_chat.id)] = arg_chat.title or str(arg_chat.id)
+            all_candidate_chats[int(tid)] = str(arg)
+        except Exception: pass
+
+    # Sort into Supergroups and Channels based on actual Telegram chat type
+    supergroups_to_scan = {}
+    channels_to_scan = {}
+
+    for cid, default_name in all_candidate_chats.items():
+        chat = None
+        try:
+            chat = await client.get_chat(cid)
         except Exception:
             pass
 
-    # Step 3: Collect all candidate Channels
-    channels_to_scan = {}
-    for col in ["FREE_CHANNELS", "PAID_CHANNELS", "SPECIAL_CHANNELS", "ALL_CHATS"]:
-        for cid, name in DB.get(col, {}).items():
-            try:
-                # Exclude if already recognized as a supergroup
-                if int(cid) not in supergroups_to_scan:
-                    channels_to_scan[int(cid)] = name
-            except Exception:
-                pass
-
-    for cid, name in ub_discovered_channels.items():
-        if int(cid) not in supergroups_to_scan:
-            channels_to_scan[int(cid)] = name
+        if chat:
+            if chat.type in [ChatType.SUPERGROUP, ChatType.GROUP]:
+                supergroups_to_scan[cid] = chat.title or default_name
+                DB.setdefault("SUPERGROUPS", {})[str(cid)] = chat.title or default_name
+            elif chat.type == ChatType.CHANNEL:
+                channels_to_scan[cid] = chat.title or default_name
+        else:
+            if str(cid) in DB.get("SUPERGROUPS", {}) or str(cid) in DB.get("ANNOUNCEMENT_TOPICS", {}):
+                supergroups_to_scan[cid] = default_name
+            else:
+                channels_to_scan[cid] = default_name
 
     total_scanned_count = len(supergroups_to_scan) + len(channels_to_scan)
     await _safe_edit(
@@ -970,49 +976,59 @@ async def cmd_setup_announcements(client: Client, message: Message):
         topic_status = "None"
         topic_id = DB.get("ANNOUNCEMENT_TOPICS", {}).get(str(cid))
 
-        if is_forum and can_manage_topics:
-            if not topic_id:
-                topic_id = await safe_create_forum_topic(client, cid, "📢 Announcements")
-
-                if topic_id:
-                    DB.setdefault("ANNOUNCEMENT_TOPICS", {})[str(cid)] = int(topic_id)
-                    topics_created += 1
-                    topic_status = f"Created (ID: {topic_id})"
-
-                    try:
-                        banner = await client.send_message(
-                            chat_id=cid,
-                            message_thread_id=int(topic_id),
-                            text=(
-                                "📢 **Official Announcements Channel**\n"
-                                "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                                "👋 **Welcome to the Official Announcements topic!**\n\n"
-                                "📌 Sabhi official batch updates, new releases, timetable alerts, "
-                                "aur important notices isi topic me aayenge.\n\n"
-                                "🔔 *Is topic ke notifications ON rakhein taaki koi important update miss na ho!*"
-                            ),
-                            parse_mode=ParseMode.MARKDOWN,
-                        )
-                        if can_pin:
-                            try:
-                                await client.pin_chat_message(chat_id=cid, message_id=banner.id)
-                            except Exception:
-                                pass
-                    except Exception as e:
-                        logger.error(f"Failed to send/pin banner in {cid} topic {topic_id}: {e}")
-                else:
-                    topic_status = "Creation Failed"
-            else:
-                topics_existing += 1
-                topic_status = f"Active (ID: {topic_id})"
+        if topic_id:
+            topics_existing += 1
+            topic_status = f"Active (ID: {topic_id})"
+            is_forum = True
         else:
+            from config import safe_create_forum_topic
+            topic_id = await safe_create_forum_topic(client, cid, "📢 Announcements")
+
+            # Fallback to Userbot session if bot failed
+            if not topic_id:
+                try:
+                    from config import DB as cDB, API_ID, API_HASH
+                    session = cDB.get("USERBOT_SESSION") or getattr(config, "SESSION_STRING", None)
+                    api_id = API_ID or getattr(config, "API_ID", None)
+                    api_hash = API_HASH or getattr(config, "API_HASH", None)
+                    if session and api_id and api_hash:
+                        from pyrogram import Client as PyroClient
+                        async with PyroClient("temp_ann_scan", api_id=int(api_id), api_hash=str(api_hash), session_string=str(session), in_memory=True) as ub:
+                            topic_id = await safe_create_forum_topic(ub, cid, "📢 Announcements")
+                except Exception as ube:
+                    logger.warning(f"Userbot fallback creation failed for {cid}: {ube}")
+
             if topic_id:
-                topic_status = f"Previously Active (ID: {topic_id})"
+                DB.setdefault("ANNOUNCEMENT_TOPICS", {})[str(cid)] = int(topic_id)
+                topics_created += 1
+                topic_status = f"Created & Pinned (ID: {topic_id})"
+                is_forum = True
+
+                try:
+                    banner = await client.send_message(
+                        chat_id=cid,
+                        message_thread_id=int(topic_id),
+                        text=(
+                            "📢 **Official Announcements Channel**\n"
+                            "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                            "👋 **Welcome to the Official Announcements topic!**\n\n"
+                            "📌 Sabhi official batch updates, new releases, timetable alerts, "
+                            "aur important notices isi topic me aayenge.\n\n"
+                            "🔔 *Is topic ke notifications ON rakhein taaki koi important update miss na ho!*"
+                        ),
+                        parse_mode=ParseMode.MARKDOWN,
+                    )
+                    try:
+                        await client.pin_chat_message(chat_id=cid, message_id=banner.id)
+                    except Exception:
+                        pass
+                except Exception as e:
+                    logger.error(f"Failed to send/pin banner in {cid} topic {topic_id}: {e}")
             else:
-                if not is_forum:
-                    topic_status = "Topics Disabled in Group Settings"
+                if not can_manage_topics:
+                    topic_status = "Missing 'Manage Topics' Permission (or Forum Mode OFF)"
                 else:
-                    topic_status = "Missing 'Manage Topics' Permission"
+                    topic_status = "Topics Disabled in Group Settings"
 
         supergroups_audit.append({
             "id": cid,

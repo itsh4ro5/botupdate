@@ -75,30 +75,50 @@ async def _check_and_setup_supergroup_announcements(client: Client, cid: int, cn
     """
     try:
         from config import safe_create_forum_topic
-        chat = await client.get_chat(cid)
-        if not cname:
-            cname = chat.title or f"Chat {cid}"
+        cid = int(cid)
+        chat = None
+        try:
+            chat = await client.get_chat(cid)
+        except Exception:
+            pass
 
-        is_sg = chat.type in [ChatType.SUPERGROUP, ChatType.GROUP]
-        if not is_sg:
-            return False, "channel"
-
-        DB.setdefault("SUPERGROUPS", {})[str(cid)] = cname
-
-        if not getattr(chat, "is_forum", False):
-            await save_data_async()
-            return False, "not_forum"
+        if chat:
+            if not cname:
+                cname = chat.title or f"Chat {cid}"
+            if chat.type == ChatType.CHANNEL:
+                return False, "channel"
+            DB.setdefault("SUPERGROUPS", {})[str(cid)] = cname
+        else:
+            if cname:
+                DB.setdefault("SUPERGROUPS", {})[str(cid)] = cname
 
         existing_topic = DB.get("ANNOUNCEMENT_TOPICS", {}).get(str(cid))
         if existing_topic:
             return True, "already_exists"
 
+        # Try creating forum topic via bot client
         topic_id = await safe_create_forum_topic(client, cid, "📢 Announcements")
+
+        # Fallback to Userbot session if bot failed
         if not topic_id:
-            logger.warning(f"Could not create forum topic in {cid}. Check bot admin permissions.")
+            try:
+                from config import DB as cDB, API_ID, API_HASH
+                session = cDB.get("USERBOT_SESSION") or getattr(config, "SESSION_STRING", None)
+                api_id = API_ID or getattr(config, "API_ID", None)
+                api_hash = API_HASH or getattr(config, "API_HASH", None)
+                if session and api_id and api_hash:
+                    from pyrogram import Client as PyroClient
+                    async with PyroClient("temp_ann_wiz", api_id=int(api_id), api_hash=str(api_hash), session_string=str(session), in_memory=True) as ub:
+                        topic_id = await safe_create_forum_topic(ub, cid, "📢 Announcements")
+            except Exception as ube:
+                logger.warning(f"Userbot fallback forum topic creation failed for {cid}: {ube}")
+
+        if not topic_id:
+            logger.warning(f"Could not create forum topic in {cid}. Supergroup may not have forum mode ON or missing manage_topics permission.")
             return False, "permission_error"
 
         DB.setdefault("ANNOUNCEMENT_TOPICS", {})[str(cid)] = int(topic_id)
+        await save_data_async()
 
         try:
             banner_rich = rp.message(
@@ -143,7 +163,6 @@ async def _check_and_setup_supergroup_announcements(client: Client, cid: int, cn
         except Exception as se:
             logger.warning(f"Could not send announcement banner in {cid}: {se}")
 
-        await save_data_async()
         return True, "created"
     except Exception as e:
         logger.warning(f"Error checking supergroup announcement topic for {cid}: {e}")
@@ -469,6 +488,9 @@ async def wizard_message(client: Client, message: Message):
                     if t_cid != cid:
                         try:
                             t_topic_id = DB.get("ANNOUNCEMENT_TOPICS", {}).get(str(t_cid))
+                            if not t_topic_id and str(t_cid) in DB.get("SUPERGROUPS", {}):
+                                await _check_and_setup_supergroup_announcements(client, int(t_cid))
+                                t_topic_id = DB.get("ANNOUNCEMENT_TOPICS", {}).get(str(t_cid))
                             sent_msg = await send_rich_batch_post(
                                 client,
                                 int(t_cid),
@@ -529,6 +551,9 @@ async def wizard_message(client: Client, message: Message):
                 if t_cid != cid:
                     try:
                         t_topic_id = DB.get("ANNOUNCEMENT_TOPICS", {}).get(str(t_cid))
+                        if not t_topic_id and str(t_cid) in DB.get("SUPERGROUPS", {}):
+                            await _check_and_setup_supergroup_announcements(client, int(t_cid))
+                            t_topic_id = DB.get("ANNOUNCEMENT_TOPICS", {}).get(str(t_cid))
                         sent_msg = await send_rich_batch_post(
                             client,
                             int(t_cid),
@@ -593,6 +618,9 @@ async def wizard_message(client: Client, message: Message):
                 if t_cid != cid:
                     try:
                         t_topic_id = DB.get("ANNOUNCEMENT_TOPICS", {}).get(str(t_cid))
+                        if not t_topic_id and str(t_cid) in DB.get("SUPERGROUPS", {}):
+                            await _check_and_setup_supergroup_announcements(client, int(t_cid))
+                            t_topic_id = DB.get("ANNOUNCEMENT_TOPICS", {}).get(str(t_cid))
                         sent_msg = await send_rich_batch_post(
                             client,
                             int(t_cid),
