@@ -144,7 +144,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                     "• ", rp.bold("Forward Tag:"), " Completely Removed (Direct Copy) ❌\n",
                     "• ", rp.bold("Engine:"), " User Session Account (Not Bot) ✅\n",
                     "• ", rp.bold("Auto Topic Creator:"), " Har unique topic ka dedicated forum topic banega ✅\n",
-                    "• ", rp.bold("Watermark Cleaner:"), " 'Extracted By' credits auto-cleaned ✅"
+                    "• ", rp.bold("Original Caption:"), " Watermark aur caption 100% intact rahega ✅"
                 ]),
                 rp.divider(),
                 rp.para("👉 ", rp.bold("Step 1/4:"), " Kripya ", rp.bold("Source Channel ID"), " bhejein (jahan se files leni hain):"),

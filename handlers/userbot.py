@@ -585,7 +585,7 @@ async def run_topic_arrangement_engine(
     topic_tag: str = "Topic:",
     start_msg_id: int = 1,
     end_msg_id: int = 0,
-    clean_caption: bool = True
+    clean_caption: bool = False
 ):
     uid = message.from_user.id
     if not hasattr(bot_client, "cancel_tasks"):
@@ -766,18 +766,13 @@ async def run_topic_arrangement_engine(
 
             topic_id = created_topics.get(topic_key)
 
-            # Clean caption if requested (removes Extracted By line)
-            new_caption = cap
-            if clean_caption and cap:
-                new_caption = re.sub(r'(?i)(?:^|\n)\s*Extracted\s+By\s*[:➤\-]?\s*.*', '', cap).strip()
-
-            # Copy message using Userbot (without Forwarded From tag)
+            # Copy message using Userbot (without Forwarded From tag, preserving original caption & watermark)
             copy_success = False
             for attempt in range(3):
                 try:
                     kwargs = {"message_thread_id": int(topic_id)} if topic_id else {}
-                    if m.caption is not None:
-                        kwargs["caption"] = new_caption
+                    if clean_caption and cap:
+                        kwargs["caption"] = re.sub(r'(?i)(?:^|\n)\s*Extracted\s+By\s*[:➤\-]?\s*.*', '', cap).strip()
 
                     await userbot.copy_message(
                         chat_id=dest_id,

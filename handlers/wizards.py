@@ -761,14 +761,14 @@ async def wizard_message(client: Client, message: Message):
             f"🏷️ **Extraction Tag:** `{topic_tag}`\n"
             f"🔢 **Range:** `{'ALL (1 to Latest)' if end_id == 0 else f'{start_id} to {end_id}'}`\n"
             f"🤖 **Engine:** User Session Account (Direct Copy without forward tag)\n"
-            f"🧹 **Watermark Clean:** 'Extracted By' credits auto-removed ✅\n\n"
+            f"🏷️ **Caption:** Original Caption & Watermark Preserved ✅\n\n"
             f"⏳ Background process shuru ho raha hai...",
             parse_mode=ParseMode.MARKDOWN
         )
 
         from .userbot import run_topic_arrangement_engine
         asyncio.create_task(run_topic_arrangement_engine(
-            client, message, str(source_id), str(dest_id), topic_tag, start_id, end_id, clean_caption=True
+            client, message, str(source_id), str(dest_id), topic_tag, start_id, end_id, clean_caption=False
         ))
         return True
 
