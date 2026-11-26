@@ -123,6 +123,40 @@ async def general_callback(client: Client, q: CallbackQuery):
             await q.answer()
             msg = build_database_panel_msg()
             await rp.edit(client, q.message.chat.id, q.message.id, msg)
+        elif data == "start_topic_arranger":
+            await q.answer()
+            if not is_admin(uid):
+                return await q.answer("❌ Only Admins can use this tool.", show_alert=True)
+            session_string = DB.get("USERBOT_SESSION") or getattr(config, "SESSION_STRING", None)
+            if not session_string or not getattr(config, "API_ID", None):
+                return await q.answer("❌ Userbot Not Logged In! Pehle Owner Panel se Userbot login karein.", show_alert=True)
+            
+            ADMIN_WIZARD[uid] = {
+                "step": "topicarr_source",
+                "back_cb": "dash_db"
+            }
+            msg = rp.message(
+                rp.heading("🗂️ Topic Arrangement Tool"),
+                rp.divider(),
+                rp.expandable_quote([
+                    rp.bold("📌 Tool Overview:\n\n"),
+                    "Yeh tool Source Channel ke sabhi contents ko unke caption me diye gaye Topic name ke hisab se Destination Supergroup me naye Topics banakar auto-sort karega.\n\n",
+                    "• ", rp.bold("Forward Tag:"), " Completely Removed (Direct Copy) ❌\n",
+                    "• ", rp.bold("Engine:"), " User Session Account (Not Bot) ✅\n",
+                    "• ", rp.bold("Auto Topic Creator:"), " Har unique topic ka dedicated forum topic banega ✅\n",
+                    "• ", rp.bold("Watermark Cleaner:"), " 'Extracted By' credits auto-cleaned ✅"
+                ]),
+                rp.divider(),
+                rp.para("👉 ", rp.bold("Step 1/4:"), " Kripya ", rp.bold("Source Channel ID"), " bhejein (jahan se files leni hain):"),
+                rp.expandable_quote([
+                    rp.bold("📌 Example:\n"),
+                    rp.code("-1002345678901"), "\n\n",
+                    rp.italic("Bot aur Userbot dono is channel me member/admin hone chahiye.")
+                ]),
+                rp.divider(),
+                rp.buttons(rp.btn("❌ Cancel", "wiz_cancel", style=rp.Style.DANGER))
+            )
+            await rp.edit(client, q.message.chat.id, q.message.id, msg)
         elif data == "dash_testers":
             await q.answer()
             if not is_owner(uid):

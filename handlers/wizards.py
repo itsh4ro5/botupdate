@@ -681,6 +681,97 @@ async def wizard_message(client: Client, message: Message):
             if uid in ADMIN_WIZARD: del ADMIN_WIZARD[uid]
         return True
 
+    elif state["step"] == "topicarr_source":
+        try:
+            source_id = int(message.text.strip())
+        except ValueError:
+            return await message.reply_text("❌ Error: Numeric Channel ID bhejein (jaise `-1001234567890`).\n\n*(Type /cancel to abort)*")
+        ADMIN_WIZARD[uid]["step"] = "topicarr_dest"
+        ADMIN_WIZARD[uid]["source_id"] = source_id
+        cancel_kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel Wizard", callback_data="wiz_cancel")]])
+        await message.reply_text(
+            f"✅ **Source Channel ID:** `{source_id}`\n━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"👉 **Step 2/4:** Ab **Destination Supergroup ID** bhejein jahan topics banakar files forward karni hain (e.g. `-1009876543210`):\n\n"
+            f"*(Destination Supergroup me Topics mode ON hona chahiye aur Bot/Userbot ko Admin permissions honi chahiye)*",
+            reply_markup=cancel_kb,
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return True
+
+    elif state["step"] == "topicarr_dest":
+        try:
+            dest_id = int(message.text.strip())
+        except ValueError:
+            return await message.reply_text("❌ Error: Numeric Supergroup ID bhejein (jaise `-1009876543210`).\n\n*(Type /cancel to abort)*")
+        ADMIN_WIZARD[uid]["step"] = "topicarr_tag"
+        ADMIN_WIZARD[uid]["dest_id"] = dest_id
+        cancel_kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel Wizard", callback_data="wiz_cancel")]])
+        await message.reply_text(
+            f"✅ **Destination Group ID:** `{dest_id}`\n━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"👉 **Step 3/4:** Topic kis tag/prefix se extract karna hai?\n\n"
+            f"• Agar caption me `Topic: Current Affairs` ya `Topic: Polity` likha hai, toh simply `Topic:` ya `Topic` bhejein.\n"
+            f"• Default `Topic:` use karne ke liye `0` ya `Topic:` bhejein.\n\n"
+            f"💡 *Bot caption se topic name automatically read karke usi naam ka topic destination supergroup me create karega.*",
+            reply_markup=cancel_kb,
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return True
+
+    elif state["step"] == "topicarr_tag":
+        raw_tag = message.text.strip()
+        topic_tag = "Topic:" if raw_tag in ["0", ""] else raw_tag
+        ADMIN_WIZARD[uid]["step"] = "topicarr_range"
+        ADMIN_WIZARD[uid]["topic_tag"] = topic_tag
+        cancel_kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel Wizard", callback_data="wiz_cancel")]])
+        await message.reply_text(
+            f"🏷️ **Extraction Tag:** `{topic_tag}`\n━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"👉 **Step 4/4:** Scan Range kya rakhni hai?\n\n"
+            f"• **Poora Channel Scan:** `ALL` ya `0` bhejein (Bot automatically 1 se lekar latest message tak poora channel scan karega)\n"
+            f"• **Custom Range:** `StartID EndID` bhejein (Example: `100 2500`)\n\n"
+            f"*(Type /cancel to abort)*",
+            reply_markup=cancel_kb,
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return True
+
+    elif state["step"] == "topicarr_range":
+        raw_range = message.text.strip().lower()
+        start_id = 1
+        end_id = 0
+        if raw_range not in ["0", "all", ""]:
+            parts = raw_range.split()
+            try:
+                if len(parts) >= 2:
+                    start_id = int(parts[0])
+                    end_id = int(parts[1])
+                elif len(parts) == 1 and parts[0].isdigit():
+                    start_id = int(parts[0])
+            except ValueError:
+                return await message.reply_text("❌ Error: Range numeric format me bhejein (e.g. `100 2000`) ya poora channel ke liye `ALL` bhejein.")
+
+        source_id = ADMIN_WIZARD[uid]["source_id"]
+        dest_id = ADMIN_WIZARD[uid]["dest_id"]
+        topic_tag = ADMIN_WIZARD[uid]["topic_tag"]
+        del ADMIN_WIZARD[uid]
+
+        await message.reply_text(
+            f"🚀 **Topic Arrangement Task Launched!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📥 **Source:** `{source_id}`\n"
+            f"📤 **Destination:** `{dest_id}`\n"
+            f"🏷️ **Extraction Tag:** `{topic_tag}`\n"
+            f"🔢 **Range:** `{'ALL (1 to Latest)' if end_id == 0 else f'{start_id} to {end_id}'}`\n"
+            f"🤖 **Engine:** User Session Account (Direct Copy without forward tag)\n"
+            f"🧹 **Watermark Clean:** 'Extracted By' credits auto-removed ✅\n\n"
+            f"⏳ Background process shuru ho raha hai...",
+            parse_mode=ParseMode.MARKDOWN
+        )
+
+        from .userbot import run_topic_arrangement_engine
+        asyncio.create_task(run_topic_arrangement_engine(
+            client, message, str(source_id), str(dest_id), topic_tag, start_id, end_id, clean_caption=True
+        ))
+        return True
+
     elif state["step"] == "superfwd_target":
         ADMIN_WIZARD[uid]["step"] = "superfwd_start_id"
         ADMIN_WIZARD[uid]["dest"] = message.text.strip()

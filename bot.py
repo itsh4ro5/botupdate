@@ -402,6 +402,7 @@ async def _run_pyrogram_engine():
         "grouptopics": H.cmd_setup_announcements, "announcementstopics": H.cmd_setup_announcements,
         "addgroup": H.cmd_add_group, "addsupergroup": H.cmd_add_group, "trackgroup": H.cmd_add_group,
         "delgroup": H.cmd_del_group, "delsupergroup": H.cmd_del_group, "groups": H.cmd_del_group, "supergroups": H.cmd_del_group,
+        "topicarrange": H.cmd_topicarrange, "topicarranger": H.cmd_topicarrange,
     }
 
     @app.on_message(filters.command(list(all_commands.keys())))

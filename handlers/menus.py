@@ -430,6 +430,7 @@ def build_database_panel_msg():
             rp.bold("• "), "🚫 ", rp.bold("Ban / Unban"), " — ", rp.italic("User access control manage karein\n\n"),
             rp.bold("• "), "🧪 ", rp.bold("Authorized Testers"), " — ", rp.italic("WebApp Maintenance Mode bypass ke liye tester IDs manage karein\n\n"),
             rp.bold("• "), "📋 ", rp.bold("Request Batches"), " — ", rp.italic("User-requested batches ki complete checklist aur interactive status dekhein\n\n"),
+            rp.bold("• "), "🗂️ ", rp.bold("Topic Arrangement"), " — ", rp.italic("Source channel se files caption ke Topic tag ke hisab se destination supergroup ke topics me auto-sort karein\n\n"),
             rp.bold("• "), "☢️ ", rp.bold("Hard Delete User"), " — ", rp.italic("User ka saara record database se delete karein")
         ]),
         rp.buttons(
@@ -455,6 +456,9 @@ def build_database_panel_msg():
         rp.buttons(
             rp.btn("🧪 Manage Testers", "dash_testers", style=rp.Style.PRIMARY),
             rp.btn("📋 Request Batches", "view_batch_requests", style=rp.Style.SUCCESS)
+        ),
+        rp.buttons(
+            rp.btn("🗂️ Topic Arrangement", "start_topic_arranger", style=rp.Style.SUCCESS)
         ),
         rp.buttons(rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DANGER))
     )
