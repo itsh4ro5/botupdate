@@ -606,7 +606,10 @@ def build_userbot_panel_msg(session, phone):
             rp.bold("• "), "⚠️ ", rp.bold("No Session: "), rp.italic("Koi active userbot session nahi mila.\n\n"),
             rp.bold("• "), "🔑 ", rp.bold("Login Required: "), rp.italic("Userbot mass cleanup features use karne ke liye login karein.")
         ]
-        action_btn = rp.buttons(rp.btn("🔑 Login Now", "input_userbotphone", style=rp.Style.SUCCESS))
+        action_btn = rp.buttons(
+            rp.btn("🔑 Login (Phone + OTP)", "input_userbotphone", style=rp.Style.SUCCESS),
+            rp.btn("📝 Paste Session String", "input_userbotsession", style=rp.Style.DEFAULT)
+        )
 
     return rp.message(
         rp.heading("🤖 USERBOT CONTROL PANEL"),

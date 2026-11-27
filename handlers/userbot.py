@@ -73,7 +73,12 @@ async def cmd_userbotphone(client: Client, message: Message):
     # FIX: Don't cut the first part if it's not a command
     text = message.text or ""
     raw_phone = text.split(" ", 1)[-1] if text.startswith("/") else text
-    phone = raw_phone.replace(" ", "").strip()
+    phone = raw_phone.replace(" ", "").replace("-", "").strip()
+    if not phone.startswith("+"):
+        if len(phone) == 10 and phone.isdigit():
+            phone = f"+91{phone}"
+        else:
+            phone = f"+{phone}"
     
     msg = await message.reply_text("⏳ OTP request bhej raha hu, kripya wait karein...")
     temp_client = Client("temp_login", api_id=API_ID, api_hash=API_HASH, in_memory=True)
@@ -86,8 +91,38 @@ async def cmd_userbotphone(client: Client, message: Message):
         client.user_data_store["login_phone"] = phone
         client.user_data_store["phone_code_hash"] = sent_code.phone_code_hash
         ADMIN_WIZARD[uid] = {"step": "call_cmd_userbototp"}
+
+        code_type_str = str(getattr(sent_code, "type", "")).upper()
+        if "APP" in code_type_str:
+            dest_header = "📱 OTP Delivered: Telegram App Ke Andar"
+            dest_detail = (
+                "⚠️ **IMPORTANT (Kripya Dhyan Se Padhein):**\n"
+                "Telegram ne aapke SIM card par normal SMS **NAHI** bheja hai!\n\n"
+                "👉 Telegram login code aapke **Telegram App** ke chat list me sabse upar **'Telegram' (Official Service Notifications / 777000)** wali chat me bheja hai.\n\n"
+                "Kripya apna Telegram app open karein, 'Telegram' chat me aaya hua 5-digit code yahan space lagakar bhejein."
+            )
+        elif "SMS" in code_type_str:
+            dest_header = "📩 OTP Delivered: Mobile SMS Inbox"
+            dest_detail = "Telegram ne aapke mobile number par SMS ke dwara code bhej diya hai. SMS inbox check karein."
+        elif "CALL" in code_type_str:
+            dest_header = "📞 OTP Delivery: Phone Call"
+            dest_detail = "Telegram aapko phone call karke code batayega."
+        else:
+            dest_header = "🔔 OTP Request Sent"
+            dest_detail = "Apna **Telegram App** (official 'Telegram' chat) aur **SMS Inbox** dono check karein."
+
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📩 Resend via SMS (SMS me mangwayein)", callback_data="userbot_resend_sms")],
+            [InlineKeyboardButton("❌ Cancel Login", callback_data="userbot_details")]
+        ])
+
         await msg.edit_text(
-            "✅ **OTP Bhej diya gaya hai!**\n\nKripya apna OTP yahan type karein.\n**DHYAN DEIN:** OTP space lagakar likhein (Example: `1 2 3 4 5`)",
+            f"✅ **{dest_header}**\n\n"
+            f"📞 **Number:** `{phone}`\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{dest_detail}\n\n"
+            f"**Format:** OTP space lagakar likhein (Example: `1 2 3 4 5`):",
+            reply_markup=kb,
             parse_mode=ParseMode.MARKDOWN,
         )
     except Exception as e:
@@ -177,6 +212,45 @@ async def cmd_userbotpass(client: Client, message: Message):
         await temp_client.disconnect()
         user_store.pop("login_client", None)
         await msg.edit_text(f"❌ Password Error: `{e}`", parse_mode=ParseMode.MARKDOWN)
+
+
+async def cmd_userbotsession(client: Client, message: Message):
+    if not is_owner_msg(message):
+        return
+    if not API_ID or API_ID == 0:
+        return await message.reply_text(
+            "⚠️ **API_ID Missing!** Kripya Cloud Dashboard me API_ID theek karein.",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+    text = (message.text or "").strip()
+    session_string = text.split(" ", 1)[-1] if text.startswith("/") else text
+    session_string = session_string.strip()
+    if not session_string or len(session_string) < 30:
+        return await message.reply_text("❌ **Invalid Session String.** Kripya valid Pyrogram Session String bhejein.")
+    
+    msg = await message.reply_text("⏳ Session string verify kar raha hu...")
+    temp_client = Client("verify_session", api_id=API_ID, api_hash=API_HASH, session_string=session_string, in_memory=True)
+    try:
+        await temp_client.start()
+        me = await temp_client.get_me()
+        phone = me.phone_number or "Hidden"
+        await temp_client.stop()
+        
+        from config import DB, save_data_async
+        DB["USERBOT_SESSION"] = session_string
+        DB["USERBOT_PHONE"] = f"+{phone}" if not str(phone).startswith("+") else str(phone)
+        await save_data_async()
+        
+        await msg.edit_text(
+            f"🎉 **USERBOT LOGIN SUCCESSFUL!**\n\n"
+            f"👤 **Account:** {me.first_name} (@{me.username or 'None'})\n"
+            f"🆔 **User ID:** `{me.id}`\n"
+            f"📞 **Phone:** `{DB['USERBOT_PHONE']}`\n\n"
+            f"✅ Session Database me save ho gaya hai. Ab aap userbot mass cleanup features use kar sakte hain!",
+            parse_mode=ParseMode.MARKDOWN
+        )
+    except Exception as e:
+        await msg.edit_text(f"❌ **Invalid Session String:** `{e}`", parse_mode=ParseMode.MARKDOWN)
 
 
 async def cmd_del_msg(client: Client, message: Message):

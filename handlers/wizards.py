@@ -972,6 +972,7 @@ async def wizard_message(client: Client, message: Message):
                 "userbotphone": getattr(H, "cmd_userbotphone", None),
                 "userbototp": getattr(H, "cmd_userbototp", None),
                 "userbotpass": getattr(H, "cmd_userbotpass", None),
+                "userbotsession": getattr(H, "cmd_userbotsession", None),
                 "storebatch": getattr(H, "cmd_storebatch", None),
                 "userlookup": getattr(H, "cmd_user_lookup", None),
                 "superfwd": getattr(H, "cmd_superfwd_start", None),

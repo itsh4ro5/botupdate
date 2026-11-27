@@ -201,11 +201,29 @@ async def general_callback(client: Client, q: CallbackQuery):
                 rp.divider(),
                 rp.expandable_quote("Userbot session successfully terminate ho gaya hai."),
                 rp.buttons(
-                    rp.btn("🔑 Login Again", "input_userbotphone", style=rp.Style.SUCCESS),
+                    rp.btn("🔑 Login (Phone + OTP)", "input_userbotphone", style=rp.Style.SUCCESS),
+                    rp.btn("📝 Paste Session String", "input_userbotsession", style=rp.Style.DEFAULT),
                     rp.btn("🔙 Back to Terminal", "dash_home", style=rp.Style.DANGER)
                 )
             )
             await rp.edit(client, q.message.chat.id, q.message.id, logout_msg)
+        elif data == "userbot_resend_sms":
+            if uid != OWNER_ID and str(uid) != str(OWNER_ID):
+                return await q.answer("❌ Owner only.", show_alert=True)
+            user_store = getattr(client, "user_data_store", {})
+            phone = user_store.get("login_phone")
+            phone_code_hash = user_store.get("phone_code_hash")
+            temp_client = user_store.get("login_client")
+            if not phone or not phone_code_hash or not temp_client:
+                return await q.answer("⚠️ Login session expire ho gaya. Wapas login start karein.", show_alert=True)
+            try:
+                new_sent = await temp_client.resend_code(phone, phone_code_hash)
+                user_store["phone_code_hash"] = new_sent.phone_code_hash
+                await q.answer("📩 Telegram ko SMS bhejne ki request bhej di gayi hai! SMS check karein.", show_alert=True)
+            except FloodWait as fw:
+                await q.answer(f"⏳ Telegram rate limit: Kripya {fw.value}s wait karein.", show_alert=True)
+            except Exception as ex:
+                await q.answer(f"⚠️ Resend failed: {ex}", show_alert=True)
         elif data.startswith("input_"):
             await q.answer()
             cmd_name = data.split("_")[1]
@@ -238,6 +256,7 @@ async def general_callback(client: Client, q: CallbackQuery):
                 "userbotphone": "  **Apna Phone Number bhejein**\nCountry code ke sath (Jaise: `+919876543210`):",
                 "userbototp": "  **OTP Bhejein**\n  *OTP spaces me bhejein!* Jaise: `1 2 3 4 5`:",
                 "userbotpass": "  **2FA Password bhejein:**",
+                "userbotsession": "📝 **PASTE PYROGRAM SESSION STRING**\n\nApna Pyrogram Session String yahan paste karein:\n*(Example: `BQG...`)*\n\n*(Agar aapke paas session string nahi hai toh aap 'Login via Phone & OTP' use karein)*",
                 "userlookup": "🔍 **Specific User Data**\n\nUser ka User ID bhejein:",
                 "deluser": "☢️ **HARD DELETE USER**\n\nJis user ka data database se **poori tarah mitana hai**, uska **User ID** bhejein.\n*(Warning: Ye action undo nahi hoga)*:",
                 "genvoucher": "🎟️ **GENERATE REDEEM CODE / VOUCHER**\n\nFormat: `<CODE> <COINS> <MAX_USES>`\n(Example: `DIWALI5 5 100` ya `GIFT10 10 50`):",
