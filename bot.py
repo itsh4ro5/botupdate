@@ -10,26 +10,46 @@ import pyrogram.types
 from pyrogram.enums import ButtonStyle, ChatType, ChatMemberStatus, ParseMode
 import richpyro as rp
 from pyrogram.parser.markdown import Markdown
+from pyrogram.parser.html import HTML
 from pyrogram.raw.types import (
     MessageEntityBold, MessageEntityItalic, MessageEntityTextUrl, 
-    MessageEntityCode, MessageEntityPre, MessageEntitySpoiler, MessageEntityStrike
+    MessageEntityCode, MessageEntityPre, MessageEntitySpoiler, MessageEntityStrike,
+    MessageEntityUnderline, MessageEntityCustomEmoji
 )
 
 def _patch_rich_text_classes():
     for name in dir(pyrogram.types):
-        if name.startswith("RichText"):
+        if name.startswith("RichText") or name.startswith("InputRich"):
             cls = getattr(pyrogram.types, name)
             if hasattr(cls, "write") and callable(getattr(cls, "write")):
                 orig_fn = cls.write
                 def _wrap(fn):
                     async def _safe_write(self, *args, **kwargs):
-                        client = kwargs.get('client') or (args[0] if args else None)
                         try:
-                            return await fn(self, client)
-                        except TypeError:
                             return await fn(self, *args, **kwargs)
+                        except TypeError as te:
+                            if "unexpected keyword argument" in str(te):
+                                cleaned = {k: v for k, v in kwargs.items() if k in ["client", "chat_id"]}
+                                return await fn(self, *args, **cleaned)
+                            raise
                     return _safe_write
                 cls.write = _wrap(orig_fn)
+
+    try:
+        from pyrogram.types.input_content.input_rich_message import InputRichMessage
+        if hasattr(InputRichMessage, "write") and callable(getattr(InputRichMessage, "write")):
+            orig_irm_write = InputRichMessage.write
+            async def _safe_irm_write(self, *args, **kwargs):
+                try:
+                    return await orig_irm_write(self, *args, **kwargs)
+                except TypeError as te:
+                    if "unexpected keyword argument" in str(te):
+                        cleaned = {k: v for k, v in kwargs.items() if k in ["client", "chat_id"]}
+                        return await orig_irm_write(self, *args, **cleaned)
+                    raise
+            InputRichMessage.write = _safe_irm_write
+    except Exception:
+        pass
 
 _patch_rich_text_classes()
 
@@ -56,6 +76,14 @@ def _entities_to_rich(text, entities):
             result.append(rp.spoiler(ent_text))
         elif isinstance(ent, MessageEntityStrike):
             result.append(rp.strike(ent_text))
+        elif isinstance(ent, MessageEntityUnderline):
+            result.append(rp.underline(ent_text))
+        elif isinstance(ent, MessageEntityCustomEmoji):
+            doc_id = getattr(ent, "document_id", None)
+            if doc_id:
+                result.append(rp.custom_emoji(ent_text, doc_id))
+            else:
+                result.append(ent_text)
         else:
             result.append(ent_text)
         last_offset = ent.offset + ent.length
@@ -103,13 +131,16 @@ async def _patched_send(client, chat_id, text=None, parse_mode=None, reply_marku
             
             is_html = (parse_mode in [ParseMode.HTML, "html", "HTML"]) or any(t in str(text or "") for t in ["<b>", "<i>", "<code>", "<u>", "<pre>", "<a ", "</a>", "</span>"])
             try:
-                content_block = rp.html_message(str(text or "")) if is_html else rp.markdown_message(str(text or ""))
-                msg = rp.message(content_block, *rp_rows)
-            except Exception:
-                parser = Markdown(client)
+                parser = HTML(client) if is_html else Markdown(client)
                 res = await parser.parse(str(text or ""))
-                rich_texts = _entities_to_rich(res['message'], res['entities'])
+                rich_texts = _entities_to_rich(res['message'], res.get('entities') or [])
                 msg = rp.message(rp.para(*rich_texts), *rp_rows)
+            except Exception:
+                try:
+                    content_block = rp.html_message(str(text or "")) if is_html else rp.markdown_message(str(text or ""))
+                    msg = rp.message(content_block, *rp_rows)
+                except Exception:
+                    msg = rp.message(rp.para(str(text or "")), *rp_rows)
             
             safe_kwargs = {k:v for k,v in kwargs.items() if k in ['disable_notification', 'protect_content', 'message_thread_id']}
             if 'reply_parameters' in kwargs and kwargs['reply_parameters']:
@@ -167,19 +198,21 @@ async def _patched_edit(client, chat_id, message_id, text=None, parse_mode=None,
             
             is_html = (parse_mode in [ParseMode.HTML, "html", "HTML"]) or any(t in str(text or "") for t in ["<b>", "<i>", "<code>", "<u>", "<pre>", "<a ", "</a>", "</span>"])
             try:
-                content_block = rp.html_message(str(text or "")) if is_html else rp.markdown_message(str(text or ""))
-                msg = rp.message(content_block, *rp_rows)
-            except Exception:
-                parser = Markdown(client)
+                parser = HTML(client) if is_html else Markdown(client)
                 res = await parser.parse(str(text or ""))
-                rich_texts = _entities_to_rich(res['message'], res['entities'])
+                rich_texts = _entities_to_rich(res['message'], res.get('entities') or [])
                 msg = rp.message(rp.para(*rich_texts), *rp_rows)
+            except Exception:
+                try:
+                    content_block = rp.html_message(str(text or "")) if is_html else rp.markdown_message(str(text or ""))
+                    msg = rp.message(content_block, *rp_rows)
+                except Exception:
+                    msg = rp.message(rp.para(str(text or "")), *rp_rows)
             
             return await rp.edit(client, chat_id, message_id, msg)
         except Exception as e:
             if "MESSAGE_NOT_MODIFIED" in str(e) or e.__class__.__name__ == "MessageNotModified":
                 return True
-            traceback.print_exc()
             try:
                 return await _old_edit(client, chat_id, message_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
             except Exception as e2:

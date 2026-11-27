@@ -110,19 +110,37 @@ ACTIVE_LINK_TTL = 60             # Rule B: matches the 60s invite-link expiry
 
 def _patch_rich_text_classes():
     for name in dir(pyrogram.types):
-        if name.startswith("RichText"):
+        if name.startswith("RichText") or name.startswith("InputRich"):
             cls = getattr(pyrogram.types, name)
             if hasattr(cls, "write") and callable(getattr(cls, "write")):
                 orig_fn = cls.write
                 def _wrap(fn):
                     async def _safe_write(self, *args, **kwargs):
-                        client = kwargs.get('client') or (args[0] if args else None)
                         try:
-                            return await fn(self, client)
-                        except TypeError:
                             return await fn(self, *args, **kwargs)
+                        except TypeError as te:
+                            if "unexpected keyword argument" in str(te):
+                                cleaned = {k: v for k, v in kwargs.items() if k in ["client", "chat_id"]}
+                                return await fn(self, *args, **cleaned)
+                            raise
                     return _safe_write
                 cls.write = _wrap(orig_fn)
+
+    try:
+        from pyrogram.types.input_content.input_rich_message import InputRichMessage
+        if hasattr(InputRichMessage, "write") and callable(getattr(InputRichMessage, "write")):
+            orig_irm_write = InputRichMessage.write
+            async def _safe_irm_write(self, *args, **kwargs):
+                try:
+                    return await orig_irm_write(self, *args, **kwargs)
+                except TypeError as te:
+                    if "unexpected keyword argument" in str(te):
+                        cleaned = {k: v for k, v in kwargs.items() if k in ["client", "chat_id"]}
+                        return await orig_irm_write(self, *args, **cleaned)
+                    raise
+            InputRichMessage.write = _safe_irm_write
+    except Exception:
+        pass
 
 
 _patch_rich_text_classes()
