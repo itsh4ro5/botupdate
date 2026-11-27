@@ -9,12 +9,13 @@ import time
 import urllib.parse
 import logging
 import json
+import random
 import config
 from config import *
 import richpyro as rp
 import pyrogram
 from pyrogram import Client, filters
-from pyrogram.enums import ButtonStyle, ChatMemberStatus, ChatType, ParseMode
+from pyrogram.enums import ButtonStyle, ChatAction, ChatMemberStatus, ChatType, ParseMode
 from pyrogram.errors import (
     ChatAdminRequired,
     FloodWait,
@@ -59,6 +60,83 @@ from bot_api_bridge import (
 logger = logging.getLogger(__name__)
 from .common import *
 from .common import _SYNC_IN_PROGRESS, _BOT_SELF_ID, _patch_rich_text_classes
+
+
+class HumanForwardPacer:
+    """
+    Simulates human behavior for forwarding, copying, and caption editing.
+    Prevents Telegram MTProto anti-spam bans and FloodWait by:
+    1. Introducing Gaussian/randomized micro-delays between operations.
+    2. Inserting realistic human pauses (burst breaks) every 10-18 messages.
+    3. Simulating sporadic ChatActions (typing/uploading).
+    4. Providing a safety buffer on FloodWait recovery.
+    """
+    def __init__(
+        self,
+        min_delay: float = None,
+        max_delay: float = None,
+        burst_min: int = None,
+        burst_max: int = None
+    ):
+        self.min_delay = min_delay if min_delay is not None else getattr(config, "HUMAN_FORWARD_MIN_DELAY", 2.4)
+        self.max_delay = max_delay if max_delay is not None else getattr(config, "HUMAN_FORWARD_MAX_DELAY", 4.8)
+        self.burst_min = burst_min if burst_min is not None else getattr(config, "HUMAN_BURST_MIN", 10)
+        self.burst_max = burst_max if burst_max is not None else getattr(config, "HUMAN_BURST_MAX", 18)
+        self.msg_count_since_burst = 0
+        self.total_processed = 0
+        self.next_burst_threshold = random.randint(self.burst_min, self.burst_max)
+
+    async def pace(self, client: Client = None, chat_id: int = None, is_media: bool = True):
+        self.total_processed += 1
+        self.msg_count_since_burst += 1
+
+        # 1. Base human delay with random variance
+        if is_media:
+            delay = random.uniform(self.min_delay, self.max_delay)
+        else:
+            delay = random.uniform(max(1.8, self.min_delay * 0.75), self.max_delay * 0.85)
+
+        # 2. Simulate ChatAction occasionally (every 3 to 6 messages)
+        if client and chat_id and (self.total_processed % random.randint(3, 6) == 0):
+            try:
+                action = ChatAction.UPLOAD_DOCUMENT if is_media else ChatAction.TYPING
+                await client.send_chat_action(chat_id, action)
+            except Exception:
+                pass
+
+        await asyncio.sleep(delay)
+
+        # 3. Check for human burst pause (e.g. user took a sip of water, scrolled feed)
+        if self.msg_count_since_burst >= self.next_burst_threshold:
+            self.msg_count_since_burst = 0
+            self.next_burst_threshold = random.randint(self.burst_min, self.burst_max)
+            
+            # Every 50 total messages, take a milestone human break
+            if self.total_processed % 50 < self.burst_max and self.total_processed >= 50:
+                rest_pause = random.uniform(18.0, 32.0)
+                logger.info(f"[HumanPacer] Milestone pause: {rest_pause:.1f}s after {self.total_processed} items")
+            else:
+                rest_pause = random.uniform(7.0, 14.0)
+                logger.info(f"[HumanPacer] Burst human pause: {rest_pause:.1f}s")
+            
+            await asyncio.sleep(rest_pause)
+
+    @staticmethod
+    async def handle_flood_wait(fw_seconds: int, progress_msg: Message = None, task_name: str = "Forwarding"):
+        safe_wait = int(fw_seconds) + random.randint(3, 7)
+        logger.warning(f"[HumanPacer] FloodWait hit: {fw_seconds}s. Safe human backoff: {safe_wait}s.")
+        if progress_msg:
+            try:
+                await progress_msg.edit_text(
+                    f"⏳ **Telegram Anti-Flood Active ({task_name})**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"⚠️ Telegram ne rate-limit lagaya hai (`{fw_seconds}s`).\n"
+                    f"🛡️ Account ban se bachane ke liye bot `{safe_wait}s` safety cooldown me hai.\n\n"
+                    f"⏱️ Cooldown pura hone ke baad natural human speed se task auto-resume ho jayega..."
+                )
+            except Exception:
+                pass
+        await asyncio.sleep(safe_wait)
+
 
 async def cmd_userbotphone(client: Client, message: Message):
     if not is_owner_msg(message):
@@ -349,10 +427,11 @@ async def run_advanced_caption_changer(bot_client: Client, message: Message, cha
             await userbot.stop()
             return await msg.edit_text(f"❌ Error: Range `{min_id}` - `{max_id}` me koi message nahi mila.")
             
-        await msg.edit_text(f"✅ Total `{total_msgs}` messages loaded!\n⏳ **Step 2:** Advanced Changer Running...", reply_markup=cancel_kb)
+        await msg.edit_text(f"✅ Total `{total_msgs}` messages loaded!\n⏳ **Step 2:** Advanced Changer Running (Human Safe Mode)...", reply_markup=cancel_kb)
         
         edited_count = 0
         checked_count = 0
+        pacer = HumanForwardPacer(min_delay=2.0, max_delay=4.2, burst_min=12, burst_max=20)
 
         for m in all_messages:
             if uid in bot_client.cancel_tasks:
@@ -390,13 +469,17 @@ async def run_advanced_caption_changer(bot_client: Client, message: Message, cha
                     try:
                         await userbot.edit_message_caption(chat_id=channel_id, message_id=m.id, caption=new_cap)
                         edited_count += 1
-                        await asyncio.sleep(2) 
+                        await pacer.pace(client=userbot, chat_id=channel_id, is_media=True)
                     except FloodWait as fw:
-                        await asyncio.sleep(fw.value + 1)
-                        await userbot.edit_message_caption(chat_id=channel_id, message_id=m.id, caption=new_cap)
-                        edited_count += 1
+                        await pacer.handle_flood_wait(fw.value, progress_msg=msg, task_name="Caption Changer")
+                        try:
+                            await userbot.edit_message_caption(chat_id=channel_id, message_id=m.id, caption=new_cap)
+                            edited_count += 1
+                            await pacer.pace(client=userbot, chat_id=channel_id, is_media=True)
+                        except Exception:
+                            pass
                     except Exception:
-                        pass
+                        await asyncio.sleep(random.uniform(1.5, 3.0))
                         
             if checked_count % 30 == 0:
                 try:
@@ -558,6 +641,7 @@ async def run_super_forwarder(bot_client: Client, message: Message, source_str: 
         created_topics = {} 
         forwarded_count = 0
         checked_count = 0
+        pacer = HumanForwardPacer(min_delay=2.5, max_delay=5.0, burst_min=10, burst_max=18)
 
         # /s ki jagah ab 0 (Zero) par skip hoga
         rem_list = [w.strip() for w in remove_words.split(",") if w.strip()] if remove_words != "0" else []
@@ -598,11 +682,13 @@ async def run_super_forwarder(bot_client: Client, message: Message, source_str: 
                     topic_key = raw_topic_name.lower() 
                     
                     if topic_key not in created_topics:
+                        await asyncio.sleep(random.uniform(1.8, 3.5))
                         new_topic_id = await safe_create_forum_topic(bot_client, dest_id, raw_topic_name)
                         if not new_topic_id:
                             new_topic_id = await safe_create_forum_topic(userbot, dest_id, raw_topic_name)
                         if new_topic_id:
                             created_topics[topic_key] = new_topic_id
+                            await asyncio.sleep(random.uniform(2.0, 3.5))
                     topic_id = created_topics.get(topic_key)
                 
             try:
@@ -614,13 +700,17 @@ async def run_super_forwarder(bot_client: Client, message: Message, source_str: 
                     caption=new_cap
                 )
                 forwarded_count += 1
-                await asyncio.sleep(1.5) 
+                await pacer.pace(client=userbot, chat_id=dest_id, is_media=True)
             except FloodWait as fw:
-                await asyncio.sleep(fw.value + 1)
-                await userbot.copy_message(chat_id=dest_id, from_chat_id=source_id, message_id=m.id, message_thread_id=topic_id, caption=new_cap)
-                forwarded_count += 1
+                await pacer.handle_flood_wait(fw.value, progress_msg=msg, task_name="Super Forwarder")
+                try:
+                    await userbot.copy_message(chat_id=dest_id, from_chat_id=source_id, message_id=m.id, message_thread_id=topic_id, caption=new_cap)
+                    forwarded_count += 1
+                    await pacer.pace(client=userbot, chat_id=dest_id, is_media=True)
+                except Exception:
+                    pass
             except Exception:
-                pass
+                await asyncio.sleep(random.uniform(1.5, 3.0))
             
             if checked_count % 30 == 0:
                 try:
@@ -795,6 +885,7 @@ async def run_topic_arrangement_engine(
         scanned_count = 0
         skipped_count = 0
         start_time = time.time()
+        pacer = HumanForwardPacer(min_delay=2.5, max_delay=5.0, burst_min=10, burst_max=18)
 
         for m in all_messages:
             if uid in bot_client.cancel_tasks:
@@ -808,6 +899,8 @@ async def run_topic_arrangement_engine(
             if not (m.video or m.document or m.photo or m.audio or m.animation or m.text):
                 continue
 
+            is_media = bool(m.video or m.document or m.photo or m.audio or m.animation)
+
             # Match topic name from caption
             t_match = re.search(topic_pattern, cap, re.IGNORECASE)
             if t_match:
@@ -820,6 +913,7 @@ async def run_topic_arrangement_engine(
 
             # Ensure topic exists in destination group
             if topic_key not in created_topics:
+                await asyncio.sleep(random.uniform(1.8, 3.5))
                 new_topic_id = await safe_create_forum_topic(userbot, dest_id, raw_topic_name)
                 if not new_topic_id and bot_client:
                     new_topic_id = await safe_create_forum_topic(bot_client, dest_id, raw_topic_name)
@@ -835,6 +929,7 @@ async def run_topic_arrangement_engine(
                         )
                     except Exception:
                         pass
+                    await asyncio.sleep(random.uniform(2.0, 3.8))
                 else:
                     logger.warning(f"Failed to create topic '{raw_topic_name}' in {dest_id}")
 
@@ -857,19 +952,19 @@ async def run_topic_arrangement_engine(
                     forwarded_count += 1
                     topic_counts[topic_key] = topic_counts.get(topic_key, 0) + 1
                     copy_success = True
-                    await asyncio.sleep(1.2)
+                    await pacer.pace(client=userbot, chat_id=dest_id, is_media=is_media)
                     break
                 except FloodWait as fw:
-                    await asyncio.sleep(fw.value + 1)
+                    await pacer.handle_flood_wait(fw.value, progress_msg=progress_msg, task_name="Topic Arrangement")
                 except Exception as ce:
                     logger.warning(f"Error copying msg {m.id}: {ce}")
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(random.uniform(1.8, 3.2))
 
             if not copy_success:
                 skipped_count += 1
 
-            # Live progress update every 15 items
-            if scanned_count % 15 == 0 or scanned_count == total_msgs:
+            # Live progress update every 12 items
+            if scanned_count % 12 == 0 or scanned_count == total_msgs:
                 try:
                     elapsed = int(time.time() - start_time)
                     mins, secs = divmod(elapsed, 60)
@@ -877,7 +972,7 @@ async def run_topic_arrangement_engine(
 
                     recent_topics_str = ", ".join([k.title() for k in list(created_topics.keys())[-3:]]) or "None"
                     await progress_msg.edit_text(
-                        f"⚡ **Topic Arrangement In Progress...**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"⚡ **Topic Arrangement In Progress (Human Safe Mode)...**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                         f"📥 **Source:** `{source_title}`\n"
                         f"📤 **Destination:** `{dest_title}`\n"
                         f"🏷️ **Active Topic:** `{raw_topic_name}`\n\n"
@@ -887,8 +982,9 @@ async def run_topic_arrangement_engine(
                         f"• 📤 **Files Forwarded:** `{forwarded_count}`\n"
                         f"• ⚠️ **Skipped/Errors:** `{skipped_count}`\n"
                         f"• ⏱️ **Elapsed Time:** `{time_str}`\n\n"
+                        f"🛡️ **Speed Mode:** `Human Behavior (Anti-Ban & Anti-Flood Active)`\n"
                         f"📌 *Recent Topics:* `{recent_topics_str}`\n\n"
-                        f"*(Userbot session is copying files cleanly without forward tag)*",
+                        f"*(Userbot session is copying files cleanly with realistic human timing)*",
                         reply_markup=cancel_kb,
                         parse_mode=ParseMode.MARKDOWN
                     )

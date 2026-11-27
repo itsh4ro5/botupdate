@@ -1,4 +1,4 @@
-import os, json, asyncio, logging, time
+import os, json, asyncio, logging, time, re
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -43,6 +43,22 @@ def _safe_int(env_name, default=0):
     except (ValueError, TypeError):
         logger.warning(f"Env var {env_name}={repr(raw)} is not a valid integer. Using default {default}")
         return default
+
+def _safe_float(env_name, default=0.0):
+    raw = os.environ.get(env_name, None)
+    if raw is None or str(raw).strip() == "":
+        return default
+    try:
+        return float(str(raw).strip())
+    except (ValueError, TypeError):
+        logger.warning(f"Env var {env_name}={repr(raw)} is not a valid float. Using default {default}")
+        return default
+
+# Human-like Forwarding & Anti-Flood pacing settings
+HUMAN_FORWARD_MIN_DELAY = _safe_float("HUMAN_FORWARD_MIN_DELAY", 2.4)
+HUMAN_FORWARD_MAX_DELAY = _safe_float("HUMAN_FORWARD_MAX_DELAY", 4.8)
+HUMAN_BURST_MIN = _safe_int("HUMAN_BURST_MIN", 10)
+HUMAN_BURST_MAX = _safe_int("HUMAN_BURST_MAX", 18)
 
 # =====================================================================
 # PYROGRAM DC (DATA CENTER) ROUTER PATCH: Configurable DC (Default: DC5 Singapore)
@@ -1194,7 +1210,7 @@ async def refresh_peer_cache(client, chat_id):
         logger.error(f"  Native peer refresh failed for {chat_id}: {e}")
         return False
 
-async def build_user_topic_info(client, target_uid):
+async def build_user_topic_info(client, target_uid, is_new_ticket=False):
     """
     Returns (summary_text, reply_markup, joined_batches_list) for a student inside a support topic.
     Performs fast parallel membership checking with caching.
@@ -1209,10 +1225,19 @@ async def build_user_topic_info(client, target_uid):
     except Exception:
         pass
 
-    raw_name = (tg_user.first_name if tg_user and tg_user.first_name else None) or u_data.get("name") or f"Student {target_uid}"
-    safe_name = raw_name.replace("[", "").replace("]", "").replace("*", "").replace("_", "")
+    first = (tg_user.first_name or "").strip() if tg_user else ""
+    last = (tg_user.last_name or "").strip() if tg_user else ""
+    full_name = f"{first} {last}".strip()
+    if not full_name:
+        full_name = u_data.get("name") or f"Student {target_uid}"
+
+    clean_name = re.sub(r"[\[\]\*\_`]", "", full_name).strip()
+    if not clean_name or clean_name in [".", "..", "...", "-", "_", "•", "|", "~"] or len(clean_name) < 2:
+        clean_name = f"Student ({target_uid})"
+
     username = (tg_user.username if tg_user and tg_user.username else None) or u_data.get("username")
     uname_str = f"@{username}" if username else "`None`"
+    profile_url = f"https://t.me/{username}" if username else f"tg://user?id={target_uid}"
 
     coins = u_data.get("referral_count", 0)
     total_invited = u_data.get("total_invited", 0)
@@ -1224,8 +1249,14 @@ async def build_user_topic_info(client, target_uid):
     if referrer_id:
         try:
             r_user = await client.get_users(int(referrer_id))
-            r_name = (r_user.first_name or f"User {referrer_id}").replace("[", "").replace("]", "")
-            referrer_str = f"[{r_name}](tg://user?id={referrer_id}) (`{referrer_id}`)"
+            r_first = (r_user.first_name or "").strip()
+            r_last = (r_user.last_name or "").strip()
+            r_name = f"{r_first} {r_last}".strip() or f"User {referrer_id}"
+            r_clean = re.sub(r"[\[\]\*\_`]", "", r_name).strip()
+            if not r_clean or len(r_clean) < 2 or r_clean in [".", ".."]:
+                r_clean = f"User ({referrer_id})"
+            r_url = f"https://t.me/{r_user.username}" if r_user.username else f"tg://user?id={referrer_id}"
+            referrer_str = f"[{r_clean}]({r_url}) (`{referrer_id}`)"
         except Exception:
             referrer_str = f"`{referrer_id}`"
 
@@ -1271,13 +1302,15 @@ async def build_user_topic_info(client, target_uid):
         batches_summary = "_Student abhi kisi bhi batch me join nahi hai._"
 
     status_tag = "🔴 **BLOCKED**" if is_blocked else "🟢 **Active Student**"
+    header_title = "🚨 **<u>NEW USER TICKET CREATED</u>**" if is_new_ticket else "👤 **<u>STUDENT PROFILE & SUPPORT SNAPSHOT</u>**"
 
     msg_text = (
-        f"👤 **<u>STUDENT PROFILE & SUPPORT SNAPSHOT</u>**\n"
+        f"{header_title}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"👤 **Name:** [{safe_name}](tg://user?id={target_uid})\n"
+        f"👤 **Name:** [{clean_name}]({profile_url})\n"
         f"🆔 **User ID:** `{target_uid}`\n"
         f"📛 **Username:** {uname_str}\n"
+        f"🔗 **Profile:** [👉 Click Here to Open Profile]({profile_url})\n"
         f"💎 **Study Coins:** `{coins} Coins`\n"
         f"👥 **Total Referrals:** `{total_invited} Students`\n"
         f"🔗 **Referred By:** {referrer_str}\n"
@@ -1287,13 +1320,16 @@ async def build_user_topic_info(client, target_uid):
         f"📚 **JOINED BATCHES ({len(joined_batches)}):**\n"
         f"{batches_summary}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"💡 _Niche button se full data (.txt) download ya coins gift karein:_"
+        f"💡 _Niche button se student ka profile open karein, data download ya coins gift karein:_"
     )
 
     block_btn_text = "🟢 Unblock Student" if is_blocked else "🚫 Block Student"
     block_cb = f"t_unblock_{target_uid}" if is_blocked else f"t_block_{target_uid}"
     kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📄 Download Full Details (.txt)", callback_data=f"t_user_txt_{target_uid}")],
+        [
+            InlineKeyboardButton("👤 Open Student Profile", url=profile_url),
+            InlineKeyboardButton("📄 Download Data (.txt)", callback_data=f"t_user_txt_{target_uid}")
+        ],
         [
             InlineKeyboardButton("🎁 Gift Coins", callback_data=f"giftcoin_direct_{target_uid}"),
             InlineKeyboardButton(block_btn_text, callback_data=block_cb)
@@ -1319,7 +1355,10 @@ async def generate_user_txt_file(client, target_uid):
     except Exception:
         pass
 
-    name = (tg_user.first_name if tg_user and tg_user.first_name else None) or u_data.get("name") or f"Student {target_uid}"
+    first = (tg_user.first_name or "").strip() if tg_user else ""
+    last = (tg_user.last_name or "").strip() if tg_user else ""
+    full_name = f"{first} {last}".strip()
+    name = full_name or u_data.get("name") or f"Student {target_uid}"
     username = (tg_user.username if tg_user and tg_user.username else None) or u_data.get("username")
     uname_str = f"@{username}" if username else "None"
 
@@ -1533,8 +1572,8 @@ async def get_or_create_topic(user, client, is_retry=False):
         
         # --- NEW TICKET PINNED MESSAGE (RICHEST FIRST MESSAGE & PINNED) ---
         try:
-            summary_text, kb, _ = await build_user_topic_info(client, user.id)
-            pin_text = f"🚨 **NEW USER TICKET CREATED**\n" + summary_text
+            summary_text, kb, _ = await build_user_topic_info(client, user.id, is_new_ticket=True)
+            pin_text = summary_text
             
             sent_msg = await client.send_message(
                 chat_id=int(SUPPORT_GROUP_ID),

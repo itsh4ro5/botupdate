@@ -731,7 +731,9 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
                     await loading_msg.delete()
                     user_key = target_uid if target_uid in DB.get("USER_DATA", {}) else str(target_uid)
                     u_name = DB.get("USER_DATA", {}).get(user_key, {}).get("name") or f"Student {target_uid}"
-                    safe_u_name = str(u_name).replace("[", "").replace("]", "")
+                    safe_u_name = str(u_name).replace("[", "").replace("]", "").strip()
+                    if not safe_u_name or safe_u_name in [".", "..", "-", "_"] or len(safe_u_name) < 2:
+                        safe_u_name = f"Student {target_uid}"
                     await client.send_document(
                         chat_id=int(SUPPORT_GROUP_ID),
                         document=f,
@@ -824,7 +826,9 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
 
                 user_key = target_uid if target_uid in DB.get("USER_DATA", {}) else str(target_uid)
                 u_name = DB.get("USER_DATA", {}).get(user_key, {}).get("name") or f"Student {target_uid}"
-                safe_u_name = str(u_name).replace("[", "").replace("]", "")
+                safe_u_name = str(u_name).replace("[", "").replace("]", "").strip()
+                if not safe_u_name or safe_u_name in [".", "..", "-", "_"] or len(safe_u_name) < 2:
+                    safe_u_name = f"Student {target_uid}"
                 await message.reply_text(
                     f"🛠️ **TOPIC COMMANDS FOR [{safe_u_name}](tg://user?id={target_uid}) (`{target_uid}`):**\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"

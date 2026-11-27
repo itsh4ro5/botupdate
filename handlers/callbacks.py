@@ -310,7 +310,9 @@ async def general_callback(client: Client, q: CallbackQuery):
                 topic_id = getattr(q.message, "message_thread_id", None) or getattr(q.message, "reply_to_top_message_id", None)
                 user_key = target if target in DB.get("USER_DATA", {}) else str(target)
                 u_name = DB.get("USER_DATA", {}).get(user_key, {}).get("name") or f"Student {target}"
-                safe_name = str(u_name).replace("[", "").replace("]", "")
+                safe_name = str(u_name).replace("[", "").replace("]", "").strip()
+                if not safe_name or safe_name in [".", "..", "-", "_"] or len(safe_name) < 2:
+                    safe_name = f"Student {target}"
                 await client.send_document(
                     chat_id=q.message.chat.id,
                     document=f,
