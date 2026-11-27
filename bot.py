@@ -99,6 +99,13 @@ async def _patched_send(client, chat_id, text=None, parse_mode=None, reply_marku
     if "rich_message" in kwargs:
         return await _old_send(client, chat_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
 
+    # In private user chats (chat_id > 0), always use native send_message so text & buttons render immediately on Telegram
+    try:
+        if int(chat_id) > 0:
+            return await _old_send(client, chat_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
+    except Exception:
+        pass
+
     # If any button is a Telegram WebApp button, preserve native Pyrogram markup
     if reply_markup and hasattr(reply_markup, "inline_keyboard") and reply_markup.inline_keyboard:
         if any(getattr(b, "web_app", None) is not None for row in reply_markup.inline_keyboard for b in row):
@@ -163,6 +170,13 @@ async def _patched_edit(client, chat_id, message_id, text=None, parse_mode=None,
             if "MESSAGE_NOT_MODIFIED" in str(e) or e.__class__.__name__ == "MessageNotModified":
                 return True
             raise
+
+    # In private user chats (chat_id > 0), if it's standard text/markup, use native edit_message_text
+    try:
+        if int(chat_id) > 0:
+            return await _old_edit(client, chat_id, message_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
+    except Exception:
+        pass
 
     if reply_markup and hasattr(reply_markup, "inline_keyboard") and reply_markup.inline_keyboard:
         if any(getattr(b, "web_app", None) is not None for row in reply_markup.inline_keyboard for b in row):
@@ -437,6 +451,7 @@ async def _run_pyrogram_engine():
         "delgroup": H.cmd_del_group, "delsupergroup": H.cmd_del_group, "groups": H.cmd_del_group, "supergroups": H.cmd_del_group,
         "topicarrange": H.cmd_topicarrange, "topicarranger": H.cmd_topicarrange,
         "giveaway": H.cmd_giveaway, "demands": H.cmd_demands, "batchdemands": H.cmd_demands,
+        "help": H.cmd_start, "menu": H.cmd_start,
     }
 
     @app.on_message(filters.command(list(all_commands.keys())))
@@ -567,13 +582,14 @@ async def _run_pyrogram_engine():
     # 5. REGULAR MESSAGES & SUPPORT TICKETS (🔥 YAHAN SOLVE HUA AAPKA BUG 🔥)
     # Ye handler normal text/photo/video ko Support Group me forward karega
     # =====================================================================
-    @app.on_message(filters.all & ~filters.command(list(all_commands.keys()) + ["start", "ping", "id", "info", "file", "txt", "status", "userinfo"]))
+    @app.on_message(filters.all & ~filters.command(list(all_commands.keys()) + ["start", "ping", "id", "info", "file", "txt", "status", "userinfo", "help", "menu"]))
     async def _on_regular_msg(client: Client, message: Message):
         if message.chat and message.chat.type in [ChatType.SUPERGROUP, ChatType.GROUP]:
             config.DB.setdefault("SUPERGROUPS", {})[str(message.chat.id)] = message.chat.title or str(message.chat.id)
         is_support = bool(message.chat and str(message.chat.id) == str(getattr(config, "SUPPORT_GROUP_ID", 0)))
         if not is_support:
-            if message.text and message.text.startswith("/"): return
+            if message.text and message.text.startswith("/"):
+                return await message.reply_text("❓ **Unknown Command.**\nMain Menu kholne ke liye /start dabayein.", parse_mode=ParseMode.MARKDOWN)
             if message.caption and message.caption.startswith("/"): return
         await H.main_message_handler(client, message)
 

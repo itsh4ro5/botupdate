@@ -981,8 +981,12 @@ async def wizard_message(client: Client, message: Message):
             }
             if cmd_name in cmds:
                 await cmds[cmd_name](client, message)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error executing wizard command {cmd_name}: {e}")
+            try:
+                await message.reply_text(f"❌ Error: {e}")
+            except Exception:
+                pass
         if uid in ADMIN_WIZARD and ADMIN_WIZARD[uid].get("step") == current_step:
             del ADMIN_WIZARD[uid]
         return True

@@ -500,77 +500,126 @@ async def main_message_handler(client: Client, message: Message, is_retry=False)
     if chat.type == ChatType.PRIVATE:
         if DB.get("MAINTENANCE_MODE", False) and not is_admin(user.id):
             return await message.reply_text("🛠 **Under Maintenance.**")
-        
 
+        text_query = (message.text or message.caption or "").strip()
+        matching_batches = []
+        if text_query and len(text_query) >= 2 and not text_query.startswith("/"):
+            q_low = text_query.lower()
+            all_chats = DB.get("ALL_CHATS", {})
+            for b_cid, b_cname in all_chats.items():
+                if q_low in str(b_cname).lower():
+                    b_type = "free"
+                    if str(b_cid) in DB.get("PAID_CHANNELS", {}) or b_cid in DB.get("PAID_CHANNELS", {}):
+                        b_type = "paid"
+                    elif str(b_cid) in DB.get("SPECIAL_CHANNELS", {}) or b_cid in DB.get("SPECIAL_CHANNELS", {}):
+                        b_type = "special"
+                    matching_batches.append((b_cid, b_cname, b_type))
+
+        delivered_to_support = False
         try:
             topic_id = await get_or_create_topic(user, client)
-            if not topic_id:
-                return await message.reply_text("  **Support Ticket Error:** Admin ne Support Group me Forum Topics enable nahi kiya hai.")
-            
-            reply_id = None
-            if message.reply_to_message:
-                reply_key = (chat.id, message.reply_to_message.id)
-                if reply_key in MESSAGE_MAP:
-                    _, reply_id = MESSAGE_MAP[reply_key]
-            
-            try:
-                sent = await message.copy(
-                    int(SUPPORT_GROUP_ID),
-                    message_thread_id=topic_id,
-                    reply_to_message_id=reply_id,
-                )
-            except TypeError:
-                target_reply_id = reply_id if reply_id else topic_id
-                sent = await message.copy(int(SUPPORT_GROUP_ID), reply_to_message_id=target_reply_id)
-            except Exception as e:
-                err_str = str(e).lower()
-                if "reply" in err_str or "message_id_invalid" in err_str:
-                    # Target reply message was deleted, try without reply_id
-                    try:
-                        sent = await message.copy(
-                            int(SUPPORT_GROUP_ID),
-                            message_thread_id=topic_id,
-                        )
-                    except TypeError:
-                        sent = await message.copy(int(SUPPORT_GROUP_ID), reply_to_message_id=topic_id)
-                else:
-                    raise e
-                    
-            MESSAGE_MAP[(chat.id, message.id)] = (int(SUPPORT_GROUP_ID), sent.id)
-            MESSAGE_MAP[(int(SUPPORT_GROUP_ID), sent.id)] = (chat.id, message.id)
-
-            # --- PRIORITY SUPPORT: VIP messages seedha owner ke personal DM me #URGENT_VIP tag ke saath ---
-            if is_vip_user(user.id):
+            if topic_id:
+                reply_id = None
+                if message.reply_to_message:
+                    reply_key = (chat.id, message.reply_to_message.id)
+                    if reply_key in MESSAGE_MAP:
+                        _, reply_id = MESSAGE_MAP[reply_key]
+                
                 try:
-                    uname = f"@{user.username}" if user.username else "no username"
-                    await client.send_message(
-                        int(OWNER_ID),
-                        f"#URGENT_VIP\n👑 **VIP Referrer Message**\n👤 {user.first_name or ''} ({uname})\n🆔 `{user.id}`"
+                    sent = await message.copy(
+                        int(SUPPORT_GROUP_ID),
+                        message_thread_id=topic_id,
+                        reply_to_message_id=reply_id,
                     )
-                    await message.copy(int(OWNER_ID))
-                except Exception:
-                    pass
+                except TypeError:
+                    target_reply_id = reply_id if reply_id else topic_id
+                    sent = await message.copy(int(SUPPORT_GROUP_ID), reply_to_message_id=target_reply_id)
+                except Exception as e:
+                    err_str = str(e).lower()
+                    if "reply" in err_str or "message_id_invalid" in err_str:
+                        # Target reply message was deleted, try without reply_id
+                        try:
+                            sent = await message.copy(
+                                int(SUPPORT_GROUP_ID),
+                                message_thread_id=topic_id,
+                            )
+                        except TypeError:
+                            sent = await message.copy(int(SUPPORT_GROUP_ID), reply_to_message_id=topic_id)
+                    else:
+                        raise e
+                        
+                MESSAGE_MAP[(chat.id, message.id)] = (int(SUPPORT_GROUP_ID), sent.id)
+                MESSAGE_MAP[(int(SUPPORT_GROUP_ID), sent.id)] = (chat.id, message.id)
+                delivered_to_support = True
+
+                # --- PRIORITY SUPPORT: VIP messages seedha owner ke personal DM me #URGENT_VIP tag ke saath ---
+                if is_vip_user(user.id):
+                    try:
+                        uname = f"@{user.username}" if user.username else "no username"
+                        await client.send_message(
+                            int(OWNER_ID),
+                            f"#URGENT_VIP\n👑 **VIP Referrer Message**\n👤 {user.first_name or ''} ({uname})\n🆔 `{user.id}`"
+                        )
+                        await message.copy(int(OWNER_ID))
+                    except Exception:
+                        pass
         except Exception as e:
             err_str = str(e).lower()
-            
             if isinstance(e, (PeerIdInvalid,)) or "peer" in err_str and "invalid" in err_str:
                 if not is_retry:
                     try:
-                        await message.reply_text("  Connection sync in progress... please wait a moment.")
                         import config
                         await config.refresh_peer_cache(client, SUPPORT_GROUP_ID)
                         return await main_message_handler(client, message, is_retry=True)
                     except Exception:
                         pass
-                
             elif ("thread" in err_str or "topic" in err_str or "forum" in err_str) and not is_retry:
                 if user.id in DB.get("USER_TOPICS", {}):
                     del DB["USER_TOPICS"][user.id]
                     await save_data_async()
                     return await main_message_handler(client, message, is_retry=True)
-                    
-            if not is_retry:
-                await message.reply_text("  **Message deliver nahi ho paya!**\nAdmin ka Support Group ID theek se configured nahi hai.")
+
+        # Always respond back to the student / user so the bot is never silent
+        if matching_batches:
+            kb_rows = []
+            for b_cid, b_cname, b_type in matching_batches[:5]:
+                btn_text = f"📦 {str(b_cname)[:30]} ({b_type.upper()})"
+                kb_rows.append([InlineKeyboardButton(btn_text, callback_data=f"binfo_{b_cid}")])
+            kb_rows.append([
+                InlineKeyboardButton("📚 All Batches", callback_data="u_batches"),
+                InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")
+            ])
+            status_note = "\n\n*(Aapka message Support Team ko bhi deliver ho gaya hai ✅)*" if delivered_to_support else ""
+            await message.reply_text(
+                f"🔍 **Search Results for:** `{text_query}` (Found {len(matching_batches)}):\n━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Aapke query se milte-julte batches niche diye gaye hain:\n\n"
+                f"Batch par click karke direct access karein:{status_note}",
+                reply_markup=InlineKeyboardMarkup(kb_rows),
+                parse_mode=ParseMode.MARKDOWN
+            )
+        else:
+            kb = [
+                [
+                    InlineKeyboardButton("📚 Browse Batches", callback_data="u_batches"),
+                    InlineKeyboardButton("📝 Request a Batch", callback_data="btn_req_batch")
+                ],
+                [
+                    InlineKeyboardButton("🎁 Free Giveaway", callback_data="gw_hub"),
+                    InlineKeyboardButton("🏠 Main Menu", callback_data="u_main")
+                ]
+            ]
+            deliv_text = (
+                "📩 **Aapka message Support Team ko deliver ho gaya hai!**\n━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "Admin jald hi is topic me aapko reply karenge.\n"
+                "Tab tak aap niche diye gaye buttons se batches explore ya request kar sakte hain:"
+                if delivered_to_support else
+                "👋 **Hello!** Niche diye gaye menu se batches explore karein ya /start dabayein:"
+            )
+            await message.reply_text(
+                deliv_text,
+                reply_markup=InlineKeyboardMarkup(kb),
+                parse_mode=ParseMode.MARKDOWN
+            )
 
     # 2. ADMIN -> USER
     elif str(chat.id) == str(SUPPORT_GROUP_ID):
