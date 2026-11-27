@@ -612,7 +612,7 @@ def build_admin_giveaway_panel_msg():
         ),
         rp.divider(),
         rp.buttons(
-            rp.btn("⏸️ Pause/Resume" if is_active else "▶️ Resume Giveaway", "gw_toggle_status", style=rp.Style.WARNING),
+            rp.btn("⏸️ Pause/Resume" if is_active else "▶️ Resume Giveaway", "gw_toggle_status", style=rp.Style.PRIMARY),
             rp.btn("👑 Declare Winner", "gw_declare_winner", style=rp.Style.SUCCESS)
         ),
         rp.buttons(

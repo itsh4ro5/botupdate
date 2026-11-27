@@ -71,6 +71,7 @@ from .menus import *
 from .support import *
 
 async def general_callback(client: Client, q: CallbackQuery):
+    import config
     uid = q.from_user.id
     data = q.data
     if q.message:
