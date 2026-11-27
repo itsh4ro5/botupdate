@@ -944,43 +944,51 @@ async def wizard_message(client: Client, message: Message):
         cmd_name = state["step"].replace("call_cmd_", "")
         current_step = state["step"]
         try:
+            import sys
+            H = sys.modules.get("handlers")
+            if not H:
+                import handlers as H
             cmds = {
-                "addadmin": cmd_add_admin,
-                "deladmin": cmd_del_admin,
-                "addtester": cmd_add_tester,
-                "deltester": cmd_del_tester,
-                "ban": cmd_ban,
-                "unban": cmd_unban,
-                "kick": cmd_kick_user,
-                "find": cmd_find_user,
-                "resetuser": cmd_reset_user,
-                "demo": cmd_approve_demo,
-                "per": cmd_approve_perm,
-                "perm": cmd_approve_perm,
-                "extend": cmd_extend_demo,
-                "gendemo": cmd_gendemo,
-                "settestbot": cmd_set_testbot,
-                "setwelcome": cmd_set_welcome,
-                "delbatch": cmd_delbatch,
-                "addcat": cmd_addcat,
-                "setcat": cmd_setcategory,
-                "emptybatch": cmd_emptybatch,
-                "userbotphone": cmd_userbotphone,
-                "userbototp": cmd_userbototp,
-                "userbotpass": cmd_userbotpass,
-                "storebatch": cmd_storebatch,
-                "userlookup": cmd_user_lookup,
-                "superfwd": cmd_superfwd_start,
-                "advcap": cmd_advcap_start,
-                "deluser": cmd_deluser,
-                "updatepost": process_updatepost,
-                "cleanbatch": cmd_cleanbatch,
-                "genvoucher": cmd_genvoucher_from_wizard,
-                "setreqnote": cmd_set_request_note,
-                "setprice": cmd_set_batch_price,
+                "addadmin": getattr(H, "cmd_add_admin", None),
+                "deladmin": getattr(H, "cmd_del_admin", None),
+                "addtester": getattr(H, "cmd_add_tester", None),
+                "deltester": getattr(H, "cmd_del_tester", None),
+                "ban": getattr(H, "cmd_ban", None),
+                "unban": getattr(H, "cmd_unban", None),
+                "kick": getattr(H, "cmd_kick_user", None),
+                "find": getattr(H, "cmd_find_user", None),
+                "resetuser": getattr(H, "cmd_reset_user", None),
+                "demo": getattr(H, "cmd_approve_demo", None),
+                "per": getattr(H, "cmd_approve_perm", None),
+                "perm": getattr(H, "cmd_approve_perm", None),
+                "extend": getattr(H, "cmd_extend_demo", None),
+                "gendemo": getattr(H, "cmd_gendemo", None),
+                "settestbot": getattr(H, "cmd_set_testbot", None),
+                "setwelcome": getattr(H, "cmd_set_welcome", None),
+                "delbatch": getattr(H, "cmd_delbatch", None),
+                "addcat": getattr(H, "cmd_addcat", None),
+                "setcat": getattr(H, "cmd_setcategory", None),
+                "emptybatch": getattr(H, "cmd_emptybatch", None),
+                "userbotphone": getattr(H, "cmd_userbotphone", None),
+                "userbototp": getattr(H, "cmd_userbototp", None),
+                "userbotpass": getattr(H, "cmd_userbotpass", None),
+                "storebatch": getattr(H, "cmd_storebatch", None),
+                "userlookup": getattr(H, "cmd_user_lookup", None),
+                "superfwd": getattr(H, "cmd_superfwd_start", None),
+                "advcap": getattr(H, "cmd_advcap_start", None),
+                "deluser": getattr(H, "cmd_deluser", None),
+                "updatepost": getattr(H, "process_updatepost", None),
+                "cleanbatch": getattr(H, "cmd_cleanbatch", None),
+                "genvoucher": getattr(H, "cmd_genvoucher_from_wizard", None),
+                "setreqnote": getattr(H, "cmd_set_request_note", None),
+                "setprice": getattr(H, "cmd_set_batch_price", None),
             }
-            if cmd_name in cmds:
-                await cmds[cmd_name](client, message)
+            handler = cmds.get(cmd_name) or getattr(H, f"cmd_{cmd_name}", None) or getattr(H, cmd_name, None)
+            if callable(handler):
+                await handler(client, message)
+            else:
+                logger.error(f"No handler found for wizard command {cmd_name}")
+                await message.reply_text(f"❌ Command handler '{cmd_name}' nahi mila.")
         except Exception as e:
             logger.error(f"Error executing wizard command {cmd_name}: {e}")
             try:

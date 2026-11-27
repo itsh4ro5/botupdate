@@ -96,6 +96,13 @@ _old_edit = pyrogram.Client.edit_message_text
 _old_reply = pyrogram.types.Message.reply_text
 
 async def _patched_send(client, chat_id, text=None, parse_mode=None, reply_markup=None, **kwargs):
+    # Convert deprecated reply_to_message_id to modern reply_parameters
+    if "reply_to_message_id" in kwargs and kwargs["reply_to_message_id"] and "reply_parameters" not in kwargs:
+        try:
+            kwargs["reply_parameters"] = pyrogram.types.ReplyParameters(message_id=int(kwargs.pop("reply_to_message_id")))
+        except Exception:
+            pass
+
     if "rich_message" in kwargs:
         return await _old_send(client, chat_id, text, parse_mode=parse_mode, reply_markup=reply_markup, **kwargs)
 
@@ -242,7 +249,12 @@ async def _patched_edit(client, chat_id, message_id, text=None, parse_mode=None,
 
 async def _patched_reply(self, text, parse_mode=None, reply_markup=None, **kwargs):
     kwargs.pop("reply_to_message_id", None)
-    return await _patched_send(self._client, self.chat.id, text, parse_mode, reply_markup, reply_to_message_id=self.id, **kwargs)
+    if "reply_parameters" not in kwargs:
+        try:
+            kwargs["reply_parameters"] = pyrogram.types.ReplyParameters(message_id=self.id)
+        except Exception:
+            kwargs["reply_to_message_id"] = self.id
+    return await _patched_send(self._client, self.chat.id, text, parse_mode, reply_markup, **kwargs)
 
 pyrogram.Client.send_message = _patched_send
 pyrogram.Client.edit_message_text = _patched_edit
